@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사 관리 · 학습지+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream: #faf8f3; --paper: #ffffff; --rule: #e8e4d9;
+  --ink: #1c1917; --ink2: #44403c; --ink3: #a8a29e;
+  --accent: #1d4ed8; --acc-lt: #eff6ff;
+  --green: #15803d; --grn-lt: #dcfce7;
+  --red: #b91c1c; --red-lt: #fee2e2;
+  --amber: #b45309; --amb-lt: #fef3c7;
+  --r: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--cream); color: var(--ink);
+  font-size: 14px; line-height: 1.6;
+}
+
+/* ── Header ── */
+header {
+  position: sticky; top: 0; z-index: 200;
+  background: var(--ink); height: 52px;
+  display: flex; align-items: center; padding: 0 20px; gap: 12px;
+}
+.logo { font-weight: 900; font-size: 18px; color: #fff; letter-spacing: -0.5px; flex: 1; }
+.logo em { color: #60a5fa; font-style: normal; }
+.logo small { font-size: 12px; font-weight: 400; color: rgba(255,255,255,.4); margin-left: 8px; }
+.hdr-right { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,.65); }
+.tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.tag-t { background: var(--accent); color: #fff; }
+.hdr-btn {
+  padding: 4px 11px; border-radius: 5px; font-size: 12px;
+  font-family: inherit; cursor: pointer;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2); color: #fff;
+}
+
+/* ── Auth gate ── */
+#auth-gate {
+  min-height: calc(100vh - 52px);
+  display: flex; align-items: center; justify-content: center; padding: 40px 20px;
+}
+.gate-card {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 16px; padding: 48px 44px; text-align: center; max-width: 380px; width: 100%;
+}
+.gate-card .icon { font-size: 48px; margin-bottom: 16px; }
+.gate-card h2 { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+.gate-card p  { color: var(--ink3); font-size: 14px; margin-bottom: 28px; }
+.btn-goog {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; padding: 13px; border: 1.5px solid var(--rule);
+  border-radius: 8px; background: var(--paper); font-family: inherit;
+  font-size: 15px; font-weight: 500; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.btn-goog:hover { border-color: var(--accent); background: var(--acc-lt); }
+.btn-goog svg { width: 20px; height: 20px; }
+
+/* ── App layout ── */
+#app { display: none; }
+.layout { display: flex; min-height: calc(100vh - 52px); }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 230px; flex-shrink: 0;
+  background: var(--paper); border-right: 1px solid var(--rule);
+  position: sticky; top: 52px; height: calc(100vh - 52px);
+  overflow-y: auto; padding: 16px 0;
+}
+.sb-section {
+  padding: 6px 18px; font-size: 10px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink3);
+  margin-top: 10px;
+}
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px; font-size: 14px; cursor: pointer;
+  color: var(--ink2); transition: background .1s;
+}
+.sb-item:hover { background: var(--cream); }
+.sb-item.active { background: var(--acc-lt); color: var(--accent); font-weight: 700; }
+.sb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Content ── */
+.content { flex: 1; padding: 28px 32px; max-width: 900px; }
+.pg-title { font-size: 22px; font-weight: 900; margin-bottom: 4px; }
+.pg-sub   { color: var(--ink3); font-size: 13px; margin-bottom: 24px; }
+
+/* ── Summary cards ── */
+.sum-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.sum-card {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: var(--r); padding: 18px;
+}
+.sum-label { font-size: 11px; font-weight: 700; color: var(--ink3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.sum-num   { font-size: 28px; font-weight: 900; }
+.sum-sub   { font-size: 12px; color: var(--ink3); margin-top: 2px; }
+
+/* ── Card / Table ── */
+.card { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r); overflow: hidden; margin-bottom: 20px; }
+.card-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--rule);
+}
+.card-title { font-size: 15px; font-weight: 700; }
+.card-actions { display: flex; gap: 8px; }
+
+table { width: 100%; border-collapse: collapse; }
+thead { background: var(--cream); }
+th, td { text-align: left; padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--rule); }
+th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink3); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--cream); }
+
+/* ── Badges ── */
+.badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+.b-done { background: var(--grn-lt); color: var(--green); }
+.b-miss { background: var(--red-lt); color: var(--red); }
+.b-late { background: var(--amb-lt); color: var(--amber); }
+
+/* ── Rate bar ── */
+.rate-row { display: flex; align-items: center; gap: 8px; }
+.rate-bg { flex: 1; height: 5px; background: var(--rule); border-radius: 3px; min-width: 50px; }
+.rate-fill { height: 5px; border-radius: 3px; }
+.rate-n { font-size: 12px; font-family: 'DM Mono', monospace; width: 36px; text-align: right; }
+
+/* ── Attempt badge (tries) ── */
+.tries-badge { font-size: 12px; font-family: 'DM Mono', monospace; }
+.tries-1 { color: var(--green); }
+.tries-2 { color: var(--amber); }
+.tries-many { color: var(--red); }
+
+/* ── Filter ── */
+.filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+select, input[type=text] {
+  padding: 7px 10px; border: 1.5px solid var(--rule); border-radius: 7px;
+  font-size: 13px; font-family: inherit; background: var(--paper); color: var(--ink);
+}
+select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+/* ── Buttons ── */
+.btn-sm {
+  padding: 6px 14px; border-radius: 7px; font-size: 13px; font-family: inherit;
+  background: var(--paper); border: 1.5px solid var(--rule); cursor: pointer; font-weight: 500;
+}
+.btn-sm:hover { background: var(--rule); }
+.btn-sm-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-sm-accent:hover { opacity: .88; background: var(--accent); }
+
+/* ── Loading ── */
+.loading { text-align: center; padding: 48px; color: var(--ink3); font-size: 15px; }
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .content { padding: 20px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">학습지<em>+</em> <small>교사 관리</small></div>
+  <div class="hdr-right">
+    <span class="tag tag-t">교사</span>
+    <span id="t-name"></span>
+    <button class="hdr-btn" id="btn-logout">로그아웃</button>
+  </div>
+</header>
+
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <div class="gate-card">
+    <div class="icon">🔐</div>
+    <h2>교사 전용 관리 페이지</h2>
+    <p>교사 Google 계정으로 로그인하세요.<br>교사 권한이 없는 계정은 접근이 차단됩니다.</p>
+    <button class="btn-goog" id="btn-login">
+      <svg viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Google 계정으로 로그인
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="content" id="content">
+      <div class="loading">데이터 불러오는 중…</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collectionGroup, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ─── CONFIG ── */
+const FB = {
+  apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:        "online-worksheets.firebaseapp.com",
+  projectId:         "online-worksheets",
+  storageBucket:     "online-worksheets.firebasestorage.app",
+  messagingSenderId: "404110714320",
+  appId:             "1:404110714320:web:cb79c555a383801f3205d5"
+};
+const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr"];
+const ALLOWED_DOMAINS = [];
+
+/* ─── 학습지 목록 ── */
+const WORKSHEETS = [
+  { id:"ws01", title:"세포의 구조와 기능",  subject:"생명과학 I", grade:2, dueDate:"2025-06-30", qCount:5 },
+  { id:"ws02", title:"멘델의 유전 법칙",   subject:"생명과학 I", grade:2, dueDate:"2025-07-15", qCount:5 },
+  { id:"ws03", title:"광합성과 세포호흡",  subject:"생명과학 I", grade:1, dueDate:"2025-07-31", qCount:5 },
+];
+
+const app  = initializeApp(FB);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+let tUser     = null;
+let allData   = {}; // uid → { wsId → record }
+let selView   = "overview";
+
+/* ── Auth ── */
+document.getElementById("btn-login").addEventListener("click", async () => {
+  const p = new GoogleAuthProvider();
+  if (ALLOWED_DOMAINS.length) p.setCustomParameters({ hd: ALLOWED_DOMAINS[0] });
+  try { await signInWithPopup(auth, p); }
+  catch(e) { alert("로그인 오류: " + e.message); }
+});
+document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async u => {
+  if (!u) { showGate(true); return; }
+  if (!TEACHER_EMAILS.includes(u.email)) {
+    alert("교사 권한이 없습니다. 관리자에게 문의하세요.");
+    await signOut(auth); return;
+  }
+  tUser = u;
+  document.getElementById("t-name").textContent = u.displayName || u.email;
+  showGate(false);
+  await loadAll();
+});
+
+function showGate(on) {
+  document.getElementById("auth-gate").style.display = on ? "flex" : "none";
+  document.getElementById("app").style.display       = on ? "none" : "block";
+}
+
+/* ── Load all Firestore results ── */
+async function loadAll() {
+  document.getElementById("content").innerHTML = '<div class="loading">데이터 불러오는 중…</div>';
+  allData = {};
+  try {
+    const snap = await getDocs(collectionGroup(db, "worksheets"));
+    snap.forEach(d => {
+      const parts = d.ref.path.split("/"); // results/{uid}/worksheets/{wsId}
+      const uid   = parts[1];
+      const wsId  = parts[3];
+      if (!allData[uid]) allData[uid] = {};
+      allData[uid][wsId] = d.data();
+    });
+  } catch(e) { console.error("Firestore 오류:", e); }
+  buildSidebar();
+  renderOverview();
+}
+
+/* ── Sidebar ── */
+function buildSidebar() {
+  const colors = ["#1d4ed8","#15803d","#b45309","#b91c1c","#7c3aed"];
+  let html = `
+    <div class="sb-section">메뉴</div>
+    <div class="sb-item ${selView==="overview"?"active":""}" onclick="nav('overview')">📊 전체 현황</div>
+    <div class="sb-section">학습지별</div>
+  `;
+  WORKSHEETS.forEach((ws, i) => {
+    const done = Object.values(allData).filter(d => d[ws.id]?.completedAt).length;
+    html += `<div class="sb-item ${selView===ws.id?"active":""}" onclick="nav('${ws.id}')">
+      <span class="sb-dot" style="background:${colors[i%colors.length]}"></span>
+      <span style="flex:1">${ws.title}</span>
+      <span style="font-size:11px;color:var(--ink3);font-family:'DM Mono',monospace">${done}</span>
+    </div>`;
+  });
+  document.getElementById("sidebar").innerHTML = html;
+  window.nav = nav;
+}
+
+function nav(view) {
+  selView = view;
+  buildSidebar();
+  if (view === "overview") renderOverview();
+  else renderWS(view);
+}
+
+/* ─── OVERVIEW ─── */
+function renderOverview() {
+  const students = Object.keys(allData).length;
+  let totalSub = 0, totalTries = 0, totalPct = 0, pctCount = 0;
+  Object.values(allData).forEach(d => {
+    Object.values(d).forEach(r => {
+      totalSub++;
+      totalTries += r.totalAttempts || 0;
+      if (r.correctRate != null) { totalPct += r.correctRate; pctCount++; }
+    });
+  });
+  const avgPct = pctCount ? Math.round(totalPct / pctCount) : 0;
+
+  let html = `
+    <div class="pg-title">전체 현황</div>
+    <div class="pg-sub">마지막 갱신: ${new Date().toLocaleString("ko-KR")}
+      <button class="btn-sm" style="margin-left:10px" onclick="loadAll()">새로고침</button>
+    </div>
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="sum-label">참여 학생</div>
+        <div class="sum-num">${students}</div>
+        <div class="sum-sub">제출 이력 기준</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">총 제출</div>
+        <div class="sum-num">${totalSub}</div>
+        <div class="sum-sub">학생 × 학습지</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">평균 정답률</div>
+        <div class="sum-num" style="color:${rateColor(avgPct)}">${avgPct}%</div>
+        <div class="sum-sub">완료 기준</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">총 시도 횟수</div>
+        <div class="sum-num">${totalTries}</div>
+        <div class="sum-sub">틀린 후 재시도 포함</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">학습지별 요약</span>
+        <div class="card-actions">
+          <button class="btn-sm" onclick="exportOverview()">CSV 내보내기</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>학습지</th><th>학년</th><th>마감</th>
+          <th>완료 학생</th><th>평균 정답률</th><th>평균 시도횟수</th>
+        </tr></thead><tbody>`;
+
+  WORKSHEETS.forEach(ws => {
+    const recs = Object.values(allData).map(d => d[ws.id]).filter(Boolean);
+    const done = recs.filter(r => r.completedAt).length;
+    const avgR = done ? Math.round(recs.filter(r=>r.completedAt).reduce((s,r)=>s+(r.correctRate||0),0)/done) : 0;
+    const avgT = done ? (recs.filter(r=>r.completedAt).reduce((s,r)=>s+(r.totalAttempts||0),0)/done).toFixed(1) : "-";
+    const ov   = new Date(ws.dueDate) < new Date();
+    html += `<tr>
+      <td><strong>${ws.title}</strong></td>
+      <td>${ws.grade}학년</td>
+      <td>${ws.dueDate} ${ov?'<span class="badge b-late">기한초과</span>':''}</td>
+      <td>${done}명</td>
+      <td>${done ? rateBar(avgR) : '<span style="color:var(--ink3)">-</span>'}</td>
+      <td><span class="tries-badge ${avgT<=ws.qCount?'tries-1':avgT<=ws.qCount*1.5?'tries-2':'tries-many'}">${avgT}회</span></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  document.getElementById("content").innerHTML = html;
+  window.loadAll    = loadAll;
+  window.exportOverview = exportOverview;
+}
+
+/* ─── PER-WORKSHEET VIEW ─── */
+function renderWS(wsId) {
+  const ws   = WORKSHEETS.find(w => w.id === wsId);
+  const recs = [];
+  Object.entries(allData).forEach(([uid, d]) => {
+    if (d[wsId]) recs.push({ uid, ...d[wsId] });
+  });
+  const done = recs.filter(r => r.completedAt);
+  const avgR = done.length ? Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length) : 0;
+  const avgT = done.length ? (done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1) : "-";
+
+  // perfect (1 attempt per question = qCount attempts total)
+  const perfect = done.filter(r => r.totalAttempts === ws.qCount).length;
+
+  let html = `
+    <div class="pg-title">${ws.title}</div>
+    <div class="pg-sub">${ws.subject} · ${ws.grade}학년 · 마감 ${ws.dueDate}</div>
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="sum-label">완료 학생</div>
+        <div class="sum-num">${done.length}</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">평균 정답률</div>
+        <div class="sum-num" style="color:${rateColor(avgR)}">${avgR}%</div>
+        <div class="sum-sub">전체 완료 기준</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">평균 시도 횟수</div>
+        <div class="sum-num">${avgT}회</div>
+        <div class="sum-sub">문제당 최소 1회</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">한 번에 완료</div>
+        <div class="sum-num" style="color:var(--green)">${perfect}</div>
+        <div class="sum-sub">모든 문제 1회 정답</div>
+      </div>
+    </div>
+
+    <!-- 완료 학생 목록 -->
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">✅ 완료 학생</span>
+        <div class="card-actions">
+          <button class="btn-sm" onclick="exportWS('${wsId}')">CSV</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>학생</th><th>이메일</th><th>정답률</th>
+          <th>총 시도</th><th>문제별 시도</th><th>완료 일시</th>
+        </tr></thead><tbody>
+  `;
+
+  if (done.length === 0) {
+    html += `<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:28px">완료한 학생이 없습니다.</td></tr>`;
+  } else {
+    done.sort((a,b) => (a.totalAttempts||0) - (b.totalAttempts||0)).forEach(r => {
+      const ts = r.completedAt?.toDate ? r.completedAt.toDate().toLocaleString("ko-KR") : "-";
+      const rate = r.correctRate ?? 0;
+      const tries = r.totalAttempts || 0;
+      const cls = tries <= ws.qCount ? "tries-1" : tries <= ws.qCount*1.5 ? "tries-2" : "tries-many";
+
+      // per-question tries summary
+      let perQHtml = "";
+      if (r.perQuestion) {
+        perQHtml = Object.entries(r.perQuestion).map(([qid, v]) => {
+          const t = v.attempts || 1;
+          const c = t === 1 ? "#15803d" : t <= 2 ? "#b45309" : "#b91c1c";
+          return `<span style="font-size:11px;color:${c};font-family:'DM Mono',monospace">${qid}:${t}</span>`;
+        }).join(" ");
+      }
+
+      html += `<tr>
+        <td><strong>${r.studentName || "-"}</strong></td>
+        <td style="font-size:12px;color:var(--ink3)">${r.studentEmail || "-"}</td>
+        <td>${rateBar(rate)}</td>
+        <td><span class="tries-badge ${cls}">${tries}회</span></td>
+        <td>${perQHtml || "-"}</td>
+        <td style="font-size:12px">${ts}</td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table></div>`;
+
+  // ─── 미이수 학생 (제출 이력 없음) ───
+  // 실제 운영에서는 Firestore에 학생 명단 컬렉션 유지 권장
+  // 여기서는 "제출 없음" 안내 표시
+  html += `
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">❌ 미이수 (미제출)</span></div>
+      <div style="padding:16px 20px;color:var(--ink3);font-size:13px">
+        ℹ️ 미이수 학생 목록 기능을 사용하려면<br>
+        Firestore <code>students</code> 컬렉션에 전체 학생 명단을 등록하세요.
+        <br><br>
+        현재 미제출 학생 수 (추정): 등록 학생 수 − 완료 학생 ${done.length}명
+        <br><br>
+        <strong>학생 명단 등록 방법:</strong> SETUP.md 참고
+      </div>
+    </div>
+  `;
+
+  // ─── 문항별 분석 ───
+  const qStats = {};
+  recs.forEach(r => {
+    if (!r.perQuestion) return;
+    Object.entries(r.perQuestion).forEach(([qid, v]) => {
+      if (!qStats[qid]) qStats[qid] = { total: 0, totalTries: 0 };
+      qStats[qid].total++;
+      qStats[qid].totalTries += v.attempts || 1;
+    });
+  });
+
+  if (Object.keys(qStats).length > 0) {
+    html += `
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">📊 문항별 난이도 분석</span></div>
+        <table>
+          <thead><tr><th>문항</th><th>응시 수</th><th>평균 시도 횟수</th><th>난이도 추정</th></tr></thead>
+          <tbody>
+    `;
+    Object.entries(qStats).sort().forEach(([qid, s]) => {
+      const avgA = (s.totalTries / s.total).toFixed(1);
+      const diff = avgA <= 1.2 ? "🟢 쉬움" : avgA <= 2.0 ? "🟡 보통" : "🔴 어려움";
+      html += `<tr>
+        <td>${qid}</td>
+        <td>${s.total}명</td>
+        <td><span class="tries-badge ${avgA<=1.2?"tries-1":avgA<=2?"tries-2":"tries-many"}">${avgA}회</span></td>
+        <td>${diff}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  document.getElementById("content").innerHTML = html;
+  window.exportWS = exportWS;
+}
+
+/* ─── HELPERS ─── */
+function rateColor(r) {
+  return r >= 80 ? "var(--green)" : r >= 60 ? "var(--amber)" : "var(--red)";
+}
+function rateBar(rate) {
+  return `<div class="rate-row">
+    <div class="rate-bg"><div class="rate-fill" style="width:${rate}%;background:${rateColor(rate)}"></div></div>
+    <span class="rate-n" style="color:${rateColor(rate)}">${rate}%</span>
+  </div>`;
+}
+
+/* ─── CSV EXPORT ─── */
+function exportOverview() {
+  let csv = "학습지,학년,마감일,완료학생수,평균정답률,평균시도횟수\n";
+  WORKSHEETS.forEach(ws => {
+    const done = Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
+    const avgR = done.length ? Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length) : 0;
+    const avgT = done.length ? (done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1) : 0;
+    csv += `"${ws.title}",${ws.grade},${ws.dueDate},${done.length},${avgR}%,${avgT}\n`;
+  });
+  dl(csv, "전체현황.csv");
+}
+function exportWS(wsId) {
+  const ws = WORKSHEETS.find(w=>w.id===wsId);
+  let csv = "이름,이메일,정답률,총시도횟수,완료일시\n";
+  Object.values(allData).forEach(d => {
+    const r = d[wsId]; if(!r?.completedAt) return;
+    const ts = r.completedAt?.toDate ? r.completedAt.toDate().toLocaleString("ko-KR") : "-";
+    csv += `"${r.studentName||""}","${r.studentEmail||""}",${r.correctRate||0}%,${r.totalAttempts||0},"${ts}"\n`;
+  });
+  dl(csv, `${ws.title}_결과.csv`);
+}
+function dl(content, name) {
+  const blob = new Blob(['\uFEFF'+content], { type:"text/csv;charset=utf-8;" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: name });
+  a.click();
+}
+</script>
+</body>
+</html>

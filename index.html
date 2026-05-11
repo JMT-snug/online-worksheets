@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>학습지+ · 생명과학</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════
+   DESIGN SYSTEM
+   톤: 차분한 노트북 + 공책 감성 / 연한 크림 바탕
+   ════════════════════════════════════════════════ */
+:root {
+  --cream:  #faf8f3;
+  --paper:  #ffffff;
+  --rule:   #e8e4d9;
+  --ink:    #1c1917;
+  --ink2:   #44403c;
+  --ink3:   #a8a29e;
+  --accent: #1d4ed8;
+  --acc-lt: #eff6ff;
+  --green:  #15803d;
+  --grn-lt: #dcfce7;
+  --red:    #b91c1c;
+  --red-lt: #fee2e2;
+  --amber:  #b45309;
+  --amb-lt: #fef3c7;
+  --canvas-bg: #fffef9;
+  --canvas-line: #e5e0d5;
+  --r: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  min-height: 100%;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── HEADER ── */
+header {
+  position: sticky; top: 0; z-index: 200;
+  background: var(--ink);
+  height: 52px;
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+}
+.logo {
+  font-weight: 900; font-size: 18px; color: #fff;
+  letter-spacing: -0.5px; flex: 1;
+}
+.logo em { color: #60a5fa; font-style: normal; }
+#hdr-user {
+  display: none; align-items: center; gap: 10px;
+  font-size: 13px; color: rgba(255,255,255,.65);
+}
+#hdr-avatar { width: 28px; height: 28px; border-radius: 50%; display: none; }
+.hdr-btn {
+  padding: 4px 11px; border-radius: 5px; font-size: 12px;
+  font-family: inherit; cursor: pointer;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2); color: #fff;
+  text-decoration: none; display: inline-flex; align-items: center;
+}
+.hdr-btn:hover { background: rgba(255,255,255,.18); }
+.hdr-teacher { background: var(--accent); border-color: var(--accent); }
+
+/* ── PAGE SYSTEM ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── LOGIN ── */
+#login-page {
+  min-height: calc(100vh - 52px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px 20px;
+}
+.login-wrap {
+  width: 100%; max-width: 400px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 52px 44px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,.07);
+}
+.login-mark {
+  width: 72px; height: 72px; border-radius: 18px;
+  background: var(--acc-lt); border: 2px solid #bfdbfe;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; margin: 0 auto 24px;
+}
+.login-wrap h1 { font-size: 24px; font-weight: 900; margin-bottom: 6px; }
+.login-wrap p { color: var(--ink3); font-size: 14px; margin-bottom: 36px; line-height: 1.7; }
+.btn-goog {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; padding: 14px;
+  border: 1.5px solid var(--rule); border-radius: 10px;
+  background: var(--paper); font-family: inherit;
+  font-size: 15px; font-weight: 500; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.btn-goog:hover { border-color: var(--accent); background: var(--acc-lt); }
+.btn-goog svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ── DASHBOARD ── */
+#dash-page > main {
+  max-width: 940px; margin: 0 auto; padding: 32px 20px;
+}
+.dash-greet { font-size: 24px; font-weight: 900; margin-bottom: 4px; }
+.dash-sub { color: var(--ink3); font-size: 14px; margin-bottom: 32px; }
+.sec-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink3); margin-bottom: 14px;
+}
+.ws-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+}
+/* ── Worksheet Card ── */
+.ws-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 20px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow .15s, transform .15s;
+}
+.ws-card::after {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: var(--accent); opacity: 0;
+  transition: opacity .15s;
+}
+.ws-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,.1); transform: translateY(-2px); }
+.ws-card:hover::after { opacity: 1; }
+.ws-pill {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 4px; margin-bottom: 10px;
+  background: var(--acc-lt); color: var(--accent);
+}
+.ws-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 5px; }
+.ws-meta { font-size: 12px; color: var(--ink3); margin-bottom: 16px; }
+.ws-status {
+  position: absolute; top: 16px; right: 16px;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 20px;
+}
+.s-done    { background: var(--grn-lt); color: var(--green); }
+.s-partial { background: var(--amb-lt); color: var(--amber); }
+.s-new     { background: var(--acc-lt); color: var(--accent); }
+.prog-bar-bg { background: var(--rule); border-radius: 4px; height: 6px; margin-bottom: 8px; }
+.prog-bar { height: 6px; border-radius: 4px; transition: width .4s; }
+.ws-stats { display: flex; gap: 14px; font-size: 12px; }
+.ws-stat { display: flex; align-items: center; gap: 5px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot-g { background: var(--green); }
+.dot-r { background: var(--red); }
+.dot-a { background: var(--amber); }
+
+/* ═══════════════════════════════════════════════
+   QUIZ PAGE — split layout
+   Left: problem + canvas  |  Right: choices
+   ═══════════════════════════════════════════════ */
+#quiz-page { background: var(--cream); min-height: calc(100vh - 52px); }
+#quiz-page > .quiz-shell {
+  max-width: 1080px; margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* top bar */
+.quiz-topbar {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 20px;
+}
+.btn-back {
+  padding: 6px 14px; border-radius: 6px; font-size: 13px;
+  background: var(--paper); border: 1.5px solid var(--rule);
+  color: var(--ink2); cursor: pointer; font-family: inherit;
+  white-space: nowrap;
+}
+.btn-back:hover { background: var(--rule); }
+.quiz-ws-title { font-weight: 700; font-size: 16px; flex: 1; }
+.q-counter { font-size: 13px; color: var(--ink3); white-space: nowrap; }
+
+/* progress strip */
+.q-progress-strip {
+  display: flex; gap: 4px; margin-bottom: 20px;
+}
+.q-dot {
+  flex: 1; height: 5px; border-radius: 3px;
+  background: var(--rule); transition: background .3s;
+}
+.q-dot.done    { background: var(--green); }
+.q-dot.current { background: var(--accent); }
+.q-dot.locked  { background: var(--rule); }
+
+/* two-column layout */
+.quiz-cols {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .quiz-cols { grid-template-columns: 1fr; }
+}
+
+/* ── LEFT: problem + canvas ── */
+.quiz-left { display: flex; flex-direction: column; gap: 14px; }
+
+.problem-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 24px;
+}
+.problem-card .q-num {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink3); margin-bottom: 10px;
+}
+.problem-card .q-text {
+  font-size: 18px; font-weight: 700; line-height: 1.55;
+  font-family: 'Gowun Dodum', serif;
+}
+
+/* ── CANVAS AREA ── */
+.canvas-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.canvas-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--cream);
+  flex-wrap: wrap;
+}
+.canvas-toolbar-label {
+  font-size: 11px; font-weight: 700; color: var(--ink3);
+  text-transform: uppercase; letter-spacing: .08em;
+  margin-right: 4px;
+}
+
+/* Tool buttons */
+.tool-btn {
+  width: 32px; height: 32px; border-radius: 6px; border: 1.5px solid var(--rule);
+  background: var(--paper); cursor: pointer; display: flex;
+  align-items: center; justify-content: center; font-size: 16px;
+  transition: background .1s, border-color .1s;
+  padding: 0;
+}
+.tool-btn:hover { background: var(--rule); }
+.tool-btn.active { background: var(--acc-lt); border-color: var(--accent); }
+
+/* Color swatches */
+.color-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  transition: transform .1s, border-color .1s;
+  flex-shrink: 0;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { border-color: var(--ink); }
+
+/* Stroke size */
+.stroke-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 70px; height: 4px; border-radius: 2px;
+  background: var(--rule); outline: none; cursor: pointer;
+}
+.stroke-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ink); cursor: pointer;
+}
+.divider-v { width: 1px; height: 22px; background: var(--rule); margin: 0 2px; }
+
+/* Canvas itself */
+#draw-canvas {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+  touch-action: none;
+  background: var(--canvas-bg);
+  /* lined paper effect via CSS */
+  background-image: repeating-linear-gradient(
+    transparent, transparent 27px,
+    var(--canvas-line) 27px, var(--canvas-line) 28px
+  );
+}
+
+/* ── RIGHT: answer choices ── */
+.quiz-right { display: flex; flex-direction: column; gap: 14px; }
+
+.answer-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 20px;
+}
+.answer-card .a-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink3); margin-bottom: 14px;
+}
+.choices-list { display: flex; flex-direction: column; gap: 8px; }
+.choice {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 16px;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px; background: var(--paper);
+  font-size: 15px; font-family: inherit;
+  cursor: pointer; text-align: left; width: 100%;
+  transition: border-color .12s, background .12s;
+  position: relative; overflow: hidden;
+}
+.choice:hover:not(:disabled) { border-color: var(--accent); background: var(--acc-lt); }
+.choice-idx {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--rule);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+  transition: background .12s, color .12s;
+}
+/* States */
+.choice.correct            { border-color: var(--green); background: var(--grn-lt); }
+.choice.correct .choice-idx{ background: var(--green); color: #fff; }
+.choice.wrong              { border-color: var(--red); background: var(--red-lt); }
+.choice.wrong .choice-idx  { background: var(--red); color: #fff; }
+.choice:disabled           { cursor: default; }
+
+/* Shake animation for wrong answer */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  15%     { transform: translateX(-6px); }
+  30%     { transform: translateX(6px); }
+  45%     { transform: translateX(-5px); }
+  60%     { transform: translateX(5px); }
+  75%     { transform: translateX(-3px); }
+  90%     { transform: translateX(3px); }
+}
+.shake { animation: shake .45s ease; }
+
+/* Feedback strip */
+.feedback-strip {
+  display: none;
+  padding: 10px 14px; border-radius: 7px; font-size: 14px; font-weight: 500;
+  margin-top: 10px; align-items: center; gap: 8px;
+}
+.feedback-strip.show { display: flex; }
+.fb-correct { background: var(--grn-lt); color: var(--green); }
+.fb-wrong   { background: var(--red-lt); color: var(--red); }
+.fb-icon    { font-size: 18px; flex-shrink: 0; }
+
+/* Attempt counter */
+.attempt-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--ink3);
+  padding: 8px 14px;
+  background: var(--cream); border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.attempt-num { font-weight: 700; color: var(--amber); }
+
+/* Clear canvas btn */
+.btn-clear-canvas {
+  padding: 8px 16px; border-radius: 7px;
+  border: 1.5px solid var(--rule); background: var(--paper);
+  font-size: 13px; font-family: inherit; cursor: pointer; color: var(--ink2);
+}
+.btn-clear-canvas:hover { background: var(--rule); }
+
+/* ── RESULT PAGE ── */
+#result-page main { max-width: 680px; margin: 0 auto; padding: 32px 20px; }
+.result-hero {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 16px; padding: 40px; text-align: center; margin-bottom: 20px;
+}
+.score-ring {
+  width: 120px; height: 120px; border-radius: 50%;
+  border: 5px solid var(--accent); background: var(--acc-lt);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  margin: 0 auto 20px;
+}
+.score-big { font-size: 38px; font-weight: 900; color: var(--accent); line-height: 1; }
+.score-of  { font-size: 14px; color: var(--ink3); }
+.result-msg { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+.result-sub { color: var(--ink3); font-size: 14px; }
+.result-list { display: flex; flex-direction: column; gap: 1px; margin-top: 24px; }
+.result-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid var(--rule); text-align: left;
+}
+.result-row:last-child { border-bottom: none; }
+.r-icon { font-size: 18px; flex-shrink: 0; width: 22px; text-align: center; }
+.r-body { flex: 1; font-size: 14px; }
+.r-qnum { font-size: 11px; color: var(--ink3); font-weight: 700; margin-bottom: 2px; }
+.r-tries { font-size: 12px; color: var(--amber); margin-top: 3px; }
+.btn-row { display: flex; gap: 12px; justify-content: center; }
+.btn-main {
+  padding: 12px 28px; border-radius: 8px; font-size: 15px;
+  font-weight: 700; font-family: inherit; cursor: pointer;
+  background: var(--accent); border: none; color: #fff;
+  transition: opacity .15s;
+}
+.btn-main:hover { opacity: .88; }
+.btn-sec {
+  padding: 12px 24px; border-radius: 8px; font-size: 15px;
+  font-family: inherit; cursor: pointer;
+  background: var(--paper); border: 1.5px solid var(--rule); color: var(--ink2);
+}
+.btn-sec:hover { background: var(--rule); }
+
+/* ── Animations ── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up .25s ease; }
+
+/* ── Responsive ── */
+@media (max-width: 500px) {
+  .login-wrap { padding: 36px 24px; }
+  .problem-card .q-text { font-size: 16px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header>
+  <div class="logo">학습지<em>+</em></div>
+  <div id="hdr-user">
+    <img id="hdr-avatar" alt="">
+    <span id="hdr-name"></span>
+    <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
+    <button class="hdr-btn" id="btn-logout">로그아웃</button>
+  </div>
+</header>
+
+<!-- ═══ LOGIN ═══ -->
+<div id="login-page" class="page active">
+  <div class="login-wrap">
+    <div class="login-mark">🧬</div>
+    <h1>온라인 학습지</h1>
+    <p>학교 Google 계정으로 로그인하면<br>학습지를 풀 수 있어요.</p>
+    <button class="btn-goog" id="btn-login">
+      <svg viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Google 계정으로 로그인
+    </button>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div id="dash-page" class="page">
+  <main>
+    <div class="dash-greet" id="dash-greet">안녕하세요!</div>
+    <div class="dash-sub">오늘 학습할 내용을 선택하세요.</div>
+    <div class="sec-label" style="margin-top:28px">학습지 목록</div>
+    <div class="ws-grid" id="ws-grid"></div>
+  </main>
+</div>
+
+<!-- ═══ QUIZ ═══ -->
+<div id="quiz-page" class="page">
+  <div class="quiz-shell">
+
+    <!-- top bar -->
+    <div class="quiz-topbar">
+      <button class="btn-back" id="btn-back">← 목록</button>
+      <span class="quiz-ws-title" id="quiz-ws-title"></span>
+      <span class="q-counter" id="q-counter"></span>
+    </div>
+
+    <!-- progress dots -->
+    <div class="q-progress-strip" id="q-progress-strip"></div>
+
+    <!-- two columns -->
+    <div class="quiz-cols">
+
+      <!-- LEFT -->
+      <div class="quiz-left">
+        <!-- Problem -->
+        <div class="problem-card">
+          <div class="q-num" id="q-num">문제 1</div>
+          <div class="q-text" id="q-text"></div>
+        </div>
+
+        <!-- Drawing canvas -->
+        <div class="canvas-card">
+          <div class="canvas-toolbar">
+            <span class="canvas-toolbar-label">풀이 공간</span>
+
+            <!-- Tools -->
+            <button class="tool-btn active" id="tool-pen"   title="펜">✏️</button>
+            <button class="tool-btn"        id="tool-eraser" title="지우개">🧹</button>
+
+            <div class="divider-v"></div>
+
+            <!-- Colors -->
+            <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917" title="검정"></span>
+            <span class="color-swatch"        data-color="#1d4ed8" style="background:#1d4ed8" title="파랑"></span>
+            <span class="color-swatch"        data-color="#15803d" style="background:#15803d" title="초록"></span>
+            <span class="color-swatch"        data-color="#b91c1c" style="background:#b91c1c" title="빨강"></span>
+            <span class="color-swatch"        data-color="#92400e" style="background:#92400e" title="갈색"></span>
+
+            <div class="divider-v"></div>
+
+            <!-- Stroke size -->
+            <input type="range" class="stroke-slider" id="stroke-size" min="1" max="18" value="3" title="굵기">
+
+            <div class="divider-v"></div>
+
+            <button class="btn-clear-canvas" id="btn-clear">지우기</button>
+          </div>
+          <canvas id="draw-canvas" height="280"></canvas>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="quiz-right">
+        <div class="answer-card fade-up">
+          <div class="a-label">정답 선택</div>
+          <div class="choices-list" id="choices-list"></div>
+          <div class="feedback-strip" id="feedback-strip">
+            <span class="fb-icon" id="fb-icon"></span>
+            <span id="fb-text"></span>
+          </div>
+        </div>
+
+        <!-- attempt counter -->
+        <div class="attempt-badge" id="attempt-badge" style="display:none">
+          🔄 이번 문제 시도 횟수:
+          <span class="attempt-num" id="attempt-num">0</span>회
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESULT ═══ -->
+<div id="result-page" class="page">
+  <main>
+    <div class="result-hero">
+      <div class="score-ring">
+        <span class="score-big" id="r-score">0</span>
+        <span class="score-of"  id="r-of">/ 0</span>
+      </div>
+      <div class="result-msg" id="r-msg"></div>
+      <div class="result-sub" id="r-sub"></div>
+      <div class="result-list" id="r-list"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-sec" id="btn-retry">다시 풀기</button>
+      <button class="btn-main" id="btn-home">목록으로</button>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FIREBASE  +  APP LOGIC
+     ═══════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ─── CONFIG: Firebase 콘솔에서 복사 ─────────────────── */
+const FB = {
+  apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:        "online-worksheets.firebaseapp.com",
+  projectId:         "online-worksheets",
+  storageBucket:     "online-worksheets.firebasestorage.app",
+  messagingSenderId: "404110714320",
+  appId:             "1:404110714320:web:cb79c555a383801f3205d5"
+};
+const ALLOWED_DOMAINS = []; // 빈 배열 = 도메인 제한 없음
+const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr"];
+
+/* ─── 학습지 데이터 ───────────────────────────────────── */
+const WORKSHEETS = [
+  {
+    id: "ws01",
+    title: "세포의 구조와 기능",
+    subject: "생명과학 I",
+    grade: 2,
+    dueDate: "2025-06-30",
+    questions: [
+      {
+        id: "q1",
+        text: "세포막의 주요 구성 성분으로 올바른 것은?",
+        choices: ["인지질 이중층", "단백질만으로 구성", "탄수화물 섬유", "핵산 이중 가닥"],
+        answer: 0
+      },
+      {
+        id: "q2",
+        text: "ATP를 생산하는 세포 소기관으로 '세포의 발전소'라 불리는 것은?",
+        choices: ["엽록체", "리보솜", "미토콘드리아", "리소솜"],
+        answer: 2
+      },
+      {
+        id: "q3",
+        text: "단백질을 합성하는 세포 소기관은?",
+        choices: ["골지체", "리보솜", "액포", "세포벽"],
+        answer: 1
+      },
+      {
+        id: "q4",
+        text: "광합성이 일어나는 세포 소기관은?",
+        choices: ["미토콘드리아", "리소솜", "엽록체", "핵"],
+        answer: 2
+      },
+      {
+        id: "q5",
+        text: "동물 세포에는 없고 식물 세포에만 있는 구조를 모두 고른 것은?",
+        choices: [
+          "세포벽, 엽록체, 큰 액포",
+          "미토콘드리아, 리보솜",
+          "세포막, 골지체",
+          "핵, 소포체"
+        ],
+        answer: 0
+      },
+    ]
+  },
+  {
+    id: "ws02",
+    title: "멘델의 유전 법칙",
+    subject: "생명과학 I",
+    grade: 2,
+    dueDate: "2025-07-15",
+    questions: [
+      {
+        id: "q1",
+        text: "멘델의 분리 법칙에서 Aa × Aa 교배 시 열성(aa) 표현형이 나올 확률은?",
+        choices: ["1/4 (25%)", "1/2 (50%)", "3/4 (75%)", "0%"],
+        answer: 0
+      },
+      {
+        id: "q2",
+        text: "부모의 형질이 자손에서 다시 나타나지 않았다가 손자 세대에서 나타나는 것과 관련된 법칙은?",
+        choices: ["독립의 법칙", "우열의 법칙", "분리 법칙", "연관 법칙"],
+        answer: 2
+      },
+      {
+        id: "q3",
+        text: "순종 노란 완두(YY) × 순종 초록 완두(yy) 교배 결과 F1은?",
+        choices: ["Yy (노란색)", "yy (초록색)", "YY (노란색)", "YYyy (혼합)"],
+        answer: 0
+      },
+      {
+        id: "q4",
+        text: "서로 다른 염색체에 있는 두 유전자가 독립적으로 분리되는 법칙은?",
+        choices: ["우열의 법칙", "분리 법칙", "독립의 법칙", "연관 법칙"],
+        answer: 2
+      },
+      {
+        id: "q5",
+        text: "AaBb × AaBb 교배 시 A_B_(표현형: 둥글고 노란) 비율은? (독립 가정)",
+        choices: ["9/16", "3/16", "1/16", "6/16"],
+        answer: 0
+      },
+    ]
+  },
+  {
+    id: "ws03",
+    title: "광합성과 세포호흡",
+    subject: "생명과학 I",
+    grade: 1,
+    dueDate: "2025-07-31",
+    questions: [
+      {
+        id: "q1",
+        text: "광합성에서 빛 에너지를 ATP로 전환하는 명반응이 일어나는 장소는?",
+        choices: ["엽록체 기질(스트로마)", "틸라코이드 막", "세포질", "미토콘드리아 기질"],
+        answer: 1
+      },
+      {
+        id: "q2",
+        text: "광합성의 암반응(캘빈 회로)에서 CO₂가 고정되는 장소는?",
+        choices: ["틸라코이드 막", "세포막", "엽록체 기질(스트로마)", "핵"],
+        answer: 2
+      },
+      {
+        id: "q3",
+        text: "세포호흡의 해당 과정(Glycolysis)이 일어나는 장소는?",
+        choices: ["미토콘드리아 기질", "미토콘드리아 내막", "세포질(cytosol)", "핵"],
+        answer: 2
+      },
+      {
+        id: "q4",
+        text: "크렙스 회로(TCA cycle)가 일어나는 장소는?",
+        choices: ["세포질", "미토콘드리아 기질", "틸라코이드", "엽록체 기질"],
+        answer: 1
+      },
+      {
+        id: "q5",
+        text: "포도당 1분자의 완전 산화 시 이론적으로 생성되는 ATP 수는?",
+        choices: ["2 ATP", "4 ATP", "36~38 ATP", "100 ATP"],
+        answer: 2
+      },
+    ]
+  }
+];
+
+/* ─────────────────────────────────────────────────────── */
+const app  = initializeApp(FB);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+let user       = null;
+let wsProgress = {};
+let curWS      = null;
+let curQIdx    = 0;
+let attempts   = [];  // per-question attempt counts
+let answered   = [];  // per-question first-correct flag
+
+/* ══ AUTH ══ */
+document.getElementById("btn-login").addEventListener("click", async () => {
+  const p = new GoogleAuthProvider();
+  if (ALLOWED_DOMAINS.length) p.setCustomParameters({ hd: ALLOWED_DOMAINS[0] });
+  try { await signInWithPopup(auth, p); }
+  catch(e) { alert("로그인 오류: " + e.message); }
+});
+document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async u => {
+  if (!u) { showPage("login-page"); updateHeader(null); return; }
+  if (ALLOWED_DOMAINS.length && !ALLOWED_DOMAINS.some(d => u.email?.endsWith("@"+d))) {
+    alert(`허용된 도메인(${ALLOWED_DOMAINS.join(", ")})의 계정만 사용 가능합니다.`);
+    await signOut(auth); return;
+  }
+  user = u;
+  updateHeader(u);
+  await loadDash();
+});
+
+function updateHeader(u) {
+  const hi = document.getElementById("hdr-user");
+  if (!u) { hi.style.display = "none"; return; }
+  hi.style.display = "flex";
+  const av = document.getElementById("hdr-avatar");
+  if (u.photoURL) { av.src = u.photoURL; av.style.display = "block"; }
+  document.getElementById("hdr-name").textContent = u.displayName || u.email;
+  document.getElementById("hdr-teacher-link").style.display =
+    TEACHER_EMAILS.includes(u.email) ? "inline-flex" : "none";
+}
+
+/* ══ DASHBOARD ══ */
+async function loadDash() {
+  showPage("dash-page");
+  const name = user.displayName?.split(" ")[0] || "학생";
+  document.getElementById("dash-greet").textContent = `안녕하세요, ${name}님! 👋`;
+
+  wsProgress = {};
+  for (const ws of WORKSHEETS) {
+    const snap = await getDoc(doc(db, "results", user.uid, "worksheets", ws.id));
+    if (snap.exists()) wsProgress[ws.id] = snap.data();
+  }
+  renderCards();
+}
+
+function renderCards() {
+  const grid = document.getElementById("ws-grid");
+  grid.innerHTML = "";
+  WORKSHEETS.forEach(ws => {
+    const prog    = wsProgress[ws.id];
+    const total   = ws.questions.length;
+    const solvedN = prog ? (prog.solvedQuestions || 0) : 0;
+    const isDone  = prog && prog.completedAt;
+    const pct     = Math.round(solvedN / total * 100);
+    const overdue = new Date(ws.dueDate) < new Date();
+
+    let statusClass = "s-new", statusText = "미완료";
+    if (isDone) { statusClass = "s-done"; statusText = "완료"; }
+    else if (solvedN > 0) { statusClass = "s-partial"; statusText = `${solvedN}/${total} 진행 중`; }
+    else if (overdue) { statusClass = "s-partial"; statusText = "기한초과"; }
+
+    const correctRate = prog ? (prog.correctRate ?? 0) : 0;
+    const barColor = correctRate >= 80 ? "var(--green)" : correctRate >= 60 ? "var(--amber)" : "var(--red)";
+
+    const card = document.createElement("div");
+    card.className = "ws-card";
+    card.innerHTML = `
+      <span class="ws-status ${statusClass}">${statusText}</span>
+      <div class="ws-pill">${ws.subject} · ${ws.grade}학년</div>
+      <h3>${ws.title}</h3>
+      <div class="ws-meta">마감 ${ws.dueDate} · ${total}문제</div>
+      ${isDone || solvedN > 0 ? `
+        <div class="prog-bar-bg">
+          <div class="prog-bar" style="width:${pct}%;background:${barColor}"></div>
+        </div>
+        <div class="ws-stats">
+          <span class="ws-stat"><span class="dot dot-g"></span>${prog?.correctRate ?? 0}% 정답률</span>
+          <span class="ws-stat"><span class="dot dot-a"></span>${prog?.totalAttempts ?? 0}번 시도</span>
+        </div>
+      ` : `<div style="font-size:13px;color:var(--ink3)">아직 풀지 않았어요.</div>`}
+    `;
+    card.addEventListener("click", () => startQuiz(ws));
+    grid.appendChild(card);
+  });
+}
+
+/* ══ QUIZ ══ */
+function startQuiz(ws) {
+  curWS   = ws;
+  curQIdx = 0;
+  attempts = new Array(ws.questions.length).fill(0);
+  answered = new Array(ws.questions.length).fill(false);
+  showPage("quiz-page");
+  document.getElementById("quiz-ws-title").textContent = ws.title;
+  buildProgressStrip();
+  renderQuestion();
+}
+
+function buildProgressStrip() {
+  const strip = document.getElementById("q-progress-strip");
+  strip.innerHTML = "";
+  curWS.questions.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "q-dot" + (i === 0 ? " current" : " locked");
+    d.id = "qdot-" + i;
+    strip.appendChild(d);
+  });
+}
+
+function updateProgressStrip() {
+  curWS.questions.forEach((_, i) => {
+    const d = document.getElementById("qdot-" + i);
+    if (!d) return;
+    d.className = "q-dot " +
+      (answered[i] ? "done" : i === curQIdx ? "current" : "locked");
+  });
+}
+
+function renderQuestion() {
+  const q   = curWS.questions[curQIdx];
+  const len = curWS.questions.length;
+
+  document.getElementById("q-num").textContent = `문제 ${curQIdx + 1}`;
+  document.getElementById("q-text").textContent = q.text;
+  document.getElementById("q-counter").textContent = `${curQIdx + 1} / ${len}`;
+
+  updateProgressStrip();
+  clearCanvas();
+  renderChoices(false);
+  hideFeedback();
+
+  // attempt badge
+  const ab = document.getElementById("attempt-badge");
+  if (attempts[curQIdx] > 0) {
+    ab.style.display = "flex";
+    document.getElementById("attempt-num").textContent = attempts[curQIdx];
+  } else {
+    ab.style.display = "none";
+  }
+}
+
+function renderChoices(locked) {
+  const list = document.getElementById("choices-list");
+  list.innerHTML = "";
+  const q = curWS.questions[curQIdx];
+
+  q.choices.forEach((c, i) => {
+    const btn = document.createElement("button");
+    btn.className = "choice";
+    btn.innerHTML = `<span class="choice-idx">${i + 1}</span><span>${c}</span>`;
+    btn.disabled = locked;
+    btn.addEventListener("click", () => handleAnswer(i));
+    list.appendChild(btn);
+  });
+}
+
+function handleAnswer(selected) {
+  const q       = curWS.questions[curQIdx];
+  const correct = selected === q.answer;
+  attempts[curQIdx]++;
+
+  const btns = document.querySelectorAll(".choice");
+  btns.forEach(b => b.disabled = true);
+
+  // update attempt badge
+  const ab = document.getElementById("attempt-badge");
+  ab.style.display = "flex";
+  document.getElementById("attempt-num").textContent = attempts[curQIdx];
+
+  if (correct) {
+    answered[curQIdx] = true;
+    btns[selected].classList.add("correct");
+    showFeedback(true, "정답입니다! 🎉");
+    updateProgressStrip();
+
+    // auto advance after 900ms
+    setTimeout(() => {
+      if (curQIdx < curWS.questions.length - 1) {
+        curQIdx++;
+        renderQuestion();
+        // animate right panel
+        document.querySelector(".answer-card").classList.remove("fade-up");
+        void document.querySelector(".answer-card").offsetWidth;
+        document.querySelector(".answer-card").classList.add("fade-up");
+      } else {
+        finishQuiz();
+      }
+    }, 900);
+
+  } else {
+    // wrong: shake + re-enable after animation
+    btns[selected].classList.add("wrong");
+    document.querySelector(".answer-card").classList.add("shake");
+    showFeedback(false, `틀렸어요. 다시 한 번 도전해 보세요! 💪`);
+
+    setTimeout(() => {
+      document.querySelector(".answer-card").classList.remove("shake");
+      btns.forEach(b => { b.disabled = false; b.classList.remove("wrong"); });
+      hideFeedback();
+    }, 1100);
+  }
+}
+
+function showFeedback(ok, msg) {
+  const strip = document.getElementById("feedback-strip");
+  strip.className = "feedback-strip show " + (ok ? "fb-correct" : "fb-wrong");
+  document.getElementById("fb-icon").textContent = ok ? "✅" : "❌";
+  document.getElementById("fb-text").textContent  = msg;
+}
+function hideFeedback() {
+  document.getElementById("feedback-strip").className = "feedback-strip";
+}
+
+/* ── Finish ── */
+async function finishQuiz() {
+  showPage("result-page");
+
+  const total       = curWS.questions.length;
+  const correctAll  = answered.filter(Boolean).length;   // should equal total
+  const totalTries  = attempts.reduce((s, a) => s + a, 0);
+  const rate        = Math.round(correctAll / total * 100);
+
+  document.getElementById("r-score").textContent = correctAll;
+  document.getElementById("r-of").textContent    = `/ ${total}`;
+  document.getElementById("r-msg").textContent =
+    totalTries === total ? "완벽해요! 단번에 모두 맞췄어요 🏆" :
+    totalTries <= total + 2 ? "훌륭해요! 🎉" : "끝까지 포기하지 않았어요! 💪";
+  document.getElementById("r-sub").textContent =
+    `총 ${totalTries}번 시도 · 정답률 ${rate}%`;
+
+  const list = document.getElementById("r-list");
+  list.innerHTML = "";
+  curWS.questions.forEach((q, i) => {
+    const tries = attempts[i];
+    const row   = document.createElement("div");
+    row.className = "result-row";
+    row.innerHTML = `
+      <span class="r-icon">${tries === 1 ? "✅" : "✅"}</span>
+      <div class="r-body">
+        <div class="r-qnum">문제 ${i + 1}</div>
+        <div>${q.text}</div>
+        ${tries > 1 ? `<div class="r-tries">⟳ ${tries}번 만에 정답</div>` : ""}
+      </div>
+    `;
+    list.appendChild(row);
+  });
+
+  // Firestore save
+  try {
+    const perQ = {};
+    curWS.questions.forEach((q, i) => { perQ[q.id] = { attempts: attempts[i] }; });
+    await setDoc(doc(db, "results", user.uid, "worksheets", curWS.id), {
+      studentEmail:    user.email,
+      studentName:     user.displayName || "",
+      worksheetId:     curWS.id,
+      worksheetTitle:  curWS.title,
+      solvedQuestions: total,
+      totalAttempts:   totalTries,
+      correctRate:     rate,
+      perQuestion:     perQ,
+      completedAt:     serverTimestamp(),
+    }, { merge: true });
+    wsProgress[curWS.id] = { solvedQuestions: total, totalAttempts: totalTries, correctRate: rate, completedAt: true };
+  } catch(e) { console.error("저장 오류:", e); }
+}
+
+document.getElementById("btn-retry").addEventListener("click", () => startQuiz(curWS));
+document.getElementById("btn-home").addEventListener("click", loadDash);
+document.getElementById("btn-back").addEventListener("click", loadDash);
+
+/* ══ PAGE SWITCH ══ */
+function showPage(id) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo(0, 0);
+}
+
+/* ═══════════════════════════════════════════════════════
+   CANVAS DRAWING ENGINE
+   ═══════════════════════════════════════════════════════ */
+const canvas  = document.getElementById("draw-canvas");
+const ctx     = canvas.getContext("2d");
+let drawing   = false;
+let penColor  = "#1c1917";
+let penSize   = 3;
+let eraserMode = false;
+let lastX = 0, lastY = 0;
+
+/* Resize canvas to fill container */
+function resizeCanvas() {
+  const w = canvas.parentElement.clientWidth;
+  // save current drawing
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  canvas.width  = w;
+  canvas.height = 280;
+  ctx.putImageData(img, 0, 0);
+  setCtxStyle();
+}
+function setCtxStyle() {
+  ctx.lineCap   = "round";
+  ctx.lineJoin  = "round";
+  ctx.strokeStyle = eraserMode ? "#fffef9" : penColor;
+  ctx.lineWidth   = eraserMode ? penSize * 4 : penSize;
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  if (e.touches) {
+    return [
+      (e.touches[0].clientX - rect.left) * scaleX,
+      (e.touches[0].clientY - rect.top)  * scaleY
+    ];
+  }
+  return [
+    (e.clientX - rect.left) * scaleX,
+    (e.clientY - rect.top)  * scaleY
+  ];
+}
+
+function startDraw(e) {
+  e.preventDefault();
+  drawing = true;
+  [lastX, lastY] = getPos(e);
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, (eraserMode ? penSize*4 : penSize) / 2, 0, Math.PI*2);
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fill();
+}
+function draw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const [x, y] = getPos(e);
+  setCtxStyle();
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  lastX = x; lastY = y;
+}
+function endDraw() { drawing = false; }
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+canvas.addEventListener("mousedown",  startDraw);
+canvas.addEventListener("mousemove",  draw);
+canvas.addEventListener("mouseup",    endDraw);
+canvas.addEventListener("mouseleave", endDraw);
+canvas.addEventListener("touchstart", startDraw, { passive: false });
+canvas.addEventListener("touchmove",  draw,      { passive: false });
+canvas.addEventListener("touchend",   endDraw);
+
+/* Tool buttons */
+document.getElementById("tool-pen").addEventListener("click", () => {
+  eraserMode = false;
+  document.getElementById("tool-pen").classList.add("active");
+  document.getElementById("tool-eraser").classList.remove("active");
+  setCtxStyle();
+});
+document.getElementById("tool-eraser").addEventListener("click", () => {
+  eraserMode = true;
+  document.getElementById("tool-eraser").classList.add("active");
+  document.getElementById("tool-pen").classList.remove("active");
+  setCtxStyle();
+});
+document.getElementById("btn-clear").addEventListener("click", clearCanvas);
+
+/* Color swatches */
+document.querySelectorAll(".color-swatch").forEach(sw => {
+  sw.addEventListener("click", () => {
+    eraserMode = false;
+    penColor   = sw.dataset.color;
+    document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("active"));
+    sw.classList.add("active");
+    document.getElementById("tool-pen").classList.add("active");
+    document.getElementById("tool-eraser").classList.remove("active");
+    setCtxStyle();
+  });
+});
+
+/* Stroke size */
+document.getElementById("stroke-size").addEventListener("input", e => {
+  penSize = parseInt(e.target.value);
+  setCtxStyle();
+});
+
+/* Initial setup */
+resizeCanvas();
+setCtxStyle();
+window.addEventListener("resize", resizeCanvas);
+</script>
+</body>
+</html>

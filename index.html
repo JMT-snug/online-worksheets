@@ -167,6 +167,37 @@ header {
 .dot-r { background: var(--red); }
 .dot-a { background: var(--amber); }
 
+/* ── Grade tabs ── */
+.grade-tabs {
+  display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.grade-tab {
+  padding: 7px 18px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  border: 2px solid var(--rule); background: var(--paper);
+  cursor: pointer; transition: all .15s; color: var(--ink2);
+}
+.grade-tab:hover { border-color: var(--ink2); }
+.grade-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.grade-tab.g1.active { background: #1d4ed8; border-color: #1d4ed8; }
+.grade-tab.g2.active { background: #15803d; border-color: #15803d; }
+.grade-tab.g3.active { background: #b91c1c; border-color: #b91c1c; }
+
+/* Category badge */
+.cat-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 1px 7px; border-radius: 3px; margin-bottom: 8px;
+  margin-right: 4px;
+}
+.cat-수와연산  { background: #dbeafe; color: #1e40af; }
+.cat-변화와관계 { background: #dcfce7; color: #166534; }
+.cat-도형과측정 { background: #fef3c7; color: #92400e; }
+.cat-자료와가능성 { background: #fce7f3; color: #9d174d; }
+
+/* Empty worksheet card */
+.ws-card.empty { opacity: .65; }
+.ws-card.empty:hover { transform: none; box-shadow: none; cursor: default; }
+.ws-coming { font-size: 12px; color: var(--ink3); font-style: italic; }
+
 /* ═══════════════════════════════════════════════
    QUIZ PAGE — split layout
    Left: problem + canvas  |  Right: choices
@@ -473,7 +504,14 @@ header {
   <main>
     <div class="dash-greet" id="dash-greet">안녕하세요!</div>
     <div class="dash-sub">오늘 학습할 내용을 선택하세요.</div>
-    <div class="sec-label" style="margin-top:28px">학습지 목록</div>
+    <div class="sec-label" style="margin-top:28px">학년 선택</div>
+    <div class="grade-tabs">
+      <button class="grade-tab active" data-grade="all" onclick="filterGrade(this,'all')">전체</button>
+      <button class="grade-tab g1" data-grade="1" onclick="filterGrade(this,'1')">🔵 1학년</button>
+      <button class="grade-tab g2" data-grade="2" onclick="filterGrade(this,'2')">🟢 2학년</button>
+      <button class="grade-tab g3" data-grade="3" onclick="filterGrade(this,'3')">🔴 3학년</button>
+    </div>
+    <div class="sec-label">학습지 목록</div>
     <div class="ws-grid" id="ws-grid"></div>
   </main>
 </div>
@@ -600,129 +638,248 @@ const ALLOWED_DOMAINS = []; // 빈 배열 = 도메인 제한 없음
 const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr"];
 
 /* ─── 학습지 데이터 ───────────────────────────────────── */
+// ═══════════════════════════════════════════════════════════
+// 2022 개정 교육과정 · 중학교 수학 학습지 목록
+// 새 학습지 추가: 아래 배열에 항목 추가 후 GitHub push
+// ═══════════════════════════════════════════════════════════
 const WORKSHEETS = [
+
+  // ──────────────────────────────
+  //  🔵 중학교 1학년
+  // ──────────────────────────────
   {
-    id: "ws01",
-    title: "세포의 구조와 기능",
-    subject: "생명과학 I",
-    grade: 2,
-    dueDate: "2025-06-30",
-    questions: [
-      {
-        id: "q1",
-        text: "세포막의 주요 구성 성분으로 올바른 것은?",
-        choices: ["인지질 이중층", "단백질만으로 구성", "탄수화물 섬유", "핵산 이중 가닥"],
-        answer: 0
-      },
-      {
-        id: "q2",
-        text: "ATP를 생산하는 세포 소기관으로 '세포의 발전소'라 불리는 것은?",
-        choices: ["엽록체", "리보솜", "미토콘드리아", "리소솜"],
-        answer: 2
-      },
-      {
-        id: "q3",
-        text: "단백질을 합성하는 세포 소기관은?",
-        choices: ["골지체", "리보솜", "액포", "세포벽"],
-        answer: 1
-      },
-      {
-        id: "q4",
-        text: "광합성이 일어나는 세포 소기관은?",
-        choices: ["미토콘드리아", "리소솜", "엽록체", "핵"],
-        answer: 2
-      },
-      {
-        id: "q5",
-        text: "동물 세포에는 없고 식물 세포에만 있는 구조를 모두 고른 것은?",
-        choices: [
-          "세포벽, 엽록체, 큰 액포",
-          "미토콘드리아, 리보솜",
-          "세포막, 골지체",
-          "핵, 소포체"
-        ],
-        answer: 0
-      },
-    ]
-  },
-  {
-    id: "ws02",
-    title: "멘델의 유전 법칙",
-    subject: "생명과학 I",
-    grade: 2,
-    dueDate: "2025-07-15",
-    questions: [
-      {
-        id: "q1",
-        text: "멘델의 분리 법칙에서 Aa × Aa 교배 시 열성(aa) 표현형이 나올 확률은?",
-        choices: ["1/4 (25%)", "1/2 (50%)", "3/4 (75%)", "0%"],
-        answer: 0
-      },
-      {
-        id: "q2",
-        text: "부모의 형질이 자손에서 다시 나타나지 않았다가 손자 세대에서 나타나는 것과 관련된 법칙은?",
-        choices: ["독립의 법칙", "우열의 법칙", "분리 법칙", "연관 법칙"],
-        answer: 2
-      },
-      {
-        id: "q3",
-        text: "순종 노란 완두(YY) × 순종 초록 완두(yy) 교배 결과 F1은?",
-        choices: ["Yy (노란색)", "yy (초록색)", "YY (노란색)", "YYyy (혼합)"],
-        answer: 0
-      },
-      {
-        id: "q4",
-        text: "서로 다른 염색체에 있는 두 유전자가 독립적으로 분리되는 법칙은?",
-        choices: ["우열의 법칙", "분리 법칙", "독립의 법칙", "연관 법칙"],
-        answer: 2
-      },
-      {
-        id: "q5",
-        text: "AaBb × AaBb 교배 시 A_B_(표현형: 둥글고 노란) 비율은? (독립 가정)",
-        choices: ["9/16", "3/16", "1/16", "6/16"],
-        answer: 0
-      },
-    ]
-  },
-  {
-    id: "ws03",
-    title: "광합성과 세포호흡",
-    subject: "생명과학 I",
+    id: "m1-01",
+    title: "소인수분해",
+    subject: "수학 1학년",
     grade: 1,
-    dueDate: "2025-07-31",
-    questions: [
-      {
-        id: "q1",
-        text: "광합성에서 빛 에너지를 ATP로 전환하는 명반응이 일어나는 장소는?",
-        choices: ["엽록체 기질(스트로마)", "틸라코이드 막", "세포질", "미토콘드리아 기질"],
-        answer: 1
-      },
-      {
-        id: "q2",
-        text: "광합성의 암반응(캘빈 회로)에서 CO₂가 고정되는 장소는?",
-        choices: ["틸라코이드 막", "세포막", "엽록체 기질(스트로마)", "핵"],
-        answer: 2
-      },
-      {
-        id: "q3",
-        text: "세포호흡의 해당 과정(Glycolysis)이 일어나는 장소는?",
-        choices: ["미토콘드리아 기질", "미토콘드리아 내막", "세포질(cytosol)", "핵"],
-        answer: 2
-      },
-      {
-        id: "q4",
-        text: "크렙스 회로(TCA cycle)가 일어나는 장소는?",
-        choices: ["세포질", "미토콘드리아 기질", "틸라코이드", "엽록체 기질"],
-        answer: 1
-      },
-      {
-        id: "q5",
-        text: "포도당 1분자의 완전 산화 시 이론적으로 생성되는 ATP 수는?",
-        choices: ["2 ATP", "4 ATP", "36~38 ATP", "100 ATP"],
-        answer: 2
-      },
-    ]
-  }
+    category: "수와 연산",
+    dueDate: "2025-12-31",
+    questions: []   // ← PDF로 문제 만들면 여기에 추가
+  },
+  {
+    id: "m1-02",
+    title: "정수와 유리수",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "수와 연산",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-03",
+    title: "문자와 식 / 일차방정식",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-04",
+    title: "좌표평면과 그래프",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-05",
+    title: "기본 도형",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-06",
+    title: "평면도형의 성질",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-07",
+    title: "입체도형의 성질",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m1-08",
+    title: "자료의 정리와 해석",
+    subject: "수학 1학년",
+    grade: 1,
+    category: "자료와 가능성",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+
+  // ──────────────────────────────
+  //  🟢 중학교 2학년
+  // ──────────────────────────────
+  {
+    id: "m2-01",
+    title: "유리수와 순환소수",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "수와 연산",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-02",
+    title: "단항식과 다항식",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-03",
+    title: "일차부등식",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-04",
+    title: "연립일차방정식",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-05",
+    title: "일차함수와 그래프",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-06",
+    title: "일차함수와 일차방정식의 관계",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-07",
+    title: "삼각형의 성질",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-08",
+    title: "사각형의 성질",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-09",
+    title: "도형의 닮음",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m2-10",
+    title: "경우의 수와 확률",
+    subject: "수학 2학년",
+    grade: 2,
+    category: "자료와 가능성",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+
+  // ──────────────────────────────
+  //  🔴 중학교 3학년
+  // ──────────────────────────────
+  {
+    id: "m3-01",
+    title: "제곱근과 실수",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "수와 연산",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-02",
+    title: "다항식의 곱셈과 인수분해",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-03",
+    title: "이차방정식",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-04",
+    title: "이차함수와 그래프",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "변화와 관계",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-05",
+    title: "삼각비",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-06",
+    title: "원의 성질",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "도형과 측정",
+    dueDate: "2025-12-31",
+    questions: []
+  },
+  {
+    id: "m3-07",
+    title: "통계 (대푯값과 산포도)",
+    subject: "수학 3학년",
+    grade: 3,
+    category: "자료와 가능성",
+    dueDate: "2025-12-31",
+    questions: []
+  },
 ];
 
 /* ─────────────────────────────────────────────────────── */
@@ -786,43 +943,75 @@ async function loadDash() {
   renderCards();
 }
 
+let curGradeFilter = "all";
+
+function filterGrade(btn, grade) {
+  document.querySelectorAll(".grade-tab").forEach(t => t.classList.remove("active"));
+  btn.classList.add("active");
+  curGradeFilter = grade;
+  renderCards();
+}
+
+const CAT_CLASS = {
+  "수와 연산":   "cat-수와연산",
+  "변화와 관계": "cat-변화와관계",
+  "도형과 측정": "cat-도형과측정",
+  "자료와 가능성":"cat-자료와가능성",
+};
+const GRADE_COLOR = { 1: "#1d4ed8", 2: "#15803d", 3: "#b91c1c" };
+
 function renderCards() {
   const grid = document.getElementById("ws-grid");
   grid.innerHTML = "";
-  WORKSHEETS.forEach(ws => {
+
+  const list = WORKSHEETS.filter(ws =>
+    curGradeFilter === "all" || String(ws.grade) === curGradeFilter
+  );
+
+  if (list.length === 0) {
+    grid.innerHTML = '<div style="color:var(--ink3);font-size:14px">해당 학년 학습지가 없습니다.</div>';
+    return;
+  }
+
+  list.forEach(ws => {
     const prog    = wsProgress[ws.id];
     const total   = ws.questions.length;
+    const isEmpty = total === 0;
     const solvedN = prog ? (prog.solvedQuestions || 0) : 0;
     const isDone  = prog && prog.completedAt;
-    const pct     = Math.round(solvedN / total * 100);
-    const overdue = new Date(ws.dueDate) < new Date();
+    const pct     = total ? Math.round(solvedN / total * 100) : 0;
+    const correctRate = prog ? (prog.correctRate ?? 0) : 0;
+    const barColor = correctRate >= 80 ? "var(--green)" : correctRate >= 60 ? "var(--amber)" : "var(--red)";
+    const gc = GRADE_COLOR[ws.grade] || "var(--accent)";
+    const catClass = CAT_CLASS[ws.category] || "";
 
     let statusClass = "s-new", statusText = "미완료";
     if (isDone) { statusClass = "s-done"; statusText = "완료"; }
     else if (solvedN > 0) { statusClass = "s-partial"; statusText = `${solvedN}/${total} 진행 중`; }
-    else if (overdue) { statusClass = "s-partial"; statusText = "기한초과"; }
-
-    const correctRate = prog ? (prog.correctRate ?? 0) : 0;
-    const barColor = correctRate >= 80 ? "var(--green)" : correctRate >= 60 ? "var(--amber)" : "var(--red)";
 
     const card = document.createElement("div");
-    card.className = "ws-card";
+    card.className = "ws-card" + (isEmpty ? " empty" : "");
     card.innerHTML = `
-      <span class="ws-status ${statusClass}">${statusText}</span>
-      <div class="ws-pill">${ws.subject} · ${ws.grade}학년</div>
+      ${!isEmpty ? `<span class="ws-status ${statusClass}">${statusText}</span>` : ""}
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="ws-pill" style="background:${gc}18;color:${gc}">${ws.grade}학년</span>
+        ${ws.category ? `<span class="cat-badge ${catClass}">${ws.category}</span>` : ""}
+      </div>
       <h3>${ws.title}</h3>
-      <div class="ws-meta">마감 ${ws.dueDate} · ${total}문제</div>
-      ${isDone || solvedN > 0 ? `
-        <div class="prog-bar-bg">
-          <div class="prog-bar" style="width:${pct}%;background:${barColor}"></div>
-        </div>
-        <div class="ws-stats">
-          <span class="ws-stat"><span class="dot dot-g"></span>${prog?.correctRate ?? 0}% 정답률</span>
-          <span class="ws-stat"><span class="dot dot-a"></span>${prog?.totalAttempts ?? 0}번 시도</span>
-        </div>
-      ` : `<div style="font-size:13px;color:var(--ink3)">아직 풀지 않았어요.</div>`}
+      <div class="ws-meta">${isEmpty ? "문제 준비 중" : `${total}문제`}</div>
+      ${isEmpty ? `<div class="ws-coming">📋 곧 업데이트됩니다</div>` :
+        (isDone || solvedN > 0) ? `
+          <div class="prog-bar-bg">
+            <div class="prog-bar" style="width:${pct}%;background:${barColor}"></div>
+          </div>
+          <div class="ws-stats">
+            <span class="ws-stat"><span class="dot dot-g"></span>${correctRate}% 정답률</span>
+            <span class="ws-stat"><span class="dot dot-a"></span>${prog?.totalAttempts ?? 0}번 시도</span>
+          </div>
+        ` : `<div style="font-size:13px;color:var(--ink3)">아직 풀지 않았어요.</div>`
+      }
     `;
-    card.addEventListener("click", () => startQuiz(ws));
+    if (!isEmpty) card.addEventListener("click", () => startQuiz(ws));
     grid.appendChild(card);
   });
 }

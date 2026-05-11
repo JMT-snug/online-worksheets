@@ -247,10 +247,16 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   <main>
     <div class="dash-greet" id="dash-greet">안녕하세요!</div>
     <div class="dash-sub">학습할 단원을 선택하세요.</div>
-    <div class="curriculum-matrix">
-      <table class="matrix-table" id="matrix-table">
-        <!-- JS로 렌더링 -->
-      </table>
+    <div class="matrix-wrap">
+      <!-- 학년 헤더 -->
+      <div class="matrix-head-row">
+        <div class="matrix-head-cell label">영역 / 학년</div>
+        <div class="matrix-head-cell g1">🔵 1학년</div>
+        <div class="matrix-head-cell g2">🟢 2학년</div>
+        <div class="matrix-head-cell g3">🔴 3학년</div>
+      </div>
+      <!-- 영역별 행: JS 렌더링 -->
+      <div id="matrix-body"></div>
     </div>
   </main>
 </div>
@@ -440,108 +446,79 @@ async function loadDash() {
 /* ── MATRIX RENDER ── */
 const CATEGORIES = ["수와 연산","변화와 관계","도형과 측정","자료와 가능성"];
 const GRADES = [1,2,3];
-const GRADE_LABEL = {1:"🔵 1학년",2:"🟢 2학년",3:"🔴 3학년"};
-const GRADE_CLASS = {1:"g1",2:"g2",3:"g3"};
+const GRADE_COLOR = {1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
 const CAT_COLOR = {
-  "수와 연산":  {bar:"#1e40af", bg:"#dbeafe", text:"#1e40af"},
-  "변화와 관계":{bar:"#166534", bg:"#dcfce7", text:"#166534"},
-  "도형과 측정":{bar:"#92400e", bg:"#fef3c7", text:"#92400e"},
-  "자료와 가능성":{bar:"#9d174d",bg:"#fce7f3", text:"#9d174d"},
+  "수와 연산":   {bar:"#1e40af",text:"#1e40af"},
+  "변화와 관계": {bar:"#166534",text:"#166534"},
+  "도형과 측정": {bar:"#92400e",text:"#92400e"},
+  "자료와 가능성":{bar:"#9d174d",text:"#9d174d"},
 };
 
+function makeItem(ws) {
+  const prog  = wsProgress[ws.id];
+  const total = ws.questions.length;
+  const empty = total === 0;
+  const solved= prog?.solvedQuestions || 0;
+  const done  = !!(prog?.completedAt);
+  const rate  = prog?.correctRate ?? 0;
+  const pct   = total ? Math.round(solved/total*100) : 0;
+  const barC  = rate>=80?"var(--green)":rate>=60?"var(--amber)":"var(--red)";
+  const gc    = GRADE_COLOR[ws.grade];
+
+  const item = document.createElement("div");
+  item.className = "ws-item" + (empty?" empty":"");
+  item.style.borderLeftColor = empty?"var(--rule)":gc;
+
+  let statusHtml="";
+  if (!empty) {
+    if(done)       statusHtml=`<span class="ws-status s-done">완료</span>`;
+    else if(solved) statusHtml=`<span class="ws-status s-partial">${solved}/${total}</span>`;
+  }
+  let bottomHtml="";
+  if(empty){
+    bottomHtml=`<div class="ws-item-coming">준비 중</div>`;
+  } else if(done||solved>0){
+    bottomHtml=`<div class="ws-mini-bar"><div class="ws-mini-fill" style="width:${pct}%;background:${barC}"></div></div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:3px">${rate}% · ${prog?.totalAttempts??0}회</div>`;
+  } else {
+    bottomHtml=`<div style="font-size:11px;color:var(--ink3)">미시작</div>`;
+  }
+  item.innerHTML=`${statusHtml}<div class="ws-item-title">${ws.title}</div>${bottomHtml}`;
+  if(!empty) item.addEventListener("click",()=>startQuiz(ws));
+  return item;
+}
+
 function renderCards() {
-  const tbl = document.getElementById("matrix-table");
-  tbl.innerHTML = "";
+  const body = document.getElementById("matrix-body");
+  body.innerHTML="";
 
-  // ── COLGROUP ──
-  const cg = document.createElement("colgroup");
-  const cl = document.createElement("col"); cl.className="col-label"; cg.appendChild(cl);
-  GRADES.forEach(()=>{ const c=document.createElement("col"); c.className="col-grade"; cg.appendChild(c); });
-  tbl.appendChild(cg);
-
-  // ── THEAD: 학년 헤더 ──
-  const thead = tbl.createTHead();
-  const hrow = thead.insertRow();
-  // 빈 코너셀 (영역 레이블 열)
-  const corner = document.createElement("th");
-  corner.className = "matrix-col-head label";
-  corner.textContent = "영역 / 학년";
-  hrow.appendChild(corner);
-  GRADES.forEach(g => {
-    const th = document.createElement("th");
-    th.className = `matrix-col-head ${GRADE_CLASS[g]}`;
-    th.textContent = GRADE_LABEL[g];
-    hrow.appendChild(th);
-  });
-
-  // ── TBODY: 영역 행 ──
-  const tbody = tbl.createTBody();
-  CATEGORIES.forEach((cat, ci) => {
-    if (ci > 0) {
-      // 행 구분선
-      const sepRow = tbody.insertRow();
-      sepRow.className = "matrix-row-sep";
-      for (let i = 0; i <= GRADES.length; i++) sepRow.insertCell();
-    }
-
-    const row = tbody.insertRow();
+  CATEGORIES.forEach(cat => {
     const cc = CAT_COLOR[cat];
+    const row = document.createElement("div");
+    row.className = "matrix-body-row";
 
-    // 영역 레이블 셀
-    const rhCell = row.insertCell();
-    rhCell.className = "matrix-row-head";
-    rhCell.innerHTML = `<div class="row-head-inner">
-      <div class="row-head-bar" style="background:${cc.bar};min-height:60px"></div>
-      <div class="row-head-text" style="color:${cc.text}">${cat}</div>
-    </div>`;
+    // 영역 레이블
+    const label = document.createElement("div");
+    label.className = "matrix-row-label";
+    label.innerHTML = `
+      <div class="row-label-bar" style="background:${cc.bar}"></div>
+      <div class="row-label-text" style="color:${cc.text}">${cat}</div>`;
+    row.appendChild(label);
 
-    // 학년별 셀
+    // 학년별 컬럼
     GRADES.forEach(g => {
-      const cell = row.insertCell();
-      cell.className = "matrix-cell";
-
-      const items = WORKSHEETS.filter(ws => ws.grade===g && ws.category===cat);
-      if (!items.length) {
-        cell.innerHTML = `<div style="height:40px;display:flex;align-items:center;justify-content:center;color:var(--rule);font-size:20px">—</div>`;
-        return;
+      const col = document.createElement("div");
+      col.className = "matrix-col";
+      const items = WORKSHEETS.filter(ws=>ws.grade===g && ws.category===cat);
+      if(!items.length){
+        col.innerHTML=`<div style="color:var(--rule);text-align:center;padding:12px;font-size:18px">—</div>`;
+      } else {
+        items.forEach(ws=>col.appendChild(makeItem(ws)));
       }
-
-      items.forEach(ws => {
-        const prog  = wsProgress[ws.id];
-        const total = ws.questions.length;
-        const empty = total === 0;
-        const solved= prog?.solvedQuestions || 0;
-        const done  = !!(prog?.completedAt);
-        const rate  = prog?.correctRate ?? 0;
-        const pct   = total ? Math.round(solved/total*100) : 0;
-        const barC  = rate>=80?"var(--green)":rate>=60?"var(--amber)":"var(--red)";
-        const gc    = GRADE_COLOR[g];
-
-        const item = document.createElement("div");
-        item.className = "ws-item" + (empty?" empty":"");
-        item.style.borderLeftColor = empty ? "var(--rule)" : gc;
-
-        let statusHtml = "";
-        if (!empty) {
-          if (done)       statusHtml = `<span class="ws-status s-done">완료</span>`;
-          else if(solved) statusHtml = `<span class="ws-status s-partial">${solved}/${total}</span>`;
-        }
-
-        let bottomHtml = "";
-        if (empty) {
-          bottomHtml = `<div class="ws-item-coming">준비 중</div>`;
-        } else if (done || solved > 0) {
-          bottomHtml = `<div class="ws-mini-bar"><div class="ws-mini-fill" style="width:${pct}%;background:${barC}"></div></div>
-            <div style="font-size:11px;color:var(--ink3);margin-top:3px">${rate}% · ${prog?.totalAttempts??0}회</div>`;
-        } else {
-          bottomHtml = `<div style="font-size:11px;color:var(--ink3)">미시작</div>`;
-        }
-
-        item.innerHTML = `${statusHtml}<div class="ws-item-title">${ws.title}</div>${bottomHtml}`;
-        if (!empty) item.addEventListener("click", () => startQuiz(ws));
-        cell.appendChild(item);
-      });
+      row.appendChild(col);
     });
+
+    body.appendChild(row);
   });
 }
 

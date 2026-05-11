@@ -775,9 +775,13 @@ async function loadDash() {
   document.getElementById("dash-greet").textContent = `안녕하세요, ${name}님! 👋`;
 
   wsProgress = {};
-  for (const ws of WORKSHEETS) {
-    const snap = await getDoc(doc(db, "results", user.uid, "worksheets", ws.id));
-    if (snap.exists()) wsProgress[ws.id] = snap.data();
+  try {
+    for (const ws of WORKSHEETS) {
+      const snap = await getDoc(doc(db, "results", user.uid, "worksheets", ws.id));
+      if (snap.exists()) wsProgress[ws.id] = snap.data();
+    }
+  } catch(e) {
+    console.warn("진도 불러오기 실패:", e.message);
   }
   renderCards();
 }

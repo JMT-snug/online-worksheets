@@ -497,6 +497,58 @@ const WORKSHEETS = [
   // { id:"ws-u1-03-01", unitId:"u1-03", title:"문자와 식 연습문제1", grade:1, questions:[] },
 
   // ── 일차방정식
+  { id:"ws-u1-04-02", unitId:"u1-04",
+    title:"일차방정식 연습문제2", grade:1, category:"변화와 관계",
+    questions:[
+      // ── 유형A: 뜻 보고 용어 맞추기 ──
+      { id:"q01", type:"word",
+        text:"수 또는 문자의 곱으로 이루어진 식의 각 부분을 무엇이라고 하는가?",
+        answer:"항", answerAlt:[], diff:1 },
+      // ── 유형B: 용어 보고 빈칸 ──
+      { id:"q02", type:"word",
+        text:"3x²−5x+2에서 항의 개수는?",
+        answer:"3", answerAlt:[], diff:1 },
+      { id:"q03", type:"word",
+        text:"항에서 문자를 제외한 수 부분을 무엇이라고 하는가?",
+        answer:"계수", answerAlt:[], diff:1 },
+      { id:"q04", type:"word",
+        text:"−7x에서 x의 계수는?",
+        answer:"-7", answerAlt:["−7"], diff:1 },
+      { id:"q05", type:"word",
+        text:"문자 없이 수만으로 이루어진 항을 무엇이라고 하는가?",
+        answer:"상수항", answerAlt:[], diff:1 },
+      { id:"q06", type:"word",
+        text:"4x³−2x+9에서 상수항은?",
+        answer:"9", answerAlt:[], diff:1 },
+      { id:"q07", type:"word",
+        text:"항에서 문자가 곱해진 횟수를 무엇이라고 하는가?",
+        answer:"차수", answerAlt:[], diff:1 },
+      { id:"q08", type:"word",
+        text:"3x²의 차수는?",
+        answer:"2", answerAlt:[], diff:1 },
+      { id:"q09", type:"word",
+        text:"a=b이면 a+3=b+□ (□에 들어갈 수는?)",
+        answer:"3", answerAlt:[], diff:2 },
+      { id:"q10", type:"word",
+        text:"a=b이면 2a=□b (□에 들어갈 수는?)",
+        answer:"2", answerAlt:[], diff:2 },
+      { id:"q11", type:"word",
+        text:"미지수의 값에 따라 참이 되기도 하고 거짓이 되기도 하는 등식을 무엇이라고 하는가?",
+        answer:"방정식", answerAlt:[], diff:2 },
+      { id:"q12", type:"word",
+        text:"방정식을 참이 되게 하는 미지수의 값을 무엇이라고 하는가?",
+        answer:"해", answerAlt:["근"], diff:2 },
+      // ── 유형C: 일차방정식 풀기 (수식 입력) ──
+      { id:"q13", type:"equation", text:"x - 3 = 5",                    answer:8,     answerFrac:null, diff:1 },
+      { id:"q14", type:"equation", text:"2x = -10",                      answer:-5,    answerFrac:null, diff:1 },
+      { id:"q15", type:"equation", text:"3x + 4 = 13",                   answer:3,     answerFrac:null, diff:2 },
+      { id:"q16", type:"equation", text:"2x + 1 = 3x - 2",               answer:3,     answerFrac:null, diff:2 },
+      { id:"q17", type:"equation", text:"4(x + 2) = 3x + 11",            answer:3,     answerFrac:null, diff:3 },
+      { id:"q18", type:"equation", text:"3x + 1 = 2x - 1/2",             answer:-1.5,  answerFrac:"-3/2", diff:4 },
+      { id:"q19", type:"equation", text:"2x - 1 = x + 1/3",              answer:4/3,   answerFrac:"4/3", diff:4 },
+      { id:"q20", type:"equation", text:"5(x - 1) - 3(x + 2) = -3",      answer:4,     answerFrac:null, diff:3 },
+    ]
+  },
   { id:"ws-u1-04-01", unitId:"u1-04",
     title:"일차방정식 연습문제1", grade:1, category:"변화와 관계",
     questions:[
@@ -802,61 +854,99 @@ function renderQuestion() {
   updateStrip();
   requestAnimationFrame(()=>{
     restoreCanvasState(curQIdx);
-    // MathJax 렌더링
     const panel=document.getElementById("quiz-left-panel");
     if(panel) renderMath(panel);
   });
+
+  const isWord = q.type==="word";
   const panel=document.getElementById("quiz-left-panel");
-  panel.innerHTML=`
+
+  // 문제 헤더
+  const qHeadHtml=`
     <div class="problem-card">
       <div class="q-num">
         문제 ${curQIdx+1} / ${len}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':
+                  '<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>'}
       </div>
-      <div class="q-text">다음 일차방정식을 풀어라.</div>
-      <div class="q-text" style="margin-top:6px"><span class="eq">${fracText(q.text)}</span></div>
-    </div>
-    <div class="math-input-card">
-      <div class="ans-hint">
-        <strong>x =</strong>
-        <span>키보드 직접 입력 가능 &nbsp;·&nbsp; Tab = 분수 다음 칸 &nbsp;·&nbsp; Enter = 확인</span>
-      </div>
-      <div class="ans-display focused" id="ans-display"><span class="ans-cur"></span></div>
-      <div class="keypad" onmousedown="event.preventDefault()">
-        <div class="krow">
-          ${[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="kbtn" onclick="qInput('${n}')">${n}</button>`).join("")}
-          <button class="kbtn del" onclick="qInput('⌫')" style="flex:1.3">⌫</button>
-        </div>
-        <div class="krow gap">
-          <button class="kbtn op" onclick="qInput('+')">+</button>
-          <button class="kbtn op" onclick="qInput('−')">−</button>
-          <button class="kbtn op" onclick="qInput('×')">×</button>
-          <button class="kbtn op" onclick="qInput('÷')">÷</button>
-          <button class="kbtn op" onclick="qInput('.')">.</button>
-          <button class="kbtn op" onclick="qInput('(')">(</button>
-          <button class="kbtn op" onclick="qInput(')')">)</button>
-        </div>
-        <div class="krow gap">
-          <button class="kbtn spl" onclick="qInput('FRAC')" style="flex:2.5">
-            <span class="frac-prev"><span class="fn">a</span><span class="fd">b</span></span>
-            분수
-          </button>
-          <button class="kbtn spl" onclick="qNextPart()" style="flex:2">▶ 다음 칸 <small style="font-size:10px">(Tab)</small></button>
-          <button class="kbtn spl" onclick="qInput('EXP')" style="flex:2.5">
-            <span class="exp-prev">a<sup>n</sup></span>
-            지수
-          </button>
-        </div>
-      </div>
-      <div class="ans-btns" onmousedown="event.preventDefault()">
-        <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
-        <button class="btn-clr-ans" onclick="qClear()">지우기</button>
-      </div>
-      <div class="feedback-strip" id="feedback-strip"></div>
-      <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-        🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
-      </div>
+      <div class="q-text" style="margin-top:2px">${isWord ? q.text : '다음 일차방정식을 풀어라.'}</div>
+      ${!isWord?`<div class="q-text" style="margin-top:6px"><span class="eq">${fracText(q.text)}</span></div>`:''}
     </div>`;
+
+  if(isWord){
+    // ── 용어 입력 UI ──
+    panel.innerHTML=`${qHeadHtml}
+      <div class="math-input-card">
+        <div class="ans-hint">
+          <strong>답:</strong>
+          <span>키보드로 입력 후 Enter</span>
+        </div>
+        <input type="text" id="word-input" autocomplete="off" autocorrect="off"
+          spellcheck="false"
+          style="width:100%;height:44px;font-size:17px;font-weight:700;
+            border:1.5px solid var(--accent);border-radius:8px;
+            padding:0 14px;font-family:inherit;color:var(--ink);
+            background:var(--paper);outline:none;box-sizing:border-box"
+          placeholder="정답 입력..."
+          onkeydown="if(event.key==='Enter'){event.preventDefault();submitQAns();}"
+        >
+        <div class="ans-btns" style="margin-top:8px" onmousedown="event.preventDefault()">
+          <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
+          <button class="btn-clr-ans" onclick="document.getElementById('word-input').value=''">지우기</button>
+        </div>
+        <div class="feedback-strip" id="feedback-strip"></div>
+        <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
+          🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+        </div>
+      </div>`;
+    // 자동 포커스
+    requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
+  } else {
+    // ── 수식 입력 UI ──
+    panel.innerHTML=`${qHeadHtml}
+      <div class="math-input-card">
+        <div class="ans-hint">
+          <strong>x =</strong>
+          <span>키보드 직접 입력 가능 &nbsp;·&nbsp; Tab = 분수 다음 칸 &nbsp;·&nbsp; Enter = 확인</span>
+        </div>
+        <div class="ans-display focused" id="ans-display"><span class="ans-cur"></span></div>
+        <div class="keypad" onmousedown="event.preventDefault()">
+          <div class="krow">
+            ${[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="kbtn" onclick="qInput('${n}')">${n}</button>`).join("")}
+            <button class="kbtn del" onclick="qInput('⌫')" style="flex:1.3">⌫</button>
+          </div>
+          <div class="krow gap">
+            <button class="kbtn op" onclick="qInput('+')">+</button>
+            <button class="kbtn op" onclick="qInput('−')">−</button>
+            <button class="kbtn op" onclick="qInput('×')">×</button>
+            <button class="kbtn op" onclick="qInput('÷')">÷</button>
+            <button class="kbtn op" onclick="qInput('.')">.</button>
+            <button class="kbtn op" onclick="qInput('(')">(</button>
+            <button class="kbtn op" onclick="qInput(')')">)</button>
+          </div>
+          <div class="krow gap">
+            <button class="kbtn spl" onclick="qInput('FRAC')" style="flex:2.5">
+              <span class="frac-prev"><span class="fn">a</span><span class="fd">b</span></span>
+              분수
+            </button>
+            <button class="kbtn spl" onclick="qNextPart()" style="flex:2">▶ 다음 칸 <small style="font-size:10px">(Tab)</small></button>
+            <button class="kbtn spl" onclick="qInput('EXP')" style="flex:2.5">
+              <span class="exp-prev">a<sup>n</sup></span>
+              지수
+            </button>
+          </div>
+        </div>
+        <div class="ans-btns" onmousedown="event.preventDefault()">
+          <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
+          <button class="btn-clr-ans" onclick="qClear()">지우기</button>
+        </div>
+        <div class="feedback-strip" id="feedback-strip"></div>
+        <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
+          🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+        </div>
+      </div>`;
+  }
 }
 
 /* 토큰 렌더 */
@@ -924,12 +1014,21 @@ function qTokensToNum(){
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"÷","Tab":"TAB","Enter":"ENTER","NumpadEnter":"ENTER"};
 function quizKeyHandler(e){
+  const q=curWS?.questions[curQIdx];
+  // word 타입: text input이 직접 처리 (Enter만 가로채기)
+  if(q?.type==="word"){
+    if((e.key==="Enter"||e.code==="NumpadEnter") && answered[curQIdx]){
+      e.preventDefault();
+      const isLast=curQIdx===curWS.questions.length-1;
+      if(isLast) finishQuiz(); else nextQ();
+    }
+    return;
+  }
   if(!document.getElementById("ans-display")) return;
   const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
   e.preventDefault();
   if(v==="TAB") qNextPart();
   else if(v==="ENTER"){
-    // 정답 후 → 다음 문제, 아니면 채점
     if(answered[curQIdx]){
       const isLast=curQIdx===curWS.questions.length-1;
       if(isLast) finishQuiz(); else nextQ();
@@ -942,6 +1041,46 @@ function quizKeyHandler(e){
 
 async function submitQAns(){
   const q=curWS.questions[curQIdx];
+
+  // ── 용어 문제 채점 ──
+  if(q.type==="word"){
+    const input=document.getElementById("word-input");
+    const userAns=(input?.value||"").trim().replace(/\s+/g," ");
+    const correct=[q.answer,...(q.answerAlt||[])];
+    const ok=correct.some(a=>a.toLowerCase()===userAns.toLowerCase());
+    attempts[curQIdx]++;
+    const ab=document.getElementById("attempt-badge");
+    const an=document.getElementById("attempt-num");
+    if(ab) ab.style.display="flex"; if(an) an.textContent=attempts[curQIdx];
+    const fb=document.getElementById("feedback-strip");
+    if(ok){
+      if(input) input.disabled=true;
+      fb.className="feedback-strip show fb-correct";
+      const isLast=curQIdx===curWS.questions.length-1;
+      fb.innerHTML=`✅ 정답! &nbsp;<strong>${q.answer}</strong>&nbsp;
+        <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+          style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
+          background:var(--green);color:#fff;font-size:13px;font-weight:700;
+          cursor:pointer;font-family:inherit">
+          ${isLast?'결과 보기 →':'다음 문제 →'}
+        </button>`;
+      answered[curQIdx]=true; updateStrip();
+    } else {
+      wrongAnswers[curQIdx].inputs.push(userAns||"(빈칸)");
+      fb.className="feedback-strip show fb-wrong";
+      fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
+      const lp=document.getElementById("quiz-left-panel");
+      lp.classList.add("shake");
+      setTimeout(()=>{
+        lp.classList.remove("shake");
+        if(input){input.disabled=false;input.value="";input.focus();}
+        fb.className="feedback-strip";
+      },600);
+    }
+    return;
+  }
+
+  // ── 수식 문제 채점 ──
   const val=qTokensToNum();
   const rawInput=qTokens.map(t=>{
     if(t.type==="char") return t.val;
@@ -949,16 +1088,31 @@ async function submitQAns(){
     if(t.type==="exp")  return `${t.base}^${t.expo}`;
     return "";
   }).join("").replace(/−/g,"-");
-  const ok=!isNaN(val)&&Math.abs(val-q.answer)<0.001;
+
+  // 분수 정답 처리 (answerFrac 있으면 분수로도 비교)
+  let ok=false;
+  if(!isNaN(val)){
+    ok=Math.abs(val-q.answer)<0.001;
+    // 분수 입력 비교: "3/2" → 1.5
+    if(!ok && rawInput.includes("/")){
+      const parts=rawInput.split("/");
+      if(parts.length===2){
+        const fv=parseFloat(parts[0])/parseFloat(parts[1]);
+        ok=Math.abs(fv-q.answer)<0.001;
+      }
+    }
+  }
+  const ok2=ok; // alias
   attempts[curQIdx]++;
   const fb=document.getElementById("feedback-strip");
   const ab=document.getElementById("attempt-badge");
   const an=document.getElementById("attempt-num");
   if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
-  if(ok){
+  if(ok_){
     fb.className="feedback-strip show fb-correct";
     const isLast = curQIdx===curWS.questions.length-1;
-    fb.innerHTML=`✅ 정답! &nbsp; x = ${q.answer} &nbsp;
+    const dispAns = q.answerFrac || q.answer;
+    fb.innerHTML=`✅ 정답! &nbsp; x = ${dispAns} &nbsp;
       <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;
@@ -967,7 +1121,6 @@ async function submitQAns(){
       </button>`;
     answered[curQIdx]=true; updateStrip();
   } else {
-    // 오답 기록
     wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
     // 캔버스 이미지 Storage 업로드
     try {

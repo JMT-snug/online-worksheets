@@ -154,7 +154,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 /* 지수 칩 */
 .chip-exp{display:inline-flex;align-items:flex-start;font-family:'Courier New',monospace;vertical-align:middle;margin:0 1px}
 .chip-exp .base{font-size:17px;line-height:1}
-.chip-exp .expo{font-size:11px;color:#fff;background:var(--accent);border-radius:3px;padding:1px 4px;min-width:14px;text-align:center;margin-top:-4px}
+.chip-exp .expo{font-size:11px;color:#fff;background:var(--accent);border-radius:3px;padding:1px 4px;min-width:14px;text-align:center;margin-top:-10px}
 .chip-exp .expo.ap{background:var(--amber)}
 /* 일반 토큰 */
 .tok{font-family:'Courier New',monospace;font-size:17px;vertical-align:middle}
@@ -387,10 +387,19 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <span class="canvas-toolbar-label">풀이판</span>
           <button class="tool-btn active" id="tool-pen" title="펜">✏️</button>
           <button class="tool-btn" id="tool-eraser" title="지우개">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="1" y="9" width="14" height="4" rx="1" fill="#a8a29e"/>
-              <path d="M3 9L7.5 3.5C8 2.8 9 2.8 9.5 3.5L13 9H3Z" fill="#d4cfc7"/>
-              <rect x="3" y="11" width="4" height="2" rx="0.5" fill="#fff"/>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- 지우개 몸통 (핑크) -->
+              <rect x="2" y="5" width="12" height="8" rx="1.5" fill="#f9a8c9"/>
+              <!-- 지우개 몸통 어두운 절반 (오른쪽) -->
+              <rect x="8" y="5" width="6" height="8" rx="1.5" fill="#f472b6"/>
+              <!-- 가운데 구분선 -->
+              <line x1="8" y1="5" x2="8" y2="13" stroke="#e879a0" stroke-width="0.8"/>
+              <!-- 지우개 테두리 -->
+              <rect x="2" y="5" width="12" height="8" rx="1.5" stroke="#e879a0" stroke-width="0.8" fill="none"/>
+              <!-- 바닥 줄 (지워진 흔적) -->
+              <line x1="1" y1="13" x2="15" y2="13" stroke="#c8b8c0" stroke-width="1" stroke-linecap="round"/>
+              <!-- 반짝이 하이라이트 -->
+              <rect x="3.5" y="6.5" width="3" height="1.5" rx="0.5" fill="white" opacity="0.5"/>
             </svg>
           </button>
           <div class="divider-v"></div>

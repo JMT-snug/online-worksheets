@@ -187,34 +187,44 @@ const FB = {
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
+const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
-/* ── 2022 개정 교육과정 중학교 수학 단원 ── */
+/* ── 학습지 목록 (index.html과 동일하게 유지) ── */
 const WORKSHEETS = [
-  { id:"m1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
-  { id:"m1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
-  { id:"m1-03", title:"문자와 식 / 일차방정식", grade:1, category:"변화와 관계", qCount:14 },
-  { id:"m1-04", title:"좌표평면과 그래프",       grade:1, category:"변화와 관계" },
-  { id:"m1-05", title:"기본 도형",              grade:1, category:"도형과 측정" },
-  { id:"m1-06", title:"평면도형의 성질",         grade:1, category:"도형과 측정" },
-  { id:"m1-07", title:"입체도형의 성질",         grade:1, category:"도형과 측정" },
-  { id:"m1-08", title:"자료의 정리와 해석",      grade:1, category:"자료와 가능성" },
-  { id:"m2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산" },
-  { id:"m2-02", title:"단항식과 다항식",         grade:2, category:"변화와 관계" },
-  { id:"m2-03", title:"일차부등식",             grade:2, category:"변화와 관계" },
-  { id:"m2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계" },
-  { id:"m2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계" },
-  { id:"m2-06", title:"일차함수와 일차방정식",   grade:2, category:"변화와 관계" },
-  { id:"m2-07", title:"삼각형의 성질",          grade:2, category:"도형과 측정" },
-  { id:"m2-08", title:"사각형의 성질",          grade:2, category:"도형과 측정" },
-  { id:"m2-09", title:"도형의 닮음",            grade:2, category:"도형과 측정" },
-  { id:"m2-10", title:"경우의 수와 확률",        grade:2, category:"자료와 가능성" },
-  { id:"m3-01", title:"제곱근과 실수",          grade:3, category:"수와 연산" },
-  { id:"m3-02", title:"다항식의 곱셈과 인수분해", grade:3, category:"변화와 관계" },
-  { id:"m3-03", title:"이차방정식",             grade:3, category:"변화와 관계" },
-  { id:"m3-04", title:"이차함수와 그래프",        grade:3, category:"변화와 관계" },
-  { id:"m3-05", title:"삼각비",                grade:3, category:"도형과 측정" },
-  { id:"m3-06", title:"원의 성질",             grade:3, category:"도형과 측정" },
-  { id:"m3-07", title:"통계 (대푯값과 산포도)", grade:3, category:"자료와 가능성" },
+  // 일차방정식
+  { id:"ws-u1-04-02", unitId:"u1-04", title:"일차방정식 연습문제2", grade:1, category:"변화와 관계", qCount:20 },
+  { id:"ws-u1-04-01", unitId:"u1-04", title:"일차방정식 연습문제1", grade:1, category:"변화와 관계", qCount:14 },
+  // 나머지 단원 (학습지 없음 — 추후 추가)
+];
+
+/* ── 단원 목록 (사이드바용) ── */
+const UNITS = [
+  { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
+  { id:"u1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
+  { id:"u1-03", title:"문자와 식",              grade:1, category:"변화와 관계" },
+  { id:"u1-04", title:"일차방정식",             grade:1, category:"변화와 관계" },
+  { id:"u1-05", title:"좌표평면과 그래프",       grade:1, category:"변화와 관계" },
+  { id:"u1-06", title:"기본 도형",              grade:1, category:"도형과 측정" },
+  { id:"u1-07", title:"평면도형의 성질",         grade:1, category:"도형과 측정" },
+  { id:"u1-08", title:"입체도형의 성질",         grade:1, category:"도형과 측정" },
+  { id:"u1-09", title:"자료의 정리와 해석",      grade:1, category:"자료와 가능성" },
+  { id:"u2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산" },
+  { id:"u2-02", title:"단항식과 다항식",         grade:2, category:"변화와 관계" },
+  { id:"u2-03", title:"일차부등식",             grade:2, category:"변화와 관계" },
+  { id:"u2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계" },
+  { id:"u2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계" },
+  { id:"u2-06", title:"일차함수와 일차방정식",   grade:2, category:"변화와 관계" },
+  { id:"u2-07", title:"삼각형의 성질",          grade:2, category:"도형과 측정" },
+  { id:"u2-08", title:"사각형의 성질",          grade:2, category:"도형과 측정" },
+  { id:"u2-09", title:"도형의 닮음",            grade:2, category:"도형과 측정" },
+  { id:"u2-10", title:"경우의 수와 확률",        grade:2, category:"자료와 가능성" },
+  { id:"u3-01", title:"제곱근과 실수",          grade:3, category:"수와 연산" },
+  { id:"u3-02", title:"다항식의 곱셈과 인수분해", grade:3, category:"변화와 관계" },
+  { id:"u3-03", title:"이차방정식",             grade:3, category:"변화와 관계" },
+  { id:"u3-04", title:"이차함수와 그래프",        grade:3, category:"변화와 관계" },
+  { id:"u3-05", title:"삼각비",                grade:3, category:"도형과 측정" },
+  { id:"u3-06", title:"원의 성질",             grade:3, category:"도형과 측정" },
+  { id:"u3-07", title:"통계 (대푯값과 산포도)", grade:3, category:"자료와 가능성" },
 ];
 const CAT_CLASS={"수와 연산":"cat-수와연산","변화와 관계":"cat-변화와관계","도형과 측정":"cat-도형과측정","자료와 가능성":"cat-자료와가능성"};
 const GRADE_COLOR={1:"var(--g1)",2:"var(--g2)",3:"var(--g3)"};
@@ -271,23 +281,18 @@ async function loadAll(){
 
 /* ── SIDEBAR ── */
 function buildSidebar(){
-  const colors=["#1d4ed8","#1d4ed8","#1d4ed8","#1d4ed8","#1d4ed8","#1d4ed8","#1d4ed8","#1d4ed8",
-                "#15803d","#15803d","#15803d","#15803d","#15803d","#15803d","#15803d","#15803d","#15803d","#15803d",
-                "#b91c1c","#b91c1c","#b91c1c","#b91c1c","#b91c1c","#b91c1c","#b91c1c"];
+  const GCOL={1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
   let h=`<div class="sb-section">메뉴</div>
     <div class="sb-item ${selView==='overview'?'active':''}" data-view="overview">📊 전체 현황</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
-    <div class="sb-section">🔵 1학년 단원</div>`;
-  [1,2,3].forEach(g=>{
-    if(g>1) h+=`<div class="sb-section">${g===2?'🟢':'🔴'} ${g}학년 단원</div>`;
-    WORKSHEETS.filter(w=>w.grade===g).forEach(ws=>{
-      const done=Object.values(allData).filter(d=>d[ws.id]?.completedAt).length;
-      h+=`<div class="sb-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
-        <span class="sb-dot" style="background:${GRADE_COLOR[ws.grade].replace('var(--g','#').replace('1)','1d4ed8').replace('2)','15803d').replace('3)','b91c1c')}"></span>
-        <span style="flex:1;font-size:12px">${ws.title}</span>
-        <span class="sb-count">${done}</span>
-      </div>`;
-    });
+    <div class="sb-section">학습지별</div>`;
+  WORKSHEETS.forEach(ws=>{
+    const done=Object.values(allData).filter(d=>d[ws.id]?.completedAt).length;
+    h+=`<div class="sb-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
+      <span class="sb-dot" style="background:${GCOL[ws.grade]||'#888'}"></span>
+      <span style="flex:1;font-size:12px">${ws.title}</span>
+      <span class="sb-count">${done}</span>
+    </div>`;
   });
   const nav=document.getElementById("sidebar");
   nav.innerHTML=h;
@@ -295,6 +300,7 @@ function buildSidebar(){
     el.addEventListener("click",()=>navigate(el.dataset.view));
   });
 }
+
 
 function navigate(view){
   selView=view;
@@ -487,13 +493,23 @@ function renderClasses(){
         </div>
         <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">${students.length}명 등록</div>
         <div class="student-list" id="list-${key}">
-          ${students.map((e,i)=>`<div class="student-chip">
-            <span>${e}</span>
-            <button class="remove" onclick="removeStudent('${key}',${i})">×</button>
-          </div>`).join("")}
+          ${students.map((e,i)=>{
+            const disp = e.endsWith(STUDENT_DOMAIN) ? e.replace(STUDENT_DOMAIN,'') : e;
+            return `<div class="student-chip">
+              <span>${disp}</span>
+              <span style="font-size:11px;color:var(--ink3);margin-left:2px">${STUDENT_DOMAIN}</span>
+              <button class="remove" onclick="removeStudent('${key}',${i})">×</button>
+            </div>`;
+          }).join("")}
         </div>
         <div class="add-student-row">
-          <input type="text" id="add-${key}" placeholder="이메일 입력" onkeydown="if(event.key==='Enter')addStudent('${key}')">
+          <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
+            <input type="text" id="add-${key}"
+              placeholder="아이디 입력"
+              style="border:none;outline:none;padding:7px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
+              onkeydown="if(event.key==='Enter')addStudent('${key}')">
+            <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
+          </div>
           <button class="btn-sm" onclick="addStudent('${key}')">추가</button>
         </div>
       </div>`;
@@ -534,10 +550,12 @@ window.deleteClass=async function(key){
 
 window.addStudent=async function(key){
   const inp=document.getElementById("add-"+key);
-  const email=inp.value.trim().toLowerCase();
-  if(!email) return;
+  let val=inp.value.trim().toLowerCase();
+  if(!val) return;
+  // 아이디만 입력하면 도메인 자동 추가
+  const email = val.includes("@") ? val : val + STUDENT_DOMAIN;
   if(!classes[key].students) classes[key].students=[];
-  if(classes[key].students.includes(email)){ alert("이미 등록된 이메일입니다."); return; }
+  if(classes[key].students.includes(email)){ alert("이미 등록된 학생입니다."); return; }
   classes[key].students.push(email);
   await saveClasses();
   renderClasses();

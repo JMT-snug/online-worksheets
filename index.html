@@ -127,10 +127,21 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .ans-cur{display:inline-block;width:1.5px;height:1.1em;background:var(--ink);animation:blink .8s step-end infinite;vertical-align:middle;margin-left:1px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 /* 분수 칩 */
-.chip-frac{display:inline-flex;flex-direction:column;align-items:center;font-family:'Courier New',monospace;font-size:13px;line-height:1;vertical-align:middle;margin:0 2px;border:1px solid var(--accent);border-radius:5px;overflow:hidden;background:var(--acc-lt)}
-.chip-frac .fn{padding:2px 6px;border-bottom:1.5px solid var(--accent);min-width:18px;text-align:center}
-.chip-frac .fd{padding:2px 6px;min-width:18px;text-align:center}
-.chip-frac .fn.ap,.chip-frac .fd.ap{background:#fff;outline:2px solid var(--accent)}
+.chip-frac{display:inline-flex;flex-direction:column;align-items:center;
+  font-family:'Courier New',monospace;font-size:14px;line-height:1;
+  vertical-align:middle;margin:0 3px;
+  border:1.5px solid var(--accent);border-radius:6px;overflow:hidden;background:var(--acc-lt)}
+.chip-frac .fn{padding:3px 8px;border-bottom:1.5px solid var(--accent);
+  min-width:22px;text-align:center;font-weight:700}
+.chip-frac .fd{padding:3px 8px;min-width:22px;text-align:center;font-weight:700}
+.chip-frac .fn.ap{background:#fff;outline:2px solid var(--accent);outline-offset:-1px}
+.chip-frac .fd.ap{background:#fff;outline:2px solid var(--accent);outline-offset:-1px}
+/* 문제 텍스트 안 수직 분수 */
+.frac-inline{display:inline-flex;flex-direction:column;align-items:center;
+  font-family:'Courier New',monospace;font-size:15px;line-height:1.1;
+  vertical-align:middle;margin:0 3px;color:var(--accent)}
+.frac-inline .fi-n{border-bottom:1.5px solid var(--accent);padding:0 4px;min-width:16px;text-align:center;font-weight:700}
+.frac-inline .fi-d{padding:0 4px;min-width:16px;text-align:center;font-weight:700}
 /* 지수 칩 */
 .chip-exp{display:inline-flex;align-items:flex-start;font-family:'Courier New',monospace;vertical-align:middle;margin:0 1px}
 .chip-exp .base{font-size:17px;line-height:1}
@@ -328,7 +339,13 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
         <div class="canvas-toolbar">
           <span class="canvas-toolbar-label">풀이판</span>
           <button class="tool-btn active" id="tool-pen" title="펜">✏️</button>
-          <button class="tool-btn" id="tool-eraser" title="지우개">🧹</button>
+          <button class="tool-btn" id="tool-eraser" title="지우개">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="9" width="14" height="4" rx="1" fill="#a8a29e"/>
+              <path d="M3 9L7.5 3.5C8 2.8 9 2.8 9.5 3.5L13 9H3Z" fill="#d4cfc7"/>
+              <rect x="3" y="11" width="4" height="2" rx="0.5" fill="#fff"/>
+            </svg>
+          </button>
           <div class="divider-v"></div>
           <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917"></span>
           <span class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8"></span>
@@ -579,6 +596,14 @@ function renderCards() {
 /* ── QUIZ ── */
 /* ── QUIZ ENGINE (단답형 + 수식입력기) ── */
 const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
+
+/* 텍스트 안 a/b 패턴을 수직 분수 HTML로 변환 */
+function fracText(text){
+  // 패턴: (num)/denom 또는 num/denom (숫자·x·변수만)
+  return text.replace(/(\([^)]+\)|[0-9x]+)\s*\/\s*([0-9x]+)/g, (_, n, d)=>{
+    return `<span class="frac-inline"><span class="fi-n">${n}</span><span class="fi-d">${d}</span></span>`;
+  });
+}
 let qTokens=[], qEditPart=null;
 
 function startQuiz(ws) {
@@ -626,7 +651,7 @@ function renderQuestion() {
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
       </div>
       <div class="q-text">다음 일차방정식을 풀어라.</div>
-      <div class="q-text" style="margin-top:6px"><span class="eq">${q.text}</span></div>
+      <div class="q-text" style="margin-top:6px"><span class="eq">${fracText(q.text)}</span></div>
     </div>
     <div class="math-input-card">
       <div class="ans-hint">
@@ -634,7 +659,7 @@ function renderQuestion() {
         <span>키보드 직접 입력 가능 &nbsp;·&nbsp; Tab = 분수 다음 칸 &nbsp;·&nbsp; Enter = 확인</span>
       </div>
       <div class="ans-display focused" id="ans-display"><span class="ans-cur"></span></div>
-      <div class="keypad">
+      <div class="keypad" onmousedown="event.preventDefault()">
         <div class="krow">
           ${[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="kbtn" onclick="qInput('${n}')">${n}</button>`).join("")}
           <button class="kbtn del" onclick="qInput('⌫')" style="flex:1.3">⌫</button>
@@ -660,7 +685,7 @@ function renderQuestion() {
           </button>
         </div>
       </div>
-      <div class="ans-btns">
+      <div class="ans-btns" onmousedown="event.preventDefault()">
         <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
         <button class="btn-clr-ans" onclick="qClear()">지우기</button>
       </div>
@@ -761,15 +786,15 @@ async function submitQAns(){
   if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
   if(ok){
     fb.className="feedback-strip show fb-correct";
-    fb.innerHTML="✅ 정답! &nbsp; x = "+q.answer;
+    const isLast = curQIdx===curWS.questions.length-1;
+    fb.innerHTML=`✅ 정답! &nbsp; x = ${q.answer} &nbsp;
+      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+        style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
+        background:var(--green);color:#fff;font-size:13px;font-weight:700;
+        cursor:pointer;font-family:inherit">
+        ${isLast?'결과 보기 →':'다음 문제 →'}
+      </button>`;
     answered[curQIdx]=true; updateStrip();
-    setTimeout(()=>{
-      if(curQIdx<curWS.questions.length-1){
-        saveCanvasState();
-        curQIdx++;
-        renderQuestion();
-      } else finishQuiz();
-    },900);
   } else {
     // 오답 기록
     wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
@@ -835,6 +860,14 @@ async function finishQuiz(){
   } catch(e){ console.error("저장 오류:",e); }
 }
 
+/* 정답 후 다음 문제로 */
+function nextQ(){
+  saveCanvasState();
+  curQIdx++;
+  renderQuestion();
+}
+window.nextQ=nextQ;
+
 /* 이전/다음 문제 이동 */
 function moveQ(dir){
   const next=curQIdx+dir;
@@ -882,13 +915,21 @@ function initCanvas(){
   const w=canvas.parentElement.clientWidth||600;
   canvas.width=w;
   canvas.height=520;
+  ctx.globalCompositeOperation="source-over";
   setCtx();
 }
 
 function setCtx(){
   ctx.lineCap="round"; ctx.lineJoin="round";
-  ctx.strokeStyle=eraser?"#fffef9":penColor;
-  ctx.lineWidth=eraser?penSize*4:penSize;
+  if(eraser){
+    ctx.globalCompositeOperation="destination-out";
+    ctx.strokeStyle="rgba(0,0,0,1)";
+    ctx.lineWidth=penSize*5;
+  } else {
+    ctx.globalCompositeOperation="source-over";
+    ctx.strokeStyle=penColor;
+    ctx.lineWidth=penSize;
+  }
 }
 
 /* 현재 문제 필기 저장 */
@@ -901,14 +942,18 @@ function saveCanvasState(){
 
 /* 문제 이동 시: 저장 → 초기화 → 복원 */
 function restoreCanvasState(idx){
+  ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if(canvasStore[idx]){
     try{ ctx.putImageData(canvasStore[idx],0,0); }
     catch(e){}
   }
+  setCtx();
 }
 
 function clearCanvas(){
+  // compositeOperation 초기화 후 지우기
+  ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
   delete canvasStore[curQIdx];
 }
@@ -924,8 +969,10 @@ function cvStart(e){
   e.preventDefault(); cvDrawing=true;
   [cvLX,cvLY]=cvPos(e);
   setCtx();
-  ctx.beginPath(); ctx.arc(cvLX,cvLY,(eraser?penSize*4:penSize)/2,0,Math.PI*2);
-  ctx.fillStyle=ctx.strokeStyle; ctx.fill();
+  if(!eraser){
+    ctx.beginPath(); ctx.arc(cvLX,cvLY,penSize/2,0,Math.PI*2);
+    ctx.fillStyle=penColor; ctx.fill();
+  }
 }
 function cvDraw(e){
   if(!cvDrawing) return; e.preventDefault();

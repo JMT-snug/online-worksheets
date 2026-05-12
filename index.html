@@ -466,11 +466,13 @@ const UNITS = [
   { id:"u1-04", title:"일차방정식",             grade:1, category:"변화와 관계" },
   { id:"u1-05", title:"좌표평면과 그래프",       grade:1, category:"변화와 관계" },
   { id:"u1-06", title:"기본 도형",              grade:1, category:"도형과 측정" },
+  { id:"u1-06b",title:"작도와 합동",            grade:1, category:"도형과 측정" },
   { id:"u1-07", title:"평면도형의 성질",         grade:1, category:"도형과 측정" },
   { id:"u1-08", title:"입체도형의 성질",         grade:1, category:"도형과 측정" },
-  { id:"u1-09", title:"자료의 정리와 해석",      grade:1, category:"자료와 가능성" },
+  { id:"u1-09", title:"대푯값",                 grade:1, category:"자료와 가능성" },
+  { id:"u1-10", title:"도수분포표와 상대도수",   grade:1, category:"자료와 가능성" },
   { id:"u2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산" },
-  { id:"u2-02", title:"단항식과 다항식",         grade:2, category:"변화와 관계" },
+  { id:"u2-02", title:"다항식의 계산",         grade:2, category:"변화와 관계" },
   { id:"u2-03", title:"일차부등식",             grade:2, category:"변화와 관계" },
   { id:"u2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계" },
   { id:"u2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계" },
@@ -478,14 +480,17 @@ const UNITS = [
   { id:"u2-07", title:"삼각형의 성질",          grade:2, category:"도형과 측정" },
   { id:"u2-08", title:"사각형의 성질",          grade:2, category:"도형과 측정" },
   { id:"u2-09", title:"도형의 닮음",            grade:2, category:"도형과 측정" },
-  { id:"u2-10", title:"경우의 수와 확률",        grade:2, category:"자료와 가능성" },
+  { id:"u2-09b",title:"피타고라스 정리",         grade:2, category:"도형과 측정" },
+  { id:"u2-10", title:"경우의 수",              grade:2, category:"자료와 가능성" },
+  { id:"u2-11", title:"확률",                   grade:2, category:"자료와 가능성" },
   { id:"u3-01", title:"제곱근과 실수",          grade:3, category:"수와 연산" },
   { id:"u3-02", title:"다항식의 곱셈과 인수분해", grade:3, category:"변화와 관계" },
   { id:"u3-03", title:"이차방정식",             grade:3, category:"변화와 관계" },
   { id:"u3-04", title:"이차함수와 그래프",        grade:3, category:"변화와 관계" },
   { id:"u3-05", title:"삼각비",                grade:3, category:"도형과 측정" },
   { id:"u3-06", title:"원의 성질",             grade:3, category:"도형과 측정" },
-  { id:"u3-07", title:"통계 (대푯값과 산포도)", grade:3, category:"자료와 가능성" },
+  { id:"u3-07", title:"산포도",                grade:3, category:"자료와 가능성" },
+  { id:"u3-08", title:"상자그림과 산포도",       grade:3, category:"자료와 가능성" },
 ];
 
 /* ── 2022 개정 교육과정 중학교 수학 단원 ── */
@@ -1102,13 +1107,12 @@ async function submitQAns(){
       }
     }
   }
-  const ok2=ok; // alias
   attempts[curQIdx]++;
   const fb=document.getElementById("feedback-strip");
   const ab=document.getElementById("attempt-badge");
   const an=document.getElementById("attempt-num");
   if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
-  if(ok_){
+  if(ok){
     fb.className="feedback-strip show fb-correct";
     const isLast = curQIdx===curWS.questions.length-1;
     const dispAns = q.answerFrac || q.answer;

@@ -203,6 +203,63 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .btn-sec:hover{background:var(--rule)}
 @keyframes fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .fade-up{animation:fade-up .25s ease}
+
+/* ── 섹션 헤더 ── */
+.section-banner{padding:10px 18px;border-radius:var(--r);margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.section-banner.review{background:var(--amb-lt);border:1px solid var(--amber)}
+.section-banner.concept{background:var(--acc-lt);border:1px solid var(--accent)}
+.section-banner.practice{background:var(--grn-lt);border:1px solid var(--green)}
+.section-banner .s-icon{font-size:18px}
+.section-banner .s-label{font-size:13px;font-weight:700}
+.section-banner .s-desc{font-size:12px;color:var(--ink3);margin-left:auto}
+
+/* ── 개념학습 카드 ── */
+.concept-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-bottom:0}
+.concept-section-title{font-size:13px;font-weight:700;padding:12px 16px 0;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.concept-section-title::before{content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:var(--accent)}
+.concept-body{padding:12px 16px 14px;font-size:14px;line-height:2}
+.concept-body .c-line{margin-bottom:4px;display:flex;align-items:baseline;flex-wrap:wrap;gap:3px}
+/* 예시 박스 */
+.example-box{background:var(--cream);border:1px solid var(--rule);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13px}
+.example-box .ex-title{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.example-eq{font-family:'Courier New',monospace;font-size:15px;color:var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.example-eq .arrow{color:var(--ink3);font-size:12px}
+.example-eq .label{font-size:11px;color:var(--ink3);border-bottom:1px solid var(--ink3)}
+/* 빈칸 */
+.blank{display:inline-flex;align-items:center;justify-content:center;
+  min-width:60px;height:26px;border-bottom:1.5px solid var(--ink);
+  font-weight:700;color:var(--accent);cursor:pointer;
+  background:transparent;border-radius:0;padding:0 4px;
+  font-family:'Noto Sans KR',sans-serif;font-size:14px;
+  position:relative}
+.blank input{position:absolute;inset:0;width:100%;height:100%;
+  border:none;background:transparent;text-align:center;
+  font-weight:700;color:var(--accent);font-size:14px;
+  font-family:'Noto Sans KR',sans-serif;outline:none;cursor:pointer}
+.blank.correct{border-bottom-color:var(--green);background:var(--grn-lt)}
+.blank.correct input{color:var(--green)}
+.blank.wrong{border-bottom-color:var(--red);background:var(--red-lt)}
+.blank.wrong input{color:var(--red)}
+/* 개념 답안 제출 */
+.concept-submit-row{padding:0 16px 14px;display:flex;align-items:center;gap:10px}
+.btn-concept-check{padding:8px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.concept-fb{font-size:13px;font-weight:700}
+.concept-fb.ok{color:var(--green)}.concept-fb.ng{color:var(--red)}
+/* 예제 풀이 카드 */
+.example-solve-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+.example-solve-head{padding:10px 16px;background:var(--cream);border-bottom:1px solid var(--rule);font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
+.example-solve-body{padding:14px 16px;font-size:14px;line-height:1.8}
+.example-solve-body .eq{font-family:'Courier New',monospace;font-size:15px;color:var(--accent)}
+.example-solve-body .step{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.example-solve-body .step-num{font-size:11px;font-weight:700;color:var(--ink3);min-width:20px}
+/* 단답형 예제 입력 */
+.example-ans-row{display:flex;align-items:center;gap:10px;padding:10px 16px 14px}
+.example-ans-label{font-size:13px;font-weight:700;color:var(--ink2)}
+.example-ans-input{width:80px;height:34px;border:1.5px solid var(--rule);border-radius:7px;text-align:center;font-size:16px;font-family:'Courier New',monospace;font-weight:700;color:var(--ink)}
+.example-ans-input:focus{outline:none;border-color:var(--accent)}
+.btn-ex-check{padding:7px 16px;border-radius:7px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.ex-fb{font-size:13px;font-weight:700}
+.ex-fb.ok{color:var(--green)}.ex-fb.ng{color:var(--red)}
 </style>
 </head>
 <body>
@@ -257,6 +314,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <div class="quiz-topbar">
       <button class="btn-back" id="btn-back">← 목록</button>
       <span class="quiz-ws-title" id="quiz-ws-title"></span>
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button class="btn-back" id="btn-prev-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(-1)">◀ 이전</button>
+        <button class="btn-back" id="btn-next-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(1)">다음 ▶</button>
+      </div>
     </div>
     <div class="q-progress-strip" id="q-progress-strip"></div>
     <div class="quiz-cols">
@@ -525,9 +586,12 @@ function startQuiz(ws) {
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
+  canvasStore={};
   showPage("quiz-page");
   document.getElementById("quiz-ws-title").textContent=ws.title;
   buildStrip(); renderQuestion();
+  // 캔버스: quiz-page 표시 후 초기화 (width 정상 계산)
+  requestAnimationFrame(()=>{ initCanvas(); });
   // 키보드 입력 활성화
   document.addEventListener("keydown", quizKeyHandler);
 }
@@ -545,12 +609,15 @@ function updateStrip() {
     const d=document.getElementById("qdot-"+i); if(!d) return;
     d.className="q-dot "+(answered[i]?"done":i===curQIdx?"current":"locked");
   });
+  updateNavBtns();
 }
 
 function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   qTokens=[]; qEditPart=null;
-  updateStrip(); clearCanvas();
+  updateStrip();
+  // 캔버스: 현재 문제 필기 복원 (quiz-page 활성 후)
+  requestAnimationFrame(()=>{ restoreCanvasState(curQIdx); });
   const panel=document.getElementById("quiz-left-panel");
   panel.innerHTML=`
     <div class="problem-card">
@@ -697,8 +764,11 @@ async function submitQAns(){
     fb.innerHTML="✅ 정답! &nbsp; x = "+q.answer;
     answered[curQIdx]=true; updateStrip();
     setTimeout(()=>{
-      if(curQIdx<curWS.questions.length-1){curQIdx++;renderQuestion();}
-      else finishQuiz();
+      if(curQIdx<curWS.questions.length-1){
+        saveCanvasState();
+        curQIdx++;
+        renderQuestion();
+      } else finishQuiz();
     },900);
   } else {
     // 오답 기록
@@ -732,10 +802,12 @@ async function finishQuiz(){
   const tries=attempts.reduce((s,a)=>s+a,0);
   document.getElementById("r-score").textContent=total;
   document.getElementById("r-of").textContent=`/ ${total}`;
+  const perfectFirst = tries===total;
   document.getElementById("r-msg").textContent=
-    tries===total?"완벽! 모두 첫 번째에 맞췄어요 🏆":
+    perfectFirst?"GOOD JOB! 🏆":
     tries<=total+2?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
-  document.getElementById("r-sub").textContent=`총 ${tries}번 시도`;
+  document.getElementById("r-sub").textContent=
+    `총 ${tries}번 시도 · 교과서 80~86페이지를 푸세요 📖`;
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
@@ -763,6 +835,24 @@ async function finishQuiz(){
   } catch(e){ console.error("저장 오류:",e); }
 }
 
+/* 이전/다음 문제 이동 */
+function moveQ(dir){
+  const next=curQIdx+dir;
+  if(next<0||next>=curWS.questions.length) return;
+  saveCanvasState();
+  curQIdx=next;
+  renderQuestion();
+}
+window.moveQ=moveQ;
+
+/* 이전/다음 버튼 활성 상태 업데이트 */
+function updateNavBtns(){
+  const prev=document.getElementById("btn-prev-q");
+  const next=document.getElementById("btn-next-q");
+  if(prev) prev.style.opacity=curQIdx===0?"0.35":"1";
+  if(next) next.style.opacity=curQIdx===curWS.questions.length-1?"0.35":"1";
+}
+
 document.getElementById("btn-retry").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   startQuiz(curWS);
@@ -777,48 +867,80 @@ document.getElementById("btn-back").addEventListener("click",()=>{
 });
 
 
-/* ── CANVAS ── */
+/* ══ CANVAS ENGINE ══
+   - 문제별 필기 저장/복원 (canvasStore[idx])
+   - quiz-page 표시 후 초기화해야 올바른 width 계산
+   - 이전/다음 이동 시 현재 내용 저장 후 복원
+*/
 const canvas=document.getElementById("draw-canvas");
 const ctx=canvas.getContext("2d");
-let drawing=false, penColor="#1c1917", penSize=3, eraser=false, lastX=0, lastY=0;
-function resizeCanvas(){
-  const w=canvas.parentElement.clientWidth;
-  const img=ctx.getImageData(0,0,canvas.width,canvas.height);
-  canvas.width=w; canvas.height=520;
-  ctx.putImageData(img,0,0); setCtx();
+let cvDrawing=false, penColor="#1c1917", penSize=3, eraser=false, cvLX=0, cvLY=0;
+let canvasStore={}; // key: qIdx, value: ImageData
+
+function initCanvas(){
+  // quiz-page가 보이는 상태에서만 호출
+  const w=canvas.parentElement.clientWidth||600;
+  canvas.width=w;
+  canvas.height=520;
+  setCtx();
 }
+
 function setCtx(){
   ctx.lineCap="round"; ctx.lineJoin="round";
   ctx.strokeStyle=eraser?"#fffef9":penColor;
   ctx.lineWidth=eraser?penSize*4:penSize;
 }
-function getPos(e){
+
+/* 현재 문제 필기 저장 */
+function saveCanvasState(){
+  if(canvas.width>0 && canvas.height>0){
+    try{ canvasStore[curQIdx]=ctx.getImageData(0,0,canvas.width,canvas.height); }
+    catch(e){}
+  }
+}
+
+/* 문제 이동 시: 저장 → 초기화 → 복원 */
+function restoreCanvasState(idx){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(canvasStore[idx]){
+    try{ ctx.putImageData(canvasStore[idx],0,0); }
+    catch(e){}
+  }
+}
+
+function clearCanvas(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  delete canvasStore[curQIdx];
+}
+
+function cvPos(e){
   const r=canvas.getBoundingClientRect();
   const sx=canvas.width/r.width, sy=canvas.height/r.height;
   return e.touches
-    ? [(e.touches[0].clientX-r.left)*sx,(e.touches[0].clientY-r.top)*sy]
-    : [(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
+    ?[(e.touches[0].clientX-r.left)*sx,(e.touches[0].clientY-r.top)*sy]
+    :[(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
 }
-function startDraw(e){
-  e.preventDefault(); drawing=true;
-  [lastX,lastY]=getPos(e);
-  ctx.beginPath(); ctx.arc(lastX,lastY,(eraser?penSize*4:penSize)/2,0,Math.PI*2);
+function cvStart(e){
+  e.preventDefault(); cvDrawing=true;
+  [cvLX,cvLY]=cvPos(e);
+  setCtx();
+  ctx.beginPath(); ctx.arc(cvLX,cvLY,(eraser?penSize*4:penSize)/2,0,Math.PI*2);
   ctx.fillStyle=ctx.strokeStyle; ctx.fill();
 }
-function draw(e){
-  if(!drawing) return; e.preventDefault();
-  const [x,y]=getPos(e); setCtx();
-  ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(x,y); ctx.stroke();
-  lastX=x; lastY=y;
+function cvDraw(e){
+  if(!cvDrawing) return; e.preventDefault();
+  const [x,y]=cvPos(e); setCtx();
+  ctx.beginPath(); ctx.moveTo(cvLX,cvLY); ctx.lineTo(x,y); ctx.stroke();
+  cvLX=x; cvLY=y;
 }
-function clearCanvas(){ ctx.clearRect(0,0,canvas.width,canvas.height); }
-canvas.addEventListener("mousedown",startDraw);
-canvas.addEventListener("mousemove",draw);
-canvas.addEventListener("mouseup",()=>drawing=false);
-canvas.addEventListener("mouseleave",()=>drawing=false);
-canvas.addEventListener("touchstart",startDraw,{passive:false});
-canvas.addEventListener("touchmove",draw,{passive:false});
-canvas.addEventListener("touchend",()=>drawing=false);
+canvas.addEventListener("mousedown",cvStart);
+canvas.addEventListener("mousemove",cvDraw);
+canvas.addEventListener("mouseup",()=>cvDrawing=false);
+canvas.addEventListener("mouseleave",()=>cvDrawing=false);
+canvas.addEventListener("touchstart",cvStart,{passive:false});
+canvas.addEventListener("touchmove",cvDraw,{passive:false});
+canvas.addEventListener("touchend",()=>cvDrawing=false);
+
 document.getElementById("tool-pen").addEventListener("click",()=>{
   eraser=false;
   document.getElementById("tool-pen").classList.add("active");
@@ -829,7 +951,9 @@ document.getElementById("tool-eraser").addEventListener("click",()=>{
   document.getElementById("tool-eraser").classList.add("active");
   document.getElementById("tool-pen").classList.remove("active"); setCtx();
 });
-document.getElementById("btn-clear-cv")?.addEventListener("click",clearCanvas);
+document.getElementById("btn-clear-cv")?.addEventListener("click",()=>{
+  clearCanvas();
+});
 document.querySelectorAll(".color-swatch").forEach(sw=>{
   sw.addEventListener("click",()=>{
     eraser=false; penColor=sw.dataset.color;
@@ -842,8 +966,14 @@ document.querySelectorAll(".color-swatch").forEach(sw=>{
 document.getElementById("stroke-size").addEventListener("input",e=>{
   penSize=parseInt(e.target.value); setCtx();
 });
-resizeCanvas(); setCtx();
-window.addEventListener("resize",resizeCanvas);
+window.addEventListener("resize",()=>{
+  if(!document.getElementById("quiz-page").classList.contains("active")) return;
+  saveCanvasState();
+  const saved=canvasStore[curQIdx];
+  canvas.width=canvas.parentElement.clientWidth||600;
+  canvas.height=520; setCtx();
+  if(saved){ try{ctx.putImageData(saved,0,0);}catch(e){} }
+});
 </script>
 </body>
 </html>

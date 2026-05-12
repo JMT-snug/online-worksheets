@@ -6,6 +6,15 @@
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<!-- MathJax: LaTeX 수식 렌더링 -->
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(','\\)'],['$','$']] },
+  options: { skipHtmlTags: ['script','noscript','style','textarea'] },
+  startup: { typeset: false }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <style>
 :root {
   --cream:#faf8f3; --paper:#fff; --rule:#e8e4d9;
@@ -116,7 +125,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .problem-card .q-num{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .q-diff{color:var(--amber);font-size:11px}
 .problem-card .q-text{font-size:16px;font-weight:700;line-height:1.6}
-.problem-card .eq{font-family:'Courier New',monospace;color:var(--accent);font-size:18px}
+.problem-card .eq{color:var(--accent);font-size:18px;line-height:1.8}
 /* 수식 입력 영역 */
 .math-input-card{background:var(--paper);border:1px solid var(--rule);border-top:none;border-radius:0 0 var(--r) var(--r);padding:12px 14px 14px}
 .ans-hint{font-size:10px;color:var(--ink3);margin-bottom:5px;display:flex;align-items:center;gap:6px}
@@ -725,12 +734,25 @@ document.getElementById("btn-unit-back").addEventListener("click", loadDash);
 /* ── QUIZ ENGINE (단답형 + 수식입력기) ── */
 const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 
-/* 텍스트 안 a/b 패턴을 수직 분수 HTML로 변환 */
+/* 문제 텍스트를 LaTeX 수식으로 변환 */
 function fracText(text){
-  // 패턴: (num)/denom 또는 num/denom (숫자·x·변수만)
-  return text.replace(/(\([^)]+\)|[0-9x]+)\s*\/\s*([0-9x]+)/g, (_, n, d)=>{
-    return `<span class="frac-inline"><span class="fi-n">${n}</span><span class="fi-d">${d}</span></span>`;
-  });
+  // 이미 \( \) 로 감싸진 경우 그대로
+  if(text.includes("\\(")) return text;
+  // a/b → \frac{a}{b}
+  let t = text.replace(/(\([^)]+\)|[0-9]+)\s*\/\s*([0-9]+)/g, (_, n, d)=>`\\frac{${n}}{${d}}`);
+  // (expr) 괄호 포함 분수: (x-1)/3
+  t = t.replace(/\(([^)]+)\)\s*\/\s*([0-9]+)/g, (_, n, d)=>`\\frac{${n}}{${d}}`);
+  // − → - (LaTeX용)
+  t = t.replace(/−/g, "-");
+  // 전체를 LaTeX inline으로 감싸기
+  return `\\( ${t} \\)`;
+}
+
+/* MathJax 재렌더링 */
+function renderMath(el){
+  if(window.MathJax && MathJax.typesetPromise){
+    MathJax.typesetPromise([el]).catch(e=>console.warn("MathJax:",e));
+  }
 }
 let qTokens=[], qEditPart=null;
 
@@ -769,8 +791,12 @@ function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   qTokens=[]; qEditPart=null;
   updateStrip();
-  // 캔버스: 현재 문제 필기 복원 (quiz-page 활성 후)
-  requestAnimationFrame(()=>{ restoreCanvasState(curQIdx); });
+  requestAnimationFrame(()=>{
+    restoreCanvasState(curQIdx);
+    // MathJax 렌더링
+    const panel=document.getElementById("quiz-left-panel");
+    if(panel) renderMath(panel);
+  });
   const panel=document.getElementById("quiz-left-panel");
   panel.innerHTML=`
     <div class="problem-card">
@@ -893,7 +919,15 @@ function quizKeyHandler(e){
   const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
   e.preventDefault();
   if(v==="TAB") qNextPart();
-  else if(v==="ENTER") submitQAns();
+  else if(v==="ENTER"){
+    // 정답 후 → 다음 문제, 아니면 채점
+    if(answered[curQIdx]){
+      const isLast=curQIdx===curWS.questions.length-1;
+      if(isLast) finishQuiz(); else nextQ();
+    } else {
+      submitQAns();
+    }
+  }
   else qInput(v);
 }
 
@@ -995,6 +1029,11 @@ function nextQ(){
   renderQuestion();
 }
 window.nextQ=nextQ;
+// 키패드 onclick에서 접근 가능하도록 전역 노출
+window.qInput=qInput;
+window.qNextPart=qNextPart;
+window.qClear=qClear;
+window.submitQAns=submitQAns;
 
 /* 이전/다음 문제 이동 */
 function moveQ(dir){

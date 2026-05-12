@@ -309,6 +309,8 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getStorage, ref, uploadString, getDownloadURL }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
   apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
@@ -374,12 +376,14 @@ const CAT_CLASS = {
 };
 const GRADE_COLOR = {1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
 
-const fbApp = initializeApp(FB);
-const auth  = getAuth(fbApp);
-const db    = getFirestore(fbApp);
+const fbApp   = initializeApp(FB);
+const auth    = getAuth(fbApp);
+const db      = getFirestore(fbApp);
+const storage = getStorage(fbApp);
 
 let user = null, wsProgress = {}, curWS = null;
 let curQIdx = 0, attempts = [], answered = [];
+let wrongAnswers = []; // per question: array of wrong inputs
 
 /* ── PAGE SWITCH ── */
 function showPage(id) {
@@ -520,6 +524,7 @@ function startQuiz(ws) {
   curWS=ws; curQIdx=0;
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
+  wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
   showPage("quiz-page");
   document.getElementById("quiz-ws-title").textContent=ws.title;
   buildStrip(); renderQuestion();
@@ -672,9 +677,15 @@ function quizKeyHandler(e){
   else qInput(v);
 }
 
-function submitQAns(){
+async function submitQAns(){
   const q=curWS.questions[curQIdx];
   const val=qTokensToNum();
+  const rawInput=qTokens.map(t=>{
+    if(t.type==="char") return t.val;
+    if(t.type==="frac") return `${t.num}/${t.den}`;
+    if(t.type==="exp")  return `${t.base}^${t.expo}`;
+    return "";
+  }).join("").replace(/−/g,"-");
   const ok=!isNaN(val)&&Math.abs(val-q.answer)<0.001;
   attempts[curQIdx]++;
   const fb=document.getElementById("feedback-strip");
@@ -690,6 +701,21 @@ function submitQAns(){
       else finishQuiz();
     },900);
   } else {
+    // 오답 기록
+    wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
+    // 캔버스 이미지 Storage 업로드
+    try {
+      const canvas=document.getElementById("draw-canvas");
+      const imgData=canvas.toDataURL("image/png");
+      // 파일명: uid-이름-wsId-qId-시도번호.png
+      const name=user.displayName||user.email.split("@")[0];
+      const fileName=`${user.uid}-${name}-${curWS.id}-${q.id}-try${attempts[curQIdx]}.png`;
+      const storageRef=ref(storage,`wrongAnswers/${user.uid}/${fileName}`);
+      await uploadString(storageRef, imgData, "data_url");
+      const url=await getDownloadURL(storageRef);
+      wrongAnswers[curQIdx].imagePath=url; // 최신 오답 이미지로 덮어씀
+    } catch(e){ console.warn("이미지 저장 실패:",e.message); }
+
     fb.className="feedback-strip show fb-wrong";
     fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
     const lp=document.getElementById("quiz-left-panel");
@@ -720,7 +746,13 @@ async function finishQuiz(){
   });
   try {
     const perQ={};
-    curWS.questions.forEach((q,i)=>{ perQ[q.id]={attempts:attempts[i]}; });
+    curWS.questions.forEach((q,i)=>{
+      perQ[q.id]={
+        attempts: attempts[i],
+        wrongInputs: wrongAnswers[i].inputs,
+        canvasImage: wrongAnswers[i].imagePath||null,
+      };
+    });
     await setDoc(doc(db,"results",user.uid,"worksheets",curWS.id),{
       studentEmail:user.email, studentName:user.displayName||"",
       worksheetId:curWS.id, worksheetTitle:curWS.title,

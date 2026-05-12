@@ -113,6 +113,17 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .cat-자료와가능성{background:#fce7f3;color:#9d174d}
 
 @media(max-width:768px){.sidebar{display:none}.content{padding:20px}}
+
+/* 오답 이미지 모달 */
+.img-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:flex;align-items:center;justify-content:center}
+.img-modal{background:var(--paper);border-radius:var(--r);padding:20px;max-width:700px;width:90%;max-height:90vh;overflow-y:auto}
+.img-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.img-modal-title{font-size:15px;font-weight:700}
+.img-modal-close{background:none;border:1px solid var(--rule);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-family:inherit}
+.img-modal img{width:100%;border-radius:8px;border:1px solid var(--rule)}
+.wrong-chip{display:inline-block;font-size:12px;font-family:'DM Mono',monospace;background:var(--red-lt);color:var(--red);padding:2px 8px;border-radius:4px;margin:2px}
+.canvas-thumb{width:80px;height:50px;object-fit:cover;border-radius:5px;border:1px solid var(--rule);cursor:pointer;transition:transform .1s}
+.canvas-thumb:hover{transform:scale(1.05)}
 </style>
 </head>
 <body>
@@ -148,12 +159,24 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
   </div>
 </div>
 
+<!-- 오답 이미지 모달 -->
+<div id="img-modal" class="img-modal-bg" style="display:none" onclick="closeModal(event)">
+  <div class="img-modal">
+    <div class="img-modal-head">
+      <span class="img-modal-title" id="modal-title">풀이 이미지</span>
+      <button class="img-modal-close" onclick="document.getElementById('img-modal').style.display='none'">닫기</button>
+    </div>
+    <img id="modal-img" src="" alt="풀이 이미지">
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collectionGroup, getDocs, doc, getDoc, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
   apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
@@ -196,9 +219,10 @@ const WORKSHEETS = [
 const CAT_CLASS={"수와 연산":"cat-수와연산","변화와 관계":"cat-변화와관계","도형과 측정":"cat-도형과측정","자료와 가능성":"cat-자료와가능성"};
 const GRADE_COLOR={1:"var(--g1)",2:"var(--g2)",3:"var(--g3)"};
 
-const fbApp = initializeApp(FB);
-const auth  = getAuth(fbApp);
-const db    = getFirestore(fbApp);
+const fbApp   = initializeApp(FB);
+const auth    = getAuth(fbApp);
+const db      = getFirestore(fbApp);
+const storage = getStorage(fbApp);
 
 let tUser=null, allData={}, classes={}, selView="overview";
 
@@ -364,15 +388,24 @@ function renderWS(wsId){
       const ts=r.completedAt?.toDate?r.completedAt.toDate().toLocaleString("ko-KR"):"-";
       const rate=r.correctRate??0;
       const tries=r.totalAttempts||0;
-      const cls=tries<=5?'tries-1':tries<=8?'tries-2':'tries-many';
+      const qc=ws.qCount||5;
+      const cls=tries<=qc?'tries-1':tries<=qc*1.5?'tries-2':'tries-many';
       const classInfo=findClass(r.studentEmail)||"-";
       let perQHtml="";
       if(r.perQuestion){
         perQHtml=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
           const t=v.attempts||1;
-          const c=t===1?"#15803d":t<=2?"#b45309":"#b91c1c";
-          return `<span style="font-size:11px;color:${c};font-family:'DM Mono',monospace">${qid.replace('q','')}:${t}</span>`;
-        }).join(" ");
+          const col=t===1?"var(--green)":t<=2?"var(--amber)":"var(--red)";
+          const wrongChips=(v.wrongInputs||[]).map(w=>`<span class="wrong-chip">${w}</span>`).join("");
+          const thumb=v.canvasImage
+            ? `<img class="canvas-thumb" src="${v.canvasImage}" alt="풀이" onclick="openModal('${v.canvasImage}','${(r.studentName||'').replace(/'/g,"\'")} - ${qid}')">`
+            : "";
+          return `<div style="margin-bottom:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:${col};font-weight:700;min-width:28px">${qid.replace('q','Q')}</span>
+            <span style="font-size:11px;color:var(--ink3)">${t}회</span>
+            ${wrongChips}${thumb}
+          </div>`;
+        }).join("");
       }
       h+=`<tr>
         <td><strong>${r.studentName||"-"}</strong></td>
@@ -380,7 +413,7 @@ function renderWS(wsId){
         <td style="font-size:12px">${classInfo}</td>
         <td>${rateBar(rate)}</td>
         <td><span class="tries-badge ${cls}">${tries}회</span></td>
-        <td>${perQHtml||"-"}</td>
+        <td style="min-width:180px">${perQHtml||"-"}</td>
         <td style="font-size:12px">${ts}</td>
       </tr>`;
     });
@@ -560,6 +593,16 @@ function dl(content,name){
   const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:name});
   a.click();
 }
+/* 이미지 모달 */
+window.openModal=function(url,title){
+  document.getElementById("modal-img").src=url;
+  document.getElementById("modal-title").textContent=title;
+  document.getElementById("img-modal").style.display="flex";
+};
+window.closeModal=function(e){
+  if(e.target.id==="img-modal")
+    document.getElementById("img-modal").style.display="none";
+};
 window.loadAll=loadAll;
 </script>
 </body>

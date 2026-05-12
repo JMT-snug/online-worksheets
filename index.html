@@ -271,6 +271,33 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .btn-ex-check{padding:7px 16px;border-radius:7px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .ex-fb{font-size:13px;font-weight:700}
 .ex-fb.ok{color:var(--green)}.ex-fb.ng{color:var(--red)}
+
+/* ── unit-page 학습지 목록 카드 ── */
+.ws-list-card{
+  background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
+  padding:18px 20px;margin-bottom:10px;cursor:pointer;
+  display:flex;align-items:center;gap:16px;
+  transition:box-shadow .15s,transform .15s;
+  position:relative;overflow:hidden;
+}
+.ws-list-card::before{content:'';position:absolute;left:0;top:0;bottom:0;
+  width:4px;background:var(--accent);opacity:0;transition:opacity .15s}
+.ws-list-card:hover{box-shadow:0 4px 18px rgba(0,0,0,.09);transform:translateY(-1px)}
+.ws-list-card:hover::before{opacity:1}
+.ws-list-card.empty{opacity:.55;cursor:default;pointer-events:none}
+.wslc-icon{width:44px;height:44px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
+  background:var(--acc-lt)}
+.wslc-body{flex:1}
+.wslc-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.wslc-meta{font-size:12px;color:var(--ink3)}
+.wslc-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+/* 단원 셀 배지 (학습지 수) */
+.unit-ws-badge{position:absolute;top:8px;right:8px;
+  font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;
+  background:var(--accent);color:#fff}
+#unit-page.active{display:block!important}
+
 </style>
 </head>
 <body>
@@ -318,6 +345,17 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     </div>
   </main>
 </div>
+
+<!-- UNIT PAGE: 단원별 학습지 목록 -->
+<div id="unit-page" class="page">
+  <main style="max-width:680px;margin:0 auto;padding:28px 20px">
+    <button class="btn-back" id="btn-unit-back" style="margin-bottom:16px">← 단원 목록</button>
+    <div class="dash-greet" id="unit-title" style="font-size:20px"></div>
+    <div class="dash-sub" id="unit-sub" style="margin-bottom:24px"></div>
+    <div id="ws-list-grid"></div>
+  </main>
+</div>
+
 
 <!-- QUIZ -->
 <div id="quiz-page" class="page">
@@ -401,12 +439,49 @@ const FB = {
 const ALLOWED_DOMAINS = [];
 const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr"];
 
+
+/* ── UNITS: 단원 정의 ── */
+const UNITS = [
+  { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
+  { id:"u1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
+  { id:"u1-03", title:"문자와 식",              grade:1, category:"변화와 관계" },
+  { id:"u1-04", title:"일차방정식",             grade:1, category:"변화와 관계" },
+  { id:"u1-05", title:"좌표평면과 그래프",       grade:1, category:"변화와 관계" },
+  { id:"u1-06", title:"기본 도형",              grade:1, category:"도형과 측정" },
+  { id:"u1-07", title:"평면도형의 성질",         grade:1, category:"도형과 측정" },
+  { id:"u1-08", title:"입체도형의 성질",         grade:1, category:"도형과 측정" },
+  { id:"u1-09", title:"자료의 정리와 해석",      grade:1, category:"자료와 가능성" },
+  { id:"u2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산" },
+  { id:"u2-02", title:"단항식과 다항식",         grade:2, category:"변화와 관계" },
+  { id:"u2-03", title:"일차부등식",             grade:2, category:"변화와 관계" },
+  { id:"u2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계" },
+  { id:"u2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계" },
+  { id:"u2-06", title:"일차함수와 일차방정식",   grade:2, category:"변화와 관계" },
+  { id:"u2-07", title:"삼각형의 성질",          grade:2, category:"도형과 측정" },
+  { id:"u2-08", title:"사각형의 성질",          grade:2, category:"도형과 측정" },
+  { id:"u2-09", title:"도형의 닮음",            grade:2, category:"도형과 측정" },
+  { id:"u2-10", title:"경우의 수와 확률",        grade:2, category:"자료와 가능성" },
+  { id:"u3-01", title:"제곱근과 실수",          grade:3, category:"수와 연산" },
+  { id:"u3-02", title:"다항식의 곱셈과 인수분해", grade:3, category:"변화와 관계" },
+  { id:"u3-03", title:"이차방정식",             grade:3, category:"변화와 관계" },
+  { id:"u3-04", title:"이차함수와 그래프",        grade:3, category:"변화와 관계" },
+  { id:"u3-05", title:"삼각비",                grade:3, category:"도형과 측정" },
+  { id:"u3-06", title:"원의 성질",             grade:3, category:"도형과 측정" },
+  { id:"u3-07", title:"통계 (대푯값과 산포도)", grade:3, category:"자료와 가능성" },
+];
+
 /* ── 2022 개정 교육과정 중학교 수학 단원 ── */
 const WORKSHEETS = [
   // 1학년
   { id:"m1-01", title:"소인수분해",            grade:1, category:"수와 연산",    questions:[] },
   { id:"m1-02", title:"정수와 유리수",          grade:1, category:"수와 연산",    questions:[] },
-  { id:"m1-03", title:"문자와 식 / 일차방정식", grade:1, category:"변화와 관계", questions:[
+  // ── 문자와 식 (학습지 없음, 추후 추가)
+  // { id:"ws-u1-03-01", unitId:"u1-03", title:"문자와 식 연습문제1", grade:1, questions:[] },
+
+  // ── 일차방정식
+  { id:"ws-u1-04-01", unitId:"u1-04",
+    title:"일차방정식 연습문제1", grade:1, category:"변화와 관계",
+    questions:[
     { id:"q01", text:"3x = 12",                                   answer:4,  diff:1 },
     { id:"q02", text:"2x + 1 = 7",                                answer:3,  diff:1 },
     { id:"q03", text:"5x − 3 = 2x + 9",                          answer:4,  diff:2 },
@@ -512,7 +587,7 @@ async function loadDash() {
   renderCards();
 }
 
-/* ── MATRIX RENDER ── */
+/* ── MATRIX RENDER (단원 기반) ── */
 const CATEGORIES = ["수와 연산","변화와 관계","도형과 측정","자료와 가능성"];
 const GRADES = [1,2,3];
 const CAT_COLOR = {
@@ -522,39 +597,43 @@ const CAT_COLOR = {
   "자료와 가능성":{bar:"#9d174d", text:"#9d174d"},
 };
 
-function makeItem(ws) {
-  const prog  = wsProgress[ws.id];
-  const total = ws.questions.length;
-  const empty = total === 0;
-  const solved = prog?.solvedQuestions || 0;
-  const done   = !!(prog?.completedAt);
-  const rate   = prog?.correctRate ?? 0;
-  const pct    = total ? Math.round(solved/total*100) : 0;
-  const barC   = rate>=80?"var(--green)":rate>=60?"var(--amber)":"var(--red)";
-  const gc     = GRADE_COLOR[ws.grade];
+/* 단원의 진도 요약 계산 */
+function unitProgress(unit) {
+  const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id && ws.questions.length>0);
+  if(!sheets.length) return {total:0, done:0, hasSheets:false};
+  const done = sheets.filter(ws=>wsProgress[ws.id]?.completedAt).length;
+  return {total:sheets.length, done, hasSheets:true};
+}
+
+/* 단원 셀 아이템 생성 */
+function makeUnitItem(unit) {
+  const gc = GRADE_COLOR[unit.grade];
+  const prog = unitProgress(unit);
 
   const item = document.createElement("div");
-  item.className = "ws-item" + (empty?" empty":"");
-  item.style.borderLeftColor = empty ? "var(--rule)" : gc;
+  item.className = "ws-item" + (!prog.hasSheets?" empty":"");
+  item.style.borderLeftColor = prog.hasSheets ? gc : "var(--rule)";
 
-  let st = "";
-  if (!empty) {
-    if (done)        st = `<span class="ws-status s-done">완료</span>`;
-    else if (solved) st = `<span class="ws-status s-partial">${solved}/${total}</span>`;
+  let badge = "";
+  if(prog.hasSheets) {
+    badge = `<span class="unit-ws-badge">${prog.done}/${prog.total}</span>`;
   }
 
-  let bot = "";
-  if (empty) {
-    bot = `<div class="ws-item-sub coming">준비 중</div>`;
-  } else if (done || solved > 0) {
-    bot = `<div class="ws-mini-bar"><div class="ws-mini-fill" style="width:${pct}%;background:${barC}"></div></div>
-      <div class="ws-item-sub" style="margin-top:3px">${rate}% · ${prog?.totalAttempts??0}회</div>`;
-  } else {
-    bot = `<div class="ws-item-sub">미시작</div>`;
+  let statusHtml = "";
+  if(prog.hasSheets) {
+    if(prog.done===prog.total) statusHtml=`<span class="ws-status s-done">완료</span>`;
+    else if(prog.done>0)      statusHtml=`<span class="ws-status s-partial">${prog.done}/${prog.total}</span>`;
   }
 
-  item.innerHTML = `${st}<div class="ws-item-title">${ws.title}</div>${bot}`;
-  if (!empty) item.addEventListener("click", () => startQuiz(ws));
+  item.innerHTML = `
+    ${badge}
+    ${statusHtml}
+    <div class="ws-item-title">${unit.title}</div>
+    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.total}개` : "준비 중"}</div>`;
+
+  if(prog.hasSheets) {
+    item.addEventListener("click", ()=>showUnitPage(unit));
+  }
   return item;
 }
 
@@ -580,18 +659,67 @@ function renderCards() {
     GRADES.forEach(g => {
       const td = document.createElement("td");
       td.className = "mtd";
-      const items = WORKSHEETS.filter(ws => ws.grade===g && ws.category===cat);
-      if (!items.length) {
-        td.innerHTML = `<div style="color:var(--rule);text-align:center;padding:10px;font-size:16px">—</div>`;
+      const units = UNITS.filter(u=>u.grade===g && u.category===cat);
+      if(!units.length) {
+        td.innerHTML=`<div style="color:var(--rule);text-align:center;padding:10px;font-size:16px">—</div>`;
       } else {
-        items.forEach(ws => td.appendChild(makeItem(ws)));
+        units.forEach(u=>td.appendChild(makeUnitItem(u)));
       }
       tr.appendChild(td);
     });
-
     tbody.appendChild(tr);
   });
 }
+
+/* ── UNIT PAGE ── */
+function showUnitPage(unit) {
+  const gc = GRADE_COLOR[unit.grade];
+  const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};
+  document.getElementById("unit-title").textContent = unit.title;
+  document.getElementById("unit-sub").textContent =
+    `수학 ${unit.grade}학년 · ${unit.category}`;
+
+  const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id);
+  const grid = document.getElementById("ws-list-grid");
+  grid.innerHTML = "";
+
+  if(!sheets.length) {
+    grid.innerHTML=`<div style="color:var(--ink3);font-size:14px;padding:20px 0">등록된 학습지가 없습니다.</div>`;
+  } else {
+    sheets.forEach(ws => {
+      const prog  = wsProgress[ws.id];
+      const done  = !!(prog?.completedAt);
+      const empty = ws.questions.length === 0;
+      const rate  = prog?.correctRate ?? 0;
+
+      let badgeHtml = "";
+      if(done)        badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
+      else if(prog?.solvedQuestions>0) badgeHtml=`<span class="wslc-badge s-partial">진행 중</span>`;
+      else if(empty)  badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
+      else            badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
+
+      const card = document.createElement("div");
+      card.className = "ws-list-card" + (empty?" empty":"");
+      card.innerHTML = `
+        <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
+        <div class="wslc-body">
+          <div class="wslc-title">${ws.title}</div>
+          <div class="wslc-meta">${ws.questions.length}문제
+            ${done ? ` · 정답률 ${rate}%` : ""}
+          </div>
+        </div>
+        ${badgeHtml}`;
+
+      if(!empty) card.addEventListener("click", ()=>startQuiz(ws));
+      grid.appendChild(card);
+    });
+  }
+
+  showPage("unit-page");
+}
+
+/* 단원 목록으로 돌아가기 */
+document.getElementById("btn-unit-back").addEventListener("click", loadDash);
 
 /* ── QUIZ ── */
 /* ── QUIZ ENGINE (단답형 + 수식입력기) ── */
@@ -896,6 +1024,11 @@ document.getElementById("btn-home").addEventListener("click",()=>{
 });
 document.getElementById("btn-back").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  // 단원 페이지로 돌아가기 (unitId가 있으면)
+  if(curWS?.unitId){
+    const unit = UNITS.find(u=>u.id===curWS.unitId);
+    if(unit){ showUnitPage(unit); return; }
+  }
   loadDash();
 });
 

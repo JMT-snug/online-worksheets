@@ -2,331 +2,183 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>수학 학습지+</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
-<!-- MathJax: LaTeX 수식 렌더링 -->
-<script>
-window.MathJax = {
-  tex: { inlineMath: [['\\(','\\)'],['$','$']] },
-  options: { skipHtmlTags: ['script','noscript','style','textarea'] },
-  startup: { typeset: false }
-};
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --cream:#faf8f3; --paper:#fff; --rule:#e8e4d9;
-  --ink:#1c1917; --ink2:#44403c; --ink3:#a8a29e;
-  --accent:#1d4ed8; --acc-lt:#eff6ff;
-  --green:#15803d; --grn-lt:#dcfce7;
-  --red:#b91c1c; --red-lt:#fee2e2;
-  --amber:#b45309; --amb-lt:#fef3c7;
+:root{
+  --cream:#faf8f3;--paper:#fff;--rule:#e8e4d9;
+  --ink:#1c1917;--ink2:#44403c;--ink3:#a8a29e;
+  --accent:#1d4ed8;--acc-lt:#eff6ff;
+  --green:#15803d;--grn-lt:#dcfce7;
+  --red:#b91c1c;--red-lt:#fee2e2;
+  --amber:#b45309;--amb-lt:#fef3c7;
   --r:10px;
-  --g1:#1d4ed8; --g2:#15803d; --g3:#b91c1c;
+  --g1:#1d4ed8;--g2:#15803d;--g3:#b91c1c;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:15px;line-height:1.65;-webkit-tap-highlight-color:transparent}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
 
 /* HEADER */
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
 .logo{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.5px;flex:1}
 .logo em{color:#60a5fa;font-style:normal}
-#hdr-user{display:none;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,.65)}
-#hdr-avatar{width:28px;height:28px;border-radius:50%;display:none}
-.hdr-btn{padding:4px 11px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.logo small{font-size:12px;font-weight:400;color:rgba(255,255,255,.4);margin-left:8px}
+.hdr-right{display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,.65)}
+.tag{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.tag-t{background:var(--accent);color:#fff}
+.hdr-btn{padding:4px 12px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
-.hdr-teacher{background:var(--accent);border-color:var(--accent)}
+.hdr-btn-green{background:#15803d;border-color:#15803d}
 
-/* PAGE SYSTEM — all hidden by default */
-.page{display:none!important}
-.page.active{display:block!important}
-#login-page.active{display:flex!important;align-items:center;justify-content:center;min-height:calc(100vh - 52px);padding:40px 20px}
-
-/* LOGIN */
-.login-wrap{width:100%;max-width:400px;background:var(--paper);border:1px solid var(--rule);border-radius:20px;padding:52px 44px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.07)}
-.login-mark{width:72px;height:72px;border-radius:18px;background:var(--acc-lt);border:2px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 24px}
-.login-wrap h1{font-size:24px;font-weight:900;margin-bottom:6px}
-.login-wrap p{color:var(--ink3);font-size:14px;margin-bottom:36px;line-height:1.7}
-.btn-goog{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:14px;border:1.5px solid var(--rule);border-radius:10px;background:var(--paper);font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;transition:border-color .15s,background .15s}
+/* AUTH GATE */
+#auth-gate{min-height:calc(100vh - 52px);display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.gate-card{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:48px 44px;text-align:center;max-width:380px;width:100%}
+.gate-card .icon{font-size:48px;margin-bottom:16px}
+.gate-card h2{font-size:20px;font-weight:900;margin-bottom:8px}
+.gate-card p{color:var(--ink3);font-size:14px;margin-bottom:28px}
+.btn-goog{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px;border:1.5px solid var(--rule);border-radius:8px;background:var(--paper);font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;transition:border-color .15s,background .15s}
 .btn-goog:hover{border-color:var(--accent);background:var(--acc-lt)}
-.btn-goog svg{width:20px;height:20px;flex-shrink:0}
+.btn-goog svg{width:20px;height:20px}
 
-/* DASHBOARD */
-#dash-page.active{display:block!important}
-#dash-page>main{max-width:1120px;margin:0 auto;padding:32px 24px}
-.dash-greet{font-size:24px;font-weight:900;margin-bottom:4px}
-.dash-sub{color:var(--ink3);font-size:14px;margin-bottom:28px}
-.sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+/* LAYOUT */
+#app{display:none}
+.layout{display:flex;min-height:calc(100vh - 52px)}
+.sidebar{width:240px;flex-shrink:0;background:var(--paper);border-right:1px solid var(--rule);position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;padding:12px 0}
+.sb-section{padding:8px 18px 4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-top:8px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 18px;font-size:13px;cursor:pointer;color:var(--ink2);transition:background .1s;border-radius:0;user-select:none}
+.sb-item:hover{background:var(--cream)}
+.sb-item.active{background:var(--acc-lt);color:var(--accent);font-weight:700}
+.sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sb-count{font-size:11px;color:var(--ink3);font-family:'DM Mono',monospace;margin-left:auto}
+.content{flex:1;padding:28px 32px;min-width:0}
 
-/* ── MATRIX: table 기반, sticky 없음 ── */
-.matrix-wrap{width:100%;overflow-x:auto}
-.matrix-tbl{width:100%;border-collapse:collapse;min-width:540px}
+/* PAGE ELEMENTS */
+.pg-title{font-size:22px;font-weight:900;margin-bottom:4px}
+.pg-sub{color:var(--ink3);font-size:13px;margin-bottom:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.sum-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px}
+.sum-label{font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.sum-num{font-size:28px;font-weight:900}
+.sum-sub{font-size:12px;color:var(--ink3);margin-top:2px}
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--rule);flex-wrap:wrap;gap:8px}
+.card-title{font-size:15px;font-weight:700}
+.card-actions{display:flex;gap:8px}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--cream)}
+th,td{text-align:left;padding:10px 16px;font-size:13px;border-bottom:1px solid var(--rule)}
+th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--cream)}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.b-done{background:var(--grn-lt);color:var(--green)}
+.b-miss{background:var(--red-lt);color:var(--red)}
+.b-late{background:var(--amb-lt);color:var(--amber)}
+.rate-row{display:flex;align-items:center;gap:8px}
+.rate-bg{flex:1;height:5px;background:var(--rule);border-radius:3px;min-width:50px}
+.rate-fill{height:5px;border-radius:3px}
+.rate-n{font-size:12px;font-family:'DM Mono',monospace;width:36px;text-align:right}
+.tries-badge{font-size:12px;font-family:'DM Mono',monospace}
+.tries-1{color:var(--green)}.tries-2{color:var(--amber)}.tries-many{color:var(--red)}
+.btn-sm{padding:6px 14px;border-radius:7px;font-size:13px;font-family:inherit;background:var(--paper);border:1.5px solid var(--rule);cursor:pointer;font-weight:500}
+.btn-sm:hover{background:var(--rule)}
+.btn-sm-accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-sm-accent:hover{opacity:.88;background:var(--accent)}
+select,input[type=text]{padding:7px 10px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit;background:var(--paper);color:var(--ink)}
+select:focus,input:focus{outline:none;border-color:var(--accent)}
+.loading{text-align:center;padding:48px;color:var(--ink3);font-size:15px}
 
-/* 학년 헤더 */
-.mth{padding:10px 10px 8px;text-align:center;font-size:13px;font-weight:900;
-  border-bottom:2px solid;white-space:nowrap;background:var(--cream)}
-.mth-label{text-align:left;font-size:10px;font-weight:700;color:var(--ink3);
-  text-transform:uppercase;letter-spacing:.06em;border-bottom-color:var(--rule);width:88px}
-.mth-g1{color:var(--g1);border-bottom-color:var(--g1)}
-.mth-g2{color:var(--g2);border-bottom-color:var(--g2)}
-.mth-g3{color:var(--g3);border-bottom-color:var(--g3)}
+/* STUDENT ROSTER / CLASS MGMT */
+.class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px}
+.class-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px}
+.class-card-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.class-form{display:flex;flex-direction:column;gap:8px}
+.class-form label{font-size:12px;color:var(--ink3);font-weight:600}
+.class-form input,.class-form select{width:100%}
+.class-row{display:flex;gap:8px}
+.class-row>*{flex:1}
+.student-list{margin-top:10px;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto}
+.student-chip{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--cream);border-radius:6px;font-size:13px}
+.student-chip .remove{cursor:pointer;color:var(--ink3);font-size:16px;line-height:1;background:none;border:none;padding:0}
+.student-chip .remove:hover{color:var(--red)}
+.add-student-row{display:flex;gap:8px;margin-top:8px}
+.add-student-row input{flex:1}
 
-/* 영역 행 */
-.mtr{border-bottom:1px solid var(--rule)}
-.mtr:last-child{border-bottom:none}
+/* CAT BADGES */
+.cat-수와연산{background:#dbeafe;color:#1e40af}
+.cat-변화와관계{background:#dcfce7;color:#166534}
+.cat-도형과측정{background:#fef3c7;color:#92400e}
+.cat-자료와가능성{background:#fce7f3;color:#9d174d}
 
-/* 영역 레이블 셀 */
-.mtd-label{padding:12px 10px 12px 0;vertical-align:top;width:88px;min-width:88px}
-.lbl-inner{display:flex;align-items:flex-start;gap:6px}
-.lbl-bar{width:3px;border-radius:2px;flex-shrink:0;min-height:32px;margin-top:3px}
-.lbl-text{font-size:12px;font-weight:700;line-height:1.4;word-break:keep-all}
+@media(max-width:768px){.sidebar{display:none}.content{padding:20px}}
 
-/* 학년 데이터 셀 */
-.mtd{padding:8px 6px;vertical-align:top;border-left:1px solid var(--rule)}
-
-/* 단원 카드 */
-.ws-item{background:var(--paper);border:1px solid var(--rule);border-left-width:3px;
-  border-radius:8px;padding:11px 12px;cursor:pointer;position:relative;
-  margin-bottom:6px;transition:box-shadow .15s,transform .15s}
-.ws-item:last-child{margin-bottom:0}
-.ws-item:hover{box-shadow:0 3px 12px rgba(0,0,0,.09);transform:translateY(-1px)}
-.ws-item.empty{opacity:.5;cursor:default;border-left-color:var(--rule)!important}
-.ws-item.empty:hover{box-shadow:none;transform:none}
-.ws-item-title{font-size:13px;font-weight:700;line-height:1.35;word-break:keep-all;margin-bottom:3px}
-.ws-item-sub{font-size:11px;color:var(--ink3)}
-.ws-item-sub.coming{font-style:italic}
-.ws-mini-bar{height:3px;border-radius:2px;margin-top:5px;background:var(--rule);overflow:hidden}
-.ws-mini-fill{height:100%;border-radius:2px}
-.ws-status{position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px}
-.s-done{background:var(--grn-lt);color:var(--green)}
-.s-partial{background:var(--amb-lt);color:var(--amber)}
-.dot{width:7px;height:7px;border-radius:50%}
-.dot-g{background:var(--green)}.dot-a{background:var(--amber)}
-
-/* QUIZ PAGE */
-#quiz-page.active{display:block!important;background:var(--cream);min-height:calc(100vh - 52px)}
-#quiz-page>.quiz-shell{max-width:1100px;margin:0 auto;padding:20px 20px}
-.quiz-topbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-.btn-back{padding:6px 14px;border-radius:6px;font-size:13px;background:var(--paper);border:1.5px solid var(--rule);color:var(--ink2);cursor:pointer;font-family:inherit;white-space:nowrap}
-.btn-back:hover{background:var(--rule)}
-.quiz-ws-title{font-weight:700;font-size:15px;flex:1}
-.q-progress-strip{display:flex;gap:3px;margin-bottom:14px}
-.q-dot{flex:1;height:5px;border-radius:3px;background:var(--rule);transition:background .3s}
-.q-dot.done{background:var(--green)}.q-dot.current{background:var(--accent)}
-/* 좌우 분할 */
-.quiz-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-@media(max-width:720px){.quiz-cols{grid-template-columns:1fr}}
-/* 왼쪽: 문제+입력 */
-.quiz-left{display:flex;flex-direction:column;gap:0}
-.problem-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r) var(--r) 0 0;padding:18px 18px 14px}
-.problem-card .q-num{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
-.q-diff{color:var(--amber);font-size:11px}
-.problem-card .q-text{font-size:16px;font-weight:700;line-height:1.6}
-.problem-card .eq{color:var(--accent);font-size:18px;line-height:1.8}
-/* 수식 입력 영역 */
-.math-input-card{background:var(--paper);border:1px solid var(--rule);border-top:none;border-radius:0 0 var(--r) var(--r);padding:12px 14px 14px}
-.ans-hint{font-size:10px;color:var(--ink3);margin-bottom:5px;display:flex;align-items:center;gap:6px}
-.ans-hint strong{color:var(--ink2);font-size:12px}
-/* 답 표시창 */
-.ans-display{min-height:40px;padding:7px 10px;border:1.5px solid var(--rule);border-radius:8px;background:var(--cream);font-family:'Courier New',monospace;font-size:17px;margin-bottom:8px;cursor:text;display:flex;align-items:center;flex-wrap:wrap;gap:1px;transition:border-color .15s}
-.ans-display.focused{border-color:var(--accent)}
-.ans-cur{display:inline-block;width:1.5px;height:1.1em;background:var(--ink);animation:blink .8s step-end infinite;vertical-align:middle;margin-left:1px}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-/* 분수 칩 */
-.chip-frac{display:inline-flex;flex-direction:column;align-items:center;
-  font-family:'Courier New',monospace;font-size:14px;line-height:1;
-  vertical-align:middle;margin:0 3px;
-  border:1.5px solid var(--accent);border-radius:6px;overflow:hidden;background:var(--acc-lt)}
-.chip-frac .fn{padding:3px 8px;border-bottom:1.5px solid var(--accent);
-  min-width:22px;text-align:center;font-weight:700}
-.chip-frac .fd{padding:3px 8px;min-width:22px;text-align:center;font-weight:700}
-.chip-frac .fn.ap{background:#fff;outline:2px solid var(--accent);outline-offset:-1px}
-.chip-frac .fd.ap{background:#fff;outline:2px solid var(--accent);outline-offset:-1px}
-/* 문제 텍스트 안 수직 분수 */
-.frac-inline{display:inline-flex;flex-direction:column;align-items:center;
-  font-family:'Courier New',monospace;font-size:15px;line-height:1.1;
-  vertical-align:middle;margin:0 3px;color:var(--accent)}
-.frac-inline .fi-n{border-bottom:1.5px solid var(--accent);padding:0 4px;min-width:16px;text-align:center;font-weight:700}
-.frac-inline .fi-d{padding:0 4px;min-width:16px;text-align:center;font-weight:700}
-/* 지수 칩 */
-.chip-exp{display:inline-flex;align-items:flex-start;font-family:'Courier New',monospace;vertical-align:middle;margin:0 1px}
-.chip-exp .base{font-size:17px;line-height:1}
-.chip-exp .expo{font-size:11px;color:#fff;background:var(--accent);border-radius:3px;padding:1px 4px;min-width:14px;text-align:center;margin-top:-10px}
-.chip-exp .expo.ap{background:var(--amber)}
-/* 일반 토큰 */
-.tok{font-family:'Courier New',monospace;font-size:17px;vertical-align:middle}
-/* 키패드 */
-.keypad{display:flex;flex-direction:column;gap:4px}
-.krow{display:flex;gap:3px}
-.krow.gap{margin-top:3px}
-.kbtn{flex:1;height:34px;border-radius:7px;border:1px solid var(--rule);background:var(--paper);font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .1s,transform .08s;font-family:'Courier New',monospace}
-.kbtn:hover{background:var(--acc-lt);border-color:var(--accent)}
-.kbtn:active{transform:scale(.93)}
-.kbtn.op{background:#f0f4ff;border-color:#c7d6f0;color:var(--accent);font-family:inherit}
-.kbtn.op:hover{background:var(--acc-lt)}
-.kbtn.spl{background:var(--amb-lt);border-color:var(--amber);color:var(--amber);font-family:inherit;font-size:12px}
-.kbtn.spl:hover{background:#fde68a}
-.kbtn.del{background:var(--red-lt);border-color:#fca5a5;color:var(--red);font-family:inherit}
-.frac-prev{display:inline-flex;flex-direction:column;align-items:center;line-height:1.1;font-size:9px;font-family:'Courier New',monospace}
-.frac-prev .fn{border-bottom:1.5px solid currentColor;padding:0 2px;min-width:10px;text-align:center}
-.frac-prev .fd{padding:0 2px;min-width:10px;text-align:center}
-.exp-prev{display:inline-flex;align-items:flex-start;font-family:'Courier New',monospace;font-size:12px}
-.exp-prev sup{font-size:7px;margin-top:-1px;border:1px solid currentColor;border-radius:2px;padding:0 2px}
-/* 제출 */
-.ans-btns{display:flex;gap:8px;margin-top:8px}
-.btn-submit{flex:2;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.btn-submit:hover{opacity:.85}
-.btn-clr-ans{flex:1;padding:9px;border-radius:8px;border:1px solid var(--rule);background:var(--paper);color:var(--ink3);font-size:13px;cursor:pointer;font-family:inherit}
-/* 피드백 */
-.feedback-strip{display:none;margin-top:8px;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:700;align-items:center;gap:7px}
-.feedback-strip.show{display:flex}
-.fb-correct{background:var(--grn-lt);color:var(--green)}.fb-wrong{background:var(--red-lt);color:var(--red)}
-.attempt-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink3);margin-top:6px}
-.attempt-num{font-weight:700;color:var(--amber)}
-/* 오른쪽: 그림판 */
-.canvas-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;position:sticky;top:72px}
-.canvas-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:wrap}
-.canvas-toolbar-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
-.tool-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0}
-.tool-btn.active{background:var(--acc-lt);border-color:var(--accent)}
-.color-swatch{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;flex-shrink:0}
-.color-swatch.active{border-color:var(--ink)}
-.stroke-slider{-webkit-appearance:none;appearance:none;width:60px;height:4px;border-radius:2px;background:var(--rule);outline:none;cursor:pointer}
-.stroke-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);cursor:pointer}
-.divider-v{width:1px;height:20px;background:var(--rule);margin:0 2px}
-#draw-canvas{display:block;width:100%;cursor:crosshair;touch-action:none;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px)}
-@keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-6px)}30%{transform:translateX(6px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}}
-.shake{animation:shake .4s ease}
-
-/* RESULT */
-#result-page.active{display:block!important}
-#result-page main{max-width:680px;margin:0 auto;padding:32px 20px}
-.result-hero{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:40px;text-align:center;margin-bottom:20px}
-.score-ring{width:120px;height:120px;border-radius:50%;border:5px solid var(--accent);background:var(--acc-lt);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 20px}
-.score-big{font-size:38px;font-weight:900;color:var(--accent);line-height:1}
-.score-of{font-size:14px;color:var(--ink3)}
-.result-msg{font-size:22px;font-weight:900;margin-bottom:6px}
-.result-sub{color:var(--ink3);font-size:14px}
-.result-list{display:flex;flex-direction:column;gap:1px;margin-top:24px}
-.result-row{display:flex;align-items:flex-start;gap:12px;padding:13px 0;border-bottom:1px solid var(--rule);text-align:left}
-.r-icon{font-size:18px;flex-shrink:0;width:22px;text-align:center}
-.r-body{flex:1;font-size:14px}
-.r-qnum{font-size:11px;color:var(--ink3);font-weight:700;margin-bottom:2px}
-.r-tries{font-size:12px;color:var(--amber);margin-top:3px}
-.btn-row{display:flex;gap:12px;justify-content:center}
-.btn-main{padding:12px 28px;border-radius:8px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;background:var(--accent);border:none;color:#fff}
-.btn-main:hover{opacity:.88}
-.btn-sec{padding:12px 24px;border-radius:8px;font-size:15px;font-family:inherit;cursor:pointer;background:var(--paper);border:1.5px solid var(--rule);color:var(--ink2)}
-.btn-sec:hover{background:var(--rule)}
-@keyframes fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.fade-up{animation:fade-up .25s ease}
-
-/* ── 섹션 헤더 ── */
-.section-banner{padding:10px 18px;border-radius:var(--r);margin-bottom:12px;display:flex;align-items:center;gap:10px}
-.section-banner.review{background:var(--amb-lt);border:1px solid var(--amber)}
-.section-banner.concept{background:var(--acc-lt);border:1px solid var(--accent)}
-.section-banner.practice{background:var(--grn-lt);border:1px solid var(--green)}
-.section-banner .s-icon{font-size:18px}
-.section-banner .s-label{font-size:13px;font-weight:700}
-.section-banner .s-desc{font-size:12px;color:var(--ink3);margin-left:auto}
-
-/* ── 개념학습 카드 ── */
-.concept-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-bottom:0}
-.concept-section-title{font-size:13px;font-weight:700;padding:12px 16px 0;color:var(--ink2);display:flex;align-items:center;gap:6px}
-.concept-section-title::before{content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:var(--accent)}
-.concept-body{padding:12px 16px 14px;font-size:14px;line-height:2}
-.concept-body .c-line{margin-bottom:4px;display:flex;align-items:baseline;flex-wrap:wrap;gap:3px}
-/* 예시 박스 */
-.example-box{background:var(--cream);border:1px solid var(--rule);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13px}
-.example-box .ex-title{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
-.example-eq{font-family:'Courier New',monospace;font-size:15px;color:var(--accent);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.example-eq .arrow{color:var(--ink3);font-size:12px}
-.example-eq .label{font-size:11px;color:var(--ink3);border-bottom:1px solid var(--ink3)}
-/* 빈칸 */
-.blank{display:inline-flex;align-items:center;justify-content:center;
-  min-width:60px;height:26px;border-bottom:1.5px solid var(--ink);
-  font-weight:700;color:var(--accent);cursor:pointer;
-  background:transparent;border-radius:0;padding:0 4px;
-  font-family:'Noto Sans KR',sans-serif;font-size:14px;
-  position:relative}
-.blank input{position:absolute;inset:0;width:100%;height:100%;
-  border:none;background:transparent;text-align:center;
-  font-weight:700;color:var(--accent);font-size:14px;
-  font-family:'Noto Sans KR',sans-serif;outline:none;cursor:pointer}
-.blank.correct{border-bottom-color:var(--green);background:var(--grn-lt)}
-.blank.correct input{color:var(--green)}
-.blank.wrong{border-bottom-color:var(--red);background:var(--red-lt)}
-.blank.wrong input{color:var(--red)}
-/* 개념 답안 제출 */
-.concept-submit-row{padding:0 16px 14px;display:flex;align-items:center;gap:10px}
-.btn-concept-check{padding:8px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-.concept-fb{font-size:13px;font-weight:700}
-.concept-fb.ok{color:var(--green)}.concept-fb.ng{color:var(--red)}
-/* 예제 풀이 카드 */
-.example-solve-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
-.example-solve-head{padding:10px 16px;background:var(--cream);border-bottom:1px solid var(--rule);font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
-.example-solve-body{padding:14px 16px;font-size:14px;line-height:1.8}
-.example-solve-body .eq{font-family:'Courier New',monospace;font-size:15px;color:var(--accent)}
-.example-solve-body .step{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
-.example-solve-body .step-num{font-size:11px;font-weight:700;color:var(--ink3);min-width:20px}
-/* 단답형 예제 입력 */
-.example-ans-row{display:flex;align-items:center;gap:10px;padding:10px 16px 14px}
-.example-ans-label{font-size:13px;font-weight:700;color:var(--ink2)}
-.example-ans-input{width:80px;height:34px;border:1.5px solid var(--rule);border-radius:7px;text-align:center;font-size:16px;font-family:'Courier New',monospace;font-weight:700;color:var(--ink)}
-.example-ans-input:focus{outline:none;border-color:var(--accent)}
-.btn-ex-check{padding:7px 16px;border-radius:7px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-.ex-fb{font-size:13px;font-weight:700}
-.ex-fb.ok{color:var(--green)}.ex-fb.ng{color:var(--red)}
-
-/* ── unit-page 학습지 목록 카드 ── */
-.ws-list-card{
-  background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
-  padding:18px 20px;margin-bottom:10px;cursor:pointer;
-  display:flex;align-items:center;gap:16px;
-  transition:box-shadow .15s,transform .15s;
-  position:relative;overflow:hidden;
+/* 접기/펼치기 사이드바 */
+.sb-grade-header{
+  display:flex;align-items:center;gap:6px;
+  padding:9px 14px;font-size:12px;font-weight:700;
+  cursor:pointer;user-select:none;
+  color:var(--ink2);transition:background .1s;
+  border-radius:0;
 }
-.ws-list-card::before{content:'';position:absolute;left:0;top:0;bottom:0;
-  width:4px;background:var(--accent);opacity:0;transition:opacity .15s}
-.ws-list-card:hover{box-shadow:0 4px 18px rgba(0,0,0,.09);transform:translateY(-1px)}
-.ws-list-card:hover::before{opacity:1}
-.ws-list-card.empty{opacity:.55;cursor:default;pointer-events:none}
-.wslc-icon{width:44px;height:44px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
-  background:var(--acc-lt)}
-.wslc-body{flex:1}
-.wslc-title{font-size:15px;font-weight:700;margin-bottom:4px}
-.wslc-meta{font-size:12px;color:var(--ink3)}
-.wslc-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
-/* 단원 셀 배지 (학습지 수) */
-.unit-ws-badge{position:absolute;top:8px;right:8px;
-  font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;
-  background:var(--accent);color:#fff}
-#unit-page.active{display:block!important}
+.sb-grade-header:hover{background:var(--cream)}
+.sb-grade-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sb-chevron{margin-left:auto;font-size:10px;transition:transform .2s;display:inline-block}
+.sb-chevron.open{transform:rotate(90deg)}
+.sb-unit-group{overflow:hidden;transition:max-height .25s ease}
+.sb-unit-group.collapsed{max-height:0!important}
+.sb-unit-header{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px 7px 24px;font-size:12px;
+  cursor:pointer;user-select:none;color:var(--ink3);
+  transition:background .1s;
+}
+.sb-unit-header:hover{background:var(--cream);color:var(--ink2)}
+.sb-unit-chevron{margin-left:auto;font-size:9px;transition:transform .2s;display:inline-block}
+.sb-unit-chevron.open{transform:rotate(90deg)}
+.sb-ws-group{overflow:hidden;transition:max-height .2s ease}
+.sb-ws-group.collapsed{max-height:0!important}
+.sb-ws-item{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 14px 7px 36px;font-size:12px;
+  cursor:pointer;color:var(--ink2);transition:background .1s;
+}
+.sb-ws-item:hover{background:var(--cream)}
+.sb-ws-item.active{background:var(--acc-lt);color:var(--accent);font-weight:700}
+.sb-ws-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--ink3)}
+.sb-ws-item.active .sb-ws-dot{background:var(--accent)}
 
+/* 오답 이미지 모달 */
+.img-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:flex;align-items:center;justify-content:center}
+.img-modal{background:var(--paper);border-radius:var(--r);padding:20px;max-width:700px;width:90%;max-height:90vh;overflow-y:auto}
+.img-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.img-modal-title{font-size:15px;font-weight:700}
+.img-modal-close{background:none;border:1px solid var(--rule);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;font-family:inherit}
+.img-modal img{width:100%;border-radius:8px;border:1px solid var(--rule)}
+.wrong-chip{display:inline-block;font-size:12px;font-family:'DM Mono',monospace;background:var(--red-lt);color:var(--red);padding:2px 8px;border-radius:4px;margin:2px}
+.canvas-thumb{width:80px;height:50px;object-fit:cover;border-radius:5px;border:1px solid var(--rule);cursor:pointer;transition:transform .1s}
+.canvas-thumb:hover{transform:scale(1.05)}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">수학 학습지<em>+</em></div>
-  <div id="hdr-user">
-    <img id="hdr-avatar" alt="">
-    <span id="hdr-name"></span>
-    <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
+  <div class="logo">수학 학습지<em>+</em> <small>교사 관리</small></div>
+  <div class="hdr-right">
+    <span class="tag tag-t">교사</span>
+    <span id="t-name"></span>
+    <a href="index.html" class="hdr-btn hdr-btn-green">🏠 학생 화면</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
 
-<!-- LOGIN -->
-<div id="login-page" class="page active">
-  <div class="login-wrap">
-    <div class="login-mark">📐</div>
-    <h1>수학 온라인 학습지</h1>
-    <p>학교 Google 계정으로 로그인하면<br>학습지를 풀 수 있어요.</p>
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <div class="gate-card">
+    <div class="icon">🔐</div>
+    <h2>교사 전용 관리 페이지</h2>
+    <p>교사 Google 계정으로 로그인하세요.<br>권한이 없는 계정은 접근이 차단됩니다.</p>
     <button class="btn-goog" id="btn-login">
       <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       Google 계정으로 로그인
@@ -334,117 +186,32 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="dash-page" class="page">
-  <main>
-    <div class="dash-greet" id="dash-greet">안녕하세요!</div>
-    <div class="dash-sub">학습할 단원을 선택하세요.</div>
-    <div class="matrix-wrap">
-      <table class="matrix-tbl" id="matrix-tbl">
-        <thead>
-          <tr>
-            <th class="mth mth-label">영역 / 학년</th>
-            <th class="mth mth-g1">🔵 1학년</th>
-            <th class="mth mth-g2">🟢 2학년</th>
-            <th class="mth mth-g3">🔴 3학년</th>
-          </tr>
-        </thead>
-        <tbody id="matrix-body"></tbody>
-      </table>
-    </div>
-  </main>
-</div>
-
-<!-- UNIT PAGE: 단원별 학습지 목록 -->
-<div id="unit-page" class="page">
-  <main style="max-width:680px;margin:0 auto;padding:28px 20px">
-    <button class="btn-back" id="btn-unit-back" style="margin-bottom:16px">← 단원 목록</button>
-    <div class="dash-greet" id="unit-title" style="font-size:20px"></div>
-    <div class="dash-sub" id="unit-sub" style="margin-bottom:24px"></div>
-    <div id="ws-list-grid"></div>
-  </main>
-</div>
-
-
-<!-- QUIZ -->
-<div id="quiz-page" class="page">
-  <div class="quiz-shell">
-    <div class="quiz-topbar">
-      <button class="btn-back" id="btn-back">← 목록</button>
-      <span class="quiz-ws-title" id="quiz-ws-title"></span>
-      <div style="display:flex;gap:6px;margin-left:auto">
-        <button class="btn-back" id="btn-prev-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(-1)">◀ 이전</button>
-        <button class="btn-back" id="btn-next-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(1)">다음 ▶</button>
-      </div>
-    </div>
-    <div class="q-progress-strip" id="q-progress-strip"></div>
-    <div class="quiz-cols">
-      <!-- 왼쪽: 문제 + 수식입력기 -->
-      <div class="quiz-left" id="quiz-left-panel"></div>
-      <!-- 오른쪽: 그림판 -->
-      <div class="canvas-card">
-        <div class="canvas-toolbar">
-          <span class="canvas-toolbar-label">풀이판</span>
-          <button class="tool-btn active" id="tool-pen" title="펜">✏️</button>
-          <button class="tool-btn" id="tool-eraser" title="지우개">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- 지우개 몸통 (핑크) -->
-              <rect x="2" y="5" width="12" height="8" rx="1.5" fill="#f9a8c9"/>
-              <!-- 지우개 몸통 어두운 절반 (오른쪽) -->
-              <rect x="8" y="5" width="6" height="8" rx="1.5" fill="#f472b6"/>
-              <!-- 가운데 구분선 -->
-              <line x1="8" y1="5" x2="8" y2="13" stroke="#e879a0" stroke-width="0.8"/>
-              <!-- 지우개 테두리 -->
-              <rect x="2" y="5" width="12" height="8" rx="1.5" stroke="#e879a0" stroke-width="0.8" fill="none"/>
-              <!-- 바닥 줄 (지워진 흔적) -->
-              <line x1="1" y1="13" x2="15" y2="13" stroke="#c8b8c0" stroke-width="1" stroke-linecap="round"/>
-              <!-- 반짝이 하이라이트 -->
-              <rect x="3.5" y="6.5" width="3" height="1.5" rx="0.5" fill="white" opacity="0.5"/>
-            </svg>
-          </button>
-          <div class="divider-v"></div>
-          <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917"></span>
-          <span class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8"></span>
-          <span class="color-swatch" data-color="#15803d" style="background:#15803d"></span>
-          <span class="color-swatch" data-color="#b91c1c" style="background:#b91c1c"></span>
-          <div class="divider-v"></div>
-          <input type="range" class="stroke-slider" id="stroke-size" min="1" max="18" value="3">
-          <div class="divider-v"></div>
-          <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
-        </div>
-        <canvas id="draw-canvas" height="520"></canvas>
-      </div>
-    </div>
+<!-- APP -->
+<div id="app">
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="content" id="content"><div class="loading">데이터 불러오는 중…</div></div>
   </div>
 </div>
 
-<!-- RESULT -->
-<div id="result-page" class="page">
-  <main>
-    <div class="result-hero">
-      <div class="score-ring">
-        <span class="score-big" id="r-score">0</span>
-        <span class="score-of" id="r-of">/ 0</span>
-      </div>
-      <div class="result-msg" id="r-msg"></div>
-      <div class="result-sub" id="r-sub"></div>
-      <div class="result-list" id="r-list"></div>
+<!-- 오답 이미지 모달 -->
+<div id="img-modal" class="img-modal-bg" style="display:none" onclick="closeModal(event)">
+  <div class="img-modal">
+    <div class="img-modal-head">
+      <span class="img-modal-title" id="modal-title">풀이 이미지</span>
+      <button class="img-modal-close" onclick="document.getElementById('img-modal').style.display='none'">닫기</button>
     </div>
-    <div class="btn-row">
-      <button class="btn-sec" id="btn-retry">다시 풀기</button>
-      <button class="btn-main" id="btn-home">목록으로</button>
-    </div>
-  </main>
+    <img id="modal-img" src="" alt="풀이 이미지">
+  </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
+import { getFirestore, collectionGroup, getDocs, doc, getDoc, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
   apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
@@ -454,11 +221,20 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const ALLOWED_DOMAINS = [];
-const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr"];
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
+const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
+/* ── 학습지 목록 (index.html과 동일하게 유지) ── */
+const WORKSHEETS = [
+  // 일차방정식 (학습 순서대로)
+  { id:"ws-u1-04-01", unitId:"u1-04", title:"일차방정식 연습문제1",   grade:1, category:"변화와 관계", qCount:14 },
+  { id:"ws-u1-04-02", unitId:"u1-04", title:"일차방정식 연습문제2",   grade:1, category:"변화와 관계", qCount:20 },
+  { id:"ws-u1-04-03", unitId:"u1-04", title:"일차방정식의 활용1",     grade:1, category:"변화와 관계", qCount:16 },
+  { id:"ws-u1-04-04", unitId:"u1-04", title:"일차방정식의 활용2",     grade:1, category:"변화와 관계", qCount:20 },
+  // 나머지 단원 (학습지 없음 — 추후 추가)
+];
 
-/* ── UNITS: 단원 정의 ── */
+/* ── 단원 목록 (사이드바용) ── */
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
   { id:"u1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
@@ -492,1007 +268,484 @@ const UNITS = [
   { id:"u3-07", title:"산포도",                grade:3, category:"자료와 가능성" },
   { id:"u3-08", title:"상자그림과 산포도",       grade:3, category:"자료와 가능성" },
 ];
-
-/* ── 2022 개정 교육과정 중학교 수학 단원 ── */
-const WORKSHEETS = [
-  // 1학년
-  { id:"m1-01", title:"소인수분해",            grade:1, category:"수와 연산",    questions:[] },
-  { id:"m1-02", title:"정수와 유리수",          grade:1, category:"수와 연산",    questions:[] },
-  // ── 문자와 식 (학습지 없음, 추후 추가)
-  // { id:"ws-u1-03-01", unitId:"u1-03", title:"문자와 식 연습문제1", grade:1, questions:[] },
-
-  // ── 일차방정식
-  { id:"ws-u1-04-01", unitId:"u1-04",
-    title:"일차방정식 연습문제1", grade:1, category:"변화와 관계", bookPage:"80~86",
-    questions:[
-    { id:"q01", text:"3x = 12",                                   answer:4,  diff:1 },
-    { id:"q02", text:"2x + 1 = 7",                                answer:3,  diff:1 },
-    { id:"q03", text:"5x − 3 = 2x + 9",                          answer:4,  diff:2 },
-    { id:"q04", text:"4(x − 1) = 2x + 6",                        answer:5,  diff:2 },
-    { id:"q05", text:"2(x + 3) = 3(x − 1)",                      answer:9,  diff:2 },
-    { id:"q06", text:"0.3x − 0.7 = 0.2x + 0.5",                  answer:12, diff:3 },
-    { id:"q07", text:"x/2 + 1 = x/3 + 2",                        answer:6,  diff:3 },
-    { id:"q08", text:"(x − 1)/3 = (x + 2)/4",                    answer:10, diff:3 },
-    { id:"q09", text:"3(2x − 1) − 2(x + 4) = x − 3",            answer:8/3, answerFrac:"8/3", diff:4 },
-    { id:"q10", text:"0.5(x + 4) = 0.2(x − 1) + 3.1",           answer:3,  diff:4 },
-    { id:"q11", text:"2x/3 − 1 = x/2 + 1",                       answer:12, diff:4 },
-    { id:"q12", text:"5(x − 2) − 3(2x − 1) = −7",               answer:0,  diff:4 },
-    { id:"q13", text:"0.4(x + 5) = 0.6(x − 1) + 0.2",           answer:12, diff:5 },
-    { id:"q14", text:"(3x − 1)/4 − (x + 2)/3 = 1",              answer:23/5, answerFrac:"23/5", diff:5 },
-  ]},
-  { id:"ws-u1-04-02", unitId:"u1-04",
-    title:"일차방정식 연습문제2", grade:1, category:"변화와 관계", bookPage:"87~90",
-    questions:[
-      // ── 유형A: 뜻 보고 용어 맞추기 ──
-      { id:"q01", type:"word",
-        text:"수 또는 문자의 곱으로 이루어진 식의 각 부분을 무엇이라고 하는가?",
-        answer:"항", answerAlt:[], diff:1 },
-      // ── 유형B: 용어 보고 빈칸 ──
-      { id:"q02", type:"word",
-        text:"3x²−5x+2에서 항의 개수는?",
-        answer:"3", answerAlt:[], diff:1 },
-      { id:"q03", type:"word",
-        text:"항에서 문자를 제외한 수 부분을 무엇이라고 하는가?",
-        answer:"계수", answerAlt:[], diff:1 },
-      { id:"q04", type:"word",
-        text:"−7x에서 x의 계수는?",
-        answer:"-7", answerAlt:["−7"], diff:1 },
-      { id:"q05", type:"word",
-        text:"문자 없이 수만으로 이루어진 항을 무엇이라고 하는가?",
-        answer:"상수항", answerAlt:[], diff:1 },
-      { id:"q06", type:"word",
-        text:"4x³−2x+9에서 상수항은?",
-        answer:"9", answerAlt:[], diff:1 },
-      { id:"q07", type:"word",
-        text:"항에서 문자가 곱해진 횟수를 무엇이라고 하는가?",
-        answer:"차수", answerAlt:[], diff:1 },
-      { id:"q08", type:"word",
-        text:"3x²의 차수는?",
-        answer:"2", answerAlt:[], diff:1 },
-      { id:"q09", type:"word",
-        text:"a=b이면 a+3=b+□ (□에 들어갈 수는?)",
-        answer:"3", answerAlt:[], diff:2 },
-      { id:"q10", type:"word",
-        text:"a=b이면 2a=□b (□에 들어갈 수는?)",
-        answer:"2", answerAlt:[], diff:2 },
-      { id:"q11", type:"word",
-        text:"미지수의 값에 따라 참이 되기도 하고 거짓이 되기도 하는 등식을 무엇이라고 하는가?",
-        answer:"방정식", answerAlt:[], diff:2 },
-      { id:"q12", type:"word",
-        text:"방정식을 참이 되게 하는 미지수의 값을 무엇이라고 하는가?",
-        answer:"해", answerAlt:["근"], diff:2 },
-      // ── 유형C: 일차방정식 풀기 (수식 입력) ──
-      { id:"q13", type:"equation", text:"x - 3 = 5",                    answer:8,     answerFrac:null, diff:1 },
-      { id:"q14", type:"equation", text:"2x = -10",                      answer:-5,    answerFrac:null, diff:1 },
-      { id:"q15", type:"equation", text:"3x + 4 = 13",                   answer:3,     answerFrac:null, diff:2 },
-      { id:"q16", type:"equation", text:"2x + 1 = 3x - 2",               answer:3,     answerFrac:null, diff:2 },
-      { id:"q17", type:"equation", text:"4(x + 2) = 3x + 11",            answer:3,     answerFrac:null, diff:3 },
-      { id:"q18", type:"equation", text:"3x + 1 = 2x - 1/2",             answer:-1.5,  answerFrac:"-3/2", diff:4 },
-      { id:"q19", type:"equation", text:"2x - 1 = x + 1/3",              answer:4/3,   answerFrac:"4/3", diff:4 },
-      { id:"q20", type:"equation", text:"5(x - 1) - 3(x + 2) = -3",      answer:4,     answerFrac:null, diff:3 },
-    ]
-  },
-  { id:"ws-u1-04-03", unitId:"u1-04",
-    title:"일차방정식의 활용1", grade:1, category:"변화와 관계",
-    bookPage:"91~94",
-    questions:[
-      // ── 복습 A: 문자로 표현하기 ──
-      { id:"q01", type:"word",
-        text:"한 개에 800원인 사과 x개의 가격을 식으로 나타내면?",
-        answer:"800x", answerAlt:["800×x"], diff:1 },
-      { id:"q02", type:"word",
-        text:"길이가 a cm인 리본을 4등분 했을 때 한 조각의 길이를 식으로 나타내면?",
-        answer:"a/4", answerAlt:["a÷4"], diff:1 },
-      { id:"q03", type:"word",
-        text:"어떤 수 x에서 7을 뺀 수의 3배를 식으로 나타내면?",
-        answer:"3(x-7)", answerAlt:["3(x−7)","(x-7)×3","(x−7)×3"], diff:1 },
-      // ── 복습 B: 일차방정식 풀기 ──
-      { id:"q04", type:"equation", text:"6x - 2 = 4x + 8",           answer:5,  diff:2 },
-      { id:"q05", type:"equation", text:"3(x + 4) = 5x - 2",          answer:7,  diff:2 },
-      { id:"q06", type:"equation", text:"(x + 1)/2 = (x - 1)/3 + 1", answer:1,  diff:3 },
-      // ── 연습하기 (링크, 문항 번호 제외) ──
-      { id:"연습하기", type:"link",
-        text:"아래 링크에 접속해서 연습하고, 충분히 연습한 사람은 다음 문제로 넘어가세요.",
-        linkUrl:"https://sites.google.com/snu-g.ms.kr/sentensce/%ED%99%88",
-        linkLabel:"📖 문장제 문제 단계별 풀이",
-        diff:1 },
-      // ── 문장제 문제 ──
-      { id:"q08", type:"equation",
-        text:"연속하는 두 홀수의 합이 36일 때, 두 수 중 작은 수는?",
-        answer:17, diff:2 },
-      { id:"q09", type:"equation",
-        text:"어떤 수의 2배에서 5를 빼면 그 수에 3을 더한 것과 같다. 어떤 수는?",
-        answer:8, diff:2 },
-      { id:"q10", type:"equation",
-        text:"현재 어머니 나이는 41세, 딸 나이는 13세다. 어머니 나이가 딸 나이의 2배가 되는 것은 몇 년 후인가?",
-        answer:15, diff:3 },
-      { id:"q11", type:"equation",
-        text:"가로가 세로보다 4 cm 긴 직사각형의 둘레가 32 cm일 때, 세로의 길이는 몇 cm인가?",
-        answer:6, diff:3 },
-      { id:"q12", type:"equation",
-        text:"800원짜리 사탕과 1200원짜리 초콜릿을 합쳐 10개 사서 9600원을 냈다. 사탕의 개수는?",
-        answer:6, diff:3 },
-      { id:"q13", type:"equation",
-        text:"형과 동생의 나이 합이 25세이고 형이 동생보다 3살 많다. 형의 나이는?",
-        answer:14, diff:2 },
-      { id:"q14", type:"equation",
-        text:"50 km 떨어진 두 지점에서 두 사람이 동시에 마주보고 걷는다. 속력이 각각 시속 3 km, 2 km일 때, 만나는 데 걸리는 시간은 몇 시간인가?",
-        answer:10, diff:3 },
-      { id:"q15", type:"equation",
-        text:"물건을 정가의 20% 할인하여 팔았더니 4800원이었다. 정가는 몇 원인가?",
-        answer:6000, diff:3 },
-      { id:"q16", type:"equation",
-        text:"학생들에게 공책을 4권씩 나눠 주면 7권이 남고, 5권씩 나눠 주면 8권이 부족하다. 학생 수는?",
-        answer:15, diff:3 },
-      { id:"q17", type:"equation",
-        text:"둘레가 52 cm인 직각삼각형에서 빗변이 나머지 두 변의 합보다 6 cm 짧을 때, 빗변의 길이는 몇 cm인가?",
-        answer:23, diff:4 },
-    ]
-  },
-  { id:"m1-04", title:"좌표평면과 그래프",       grade:1, category:"변화와 관계",  questions:[] },
-  { id:"m1-05", title:"기본 도형",              grade:1, category:"도형과 측정",  questions:[] },
-  { id:"m1-06", title:"평면도형의 성질",         grade:1, category:"도형과 측정",  questions:[] },
-  { id:"m1-07", title:"입체도형의 성질",         grade:1, category:"도형과 측정",  questions:[] },
-  { id:"m1-08", title:"자료의 정리와 해석",      grade:1, category:"자료와 가능성", questions:[] },
-  // 2학년
-  { id:"m2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산",    questions:[] },
-  { id:"m2-02", title:"단항식과 다항식",         grade:2, category:"변화와 관계",  questions:[] },
-  { id:"m2-03", title:"일차부등식",             grade:2, category:"변화와 관계",  questions:[] },
-  { id:"m2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계",  questions:[] },
-  { id:"m2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계",  questions:[] },
-  { id:"m2-06", title:"일차함수와 일차방정식",   grade:2, category:"변화와 관계",  questions:[] },
-  { id:"m2-07", title:"삼각형의 성질",          grade:2, category:"도형과 측정",  questions:[] },
-  { id:"m2-08", title:"사각형의 성질",          grade:2, category:"도형과 측정",  questions:[] },
-  { id:"m2-09", title:"도형의 닮음",            grade:2, category:"도형과 측정",  questions:[] },
-  { id:"m2-10", title:"경우의 수와 확률",        grade:2, category:"자료와 가능성", questions:[] },
-  // 3학년
-  { id:"m3-01", title:"제곱근과 실수",          grade:3, category:"수와 연산",    questions:[] },
-  { id:"m3-02", title:"다항식의 곱셈과 인수분해", grade:3, category:"변화와 관계",  questions:[] },
-  { id:"m3-03", title:"이차방정식",             grade:3, category:"변화와 관계",  questions:[] },
-  { id:"m3-04", title:"이차함수와 그래프",        grade:3, category:"변화와 관계",  questions:[] },
-  { id:"m3-05", title:"삼각비",                grade:3, category:"도형과 측정",  questions:[] },
-  { id:"m3-06", title:"원의 성질",             grade:3, category:"도형과 측정",  questions:[] },
-  { id:"m3-07", title:"통계 (대푯값과 산포도)", grade:3, category:"자료와 가능성", questions:[] },
-];
-
-const CAT_CLASS = {
-  "수와 연산":"cat-수와연산","변화와 관계":"cat-변화와관계",
-  "도형과 측정":"cat-도형과측정","자료와 가능성":"cat-자료와가능성"
-};
-const GRADE_COLOR = {1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
+const CAT_CLASS={"수와 연산":"cat-수와연산","변화와 관계":"cat-변화와관계","도형과 측정":"cat-도형과측정","자료와 가능성":"cat-자료와가능성"};
+const GRADE_COLOR={1:"var(--g1)",2:"var(--g2)",3:"var(--g3)"};
 
 const fbApp   = initializeApp(FB);
 const auth    = getAuth(fbApp);
 const db      = getFirestore(fbApp);
 const storage = getStorage(fbApp);
 
-let user = null, wsProgress = {}, curWS = null;
-let curQIdx = 0, attempts = [], answered = [];
-let wrongAnswers = []; // per question: array of wrong inputs
-
-/* ── PAGE SWITCH ── */
-function showPage(id) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  window.scrollTo(0,0);
-}
+let tUser=null, allData={}, classes={}, selView="overview";
 
 /* ── AUTH ── */
-document.getElementById("btn-login").addEventListener("click", async () => {
-  const p = new GoogleAuthProvider();
-  try { await signInWithPopup(auth, p); }
-  catch(e) { alert("로그인 오류: " + e.message); }
+document.getElementById("btn-login").addEventListener("click",async()=>{
+  const p=new GoogleAuthProvider();
+  try{ await signInWithPopup(auth,p); } catch(e){ alert("로그인 오류: "+e.message); }
 });
-document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+document.getElementById("btn-logout").addEventListener("click",()=>signOut(auth));
 
-onAuthStateChanged(auth, async u => {
-  if (!u) { showPage("login-page"); updateHeader(null); return; }
-  user = u;
-  updateHeader(u);
-  await loadDash();
+onAuthStateChanged(auth,async u=>{
+  if(!u){ showGate(true); return; }
+  if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 권한이 없습니다."); await signOut(auth); return; }
+  tUser=u;
+  document.getElementById("t-name").textContent=u.displayName||u.email;
+  showGate(false);
+  await loadAll();
 });
 
-function updateHeader(u) {
-  const hi = document.getElementById("hdr-user");
-  if (!u) { hi.style.display = "none"; return; }
-  hi.style.display = "flex";
-  const av = document.getElementById("hdr-avatar");
-  if (u.photoURL) { av.src = u.photoURL; av.style.display = "block"; }
-  document.getElementById("hdr-name").textContent = u.displayName || u.email;
-  document.getElementById("hdr-teacher-link").style.display =
-    TEACHER_EMAILS.includes(u.email) ? "inline-flex" : "none";
+function showGate(on){
+  document.getElementById("auth-gate").style.display=on?"flex":"none";
+  document.getElementById("app").style.display=on?"none":"block";
 }
 
-/* ── DASHBOARD ── */
-async function loadDash() {
-  showPage("dash-page");
-  const name = user.displayName?.split(" ")[0] || "학생";
-  document.getElementById("dash-greet").textContent = `안녕하세요, ${name}님! 👋`;
-  wsProgress = {};
-  try {
-    for (const ws of WORKSHEETS) {
-      if (!ws.questions.length) continue;
-      const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
-      if (snap.exists()) wsProgress[ws.id] = snap.data();
-    }
-  } catch(e) { console.warn("진도 로드 실패:", e.message); }
-  renderCards();
+/* ── LOAD DATA ── */
+async function loadAll(){
+  document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';
+  allData={};
+  try{
+    const snap=await getDocs(collectionGroup(db,"worksheets"));
+    snap.forEach(d=>{
+      const parts=d.ref.path.split("/");
+      const uid=parts[1], wsId=parts[3];
+      if(!allData[uid]) allData[uid]={};
+      allData[uid][wsId]=d.data();
+    });
+  }catch(e){ console.error("Firestore 오류:",e); }
+  // 학급 데이터 로드
+  try{
+    const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
+    if(cSnap.exists()) classes=cSnap.data().classes||{};
+  }catch(e){ classes={}; }
+  buildSidebar();
+  renderOverview();
 }
 
-/* ── MATRIX RENDER (단원 기반) ── */
-const CATEGORIES = ["수와 연산","변화와 관계","도형과 측정","자료와 가능성"];
-const GRADES = [1,2,3];
-const CAT_COLOR = {
-  "수와 연산":    {bar:"#1e40af", text:"#1e40af"},
-  "변화와 관계":  {bar:"#166534", text:"#166534"},
-  "도형과 측정":  {bar:"#92400e", text:"#92400e"},
-  "자료와 가능성":{bar:"#9d174d", text:"#9d174d"},
+/* ── SIDEBAR ── */
+const GCOL={1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
+const GRADE_LABEL={1:"🔵 1학년",2:"🟢 2학년",3:"🔴 3학년"};
+// 펼침 상태 저장
+const sbGradeOpen={1:true,2:true,3:true};
+const sbUnitOpen={};
+
+function buildSidebar(){
+  const nav=document.getElementById("sidebar");
+  let h=`
+    <div class="sb-section">메뉴</div>
+    <div class="sb-item ${selView==='overview'?'active':''}" data-view="overview">📊 전체 현황</div>
+    <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
+    <div class="sb-section" style="margin-top:8px">학습지</div>`;
+
+  [1,2,3].forEach(grade=>{
+    const gc=GCOL[grade];
+    const gradeOpen=sbGradeOpen[grade]!==false;
+    h+=`
+      <div class="sb-grade-header" data-grade="${grade}">
+        <span class="sb-grade-dot" style="background:${gc}"></span>
+        <span>${GRADE_LABEL[grade]}</span>
+        <span class="sb-chevron ${gradeOpen?'open':''}">›</span>
+      </div>
+      <div class="sb-unit-group" id="grade-group-${grade}" style="max-height:${gradeOpen?'2000px':'0'}">`;
+
+    // 이 학년의 단원들
+    const gradeUnits=UNITS.filter(u=>u.grade===grade);
+    gradeUnits.forEach(unit=>{
+      const uKey=`${grade}-${unit.id}`;
+      const unitOpen=sbUnitOpen[uKey]!==false;
+      const sheets=WORKSHEETS.filter(ws=>ws.unitId===unit.id);
+      if(!sheets.length) return; // 학습지 없는 단원은 숨김
+
+      h+=`
+        <div class="sb-unit-header" data-ukey="${uKey}">
+          <span style="font-size:11px">📂</span>
+          <span>${unit.title}</span>
+          <span class="sb-unit-chevron ${unitOpen?'open':''}">›</span>
+        </div>
+        <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
+
+      sheets.forEach(ws=>{
+        const done=Object.values(allData).filter(d=>d[ws.id]?.completedAt).length;
+        h+=`
+          <div class="sb-ws-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
+            <span class="sb-ws-dot"></span>
+            <span style="flex:1">${ws.title}</span>
+            <span class="sb-count">${done}</span>
+          </div>`;
+      });
+      h+=`</div>`; // ws-group
+    });
+    h+=`</div>`; // unit-group (grade)
+  });
+
+  nav.innerHTML=h;
+
+  // 메뉴 버튼
+  nav.querySelectorAll(".sb-item[data-view]").forEach(el=>{
+    el.addEventListener("click",()=>navigate(el.dataset.view));
+  });
+  // 학습지 버튼
+  nav.querySelectorAll(".sb-ws-item[data-view]").forEach(el=>{
+    el.addEventListener("click",()=>navigate(el.dataset.view));
+  });
+  // 학년 펼치기/접기
+  nav.querySelectorAll(".sb-grade-header").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const g=parseInt(el.dataset.grade);
+      sbGradeOpen[g]=!sbGradeOpen[g];
+      const group=document.getElementById("grade-group-"+g);
+      const chevron=el.querySelector(".sb-chevron");
+      if(sbGradeOpen[g]){
+        group.style.maxHeight="2000px";
+        chevron.classList.add("open");
+      } else {
+        group.style.maxHeight="0";
+        chevron.classList.remove("open");
+      }
+    });
+  });
+  // 단원 펼치기/접기
+  nav.querySelectorAll(".sb-unit-header").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const uKey=el.dataset.ukey;
+      sbUnitOpen[uKey]=!sbUnitOpen[uKey];
+      const group=document.getElementById("unit-group-"+uKey);
+      const chevron=el.querySelector(".sb-unit-chevron");
+      if(sbUnitOpen[uKey]!==false){
+        group.style.maxHeight="1000px";
+        chevron.classList.add("open");
+      } else {
+        group.style.maxHeight="0";
+        chevron.classList.remove("open");
+      }
+    });
+  });
+}
+
+
+function navigate(view){
+  selView=view;
+  buildSidebar();
+  if(view==="overview") renderOverview();
+  else if(view==="classes") renderClasses();
+  else renderWS(view);
+}
+
+/* ── OVERVIEW ── */
+function renderOverview(){
+  const students=Object.keys(allData).length;
+  let totalSub=0,totalTries=0,totalPct=0,pctN=0;
+  Object.values(allData).forEach(d=>Object.values(d).forEach(r=>{
+    totalSub++; totalTries+=r.totalAttempts||0;
+    if(r.correctRate!=null){totalPct+=r.correctRate;pctN++;}
+  }));
+  const avgPct=pctN?Math.round(totalPct/pctN):0;
+  let h=`<div class="pg-title">전체 현황</div>
+  <div class="pg-sub">마지막 갱신: ${new Date().toLocaleString("ko-KR")}
+    <button class="btn-sm" onclick="loadAll()">새로고침</button>
+  </div>
+  <div class="sum-grid">
+    <div class="sum-card"><div class="sum-label">참여 학생</div><div class="sum-num">${students}</div><div class="sum-sub">제출 이력 기준</div></div>
+    <div class="sum-card"><div class="sum-label">총 제출</div><div class="sum-num">${totalSub}</div><div class="sum-sub">학생 × 단원</div></div>
+    <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${rateColor(avgPct)}">${avgPct}%</div><div class="sum-sub">완료 기준</div></div>
+    <div class="sum-card"><div class="sum-label">총 시도 횟수</div><div class="sum-num">${totalTries}</div><div class="sum-sub">오답 재시도 포함</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">학년·단원별 요약</span>
+      <button class="btn-sm" onclick="exportOverview()">CSV 내보내기</button>
+    </div>
+    <table><thead><tr>
+      <th>단원</th><th>학년</th><th>영역</th><th>완료 학생</th><th>평균 정답률</th><th>평균 시도</th>
+    </tr></thead><tbody>`;
+  [1,2,3].forEach(g=>{
+    WORKSHEETS.filter(w=>w.grade===g).forEach(ws=>{
+      const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
+      const done=recs.length;
+      const avgR=done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0;
+      const avgT=done?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/done).toFixed(1):"-";
+      h+=`<tr>
+        <td><strong>${ws.title}</strong></td>
+        <td><span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:${g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2'};color:${g===1?'#1e40af':g===2?'#166534':'#991b1b'}">${g}학년</span></td>
+        <td><span class="badge ${CAT_CLASS[ws.category]}">${ws.category}</span></td>
+        <td>${done}명</td>
+        <td>${done?rateBar(avgR):'<span style="color:var(--ink3)">-</span>'}</td>
+        <td><span class="tries-badge ${avgT<=3?'tries-1':avgT<=6?'tries-2':'tries-many'}">${avgT}</span></td>
+      </tr>`;
+    });
+  });
+  h+=`</tbody></table></div>`;
+  document.getElementById("content").innerHTML=h;
+  window.loadAll=loadAll;
+  window.exportOverview=exportOverview;
+}
+
+/* ── PER-WS VIEW ── */
+function renderWS(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  if(!ws){renderOverview();return;}
+  const recs=[];
+  Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
+  const done=recs.filter(r=>r.completedAt);
+  const avgR=done.length?Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length):0;
+  const avgT=done.length?(done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1):"-";
+  const perfect=done.filter(r=>r.totalAttempts===5).length; // 5문항 기준
+
+  let h=`<div class="pg-title">${ws.title}</div>
+  <div class="pg-sub">
+    <span class="badge ${CAT_CLASS[ws.category]}">${ws.category}</span>
+    수학 ${ws.grade}학년
+  </div>
+  <div class="sum-grid">
+    <div class="sum-card"><div class="sum-label">완료 학생</div><div class="sum-num">${done.length}</div></div>
+    <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${rateColor(avgR)}">${avgR}%</div></div>
+    <div class="sum-card"><div class="sum-label">평균 시도 횟수</div><div class="sum-num">${avgT}</div><div class="sum-sub">문제당</div></div>
+    <div class="sum-card"><div class="sum-label">첫 번에 완료</div><div class="sum-num" style="color:var(--green)">${perfect}</div><div class="sum-sub">모두 1회 정답</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><span class="card-title">✅ 완료 학생 목록</span>
+      <button class="btn-sm" onclick="exportWS('${wsId}')">CSV</button>
+    </div>
+    <table><thead><tr>
+      <th>학생</th><th>이메일</th><th>학급</th><th>정답률</th><th>총 시도</th><th>문항별 시도</th><th>완료 일시</th>
+    </tr></thead><tbody>`;
+  if(!done.length){
+    h+=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">완료한 학생이 없습니다.</td></tr>`;
+  } else {
+    done.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0)).forEach(r=>{
+      const ts=r.completedAt?.toDate?r.completedAt.toDate().toLocaleString("ko-KR"):"-";
+      const rate=r.correctRate??0;
+      const tries=r.totalAttempts||0;
+      const qc=ws.qCount||5;
+      const cls=tries<=qc?'tries-1':tries<=qc*1.5?'tries-2':'tries-many';
+      const classInfo=findClass(r.studentEmail)||"-";
+      let perQHtml="";
+      if(r.perQuestion){
+        perQHtml=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
+          const t=v.attempts||1;
+          const col=t===1?"var(--green)":t<=2?"var(--amber)":"var(--red)";
+          const wrongChips=(v.wrongInputs||[]).map(w=>`<span class="wrong-chip">${w}</span>`).join("");
+          const thumb=v.canvasImage
+            ? `<img class="canvas-thumb" src="${v.canvasImage}" alt="풀이" onclick="openModal('${v.canvasImage}','${(r.studentName||'').replace(/'/g,"\'")} - ${qid}')">`
+            : "";
+          return `<div style="margin-bottom:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            <span style="font-size:11px;font-family:'DM Mono',monospace;color:${col};font-weight:700;min-width:28px">${qid.replace('q','Q')}</span>
+            <span style="font-size:11px;color:var(--ink3)">${t}회</span>
+            ${wrongChips}${thumb}
+          </div>`;
+        }).join("");
+      }
+      h+=`<tr>
+        <td><strong>${r.studentName||"-"}</strong></td>
+        <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
+        <td style="font-size:12px">${classInfo}</td>
+        <td>${rateBar(rate)}</td>
+        <td><span class="tries-badge ${cls}">${tries}회</span></td>
+        <td style="min-width:180px">${perQHtml||"-"}</td>
+        <td style="font-size:12px">${ts}</td>
+      </tr>`;
+    });
+  }
+  h+=`</tbody></table></div>`;
+
+  // 문항별 난이도
+  const qStats={};
+  recs.forEach(r=>{ if(!r.perQuestion) return;
+    Object.entries(r.perQuestion).forEach(([qid,v])=>{
+      if(!qStats[qid]) qStats[qid]={total:0,totalTries:0};
+      qStats[qid].total++; qStats[qid].totalTries+=v.attempts||1;
+    });
+  });
+  if(Object.keys(qStats).length){
+    h+=`<div class="card"><div class="card-hdr"><span class="card-title">📊 문항별 난이도</span></div>
+    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th></tr></thead><tbody>`;
+    Object.entries(qStats).sort().forEach(([qid,s])=>{
+      const avg=(s.totalTries/s.total).toFixed(1);
+      const diff=avg<=1.2?"🟢 쉬움":avg<=2.0?"🟡 보통":"🔴 어려움";
+      h+=`<tr><td>${qid}</td><td>${s.total}명</td>
+        <td><span class="tries-badge ${avg<=1.2?'tries-1':avg<=2?'tries-2':'tries-many'}">${avg}회</span></td>
+        <td>${diff}</td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+  document.getElementById("content").innerHTML=h;
+  window.exportWS=exportWS;
+}
+
+/* ── CLASS MANAGEMENT ── */
+function renderClasses(){
+  let h=`<div class="pg-title">🏫 학급 관리</div>
+  <div class="pg-sub">학년도·학년·반 단위로 학생 이메일을 등록합니다.</div>
+  <div class="card-hdr" style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);margin-bottom:16px;padding:14px 18px">
+    <span class="card-title">새 학급 추가</span>
+  </div>
+  <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div class="class-row" style="gap:10px;margin-bottom:10px">
+      <div>
+        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년도</label>
+        <input type="text" id="new-year" value="${new Date().getFullYear()}" style="width:100%">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년</label>
+        <select id="new-grade" style="width:100%">
+          <option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">반</label>
+        <input type="text" id="new-class" placeholder="예: 3" style="width:100%">
+      </div>
+    </div>
+    <button class="btn-sm btn-sm-accent" onclick="addClass()">+ 학급 추가</button>
+  </div>
+  <div class="class-grid" id="class-grid">`;
+
+  const classKeys=Object.keys(classes).sort();
+  if(!classKeys.length){
+    h+=`<div style="color:var(--ink3);font-size:14px;padding:8px">등록된 학급이 없습니다.</div>`;
+  } else {
+    classKeys.forEach(key=>{
+      const cls=classes[key];
+      const students=cls.students||[];
+      h+=`<div class="class-card">
+        <div class="class-card-title">
+          <span style="font-size:18px">📚</span>
+          <span>${cls.year}학년도 ${cls.grade}학년 ${cls.classNum}반</span>
+          <button onclick="deleteClass('${key}')" style="margin-left:auto;background:none;border:none;color:var(--ink3);cursor:pointer;font-size:13px">🗑</button>
+        </div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">${students.length}명 등록</div>
+        <div class="student-list" id="list-${key}">
+          ${students.map((e,i)=>{
+            const disp = e.endsWith(STUDENT_DOMAIN) ? e.replace(STUDENT_DOMAIN,'') : e;
+            return `<div class="student-chip">
+              <span>${disp}</span>
+              <span style="font-size:11px;color:var(--ink3);margin-left:2px">${STUDENT_DOMAIN}</span>
+              <button class="remove" onclick="removeStudent('${key}',${i})">×</button>
+            </div>`;
+          }).join("")}
+        </div>
+        <div class="add-student-row">
+          <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
+            <input type="text" id="add-${key}"
+              placeholder="아이디 입력"
+              style="border:none;outline:none;padding:7px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
+              onkeydown="if(event.key==='Enter')addStudent('${key}')">
+            <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
+          </div>
+          <button class="btn-sm" onclick="addStudent('${key}')">추가</button>
+        </div>
+      </div>`;
+    });
+  }
+  h+=`</div>`;
+  document.getElementById("content").innerHTML=h;
+  window.addClass=addClass;
+  window.deleteClass=deleteClass;
+  window.addStudent=addStudent;
+  window.removeStudent=removeStudent;
+}
+
+async function saveClasses(){
+  try{
+    await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true});
+  }catch(e){ console.error("학급 저장 오류:",e); }
+}
+
+window.addClass=async function(){
+  const year=document.getElementById("new-year").value.trim();
+  const grade=document.getElementById("new-grade").value;
+  const cn=document.getElementById("new-class").value.trim();
+  if(!year||!cn){ alert("학년도와 반을 입력하세요."); return; }
+  const key=`${year}-${grade}-${cn}`;
+  if(classes[key]){ alert("이미 존재하는 학급입니다."); return; }
+  classes[key]={year,grade,classNum:cn,students:[]};
+  await saveClasses();
+  renderClasses();
 };
 
-/* 단원의 진도 요약 계산 */
-function unitProgress(unit) {
-  const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id && ws.questions.length>0);
-  if(!sheets.length) return {total:0, done:0, hasSheets:false};
-  const done = sheets.filter(ws=>wsProgress[ws.id]?.completedAt).length;
-  return {total:sheets.length, done, hasSheets:true};
-}
+window.deleteClass=async function(key){
+  if(!confirm(`${classes[key]?.year}학년도 ${classes[key]?.grade}학년 ${classes[key]?.classNum}반을 삭제할까요?`)) return;
+  delete classes[key];
+  await saveClasses();
+  renderClasses();
+};
 
-/* 단원 셀 아이템 생성 */
-function makeUnitItem(unit) {
-  const gc = GRADE_COLOR[unit.grade];
-  const prog = unitProgress(unit);
-
-  const item = document.createElement("div");
-  item.className = "ws-item" + (!prog.hasSheets?" empty":"");
-  item.style.borderLeftColor = prog.hasSheets ? gc : "var(--rule)";
-
-  let badge = "";
-  if(prog.hasSheets) {
-    badge = `<span class="unit-ws-badge">${prog.done}/${prog.total}</span>`;
-  }
-
-  let statusHtml = "";
-  if(prog.hasSheets) {
-    if(prog.done===prog.total) statusHtml=`<span class="ws-status s-done">완료</span>`;
-    else if(prog.done>0)      statusHtml=`<span class="ws-status s-partial">${prog.done}/${prog.total}</span>`;
-  }
-
-  item.innerHTML = `
-    ${badge}
-    ${statusHtml}
-    <div class="ws-item-title">${unit.title}</div>
-    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.total}개` : "준비 중"}</div>`;
-
-  if(prog.hasSheets) {
-    item.addEventListener("click", ()=>showUnitPage(unit));
-  }
-  return item;
-}
-
-function renderCards() {
-  const tbody = document.getElementById("matrix-body");
-  tbody.innerHTML = "";
-
-  CATEGORIES.forEach(cat => {
-    const cc = CAT_COLOR[cat];
-    const tr = document.createElement("tr");
-    tr.className = "mtr";
-
-    // 영역 레이블
-    const tdLabel = document.createElement("td");
-    tdLabel.className = "mtd-label";
-    tdLabel.innerHTML = `<div class="lbl-inner">
-      <div class="lbl-bar" style="background:${cc.bar}"></div>
-      <div class="lbl-text" style="color:${cc.text}">${cat}</div>
-    </div>`;
-    tr.appendChild(tdLabel);
-
-    // 학년별 td
-    GRADES.forEach(g => {
-      const td = document.createElement("td");
-      td.className = "mtd";
-      const units = UNITS.filter(u=>u.grade===g && u.category===cat);
-      if(!units.length) {
-        td.innerHTML=`<div style="color:var(--rule);text-align:center;padding:10px;font-size:16px">—</div>`;
-      } else {
-        units.forEach(u=>td.appendChild(makeUnitItem(u)));
-      }
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
-}
-
-/* ── UNIT PAGE ── */
-function showUnitPage(unit) {
-  const gc = GRADE_COLOR[unit.grade];
-  const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};
-  document.getElementById("unit-title").textContent = unit.title;
-  document.getElementById("unit-sub").textContent =
-    `수학 ${unit.grade}학년 · ${unit.category}`;
-
-  const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id);
-  const grid = document.getElementById("ws-list-grid");
-  grid.innerHTML = "";
-
-  if(!sheets.length) {
-    grid.innerHTML=`<div style="color:var(--ink3);font-size:14px;padding:20px 0">등록된 학습지가 없습니다.</div>`;
-  } else {
-    sheets.forEach(ws => {
-      const prog  = wsProgress[ws.id];
-      const done  = !!(prog?.completedAt);
-      const empty = ws.questions.length === 0;
-      const rate  = prog?.correctRate ?? 0;
-
-      let badgeHtml = "";
-      if(done)        badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
-      else if(prog?.solvedQuestions>0) badgeHtml=`<span class="wslc-badge s-partial">진행 중</span>`;
-      else if(empty)  badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
-      else            badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
-
-      const card = document.createElement("div");
-      card.className = "ws-list-card" + (empty?" empty":"");
-      card.innerHTML = `
-        <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
-        <div class="wslc-body">
-          <div class="wslc-title">${ws.title}</div>
-          <div class="wslc-meta">${ws.questions.length}문제
-            ${done ? ` · 정답률 ${rate}%` : ""}
-          </div>
-        </div>
-        ${badgeHtml}`;
-
-      if(!empty) card.addEventListener("click", ()=>startQuiz(ws));
-      grid.appendChild(card);
-    });
-  }
-
-  showPage("unit-page");
-}
-
-/* 단원 목록으로 돌아가기 */
-document.getElementById("btn-unit-back").addEventListener("click", loadDash);
-
-/* ── QUIZ ── */
-/* ── QUIZ ENGINE (단답형 + 수식입력기) ── */
-const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
-
-/* 문제 텍스트를 LaTeX 수식으로 변환 */
-function fracText(text){
-  // 이미 \( \) 로 감싸진 경우 그대로
-  if(text.includes("\\(")) return text;
-  // − → - (LaTeX용)
-  let t = text.replace(/−/g, "-");
-  // (expr)/num 패턴: (x-1)/3 → \frac{x-1}{3}
-  t = t.replace(/\(([^)]+)\)\s*\/\s*([0-9a-zA-Z]+)/g, (_, n, d)=>`\\frac{${n}}{${d}}`);
-  // var/num 패턴: x/2, 2x/3 → \frac{x}{2}, \frac{2x}{3}
-  t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\s*\/\s*([0-9]+)/g, (_, n, d)=>`\\frac{${n}}{${d}}`);
-  // num/num 패턴: 1/2 → \frac{1}{2}
-  t = t.replace(/([0-9]+)\s*\/\s*([0-9]+)/g, (_, n, d)=>`\\frac{${n}}{${d}}`);
-  // 전체를 LaTeX inline으로 감싸기
-  return `\\( ${t} \\)`;
-}
-
-/* MathJax 재렌더링 — 로드 안 됐으면 최대 2초 대기 후 재시도 */
-function renderMath(el, retry=0){
-  if(window.MathJax && MathJax.typesetPromise){
-    MathJax.typesetClear([el]);
-    MathJax.typesetPromise([el]).catch(e=>console.warn("MathJax:",e));
-  } else if(retry < 20){
-    setTimeout(()=>renderMath(el, retry+1), 100);
-  }
-}
-let qTokens=[], qEditPart=null;
-
-function startQuiz(ws) {
-  curWS=ws; curQIdx=0;
-  attempts=new Array(ws.questions.length).fill(0);
-  answered=new Array(ws.questions.length).fill(false);
-  wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
-  canvasStore={};
-  showPage("quiz-page");
-  document.getElementById("quiz-ws-title").textContent=ws.title;
-  // 링크 제외 문항 수 캐싱
-  curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
-  buildStrip(); renderQuestion();
-  // 캔버스: quiz-page 표시 후 초기화 (width 정상 계산)
-  requestAnimationFrame(()=>{ initCanvas(); });
-  // 키보드 입력 활성화
-  document.addEventListener("keydown", quizKeyHandler);
-}
-
-function buildStrip() {
-  const s=document.getElementById("q-progress-strip"); s.innerHTML="";
-  curWS.questions.forEach((q,i)=>{
-    if(q.type==="link") return; // 링크 문항은 진도 표시 제외
-    const d=document.createElement("div");
-    d.className="q-dot"+(i===0?" current":" locked");
-    d.id="qdot-"+i; s.appendChild(d);
-  });
-}
-function updateStrip() {
-  // 링크 제외 문항 카운터 업데이트
-  const q=curWS.questions[curQIdx];
-  if(q && q.type!=="link"){
-    const realIdx=curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length;
-    const realTotal=curWS._realQCount||curWS.questions.filter(q=>q.type!=="link").length;
-    const ctr=document.getElementById("q-counter-label");
-    if(ctr) ctr.textContent=`${realIdx+1} / ${realTotal}`;
-  }
-  curWS.questions.forEach((q,i)=>{
-    if(q.type==="link") return;
-    const d=document.getElementById("qdot-"+i); if(!d) return;
-    d.className="q-dot "+(answered[i]?"done":i===curQIdx?"current":"locked");
-  });
-  updateNavBtns();
-}
-
-function renderQuestion() {
-  const q=curWS.questions[curQIdx], len=curWS.questions.length;
-  qTokens=[]; qEditPart=null;
-  updateStrip();
+window.addStudent=async function(key){
+  const inp=document.getElementById("add-"+key);
+  let val=inp.value.trim().toLowerCase();
+  if(!val) return;
+  const email = val.includes("@") ? val : val + STUDENT_DOMAIN;
+  if(!classes[key].students) classes[key].students=[];
+  if(classes[key].students.includes(email)){ alert("이미 등록된 학생입니다."); inp.select(); return; }
+  classes[key].students.push(email);
+  await saveClasses();
+  renderClasses();
+  // 추가 후 같은 입력칸에 포커스 유지
   requestAnimationFrame(()=>{
-    restoreCanvasState(curQIdx);
-    const panel=document.getElementById("quiz-left-panel");
-    if(panel) renderMath(panel);
+    const newInp=document.getElementById("add-"+key);
+    if(newInp){ newInp.value=""; newInp.focus(); }
   });
+};
 
-  const isWord = q.type==="word";
-  const panel=document.getElementById("quiz-left-panel");
+window.removeStudent=async function(key,idx){
+  classes[key].students.splice(idx,1);
+  await saveClasses();
+  renderClasses();
+};
 
-  // 문제 헤더
-  const qHeadHtml=`
-    <div class="problem-card">
-      <div class="q-num">
-        문제 ${curQIdx+1} / ${len}
-        <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':
-                  '<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>'}
-      </div>
-      <div class="q-text" style="margin-top:2px">${isWord ? q.text : '다음 일차방정식을 풀어라.'}</div>
-      ${!isWord?`<div class="q-text" style="margin-top:6px"><span class="eq">${fracText(q.text)}</span></div>`:''}
-    </div>`;
-
-  const isLink = q.type==="link";
-  // 카운터: 링크 제외 순번
-  if(!isLink){
-    const realIdx = curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length;
-    const realTotal = curWS._realQCount || curWS.questions.filter(q=>q.type!=="link").length;
-    document.getElementById("q-counter")?.setAttribute("data-real",`${realIdx+1} / ${realTotal}`);
+/* ── HELPERS ── */
+function findClass(email){
+  if(!email) return null;
+  for(const [key,cls] of Object.entries(classes)){
+    if((cls.students||[]).includes(email.toLowerCase()))
+      return `${cls.year}/${cls.grade}학년 ${cls.classNum}반`;
   }
-  if(isLink){
-    // ── 링크 페이지 UI ──
-    panel.innerHTML=`${qHeadHtml}
-      <div class="math-input-card">
-        <div style="padding:8px 0 16px">
-          <a href="${q.linkUrl}" target="_blank"
-            style="display:flex;align-items:center;justify-content:center;gap:10px;
-              padding:16px;border-radius:10px;
-              background:var(--acc-lt);border:2px solid var(--accent);
-              color:var(--accent);font-size:15px;font-weight:700;
-              text-decoration:none;transition:opacity .15s"
-            onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
-            ${q.linkLabel}
-          </a>
-        </div>
-        <div class="ans-btns" onmousedown="event.preventDefault()">
-          <button class="btn-submit" onclick="submitQAns()"
-            style="background:var(--green)">
-            확인했어요 → 다음 문제
-          </button>
-        </div>
-        <div class="feedback-strip" id="feedback-strip"></div>
-      </div>`;
-    return;
-  }
-  if(isWord){
-    // ── 용어 입력 UI ──
-    panel.innerHTML=`${qHeadHtml}
-      <div class="math-input-card">
-        <div class="ans-hint">
-          <strong>답:</strong>
-          <span>키보드로 입력 후 Enter</span>
-        </div>
-        <input type="text" id="word-input" autocomplete="off" autocorrect="off"
-          spellcheck="false"
-          style="width:100%;height:44px;font-size:17px;font-weight:700;
-            border:1.5px solid var(--accent);border-radius:8px;
-            padding:0 14px;font-family:inherit;color:var(--ink);
-            background:var(--paper);outline:none;box-sizing:border-box"
-          placeholder="정답 입력..."
-          onkeydown="if(event.key==='Enter'){event.preventDefault();submitQAns();}"
-        >
-        <div class="ans-btns" style="margin-top:8px" onmousedown="event.preventDefault()">
-          <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
-          <button class="btn-clr-ans" onclick="document.getElementById('word-input').value=''">지우기</button>
-        </div>
-        <div class="feedback-strip" id="feedback-strip"></div>
-        <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-          🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
-        </div>
-      </div>`;
-    // 자동 포커스
-    requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
-  } else {
-    // ── 수식 입력 UI ──
-    panel.innerHTML=`${qHeadHtml}
-      <div class="math-input-card">
-        <div class="ans-hint">
-          <strong>x =</strong>
-          <span>키보드 직접 입력 가능 &nbsp;·&nbsp; Tab = 분수 다음 칸 &nbsp;·&nbsp; Enter = 확인</span>
-        </div>
-        <div class="ans-display focused" id="ans-display"><span class="ans-cur"></span></div>
-        <div class="keypad" onmousedown="event.preventDefault()">
-          <div class="krow">
-            ${[1,2,3,4,5,6,7,8,9,0].map(n=>`<button class="kbtn" onclick="qInput('${n}')">${n}</button>`).join("")}
-            <button class="kbtn del" onclick="qInput('⌫')" style="flex:1.3">⌫</button>
-          </div>
-          <div class="krow gap">
-            <button class="kbtn op" onclick="qInput('+')">+</button>
-            <button class="kbtn op" onclick="qInput('−')">−</button>
-            <button class="kbtn op" onclick="qInput('×')">×</button>
-            <button class="kbtn op" onclick="qInput('÷')">÷</button>
-            <button class="kbtn op" onclick="qInput('.')">.</button>
-            <button class="kbtn op" onclick="qInput('(')">(</button>
-            <button class="kbtn op" onclick="qInput(')')">)</button>
-          </div>
-          <div class="krow gap">
-            <button class="kbtn spl" onclick="qInput('FRAC')" style="flex:2.5">
-              <span class="frac-prev"><span class="fn">a</span><span class="fd">b</span></span>
-              분수
-            </button>
-            <button class="kbtn spl" onclick="qNextPart()" style="flex:2">▶ 다음 칸 <small style="font-size:10px">(Tab)</small></button>
-            <button class="kbtn spl" onclick="qInput('EXP')" style="flex:2.5">
-              <span class="exp-prev">a<sup>n</sup></span>
-              지수
-            </button>
-          </div>
-        </div>
-        <div class="ans-btns" onmousedown="event.preventDefault()">
-          <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
-          <button class="btn-clr-ans" onclick="qClear()">지우기</button>
-        </div>
-        <div class="feedback-strip" id="feedback-strip"></div>
-        <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-          🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
-        </div>
-      </div>`;
-  }
+  return null;
+}
+function rateColor(r){ return r>=80?"var(--green)":r>=60?"var(--amber)":"var(--red)"; }
+function rateBar(rate){
+  return `<div class="rate-row">
+    <div class="rate-bg"><div class="rate-fill" style="width:${rate}%;background:${rateColor(rate)}"></div></div>
+    <span class="rate-n" style="color:${rateColor(rate)}">${rate}%</span>
+  </div>`;
 }
 
-/* 토큰 렌더 */
-function qRender(){
-  const el=document.getElementById("ans-display"); if(!el)return;
-  let h="";
-  qTokens.forEach((t,i)=>{
-    if(t.type==="char") h+=`<span class="tok">${escH(t.val)}</span>`;
-    else if(t.type==="frac"){
-      const na=qEditPart&&qEditPart.idx===i&&qEditPart.part==="num"?" ap":"";
-      const da=qEditPart&&qEditPart.idx===i&&qEditPart.part==="den"?" ap":"";
-      h+=`<span class="chip-frac"><span class="fn${na}">${escH(t.num)||"&thinsp;"}</span><span class="fd${da}">${escH(t.den)||"&thinsp;"}</span></span>`;
-    } else if(t.type==="exp"){
-      const ea=qEditPart&&qEditPart.idx===i?" ap":"";
-      h+=`<span class="chip-exp"><span class="base">${escH(t.base)}</span><span class="expo${ea}">${escH(t.expo)||"&thinsp;"}</span></span>`;
-    }
+/* ── CSV ── */
+function exportOverview(){
+  let csv="단원,학년,영역,완료학생수,평균정답률,평균시도\n";
+  WORKSHEETS.forEach(ws=>{
+    const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
+    const avgR=recs.length?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/recs.length):0;
+    const avgT=recs.length?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/recs.length).toFixed(1):0;
+    csv+=`"${ws.title}",${ws.grade},"${ws.category}",${recs.length},${avgR}%,${avgT}\n`;
   });
-  el.innerHTML=h+'<span class="ans-cur"></span>';
+  dl(csv,"전체현황.csv");
 }
-function escH(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
-
-function qInput(v){
-  if(v==="⌫"){
-    if(qEditPart){
-      const t=qTokens[qEditPart.idx];
-      if(t){if(qEditPart.part==="num")t.num=t.num.slice(0,-1);else if(qEditPart.part==="den")t.den=t.den.slice(0,-1);else t.expo=t.expo.slice(0,-1);}
-    } else if(qTokens.length) qTokens.pop();
-  } else if(v==="FRAC"){
-    qTokens.push({type:"frac",num:"",den:""});
-    qEditPart={idx:qTokens.length-1,part:"num"};
-  } else if(v==="EXP"){
-    let base="";
-    if(qTokens.length&&qTokens[qTokens.length-1].type==="char") base=qTokens.pop().val;
-    qTokens.push({type:"exp",base,expo:""});
-    qEditPart={idx:qTokens.length-1,part:"expo"};
-  } else {
-    if(qEditPart){
-      const t=qTokens[qEditPart.idx];
-      if(t){if(qEditPart.part==="num")t.num+=v;else if(qEditPart.part==="den")t.den+=v;else t.expo+=v;}
-    } else qTokens.push({type:"char",val:v});
-  }
-  qRender();
-}
-function qNextPart(){
-  if(!qEditPart){qRender();return;}
-  const t=qTokens[qEditPart.idx];
-  if(t&&t.type==="frac"&&qEditPart.part==="num") qEditPart.part="den";
-  else qEditPart=null;
-  qRender();
-}
-function qClear(){qTokens=[];qEditPart=null;qRender();}
-
-function qTokensToNum(){
-  let s=qTokens.map(t=>{
-    if(t.type==="char") return t.val;
-    if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
-    if(t.type==="exp")  return `Math.pow(${t.base||0},${t.expo||1})`;
-    return "";
-  }).join("");
-  s=s.replace(/−/g,"-").replace(/×/g,"*").replace(/÷/g,"/");
-  try{ return Function('"use strict";return ('+s+')')(); } catch(e){ return NaN; }
-}
-
-/* 키보드 */
-const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
-  ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"÷","Tab":"TAB","Enter":"ENTER","NumpadEnter":"ENTER"};
-function quizKeyHandler(e){
-  const q=curWS?.questions[curQIdx];
-  // link 타입: Enter로 바로 다음 문제
-  if(q?.type==="link"){
-    if(e.key==="Enter"||e.code==="NumpadEnter"){
-      e.preventDefault();
-      if(answered[curQIdx]){
-        const isLast=curQIdx===curWS.questions.length-1;
-        if(isLast) finishQuiz(); else nextQ();
-      } else { submitQAns(); }
-    }
-    return;
-  }
-  // word 타입: text input이 직접 처리 (Enter만 가로채기)
-  if(q?.type==="word"){
-    if((e.key==="Enter"||e.code==="NumpadEnter") && answered[curQIdx]){
-      e.preventDefault();
-      const isLast=curQIdx===curWS.questions.length-1;
-      if(isLast) finishQuiz(); else nextQ();
-    }
-    return;
-  }
-  if(!document.getElementById("ans-display")) return;
-  const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
-  e.preventDefault();
-  if(v==="TAB") qNextPart();
-  else if(v==="ENTER"){
-    if(answered[curQIdx]){
-      const isLast=curQIdx===curWS.questions.length-1;
-      if(isLast) finishQuiz(); else nextQ();
-    } else {
-      submitQAns();
-    }
-  }
-  else qInput(v);
-}
-
-async function submitQAns(){
-  const q=curWS.questions[curQIdx];
-
-  // ── 링크 페이지: 항상 통과 ──
-  if(q.type==="link"){
-    answered[curQIdx]=true; updateStrip();
-    const isLast=curQIdx===curWS.questions.length-1;
-    const fb=document.getElementById("feedback-strip");
-    fb.className="feedback-strip show fb-correct";
-    fb.innerHTML=`✅ 확인 완료!&nbsp;
-      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
-        style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
-        background:var(--green);color:#fff;font-size:13px;font-weight:700;
-        cursor:pointer;font-family:inherit">
-        ${isLast?'결과 보기 →':'다음 문제 →'}
-      </button>`;
-    return;
-  }
-  // ── 용어 문제 채점 ──
-  if(q.type==="word"){
-    const input=document.getElementById("word-input");
-    const userAns=(input?.value||"").trim().replace(/\s+/g," ");
-    const correct=[q.answer,...(q.answerAlt||[])];
-    const ok=correct.some(a=>a.toLowerCase()===userAns.toLowerCase());
-    attempts[curQIdx]++;
-    const ab=document.getElementById("attempt-badge");
-    const an=document.getElementById("attempt-num");
-    if(ab) ab.style.display="flex"; if(an) an.textContent=attempts[curQIdx];
-    const fb=document.getElementById("feedback-strip");
-    if(ok){
-      if(input) input.disabled=true;
-      fb.className="feedback-strip show fb-correct";
-      const isLast=curQIdx===curWS.questions.length-1;
-      fb.innerHTML=`✅ 정답! &nbsp;<strong>${q.answer}</strong>&nbsp;
-        <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
-          style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
-          background:var(--green);color:#fff;font-size:13px;font-weight:700;
-          cursor:pointer;font-family:inherit">
-          ${isLast?'결과 보기 →':'다음 문제 →'}
-        </button>`;
-      answered[curQIdx]=true; updateStrip();
-    } else {
-      wrongAnswers[curQIdx].inputs.push(userAns||"(빈칸)");
-      fb.className="feedback-strip show fb-wrong";
-      fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
-      const lp=document.getElementById("quiz-left-panel");
-      lp.classList.add("shake");
-      setTimeout(()=>{
-        lp.classList.remove("shake");
-        if(input){input.disabled=false;input.value="";input.focus();}
-        fb.className="feedback-strip";
-      },600);
-    }
-    return;
-  }
-
-  // ── 수식 문제 채점 ──
-  const val=qTokensToNum();
-  const rawInput=qTokens.map(t=>{
-    if(t.type==="char") return t.val;
-    if(t.type==="frac") return `${t.num}/${t.den}`;
-    if(t.type==="exp")  return `${t.base}^${t.expo}`;
-    return "";
-  }).join("").replace(/−/g,"-");
-
-  // 분수 정답 처리 (answerFrac 있으면 분수로도 비교)
-  let ok=false;
-  if(!isNaN(val)){
-    ok=Math.abs(val-q.answer)<0.001;
-    // 분수 입력 비교: "3/2" → 1.5
-    if(!ok && rawInput.includes("/")){
-      const parts=rawInput.split("/");
-      if(parts.length===2){
-        const fv=parseFloat(parts[0])/parseFloat(parts[1]);
-        ok=Math.abs(fv-q.answer)<0.001;
-      }
-    }
-  }
-  attempts[curQIdx]++;
-  const fb=document.getElementById("feedback-strip");
-  const ab=document.getElementById("attempt-badge");
-  const an=document.getElementById("attempt-num");
-  if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
-  if(ok){
-    fb.className="feedback-strip show fb-correct";
-    const isLast = curQIdx===curWS.questions.length-1;
-    const dispAns = q.answerFrac || q.answer;
-    fb.innerHTML=`✅ 정답! &nbsp; x = ${dispAns} &nbsp;
-      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
-        style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
-        background:var(--green);color:#fff;font-size:13px;font-weight:700;
-        cursor:pointer;font-family:inherit">
-        ${isLast?'결과 보기 →':'다음 문제 →'}
-      </button>`;
-    answered[curQIdx]=true; updateStrip();
-  } else {
-    wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
-    // 캔버스 이미지 Storage 업로드
-    try {
-      const canvas=document.getElementById("draw-canvas");
-      const imgData=canvas.toDataURL("image/png");
-      // 파일명: uid-이름-wsId-qId-시도번호.png
-      const name=user.displayName||user.email.split("@")[0];
-      const fileName=`${user.uid}-${name}-${curWS.id}-${q.id}-try${attempts[curQIdx]}.png`;
-      const storageRef=ref(storage,`wrongAnswers/${user.uid}/${fileName}`);
-      await uploadString(storageRef, imgData, "data_url");
-      const url=await getDownloadURL(storageRef);
-      wrongAnswers[curQIdx].imagePath=url; // 최신 오답 이미지로 덮어씀
-    } catch(e){ console.warn("이미지 저장 실패:",e.message); }
-
-    fb.className="feedback-strip show fb-wrong";
-    fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
-    const lp=document.getElementById("quiz-left-panel");
-    lp.classList.add("shake");
-    setTimeout(()=>lp.classList.remove("shake"),450);
-  }
-}
-
-async function finishQuiz(){
-  // 키보드 리스너 제거
-  document.removeEventListener("keydown", quizKeyHandler);
-  showPage("result-page");
-  const total=curWS.questions.length;
-  const tries=attempts.reduce((s,a,i)=>
-    curWS.questions[i]?.type==="link"?s:s+a, 0);
-  document.getElementById("r-score").textContent=total;
-  document.getElementById("r-of").textContent=`/ ${total}`;
-  const perfectFirst = tries===total;
-  document.getElementById("r-msg").textContent=
-    perfectFirst?"GOOD JOB! 🏆":
-    tries<=total+2?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
-  const bp = curWS.bookPage || "교과서";
-  document.getElementById("r-sub").textContent=
-    `총 ${tries}번 시도 · 교과서 ${bp}페이지를 푸세요 📖`;
-  const list=document.getElementById("r-list"); list.innerHTML="";
-  curWS.questions.forEach((q,i)=>{
-    const row=document.createElement("div"); row.className="result-row";
-    row.innerHTML=`<span class="r-icon">✅</span>
-      <div class="r-body"><div class="r-qnum">문제 ${i+1} &nbsp;<span style="font-family:monospace">${q.text}</span></div>
-      ${attempts[i]>1?`<div class="r-tries">⟳ ${attempts[i]}번 만에 정답</div>`:""}</div>`;
-    list.appendChild(row);
+function exportWS(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  let csv="이름,이메일,학급,정답률,총시도,완료일시\n";
+  Object.values(allData).forEach(d=>{
+    const r=d[wsId]; if(!r?.completedAt) return;
+    const ts=r.completedAt?.toDate?r.completedAt.toDate().toLocaleString("ko-KR"):"-";
+    const cls=findClass(r.studentEmail)||"-";
+    csv+=`"${r.studentName||""}","${r.studentEmail||""}","${cls}",${r.correctRate||0}%,${r.totalAttempts||0},"${ts}"\n`;
   });
-  try {
-    const perQ={};
-    curWS.questions.forEach((q,i)=>{
-      perQ[q.id]={
-        attempts: attempts[i],
-        wrongInputs: wrongAnswers[i].inputs,
-        canvasImage: wrongAnswers[i].imagePath||null,
-      };
-    });
-    await setDoc(doc(db,"results",user.uid,"worksheets",curWS.id),{
-      studentEmail:user.email, studentName:user.displayName||"",
-      worksheetId:curWS.id, worksheetTitle:curWS.title,
-      solvedQuestions:total, totalAttempts:tries, correctRate:100,
-      perQuestion:perQ, completedAt:serverTimestamp(),
-    },{merge:true});
-    wsProgress[curWS.id]={solvedQuestions:total,totalAttempts:tries,correctRate:100,completedAt:true};
-  } catch(e){ console.error("저장 오류:",e); }
+  dl(csv,`${ws.title}_결과.csv`);
 }
-
-/* 정답 후 다음 문제로 */
-function nextQ(){
-  saveCanvasState();
-  curQIdx++;
-  renderQuestion();
+function dl(content,name){
+  const blob=new Blob(['\uFEFF'+content],{type:"text/csv;charset=utf-8;"});
+  const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:name});
+  a.click();
 }
-window.nextQ=nextQ;
-// 키패드 onclick에서 접근 가능하도록 전역 노출
-window.qInput=qInput;
-window.qNextPart=qNextPart;
-window.qClear=qClear;
-window.submitQAns=submitQAns;
-
-/* 이전/다음 문제 이동 */
-function moveQ(dir){
-  const next=curQIdx+dir;
-  if(next<0||next>=curWS.questions.length) return;
-  saveCanvasState();
-  curQIdx=next;
-  renderQuestion();
-}
-window.moveQ=moveQ;
-
-/* 이전/다음 버튼 활성 상태 업데이트 */
-function updateNavBtns(){
-  const prev=document.getElementById("btn-prev-q");
-  const next=document.getElementById("btn-next-q");
-  if(prev) prev.style.opacity=curQIdx===0?"0.35":"1";
-  if(next) next.style.opacity=curQIdx===curWS.questions.length-1?"0.35":"1";
-}
-
-document.getElementById("btn-retry").addEventListener("click",()=>{
-  document.removeEventListener("keydown", quizKeyHandler);
-  startQuiz(curWS);
-});
-document.getElementById("btn-home").addEventListener("click",()=>{
-  document.removeEventListener("keydown", quizKeyHandler);
-  loadDash();
-});
-document.getElementById("btn-back").addEventListener("click",()=>{
-  document.removeEventListener("keydown", quizKeyHandler);
-  // 단원 페이지로 돌아가기 (unitId가 있으면)
-  if(curWS?.unitId){
-    const unit = UNITS.find(u=>u.id===curWS.unitId);
-    if(unit){ showUnitPage(unit); return; }
-  }
-  loadDash();
-});
-
-
-/* ══ CANVAS ENGINE ══
-   - 문제별 필기 저장/복원 (canvasStore[idx])
-   - quiz-page 표시 후 초기화해야 올바른 width 계산
-   - 이전/다음 이동 시 현재 내용 저장 후 복원
-*/
-const canvas=document.getElementById("draw-canvas");
-const ctx=canvas.getContext("2d");
-let cvDrawing=false, penColor="#1c1917", penSize=3, eraser=false, cvLX=0, cvLY=0;
-let canvasStore={}; // key: qIdx, value: ImageData
-
-function initCanvas(){
-  // quiz-page가 보이는 상태에서만 호출
-  const w=canvas.parentElement.clientWidth||600;
-  canvas.width=w;
-  canvas.height=520;
-  ctx.globalCompositeOperation="source-over";
-  setCtx();
-}
-
-function setCtx(){
-  ctx.lineCap="round"; ctx.lineJoin="round";
-  if(eraser){
-    ctx.globalCompositeOperation="destination-out";
-    ctx.strokeStyle="rgba(0,0,0,1)";
-    ctx.lineWidth=penSize*5;
-  } else {
-    ctx.globalCompositeOperation="source-over";
-    ctx.strokeStyle=penColor;
-    ctx.lineWidth=penSize;
-  }
-}
-
-/* 현재 문제 필기 저장 */
-function saveCanvasState(){
-  if(canvas.width>0 && canvas.height>0){
-    try{ canvasStore[curQIdx]=ctx.getImageData(0,0,canvas.width,canvas.height); }
-    catch(e){}
-  }
-}
-
-/* 문제 이동 시: 저장 → 초기화 → 복원 */
-function restoreCanvasState(idx){
-  ctx.globalCompositeOperation="source-over";
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(canvasStore[idx]){
-    try{ ctx.putImageData(canvasStore[idx],0,0); }
-    catch(e){}
-  }
-  setCtx();
-}
-
-function clearCanvas(){
-  // compositeOperation 초기화 후 지우기
-  ctx.globalCompositeOperation="source-over";
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  delete canvasStore[curQIdx];
-}
-
-function cvPos(e){
-  const r=canvas.getBoundingClientRect();
-  const sx=canvas.width/r.width, sy=canvas.height/r.height;
-  return e.touches
-    ?[(e.touches[0].clientX-r.left)*sx,(e.touches[0].clientY-r.top)*sy]
-    :[(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
-}
-function cvStart(e){
-  e.preventDefault(); cvDrawing=true;
-  [cvLX,cvLY]=cvPos(e);
-  setCtx();
-  if(!eraser){
-    ctx.beginPath(); ctx.arc(cvLX,cvLY,penSize/2,0,Math.PI*2);
-    ctx.fillStyle=penColor; ctx.fill();
-  }
-}
-function cvDraw(e){
-  if(!cvDrawing) return; e.preventDefault();
-  const [x,y]=cvPos(e); setCtx();
-  ctx.beginPath(); ctx.moveTo(cvLX,cvLY); ctx.lineTo(x,y); ctx.stroke();
-  cvLX=x; cvLY=y;
-}
-canvas.addEventListener("mousedown",cvStart);
-canvas.addEventListener("mousemove",cvDraw);
-canvas.addEventListener("mouseup",()=>cvDrawing=false);
-canvas.addEventListener("mouseleave",()=>cvDrawing=false);
-canvas.addEventListener("touchstart",cvStart,{passive:false});
-canvas.addEventListener("touchmove",cvDraw,{passive:false});
-canvas.addEventListener("touchend",()=>cvDrawing=false);
-
-document.getElementById("tool-pen").addEventListener("click",()=>{
-  eraser=false;
-  document.getElementById("tool-pen").classList.add("active");
-  document.getElementById("tool-eraser").classList.remove("active"); setCtx();
-});
-document.getElementById("tool-eraser").addEventListener("click",()=>{
-  eraser=true;
-  document.getElementById("tool-eraser").classList.add("active");
-  document.getElementById("tool-pen").classList.remove("active"); setCtx();
-});
-document.getElementById("btn-clear-cv")?.addEventListener("click",()=>{
-  clearCanvas();
-});
-document.querySelectorAll(".color-swatch").forEach(sw=>{
-  sw.addEventListener("click",()=>{
-    eraser=false; penColor=sw.dataset.color;
-    document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
-    sw.classList.add("active");
-    document.getElementById("tool-pen").classList.add("active");
-    document.getElementById("tool-eraser").classList.remove("active"); setCtx();
-  });
-});
-document.getElementById("stroke-size").addEventListener("input",e=>{
-  penSize=parseInt(e.target.value); setCtx();
-});
-window.addEventListener("resize",()=>{
-  if(!document.getElementById("quiz-page").classList.contains("active")) return;
-  saveCanvasState();
-  const saved=canvasStore[curQIdx];
-  canvas.width=canvas.parentElement.clientWidth||600;
-  canvas.height=520; setCtx();
-  if(saved){ try{ctx.putImageData(saved,0,0);}catch(e){} }
-});
+/* 이미지 모달 */
+window.openModal=function(url,title){
+  document.getElementById("modal-img").src=url;
+  document.getElementById("modal-title").textContent=title;
+  document.getElementById("img-modal").style.display="flex";
+};
+window.closeModal=function(e){
+  if(e.target.id==="img-modal")
+    document.getElementById("img-modal").style.display="none";
+};
+window.loadAll=loadAll;
 </script>
 </body>
 </html>

@@ -2,12 +2,15 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+  <meta name="app-version" content="1.0.1">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
+const VERSION = "1.0.1"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
+
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']] },
   options: { skipHtmlTags: ['script','noscript','style','textarea'] },
@@ -1313,7 +1316,7 @@ function fracText(text){
         const lm = t2.match(/^(\([0-9]\)\s*)([\s\S]*)$/);
         if(lm){
           // 이미 \( 있으면 이중 래핑 방지
-          if(lm[2].includes('\\(')) { result.push(lm[1]+mergeLaTeX(mathStyle(lm[2]))); continue; }
+          if(lm[2].includes('\\(')) { return lm[1]+mergeLaTeX(mathStyle(lm[2])); }
           let expr = lm[2].replace(/−/g,'-');
           expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
           expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);

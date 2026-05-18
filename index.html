@@ -364,7 +364,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 <body>
 
 <header>
-  <div class="logo">수학 학습지<em>+</em></div>
+  <div class="logo">수학 학습지<em>+</em><span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;margin-left:6px;font-family:monospace;align-self:flex-end;padding-bottom:2px"></span></div>
   <div id="hdr-user">
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
@@ -544,8 +544,11 @@ document.getElementById("btn-logout").addEventListener("click", () => signOut(au
 
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
+  const ver = typeof VERSION!=='undefined' ? 'v'+VERSION : '';
   const _lv=document.getElementById('login-ver');
-  if(_lv) _lv.textContent='v'+VERSION;
+  if(_lv) _lv.textContent=ver;
+  const _hv=document.getElementById('hdr-version');
+  if(_hv) _hv.textContent=ver;
 });
 
 onAuthStateChanged(auth, async u => {

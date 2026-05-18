@@ -423,7 +423,7 @@ const WORKSHEETS = [
       { id:"q16", type:"equation", text:"어떤 일을 A 혼자 하면 12일, B 혼자 하면 6일 걸린다. A, B가 함께 2일 일하다가 B가 그만두고 A 혼자 나머지를 끝냈다. A가 혼자 일한 날수는?", answer:6, diff:4 },
       { id:"q17", type:"equation", text:"8%의 소금물 500g을 가열하여 물을 증발시켜 20%의 소금물을 만들었다. 증발시킨 물의 양은 몇 g인가?", answer:300, diff:4 },
       { id:"q18", type:"equation", text:"둘레가 300m인 트랙에서 A는 분속 90m, B는 분속 60m로 같은 방향으로 동시에 출발했다. A가 B를 3번째로 따라잡는 것은 출발 후 몇 분 후인가?", answer:30, diff:4 },
-      { id:"q19", type:"equation", text:"\\(A\\)혼자 하면 18일, B 혼자 하면 9일 걸리는 일을 A가 혼자 3일 한 후 B와 함께 끝냈다. B와 함께 일한 날수는?", answer:5, diff:4 },
+      { id:"q19", type:"equation", text:"A혼자 하면 18일, B 혼자 하면 9일 걸리는 일을 A가 혼자 3일 한 후 B와 함께 끝냈다. B와 함께 일한 날수는?", answer:5, diff:4 },
       { id:"q20", type:"equation", text:"10%의 소금물 300g에 소금을 더 넣어 25%의 소금물을 만들었다. 더 넣은 소금의 양은 몇 g인가?", answer:60, diff:4 },
     ]
   },

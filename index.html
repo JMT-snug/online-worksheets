@@ -1250,7 +1250,7 @@ function renderMultiQ(q, panel){
       <div class="multi-grid ${q.options.length===4?'cols2':q.options.length===3?'cols3':''}" id="multi-grid">
         ${q.options.map((opt,i)=>
           `<button class="multi-opt" id="mopt-${i}"
-            onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${mathStyle(opt)}</button>`
+            onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${renderOption(opt)}</button>`
         ).join('')}
       </div>
       <button class="btn-multi-submit" onmousedown="event.preventDefault()" onclick="submitMulti()">확인</button>
@@ -1259,7 +1259,7 @@ function renderMultiQ(q, panel){
         🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
       </div>
     </div>`;
-  renderMath(panel);
+  setTimeout(()=>renderMath(panel),50);
 }
 
 window.toggleMulti = function(i){

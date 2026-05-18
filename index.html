@@ -738,38 +738,6 @@ function renderOption(opt){
   return lbl + `\\(${t}\\)`;
 }
 /* 인접 LaTeX 블록 병합: \(A\)X\(B\) → \(AXB\) (X에 한글 없을 때) */
-function mergeLaTeX(text){
-  if(!text||!text.includes('\\(')) return text;
-  for(let iter=0;iter<8;iter++){
-    const prev=text;
-    const out=[]; let i=0;
-    while(i<text.length){
-      if(text.slice(i,i+2)==='\\('){
-        let j=i+2, blk='';
-        while(j<text.length){
-          if(text.slice(j,j+2)==='\\)'){ j+=2; break; }
-          blk+=text[j++];
-        }
-        // 갭 수집: 한글·HTML태그·\( 없는 구간까지만
-        let gap='', k=j;
-        while(k<text.length
-              && !/[가-힣]/.test(text[k])
-              && text[k]!=='<'
-              && text.slice(k,k+2)!=='\\('){
-          gap+=text[k++];
-        }
-        if(k<text.length && text.slice(k,k+2)==='\\('){
-          out.push('\\('+blk+gap); i=k+2;
-        } else {
-          out.push('\\('+blk+'\\)'+gap); i=k;
-        }
-      } else { out.push(text[i]); i++; }
-    }
-    text=out.join('');
-    if(text===prev) break;
-  }
-  return text;
-}
 
 /* ── 수식 렌더링 ──────────────────────────────
    단순화된 파이프라인: processText → MathJax
@@ -786,10 +754,9 @@ function processText(text){
 }
 
 // 하위호환 별칭 (기존 코드에서 사용)
-function fracText(text){ return processText(text); }
 function mathStyle(text){ return processText(text); }
 function mergeLaTeX(text){ return text; }
-function fracSpan(n,d){ return `\\(\\frac{${n}}{${d}}\\)`; }
+
 const mathVars = s => s;
 /* 수식 텍스트 렌더링:
    - 순수 수식 → \( LaTeX \) MathJax

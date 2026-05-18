@@ -128,14 +128,14 @@ const WORKSHEETS = [
     questions:[
       // ── 1번: 문장을 식으로 ──
       { id:"q01a", type:"word", answerType:"text", diff:1,
-        text:"다음을 문자를 사용해 식으로 나타내시오.<br>(1) x의 3배에서 y의 4배를 뺀 값",
+        text:"다음을 문자를 사용해 식으로 나타내시오.<br>(1) \\(x\\)의 3배에서 \\(y\\)의 4배를 뺀 값",
         answer:"3x-4y", answerAlt:["3x−4y"] },
       { id:"q01b", type:"word", answerType:"text", diff:1,
-        text:"다음을 문자를 사용해 식으로 나타내시오.<br>(2) 하루에 500원씩 x일 동안 모아 5900원짜리 카네이션을 샀을 때 남은 금액",
+        text:"다음을 문자를 사용해 식으로 나타내시오.<br>(2) 하루에 500원씩 \\(x\\)일 동안 모아 5900원짜리 카네이션을 샀을 때 남은 금액",
         answer:"500x-5900", answerAlt:["500x−5900"] },
       // ── 2번: 기호 생략 ──
       { id:"q02a", type:"word", answerType:"text", diff:1,
-        text:"다음 식을 곱셈 기호 ×와 나눗셈 기호 ÷를 생략하여 간단히 나타내시오.<br>(1) 4×a×a",
+        text:"다음 식을 곱셈 기호 ×와 나눗셈 기호 ÷를 생략하여 간단히 나타내시오.<br>(1) \\(4\\times a\\times a\\)",
         answer:"4a²", answerAlt:["4a^2"] },
       { id:"q02b", type:"word", answerType:"text", diff:1,
         text:"(2) \\(-11\\div b\\)",
@@ -148,7 +148,7 @@ const WORKSHEETS = [
         answer:"-(x+y)/a", answerAlt:["−(x+y)/a"] },
       // ── 3번: 식의 값 ──
       { id:"q03a", type:"equation", diff:2,
-        text:"x=3, y=−4일 때, 다음 식의 값을 구하시오.<br>(1) 2x+y", answer:2 },
+        text:"\\(x=3,\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(1) \\(2x+y\\)", answer:2 },
       { id:"q03b", type:"equation", diff:2,
         text:"(2) \\(\\frac{1}{3}x+\\frac{1}{2}y\\)", answer:-1 },
       { id:"q03c", type:"equation", diff:2,
@@ -157,14 +157,14 @@ const WORKSHEETS = [
         text:"(4) \\(x^2+y^2\\)", answer:25 },
       // ── 4번: 계수와 상수항 ──
       { id:"q04a", type:"equation", diff:2,
-        text:"다항식 −4x+y−5에서 x의 계수를 구하시오.", answer:-4 },
+        text:"다항식 \\(-4x+y-5\\)에서 \\(x\\)의 계수를 구하시오.", answer:-4 },
       { id:"q04b", type:"equation", diff:2,
-        text:"다항식 −4x+y−5에서 y의 계수를 구하시오.", answer:1 },
+        text:"다항식 \\(-4x+y-5\\)에서 \\(y\\)의 계수를 구하시오.", answer:1 },
       { id:"q04c", type:"equation", diff:2,
-        text:"다항식 −4x+y−5에서 상수항을 구하시오.", answer:-5 },
+        text:"다항식 \\(-4x+y-5\\)에서 상수항을 구하시오.", answer:-5 },
       // ── 5번: 단항식 계산 ──
       { id:"q05a", type:"word", answerType:"expr", diff:1,
-        text:"다음을 계산하시오.<br>(1) 5a×3",
+        text:"다음을 계산하시오.<br>(1) \\(5a\\times 3\\)",
         answer:"15*a", answerAlt:["15a"] },
       { id:"q05b", type:"word", answerType:"expr", diff:1,
         text:"(2) \\(8b\\div4\\)",
@@ -174,7 +174,7 @@ const WORKSHEETS = [
         answer:"-12*x+4", answerAlt:["-12x+4","4-12*x","4-12x"] },
       // ── 6번: 동류항 계산 ──
       { id:"q06a", type:"word", answerType:"expr", diff:1,
-        text:"다음을 계산하시오.<br>(1) 6a+3a",
+        text:"다음을 계산하시오.<br>(1) \\(6a+3a\\)",
         answer:"9*a", answerAlt:["9a"] },
       { id:"q06b", type:"word", answerType:"expr", diff:1,
         text:"(2) \\(4x+7x\\)",
@@ -195,7 +195,7 @@ const WORKSHEETS = [
         answer:"2*a+2*b+12", answerAlt:["2*(a+b+6)","2a+2b+12","2(a+b+6)"] },
       // ── 9번: 다항식 계산 ──
       { id:"q09a", type:"word", answerType:"expr", diff:2,
-        text:"다음을 계산하시오.<br>(1) (4a+5b)+(−7a+4b)",
+        text:"다음을 계산하시오.<br>(1) \\((4a+5b)+(-7a+4b)\\)",
         answer:"-3*a+9*b", answerAlt:["-3a+9b","9b-3a","9*b-3*a"] },
       { id:"q09b", type:"word", answerType:"expr", diff:2,
         text:"(2) \\((-3a+b)-(a+2b)\\)",
@@ -208,11 +208,11 @@ const WORKSHEETS = [
         answer:"4*x+10*y", answerAlt:["4x+10y","10*y+4*x","10y+4x"] },
       // ── 10번: A-2B 계산 ──
       { id:"q10", type:"word", answerType:"expr", diff:3,
-        text:"\\(A=4x+2y, B=3x-y\\)일 때, A−2B를 계산하시오.",
+        text:"\\(A=4x+2y, B=3x-y\\)일 때, \\(A-2B\\)를 계산하시오.",
         answer:"-2*x+4*y", answerAlt:["-2x+4y","4*y-2*x","4y-2x"] },
       // ── 11번: 번개 거리 ──
       { id:"q11", type:"equation", diff:3,
-        text:"기온이 x°C일 때, 소리의 속도는 초속 (331.5+0.6x) m이다. 기온이 25°C일 때, 나루는 번개를 보고 3초 후 천둥소리를 들었다. 나루가 번개 친 곳으로부터 떨어진 거리를 구하시오. (m)",
+        text:"기온이 \\(x\\)°C일 때, 소리의 속도는 초속 \\(331.5+0.6x\\) m이다. 기온이 25°C일 때, 나루는 번개를 보고 3초 후 천둥소리를 들었다. 나루가 번개 친 곳으로부터 떨어진 거리를 구하시오. (m)",
         answer:1039.5 },
       // ── 12번: 마방진 ──
       { id:"q12a", type:"word", answerType:"text", diff:4,

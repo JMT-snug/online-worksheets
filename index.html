@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="2.0.1">
+  <meta name="app-version" content="2.1.0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "2.0.1"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
+const VERSION = "2.1.0"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']] },
@@ -726,19 +726,14 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 /* multi 보기 렌더링: 라벨+(수식) */
 function renderOption(opt){
   if(!opt) return opt;
-  if(opt.includes('<span')) return opt;
-  if(opt.includes('\\(')) return mergeLaTeX(opt);
+  // 이미 LaTeX(\()나 HTML(<span)이 있으면 그대로
+  if(opt.includes('\\(') || opt.includes('<span')) return opt;
+  // 아닌 경우: ² ³ 변환 후 LaTeX 래핑
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
-  const lbl = m ? m[1] : '';
-  const raw = m ? m[2] : opt;
-  if(!raw.trim()) return opt;
-  // 유니코드 위첨자 → LaTeX 표기
-  let t = raw.replace(/−/g,'-')
-             .replace(/²/g,'^2').replace(/³/g,'^3')
-             .replace(/⁰/g,'^0').replace(/¹/g,'^1');
-  // 분수 변환 (^N 포함)
+  const lbl = m ? m[1] : '', raw = m ? m[2] : opt;
+  let t = raw.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
   t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([a-zA-Z][a-zA-Z0-9\^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t = t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   return lbl + `\\(${t}\\)`;
 }
@@ -776,43 +771,26 @@ function mergeLaTeX(text){
   return text;
 }
 
-/* mathStyle: HTML 텍스트 안의 단일 변수·숫자를 \( \) LaTeX로 변환 */
-function mathStyle(s){
-  if(!s) return s;
-  let out='', inTag=false, inMath=false, inParen=false, i=0;
-  while(i<s.length){
-    if(!inTag && !inMath && s[i]==='\\' && s[i+1]==='('){
-      inMath=true; out+='\\('; i+=2; continue;
-    }
-    if(inMath && s[i]==='\\' && s[i+1]===')'){
-      inMath=false; out+='\\)'; i+=2; continue;
-    }
-    if(inMath){ out+=s[i]; i++; continue; }
-    if(s[i]==='<'){ inTag=true; out+=s[i]; i++; continue; }
-    if(s[i]==='>'){ inTag=false; out+=s[i]; i++; continue; }
-    if(inTag){ out+=s[i]; i++; continue; }
-    // (N) 형태 라벨: 괄호 안 숫자는 LaTeX 미적용
-    if(s[i]==='(' && i+2<s.length && /[0-9]/.test(s[i+1]) && s[i+2]===')'){
-      out+=s[i]+s[i+1]+s[i+2]; i+=3; continue;
-    }
-    // 연속 숫자
-    if(/[0-9]/.test(s[i])){
-      let num='';
-      while(i<s.length && /[0-9.]/.test(s[i])){ num+=s[i]; i++; }
-      out+=`\\(${num}\\)`; continue;
-    }
-    // 단일 영문자
-    if(/[a-zA-Z]/.test(s[i])){
-      const prev=i>0?s[i-1]:'', next=i<s.length-1?s[i+1]:'';
-      if(!/[a-zA-Z]/.test(prev)&&!/[a-zA-Z]/.test(next)){
-        out+=`\\(${s[i]}\\)`; i++; continue;
-      }
-    }
-    out+=s[i]; i++;
-  }
-  return out;
+/* ── 수식 렌더링 ──────────────────────────────
+   단순화된 파이프라인: processText → MathJax
+   데이터 형식 규칙:
+   · 수식: \( ... \) LaTeX inline
+   · 줄바꿈: <br>
+   · 분수: \(\frac{a}{b}\)
+   ─────────────────────────────────────────── */
+
+function processText(text){
+  if(!text) return text;
+  // 줄바꿈 통일
+  return text.replace(/\n/g,'<br>');
 }
-const mathVars = mathStyle;
+
+// 하위호환 별칭 (기존 코드에서 사용)
+function fracText(text){ return processText(text); }
+function mathStyle(text){ return processText(text); }
+function mergeLaTeX(text){ return text; }
+function fracSpan(n,d){ return `\\(\\frac{${n}}{${d}}\\)`; }
+const mathVars = s => s;
 /* 수식 텍스트 렌더링:
    - 순수 수식 → \( LaTeX \) MathJax
    - 한글 포함 → 줄별 처리 (한글줄=mathStyle, 수식줄=LaTeX)

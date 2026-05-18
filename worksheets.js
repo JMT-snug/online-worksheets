@@ -491,3 +491,7 @@ const WORKSHEETS = [
     ]
   },
 ];
+
+// 모듈 환경에서도 접근 가능하도록 전역 할당
+window.UNITS = UNITS;
+window.WORKSHEETS = WORKSHEETS;

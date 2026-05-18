@@ -299,13 +299,13 @@ const WORKSHEETS = [
     bookPage:"91~94",
     questions:[
       // ── 복습 A: 문자로 표현하기 ──
-      { id:"q01", type:"word",
-        text:"한 개에 800원인 사과 x개의 가격을 식으로 나타내면?",
-        answer:"800x", answerAlt:["800×x"], diff:1 },
-      { id:"q02", type:"word",
-        text:"길이가 a cm인 리본을 4등분 했을 때 한 조각의 길이를 식으로 나타내면?",
+      { id:"q01", type:"word", answerType:"expr",
+        text:"한 개에 800원인 사과 \\(x\\)개의 가격을 식으로 나타내면?",
+        answer:"800x", answerAlt:["800*x","800×x"], diff:1 },
+      { id:"q02", type:"word", answerType:"expr",
+        text:"길이가 \\(a\\) cm인 리본을 4등분 했을 때 한 조각의 길이를 식으로 나타내면?",
         answer:"a/4", answerAlt:["a÷4"], diff:1 },
-      { id:"q03", type:"word",
+      { id:"q03", type:"word", answerType:"expr",
         text:"어떤 수 \\(x\\)에서 7을 뺀 수의 3배를 식으로 나타내면?",
         answer:"3(x-7)", answerAlt:["3(x−7)","(x-7)×3","(x−7)×3"], diff:1 },
       // ── 복습 B: 일차방정식 풀기 ──

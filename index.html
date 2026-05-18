@@ -124,7 +124,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .problem-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r) var(--r) 0 0;padding:18px 18px 14px}
 .problem-card .q-num{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .q-diff{color:var(--amber);font-size:11px}
-.problem-card .q-text{font-size:16px;font-weight:700;line-height:1.6}
+.problem-card .q-text{font-size:16px;font-weight:400;line-height:1.7}
 .problem-card .eq{color:var(--ink);font-size:18px;line-height:1.8}
 /* 수식 입력 영역 */
 .math-input-card{background:var(--paper);border:1px solid var(--rule);border-top:none;border-radius:0 0 var(--r) var(--r);padding:12px 14px 14px}
@@ -152,6 +152,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .chip-frac .fd.ap{background:#fff;outline:2px solid var(--accent);outline-offset:-1px}
 /* 문제 텍스트 안 수직 분수 */
 .mv{font-style:italic;font-family:Georgia,'Times New Roman',serif;color:inherit}
+.math-u{text-decoration:underline;text-underline-offset:3px}
 .mn{font-family:Georgia,'Times New Roman',serif;color:inherit}
 .frac-inline{display:inline-flex;flex-direction:column;align-items:center;
   font-family:'Courier New',monospace;font-size:15px;line-height:1.1;
@@ -951,16 +952,16 @@ const WORKSHEETS = [
         options:["(1) a+2=b+2","(2) a−5=b+5","(3) 2a−3=2b−3",`(4) <span class="frac-inline"><span class="fi-n">a</span><span class="fi-d">3</span></span>+4=<span class="frac-inline"><span class="fi-n">b</span><span class="fi-d">4</span></span>+3`],
         answer:[0,2] },
       { id:"q04", type:"word", answerType:"expr", diff:2,
-        text:"다음 방정식에서 <u>밑줄 친 항</u>을 이항하시오.<br>(1) <u>3x</u>−6=3",
+        text:"다음 방정식에서 밑줄 친 항을 이항하시오.<br>(1) <span class="math-u">3x</span>−6=3",
         answer:"6+3=3*x", answerAlt:["3*x=3+6","3*x=6+3","3x=3+6","3x=6+3"] },
       { id:"q04b", type:"word", answerType:"expr", diff:2,
-        text:"다음 방정식에서 <u>밑줄 친 항</u>을 이항하시오.<br>(2) <u>4x</u>=−x+5",
+        text:"다음 방정식에서 밑줄 친 항을 이항하시오.<br>(2) <span class="math-u">4x</span>=−x+5",
         answer:"4*x+x=5", answerAlt:["4x+x=5"] },
       { id:"q04c", type:"word", answerType:"expr", diff:2,
-        text:"다음 방정식에서 <u>밑줄 친 항</u>을 이항하시오.<br>(3) <u>x</u>−1=<u>2x</u>+3",
+        text:"다음 방정식에서 밑줄 친 항을 이항하시오.<br>(3) <span class="math-u">x</span>−1=<span class="math-u">2x</span>+3",
         answer:"x-2*x=3+1", answerAlt:["x-2x=3+1","-x=4","x-2*x=1+3"] },
       { id:"q04d", type:"word", answerType:"expr", diff:2,
-        text:"다음 방정식에서 <u>밑줄 친 항</u>을 이항하시오.<br>(4) <u>3x</u>+<u>2</u>=4−<u>x</u>",
+        text:"다음 방정식에서 밑줄 친 항을 이항하시오.<br>(4) <span class="math-u">3x</span>+<span class="math-u">2</span>=4−<span class="math-u">x</span>",
         answer:"3*x+x=4-2", answerAlt:["3x+x=4-2","4*x=4-2","4*x=2"] },
       { id:"q05", type:"equation", diff:2, text:"(1) 5x+2=3x+6", answer:2 },
       { id:"q05b", type:"equation", diff:2, text:"(2) 2x+2=5x−7", answer:3 },
@@ -1198,6 +1199,26 @@ document.getElementById("btn-unit-back").addEventListener("click", loadDash);
 /* ── QUIZ ENGINE (단답형 + 수식입력기) ── */
 const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 
+/* multi 보기 렌더링: 라벨+(수식) */
+function renderOption(opt){
+  if(!opt) return opt;
+  if(opt.includes("<span")||opt.includes("\(")) return mathStyle(opt);
+  // ㄱ./ㄴ./ㄷ./ㄹ. 또는 (1)/(2) 라벨 분리
+  const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)(.*)/);
+  if(m){
+    const lbl = m[1], expr = m[2];
+    if(!expr) return mathStyle(lbl);
+    let t = expr.replace(/−/g,"-");
+    t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+    t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+    t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+    return mathStyle(lbl)+"\\("+t+"\\)";
+  }
+  // 라벨 없음
+  let t = opt.replace(/−/g,"-");
+  t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  return "\\("+t+"\\)";
+}
 /* 수식 스타일: 단일 영문자 → 이탤릭, 숫자 → 수식 폰트 */
 function mathStyle(s){
   if(!s) return s;
@@ -1228,30 +1249,66 @@ function mathStyle(s){
 }
 // 하위호환
 const mathVars = mathStyle;
-/* 문제 텍스트를 LaTeX 수식으로 변환 */
+/* 수식 텍스트 렌더링:
+   - 순수 수식 → \( LaTeX \) MathJax
+   - 한글 포함 → 줄별 처리 (한글줄=mathStyle, 수식줄=LaTeX)
+   - HTML 포함 → mathStyle만 적용
+*/
 function fracText(text){
+  if(!text) return text;
   if(text.includes("\\(")) return text;
-  // HTML 태그(frac-inline 등) 포함 시 그대로 반환
-  if(text.includes("<span") || text.includes("<br") || text.includes("<strong")) return text;
-
-  // 한글이 포함된 문장 → 문장은 그대로, 수식 부분만 HTML 분수로
-  if(/[가-힣]/.test(text)){
-    let t = text;
-    // (expr)/num → HTML 수직 분수
-    t = t.replace(/\(([^)]+)\)\/([0-9]+)/g, (_,n,d)=>fracSpan(n,d));
-    // var/num: x/2, 2x/3
-    t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g, (_,n,d)=>fracSpan(n,d));
-    // num/num: 1/2
-    t = t.replace(/([0-9]+)\/([0-9]+)/g, (_,n,d)=>fracSpan(n,d));
+  // HTML 태그 포함 시 mathStyle만
+  if(text.includes("<span")||text.includes("<br")||text.includes("<strong")||text.includes("<u")){
+    return mathStyle(text);
+  }
+  // 줄 구분자 확인
+  const hasBr = /<br\s*\/?>/i.test(text);
+  const hasNl = text.includes("\\n");
+  const hasKo = /[가-힣]/.test(text);
+  if((hasBr||hasNl) && hasKo){
+    // 줄별 처리
+    const lines = text.split(hasBr ? /<br\s*\/?>/i : /\n/);
+    const processed = lines.map(line=>{
+      const t2 = line.trim();
+      if(!t2) return line;
+      if(!/[가-힣]/.test(t2)){
+        // 수식 줄: (N) 라벨 분리
+        const lm = t2.match(/^(\([0-9]\)\s*)([\s\S]*)$/);
+        if(lm){
+          const lbl = lm[1];
+          let expr = lm[2].replace(/−/g,"-");
+          expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+          expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+          expr = expr.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+          return mathStyle(lbl)+"\\("+expr+"\\)";
+        }
+        let expr = t2.replace(/−/g,"-");
+        expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        return "\\("+expr+"\\)";
+      }
+      // 한글 줄: fracSpan + mathStyle
+      let t=line;
+      t=t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      t=t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      t=t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      return mathStyle(t);
+    });
+    return processed.join("<br>");
+  }
+  if(hasKo){
+    let t=text;
+    t=t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+    t=t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+    t=t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
     return mathStyle(t);
   }
-
-  // 순수 수식 → 전체 LaTeX
-  let t = text.replace(/−/g, "-");
-  t = t.replace(/\(([^)]+)\)\s*\/\s*([0-9a-zA-Z]+)/g, (_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\s*\/\s*([0-9]+)/g, (_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([0-9]+)\s*\/\s*([0-9]+)/g, (_,n,d)=>`\\frac{${n}}{${d}}`);
-  return `\\( ${t} \\)`;
+  // 순수 수식 → LaTeX
+  let t=text.replace(/−/g,"-");
+  t=t.replace(/\(([^)]+)\)\s*\/\s*([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t=t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\s*\/\s*([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t=t.replace(/([0-9]+)\s*\/\s*([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  return "\\( "+t+" \\)";
 }
 
 function fracSpan(n, d){
@@ -1338,7 +1395,7 @@ function renderQuestion() {
                   '<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>'}
       </div>
       ${(()=>{
-        if(isWord) return `<div class="q-text" style="margin-top:2px">${mathStyle(q.text)}</div>`;
+        if(isWord) return `<div class="q-text" style="margin-top:2px">${fracText(q.text)}</div>`;
         const isSentence = /[가-힣]/.test(q.text);
         if(isSentence) return `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>`;
         return `<div class="q-text" style="margin-top:2px">다음 일차방정식을 풀어라.</div>
@@ -1678,6 +1735,7 @@ function renderMultiQ(q, panel){
         🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
       </div>
     </div>`;
+  renderMath(panel);
 }
 
 window.toggleMulti = function(i){

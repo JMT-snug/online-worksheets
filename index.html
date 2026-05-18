@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="2.0.0">
+  <meta name="app-version" content="2.0.1">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "2.0.0"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
+const VERSION = "2.0.1"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']] },
@@ -747,23 +747,23 @@ function mergeLaTeX(text){
   if(!text||!text.includes('\\(')) return text;
   for(let iter=0;iter<8;iter++){
     const prev=text;
-    const out=[];
-    let i=0;
+    const out=[]; let i=0;
     while(i<text.length){
       if(text.slice(i,i+2)==='\\('){
-        // \( 블록 수집
         let j=i+2, blk='';
         while(j<text.length){
           if(text.slice(j,j+2)==='\\)'){ j+=2; break; }
           blk+=text[j++];
         }
-        // 갭 수집 (한글/\( 없는 구간)
+        // 갭 수집: 한글·HTML태그·\( 없는 구간까지만
         let gap='', k=j;
-        while(k<text.length && !/[가-힣]/.test(text[k]) && text.slice(k,k+2)!=='\\('){
+        while(k<text.length
+              && !/[가-힣]/.test(text[k])
+              && text[k]!=='<'
+              && text.slice(k,k+2)!=='\\('){
           gap+=text[k++];
         }
         if(k<text.length && text.slice(k,k+2)==='\\('){
-          // 병합
           out.push('\\('+blk+gap); i=k+2;
         } else {
           out.push('\\('+blk+'\\)'+gap); i=k;
@@ -820,81 +820,74 @@ const mathVars = mathStyle;
 */
 function fracText(text){
   if(!text) return text;
+  // 줄바꿈 통일: \n(뉴라인) → <br>
+  text = text.replace(/\n/g,'<br>');
+
   const hasBr = /<br\s*\/?>/i.test(text);
   const hasKo = /[가-힣]/.test(text);
-  const hasHtml = /<span|<strong|<u\b|<img/i.test(text);
 
-  // <br>로 나뉘는 경우: 줄별 처리 (HTML 포함이어도)
+  // <br>로 분리되는 경우: 줄별 처리
   if(hasBr && hasKo){
     const lines = text.split(/<br\s*\/?>/i);
     return lines.map(line=>{
       const t2 = line.trim();
       if(!t2) return '';
-      // HTML 태그 포함 줄: mathStyle만
-      if(/<[a-zA-Z]/.test(t2)){
-        return mergeLaTeX(mathStyle(t2));
-      }
-      // 한글 없는 순수 수식 줄
-      if(!/[가-힣]/.test(t2) && !/^[→⟹∴]/.test(t2.trim())){
+      // HTML 태그 포함 줄: mathStyle만 (table, span, strong, u, img 등 모두 포함)
+      if(/<[a-zA-Z]/.test(t2)) return mergeLaTeX(mathStyle(t2));
+      // 한글 없는 순수 수식 줄 (화살표/기호로 시작하면 제외)
+      if(!/[가-힣]/.test(t2) && !/^[→⟹∴·]/.test(t2)){
+        // 이미 \( 있으면 이중 래핑 방지
+        if(t2.includes('\\(')) return mergeLaTeX(mathStyle(t2));
         const lm = t2.match(/^(\([0-9]\)\s*)([\s\S]*)$/);
         if(lm){
-          // 이미 \( 있으면 이중 래핑 방지
-          if(lm[2].includes('\\(')) { return lm[1]+mergeLaTeX(mathStyle(lm[2])); }
-          let expr = lm[2].replace(/−/g,'-');
-          expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-          expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+          let expr = lm[2].replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
+          expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+          expr = expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
           expr = expr.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
           return lm[1]+`\\(${expr}\\)`;
         }
-        let expr = t2.replace(/−/g,'-');
-        expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-        expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        let expr = t2.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
+        expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        expr = expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
         return `\\(${expr}\\)`;
       }
-      // 한글 줄
-      let t = line;
-      t = t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-      t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-      t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-      return mergeLaTeX(mathStyle(t));
+      // 한글 줄: 분수 변환 후 mathStyle
+      let t=line;
+      t=t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      t=t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      t=t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+      return mathStyle(t);
     }).join('<br>');
   }
 
-  // HTML 포함 단일 줄: mathStyle만
-  if(hasHtml) return mergeLaTeX(mathStyle(text));
+  // HTML 단일 줄
+  if(/<[a-zA-Z]/.test(text)) return mergeLaTeX(mathStyle(text));
 
-  // 한글 단일 줄: 앞의 수식 prefix를 LaTeX로 감싸기
+  // 한글 단일 줄: 앞 수식 prefix 처리
   if(hasKo){
+    if(text.includes('\\(')) return mergeLaTeX(mathStyle(text));
     const firstKo = text.search(/[가-힣]/);
     if(firstKo > 0){
-      let prefix = text.slice(0, firstKo);
-      const rest   = text.slice(firstKo);
-      const pTrim  = prefix.trim();
-      // 앞부분이 수식(한글 없음)이면 LaTeX로
-      if(pTrim && !/[가-힣]/.test(pTrim)){
-        // 이미 \( 있으면 이중 래핑 방지 → mathStyle만
-        if(pTrim.includes('\\(')) return mergeLaTeX(mathStyle(text));
-        let expr = pTrim.replace(/−/g,'-')
-                        .replace(/²/g,'^2').replace(/³/g,'^3');
-        expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-        expr = expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+      const prefix=text.slice(0,firstKo).trim();
+      const rest=text.slice(firstKo);
+      if(prefix && !/[가-힣]/.test(prefix) && !prefix.includes('\\(')){
+        let expr=prefix.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
+        expr=expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
         return `\\(${expr}\\)`+mathStyle(rest);
       }
     }
-
-    let t = text;
-    t = t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-    t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-    t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-    return mergeLaTeX(mathStyle(t));
+    let t=text;
+    t=t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+    t=t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
+    return mathStyle(t);
   }
 
-  // 순수 수식 → LaTeX (이미 \( 있으면 mathStyle만 적용)
+  // 순수 수식 → LaTeX
   if(text.includes('\\(')) return mergeLaTeX(mathStyle(text));
-  let t = text.replace(/−/g,'-');
-  t = t.replace(/\(([^)]+)\)\s*\/\s*([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\s*\/\s*([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([0-9]+)\s*\/\s*([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  let t=text.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
+  t=t.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t=t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t=t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   return `\\( ${t} \\)`;
 }
 

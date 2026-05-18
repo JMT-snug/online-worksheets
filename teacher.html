@@ -205,6 +205,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
   </div>
 </div>
 
+<script src="worksheets.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -225,19 +226,6 @@ const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
 /* ── 학습지 목록 (index.html과 동일하게 유지) ── */
-const WORKSHEETS = [
-  // 문자와 식
-  { id:"ws-u1-03-01", unitId:"u1-03", title:"다항식의 계산",       grade:1, category:"변화와 관계", qCount:19 },
-  { id:"ws-u1-03-02", unitId:"u1-03", title:"중단원 연습문제",         grade:1, category:"변화와 관계", qCount:27 },
-  // 일차방정식 (학습 순서대로)
-  { id:"ws-u1-04-01", unitId:"u1-04", title:"일차방정식 연습문제1",   grade:1, category:"변화와 관계", qCount:14 },
-  { id:"ws-u1-04-02", unitId:"u1-04", title:"일차방정식 연습문제2",   grade:1, category:"변화와 관계", qCount:20 },
-  { id:"ws-u1-04-03", unitId:"u1-04", title:"일차방정식의 활용1",     grade:1, category:"변화와 관계", qCount:16 },
-  { id:"ws-u1-04-04", unitId:"u1-04", title:"일차방정식의 활용2",     grade:1, category:"변화와 관계", qCount:20 },
-  { id:"ws-u1-04-05", unitId:"u1-04", title:"중단원 마무리 문제", grade:1, category:"변화와 관계", qCount:21 },
-  // 나머지 단원 (학습지 없음 — 추후 추가)
-];
-
 /* ── 단원 목록 (사이드바용) ── */
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -288,6 +276,11 @@ document.getElementById("btn-login").addEventListener("click",async()=>{
   try{ await signInWithPopup(auth,p); } catch(e){ alert("로그인 오류: "+e.message); }
 });
 document.getElementById("btn-logout").addEventListener("click",()=>signOut(auth));
+
+// worksheets.js의 데이터에 qCount 자동 계산
+WORKSHEETS.forEach(ws => {
+  if(ws.questions && !ws.qCount) ws.qCount = ws.questions.length;
+});
 
 onAuthStateChanged(auth,async u=>{
   if(!u){ showGate(true); return; }

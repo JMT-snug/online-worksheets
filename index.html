@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="2.1.3f">
+  <meta name="app-version" content="2.1.4">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "2.1.3f"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
+const VERSION = "2.1.4"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -464,6 +464,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <input type="range" class="stroke-slider" id="stroke-size" min="1" max="18" value="3">
           <div class="divider-v"></div>
           <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
+          <div class="divider-v"></div>
+          <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
+          <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;margin:0 2px"></span>
+          <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:11px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">현재↩</button>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -901,8 +905,10 @@ function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   qTokens=[]; qEditPart=null;
   updateStrip();
+  canvasViewIdx=curQIdx;
   requestAnimationFrame(()=>{
     restoreCanvasState(curQIdx);
+    updateCanvasNav();
     const panel=document.getElementById("quiz-left-panel");
     if(panel) renderMath(panel);
   });
@@ -1821,10 +1827,47 @@ function setCtx(){
   }
 }
 
+/* 연습장 네비게이션 */
+let canvasViewIdx=0;
+
+function updateCanvasNav(){
+  const prevBtn=document.getElementById("cv-prev-btn");
+  const nowBtn=document.getElementById("cv-now-btn");
+  const label=document.getElementById("cv-nav-label");
+  if(!prevBtn) return;
+  const hasPrev=canvasViewIdx>0;
+  prevBtn.disabled=!hasPrev;
+  prevBtn.style.opacity=hasPrev?"1":"0.3";
+  const isAway=canvasViewIdx!==curQIdx;
+  if(isAway){
+    label.textContent=(canvasViewIdx+1)+"번 풀이";
+    label.style.display="inline";
+    nowBtn.style.display="inline-block";
+  } else {
+    label.style.display="none";
+    nowBtn.style.display="none";
+  }
+}
+
+function canvasPrev(){
+  if(canvasViewIdx<=0) return;
+  saveCanvasState();
+  canvasViewIdx--;
+  restoreCanvasState(canvasViewIdx);
+  updateCanvasNav();
+}
+
+function canvasGoToNow(){
+  saveCanvasState();
+  canvasViewIdx=curQIdx;
+  restoreCanvasState(canvasViewIdx);
+  updateCanvasNav();
+}
+
 /* 현재 문제 필기 저장 */
 function saveCanvasState(){
   if(canvas.width>0 && canvas.height>0){
-    try{ canvasStore[curQIdx]=ctx.getImageData(0,0,canvas.width,canvas.height); }
+    try{ canvasStore[canvasViewIdx]=ctx.getImageData(0,0,canvas.width,canvas.height); }
     catch(e){}
   }
 }
@@ -1844,7 +1887,7 @@ function clearCanvas(){
   // compositeOperation 초기화 후 지우기
   ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  delete canvasStore[curQIdx];
+  delete canvasStore[canvasViewIdx];
 }
 
 function cvPos(e){

@@ -568,7 +568,7 @@ const WORKSHEETS = [
         text:"4(−x + 3)을 계산하시오.",
         answer:"-4x+12", answerAlt:["−4x+12"], diff:1 },
       { id:"q04", type:"word", answerType:"expr",
-        text:"<span class=\"frac-inline\"><span class=\"fi-n\">1</span><span class=\"fi-d\">2</span></span>(4x − 6)을 계산하시오.",
+        text:"\\(\\frac{1}{2}(4x-6)\\)을 계산하시오.",
         answer:"2x-3", answerAlt:["2x−3"], diff:1 },
       // ── 2단계: 동류항 개념 ──
       { id:"q00b", type:"word", answerType:"text",
@@ -576,11 +576,11 @@ const WORKSHEETS = [
         answer:"문자, 차수", answerAlt:["차수, 문자","문자,차수","차수,문자","곱해진 문자, 차수","차수, 곱해진 문자"], diff:1 },
       // ── 2단계: 동류항 찾기 (multi) ──
       { id:"q05", type:"multi",
-        text:"3x의 동류항을 모두 고르시오.",
+        text:"\\(3x\\)의 동류항을 모두 고르시오.",
         options:["5x","2y","−x","7","4x²","x/2","−3x","0.5x","2x²","6y"],
         answer:[0,2,5,6,7], diff:2 },
       { id:"q06", type:"multi",
-        text:"−2x²의 동류항을 모두 고르시오.",
+        text:"\\(-2x^2\\)의 동류항을 모두 고르시오.",
         options:["x²","3x","−5x²","4x²y","2x²","−x","7x²","x²/2","−3y","6"],
         answer:[0,2,4,6,7], diff:2 },
       { id:"q07", type:"multi",
@@ -588,7 +588,7 @@ const WORKSHEETS = [
         options:["3x","−7","2x²","5","0","1/2","3xy","−3","8x","2"],
         answer:[1,3,4,5,7,9], diff:2 },
       { id:"q08", type:"multi",
-        text:"−3xy의 동류항을 모두 고르시오.",
+        text:"\\(-3xy\\)의 동류항을 모두 고르시오.",
         options:["2xy","x","−y","5xy","xy/2","3x²y","−xy","4y","7xy","−2x"],
         answer:[0,3,4,6,8], diff:2 },
       // ── 3단계: 괄호 개념 ──
@@ -606,7 +606,7 @@ const WORKSHEETS = [
         text:"(2x + 3) − (x − 4)를 계산하시오.",
         answer:"x+7", answerAlt:[], diff:2 },
       { id:"q12", type:"word", answerType:"expr",
-        text:"(<span class=\"frac-inline\"><span class=\"fi-n\">3</span><span class=\"fi-d\">4</span></span>x + 1) − (<span class=\"frac-inline\"><span class=\"fi-n\">1</span><span class=\"fi-d\">4</span></span>x − 2)를 계산하시오.",
+        text:"\\(\\left(\\frac{3}{4}x+1\\right)-\\left(\\frac{1}{4}x-2\\right)\\)를 계산하시오.",
         answer:"1/2x+3", answerAlt:["x/2+3"], diff:3 },
       // ── 4단계: a(bx+c) + d(ex+f) ──
       { id:"q13", type:"word", answerType:"expr",
@@ -619,7 +619,7 @@ const WORKSHEETS = [
         text:"4(x + 2) − 3(2x − 1)을 계산하시오.",
         answer:"-2x+11", answerAlt:[], diff:3 },
       { id:"q16", type:"word", answerType:"expr",
-        text:"<span class=\"frac-inline\"><span class=\"fi-n\">1</span><span class=\"fi-d\">2</span></span>(4x − 2) + <span class=\"frac-inline\"><span class=\"fi-n\">1</span><span class=\"fi-d\">3</span></span>(6x + 9)를 계산하시오.",
+        text:"\\(\\frac{1}{2}(4x-2)+\\frac{1}{3}(6x+9)\\)를 계산하시오.",
         answer:"4x+2", answerAlt:[], diff:4 },
     ]
   },
@@ -654,7 +654,7 @@ const WORKSHEETS = [
       { id:"q03a", type:"equation", diff:2,
         text:"x=3, y=−4일 때, 다음 식의 값을 구하시오.<br>(1) 2x+y", answer:2 },
       { id:"q03b", type:"equation", diff:2,
-        text:`(2) <span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">3</span></span>x+<span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">2</span></span>y`, answer:-1 },
+        text:`(2) \(\frac{1}{3}x+\frac{1}{2}y\)`, answer:-1 },
       { id:"q03c", type:"equation", diff:2,
         text:"(3) 5(x+y)", answer:-5 },
       { id:"q03d", type:"equation", diff:3,
@@ -708,7 +708,7 @@ const WORKSHEETS = [
         text:"(3) (4x−y)+3(2x+y)",
         answer:"10*x+2*y", answerAlt:["10x+2y","2*y+10*x","2y+10x"] },
       { id:"q09d", type:"word", answerType:"expr", diff:3,
-        text:`(4) 3(2x+3y)+<span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">3</span></span>(−4x+2y)`,
+        text:`(4) 3(2x+3y)+\(\frac{1}{3}(-4x+2y)\)`,
         answer:"4*x+10*y", answerAlt:["4x+10y","10*y+4*x","10y+4x"] },
       // ── 10번: A-2B 계산 ──
       { id:"q10", type:"word", answerType:"expr", diff:3,
@@ -943,11 +943,11 @@ const WORKSHEETS = [
         answer:[0,3] },
       { id:"q02", type:"multi", diff:2,
         text:"다음 보기 중 항등식을 모두 찾으시오.",
-        options:["ㄱ. 2x−x=x","ㄴ. 2x−2=0","ㄷ. −x−2=−(x+2)",`ㄹ. <span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">2</span></span>(x−4)=<span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">2</span></span>x−4`],
+        options:["ㄱ. 2x−x=x","ㄴ. 2x−2=0","ㄷ. −x−2=−(x+2)",`ㄹ. \(\frac{1}{2}\)(x−4)=\(\frac{1}{2}\)x−4`],
         answer:[0,2] },
       { id:"q03", type:"multi", diff:2,
         text:"a=b일 때, 다음 중 옳은 것을 모두 고르시오.",
-        options:["(1) a+2=b+2","(2) a−5=b+5","(3) 2a−3=2b−3",`(4) <span class="frac-inline"><span class="fi-n">a</span><span class="fi-d">3</span></span>+4=<span class="frac-inline"><span class="fi-n">b</span><span class="fi-d">4</span></span>+3`],
+        options:["(1) a+2=b+2","(2) a−5=b+5","(3) 2a−3=2b−3",`(4) \(\frac{a}{3}\)+4=\(\frac{b}{4}\)+3`],
         answer:[0,2] },
       { id:"q04", type:"word", answerType:"expr", diff:2,
         text:"다음 방정식에서 밑줄 친 항을 이항하시오.<br>(1) <span class='math-u'>\(3x\)</span>−6=3",
@@ -979,7 +979,7 @@ const WORKSHEETS = [
       { id:"q08b", type:"equation", diff:3, text:"(2) −2(x−3)=3x+1", answer:1 },
       { id:"q08c", type:"equation", diff:3, text:"(3) 0.1x−0.1=0.3x+0.5", answer:-3 },
       { id:"q08d", type:"equation", diff:3,
-        text:`다음 일차방정식을 풀어라.<br>(4) −<span class="frac-inline"><span class="fi-n">x+1</span><span class="fi-d">6</span></span>=<span class="frac-inline"><span class="fi-n">x+1</span><span class="fi-d">3</span></span>−<span class="frac-inline"><span class="fi-n">1</span><span class="fi-d">2</span></span>`,
+        text:`다음 일차방정식을 풀어라.<br>(4) \(-\dfrac{x+1}{6}=\dfrac{x+1}{3}-\dfrac{1}{2}\)`,
         answer:0 },
       { id:"q09", type:"equation", diff:3,
         text:"일차방정식 2(x−3)+10=ax의 해가 x=2일 때, 수 a의 값을 구하시오.", answer:4 },
@@ -1200,20 +1200,34 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 /* multi 보기 렌더링: 라벨+(수식) */
 function renderOption(opt){
   if(!opt) return opt;
-  // 이미 처리된 HTML 또는 LaTeX
   if(opt.includes('<span')||opt.includes('\\(')) return opt;
-  // ㄱ./ㄴ./ㄷ./ㄹ. 또는 (1)/(2) 라벨 분리
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
   const lbl = m ? m[1] : '';
   const raw = m ? m[2] : opt;
   if(!raw.trim()) return opt;
-  // 전체 수식을 하나의 LaTeX 블록으로
-  let t = raw.replace(/−/g,'-');
-  t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-  t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  // 유니코드 위첨자 → LaTeX 표기
+  let t = raw.replace(/−/g,'-')
+             .replace(/²/g,'^2').replace(/³/g,'^3')
+             .replace(/⁰/g,'^0').replace(/¹/g,'^1');
+  // 분수 변환 (^N 포함)
+  t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+  t = t.replace(/([a-zA-Z][a-zA-Z0-9\^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   return lbl + `\\(${t}\\)`;
 }
+/* 인접 LaTeX 블록 병합: \(A\)X\(B\) → \(AXB\) (X에 한글 없을 때) */
+function mergeLaTeX(text){
+  if(!text||!text.includes('\\(')) return text;
+  // 단순 반복: \(A\)[비한글]\(B\) → \(A[비한글]B\)  (마지막 \)는 다음 \(이 이어받음)
+  for(let i=0;i<8;i++){
+    const prev=text;
+    // \(A\) 다음에 한글없는 갭 후 \( 오면: \(A\)갭\( → \(A갭
+    text=text.replace(/\\(([^]*?)\\)((?:[^가-힣\\]|\\[^()])*)(?=\\()/g,(m,a,gap)=>'\\('+a+gap);
+    if(text===prev) break;
+  }
+  return text;
+}
+
 /* mathStyle: HTML 텍스트 안의 단일 변수·숫자를 \( \) LaTeX로 변환 */
 function mathStyle(s){
   if(!s) return s;
@@ -1258,9 +1272,6 @@ const mathVars = mathStyle;
 */
 function fracText(text){
   if(!text) return text;
-  if(text.includes('\\(')) return text;
-  if(text.includes('frac-inline')) return text;
-
   const hasBr = /<br\s*\/?>/i.test(text);
   const hasKo = /[가-힣]/.test(text);
   const hasHtml = /<span|<strong|<u\b|<img/i.test(text);
@@ -1273,7 +1284,7 @@ function fracText(text){
       if(!t2) return '';
       // HTML 태그 포함 줄: mathStyle만
       if(/<span|<strong|<u\b|<img/i.test(t2)){
-        return mathStyle(t2);
+        return mergeLaTeX(mathStyle(t2));
       }
       // 한글 없는 순수 수식 줄
       if(!/[가-힣]/.test(t2)){
@@ -1295,23 +1306,38 @@ function fracText(text){
       t = t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
       t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
       t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-      return mathStyle(t);
-    }).join('<br>');
+      return mergeLaTeX(mathStyle(t));
+    }).join('<br>')).split('<br>').map(mergeLaTeX).join('<br>');
   }
 
   // HTML 포함 단일 줄: mathStyle만
-  if(hasHtml) return mathStyle(text);
+  if(hasHtml) return mergeLaTeX(mathStyle(text));
 
-  // 한글 단일 줄
+  // 한글 단일 줄: 앞의 수식 prefix를 LaTeX로 감싸기
   if(hasKo){
+    const firstKo = text.search(/[가-힣]/);
+    if(firstKo > 0){
+      let prefix = text.slice(0, firstKo);
+      const rest   = text.slice(firstKo);
+      // 앞부분이 수식(한글 없음)이면 LaTeX로
+      if(prefix.trim() && !/[가-힣]/.test(prefix)){
+        let expr = prefix.trim().replace(/−/g,'-')
+                         .replace(/²/g,'^2').replace(/³/g,'^3');
+        expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        expr = expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
+        return `\\(${expr}\\)`+mathStyle(rest);
+      }
+    }
+
     let t = text;
     t = t.replace(/\(([^)]+)\)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
     t = t.replace(/([0-9]*[a-zA-Z])\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
     t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>fracSpan(n,d));
-    return mathStyle(t);
+    return mergeLaTeX(mathStyle(t));
   }
 
-  // 순수 수식 → LaTeX
+  // 순수 수식 → LaTeX (이미 \( 있으면 mathStyle만 적용)
+  if(text.includes('\\(')) return mergeLaTeX(mathStyle(text));
   let t = text.replace(/−/g,'-');
   t = t.replace(/\(([^)]+)\)\s*\/\s*([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\s*\/\s*([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
@@ -1400,7 +1426,7 @@ function renderQuestion() {
                   '<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>'}
       </div>
       ${(()=>{
-        if(isWord) return `<div class="q-text" style="margin-top:2px">${fracText(q.text)}</div>`;
+        if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
         const isSentence = /[가-힣]/.test(q.text);
         if(isSentence) return `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>`;
         return `<div class="q-text" style="margin-top:2px">다음 일차방정식을 풀어라.</div>

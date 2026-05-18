@@ -1200,7 +1200,8 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 /* multi 보기 렌더링: 라벨+(수식) */
 function renderOption(opt){
   if(!opt) return opt;
-  if(opt.includes('<span')||opt.includes('\\(')) return opt;
+  if(opt.includes('<span')) return opt;
+  if(opt.includes('\\(')) return mergeLaTeX(opt);
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
   const lbl = m ? m[1] : '';
   const raw = m ? m[2] : opt;
@@ -1218,11 +1219,32 @@ function renderOption(opt){
 /* 인접 LaTeX 블록 병합: \(A\)X\(B\) → \(AXB\) (X에 한글 없을 때) */
 function mergeLaTeX(text){
   if(!text||!text.includes('\\(')) return text;
-  // 단순 반복: \(A\)[비한글]\(B\) → \(A[비한글]B\)  (마지막 \)는 다음 \(이 이어받음)
-  for(let i=0;i<8;i++){
+  for(let iter=0;iter<8;iter++){
     const prev=text;
-    // \(A\) 다음에 한글없는 갭 후 \( 오면: \(A\)갭\( → \(A갭
-    text=text.replace(/\\(([^]*?)\\)((?:[^가-힣\\]|\\[^()])*)(?=\\()/g,(m,a,gap)=>'\\('+a+gap);
+    const out=[];
+    let i=0;
+    while(i<text.length){
+      if(text.slice(i,i+2)==='\\('){
+        // \( 블록 수집
+        let j=i+2, blk='';
+        while(j<text.length){
+          if(text.slice(j,j+2)==='\\)'){ j+=2; break; }
+          blk+=text[j++];
+        }
+        // 갭 수집 (한글/\( 없는 구간)
+        let gap='', k=j;
+        while(k<text.length && !/[가-힣]/.test(text[k]) && text.slice(k,k+2)!=='\\('){
+          gap+=text[k++];
+        }
+        if(k<text.length && text.slice(k,k+2)==='\\('){
+          // 병합
+          out.push('\\('+blk+gap); i=k+2;
+        } else {
+          out.push('\\('+blk+'\\)'+gap); i=k;
+        }
+      } else { out.push(text[i]); i++; }
+    }
+    text=out.join('');
     if(text===prev) break;
   }
   return text;
@@ -1290,6 +1312,8 @@ function fracText(text){
       if(!/[가-힣]/.test(t2)){
         const lm = t2.match(/^(\([0-9]\)\s*)([\s\S]*)$/);
         if(lm){
+          // 이미 \( 있으면 이중 래핑 방지
+          if(lm[2].includes('\\(')) { result.push(lm[1]+mergeLaTeX(mathStyle(lm[2]))); continue; }
           let expr = lm[2].replace(/−/g,'-');
           expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
           expr = expr.replace(/([0-9]*[a-zA-Z][0-9a-zA-Z]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
@@ -1319,10 +1343,13 @@ function fracText(text){
     if(firstKo > 0){
       let prefix = text.slice(0, firstKo);
       const rest   = text.slice(firstKo);
+      const pTrim  = prefix.trim();
       // 앞부분이 수식(한글 없음)이면 LaTeX로
-      if(prefix.trim() && !/[가-힣]/.test(prefix)){
-        let expr = prefix.trim().replace(/−/g,'-')
-                         .replace(/²/g,'^2').replace(/³/g,'^3');
+      if(pTrim && !/[가-힣]/.test(pTrim)){
+        // 이미 \( 있으면 이중 래핑 방지 → mathStyle만
+        if(pTrim.includes('\\(')) return mergeLaTeX(mathStyle(text));
+        let expr = pTrim.replace(/−/g,'-')
+                        .replace(/²/g,'^2').replace(/³/g,'^3');
         expr = expr.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
         expr = expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
         return `\\(${expr}\\)`+mathStyle(rest);

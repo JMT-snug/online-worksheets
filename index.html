@@ -13,8 +13,8 @@
 const VERSION = "2.1.0"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
 
 window.MathJax = {
-  tex: { inlineMath: [['\\(','\\)'],['$','$']] },
-  options: { skipHtmlTags: ['script','noscript','style','textarea'] },
+  tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
+  options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] },
   startup: { typeset: false }
 };
 </script>
@@ -843,10 +843,10 @@ function fracSpan(n, d){
 /* MathJax 재렌더링 — 로드 안 됐으면 최대 2초 대기 후 재시도 */
 function renderMath(el, retry=0){
   if(window.MathJax && MathJax.typesetPromise){
-    MathJax.typesetClear([el]);
+    // typesetClear 제거: 깜빡임 및 재렌더링 버그 방지
     MathJax.typesetPromise([el]).catch(e=>console.warn("MathJax:",e));
-  } else if(retry < 20){
-    setTimeout(()=>renderMath(el, retry+1), 100);
+  } else if(retry < 30){
+    setTimeout(()=>renderMath(el, retry+1), 150);
   }
 }
 let qTokens=[], qEditPart=null;
@@ -1033,7 +1033,7 @@ function renderQuestion() {
         </div>`;
       requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
     }
-    setTimeout(()=>renderMath(panel),0);
+    setTimeout(()=>renderMath(panel),50);
   } else {
     // ── 수식 입력 UI ──
     panel.innerHTML=`${qHeadHtml}
@@ -1082,7 +1082,7 @@ function renderQuestion() {
         </div>
       </div>`;
   }
-  setTimeout(()=>renderMath(panel),0);
+  setTimeout(()=>renderMath(panel),50);
 }
 
 /* 토큰 렌더 */

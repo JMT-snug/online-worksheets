@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="3.0.0">
+  <meta name="app-version" content="3.0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,7 +10,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "3.0.0"; // v1.x.y: x=학습지추가, y=오류수정, 1=시스템변경
+const VERSION = "3.0"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -548,7 +548,9 @@ document.getElementById("btn-logout").addEventListener("click", () => signOut(au
 
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
-  const ver = typeof VERSION!=='undefined' ? 'v'+VERSION : '';
+  const engineVer = typeof VERSION!=='undefined' ? VERSION : '';
+  const wsVer = typeof WS_VERSION!=='undefined' ? WS_VERSION : '';
+  const ver = engineVer ? 'v'+engineVer+(wsVer ? ' · ws'+wsVer : '') : '';
   const _lv=document.getElementById('login-ver');
   if(_lv) _lv.textContent=ver;
   const _hv=document.getElementById('hdr-version');

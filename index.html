@@ -630,7 +630,7 @@ async function loadDash() {
   wsProgress = {};
   try {
     for (const ws of WORKSHEETS) {
-      if (!ws.questions.length) continue;
+      if (ws.type==="vocab" || !ws.questions?.length) continue;
       const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
       if (snap.exists()) wsProgress[ws.id] = snap.data();
     }
@@ -650,10 +650,14 @@ const CAT_COLOR = {
 
 /* 단원의 진도 요약 계산 */
 function unitProgress(unit) {
-  const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id && ws.questions.length>0);
-  if(!sheets.length) return {total:0, done:0, hasSheets:false};
-  const done = sheets.filter(ws=>wsProgress[ws.id]?.completedAt).length;
-  return {total:sheets.length, done, hasSheets:true};
+  // vocab 포함 전체 학습지 (hasSheets 판단)
+  const allSheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id &&
+    (ws.type==="vocab" || (ws.questions?.length??0)>0));
+  if(!allSheets.length) return {total:0, done:0, hasSheets:false};
+  // 진도는 일반 학습지만 집계
+  const regular = allSheets.filter(ws=>ws.type!=="vocab");
+  const done = regular.filter(ws=>wsProgress[ws.id]?.completedAt).length;
+  return {total:regular.length, done, hasSheets:true};
 }
 
 /* 단원 셀 아이템 생성 */

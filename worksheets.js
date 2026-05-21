@@ -2,7 +2,7 @@
    온라인 학습지 데이터 파일  v2.2.3
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.3";
+const WS_VERSION = "2.2.4";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -93,7 +93,7 @@ const WORKSHEETS = [
       // ── 1단계: 분배법칙 개념 ──
       { id:"q00a", type:"word", answerType:"text",
         text:"다음과 같은 계산 법칙을 무엇이라고 하는가?<br>\\(a(b + c) = ab + ac\\)",
-        answer:"분배법칙", answerAlt:[], diff:1 },
+        answer:"분배법칙", answerAlt:["분배 법칙"], diff:1 },
       // ── 1단계: 1차식 × 상수 ──
       { id:"q01", type:"word", answerType:"expr",
         text:"\\(3(2x + 4)\\)를 계산하시오.",
@@ -109,7 +109,7 @@ const WORKSHEETS = [
         answer:"2x-3", answerAlt:["2x−3"], diff:1 },
       // ── 2단계: 동류항 개념 ──
       { id:"q00b", type:"word", answerType:"text",
-        text:"다항식에서 _____와 _____가 각각 같은 항을 <strong style=\"color:var(--accent)\">\"동류항\"</strong>이라고 한다.<br>(두 빈칸에 들어갈 말을 차례로 쓰시오. 예: 문자, 차수)",
+        text:"다항식에서 _____와 _____가 각각 같은 항을 <strong style=\"color:var(--accent)\">\"동류항\"</strong>이라고 한다.<br>(두 빈칸에 들어갈 말을 쉼표로 구분지어 적으세요. 예: 사과, 배)",
         answer:"문자, 차수", answerAlt:["차수, 문자","문자,차수","차수,문자","곱해진 문자, 차수","차수, 곱해진 문자"], diff:1 },
       // ── 2단계: 동류항 찾기 (multi) ──
       { id:"q05", type:"multi",

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t1.1a">
+<meta name="app-version" content="t2.0a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -124,6 +124,12 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .wrong-chip{display:inline-block;font-size:12px;font-family:'DM Mono',monospace;background:var(--red-lt);color:var(--red);padding:2px 8px;border-radius:4px;margin:2px}
 .canvas-thumb{width:80px;height:50px;object-fit:cover;border-radius:5px;border:1px solid var(--rule);cursor:pointer;transition:transform .1s}
 .canvas-thumb:hover{transform:scale(1.05)}
+/* 문항별 가로 셀 */
+.qcell{display:flex;flex-direction:column;align-items:center;padding:4px 5px;
+  border-radius:6px;cursor:pointer;transition:background .1s;min-width:34px;border:1px solid transparent}
+.qcell:hover{background:var(--cream);border-color:var(--rule)}
+.qcell-id{font-size:11px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.2}
+.qcell-try{font-size:10px;line-height:1.2;margin-top:1px}
 </style>
 </head>
 <body>
@@ -162,6 +168,18 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     <img id="modal-img" src="" alt="풀이 이미지">
   </div>
 </div>
+
+<!-- 문항 상세 팝업 -->
+<div id="qd-modal" class="img-modal-bg" style="display:none" onclick="if(event.target.id==='qd-modal')event.target.style.display='none'">
+  <div class="img-modal" style="max-width:480px">
+    <div class="img-modal-head">
+      <span class="img-modal-title" id="qd-title"></span>
+      <button class="img-modal-close" onclick="document.getElementById('qd-modal').style.display='none'">닫기</button>
+    </div>
+    <div id="qd-body"></div>
+  </div>
+</div>
+
 <script src="worksheets.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -179,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t1.1a"; // teacher 버전
+const T_VERSION = "t2.0a"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -458,19 +476,23 @@ function renderWS(wsId){
       const classInfo=findClass(r.studentEmail)||"-";
       let perQHtml="";
       if(r.perQuestion){
-        perQHtml=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
-          const t=v.attempts||1;
-          const col=t===1?"var(--green)":t<=2?"var(--amber)":"var(--red)";
-          const wrongChips=(v.wrongInputs||[]).map(w=>`<span class="wrong-chip">${w}</span>`).join("");
-          const thumb=v.canvasImage
-            ? `<img class="canvas-thumb" src="${v.canvasImage}" alt="풀이" onclick="openModal('${v.canvasImage}','${(r.studentName||'').replace(/'/g,"\\'")} - ${qid}')">`
-            : "";
-          return `<div style="margin-bottom:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
-            <span style="font-size:11px;font-family:'DM Mono',monospace;color:${col};font-weight:700;min-width:28px">${qid.replace('q','Q')}</span>
-            <span style="font-size:11px;color:var(--ink3)">${t}회</span>
-            ${wrongChips}${thumb}
+        const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
+          const att=v.attempts||1;
+          const col=att===1?"var(--green)":att<=2?"var(--amber)":"var(--red)";
+          const dkey=r.uid+"_"+qid;
+          window._qd=window._qd||{};
+          window._qd[dkey]={
+            studentName:r.studentName||"-", qid,
+            attempts:att,
+            wrongInputs:v.wrongInputs||[],
+            canvasImage:v.canvasImage||null
+          };
+          return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: ${att}회">
+            <span class="qcell-id" style="color:${col}">${qid.replace('q','Q')}</span>
+            <span class="qcell-try" style="color:${col}">${att}회</span>
           </div>`;
         }).join("");
+        perQHtml=`<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
       }
       h+=`<tr>
         <td><strong>${r.studentName||"-"}</strong></td>
@@ -665,6 +687,32 @@ window.closeModal=function(e){
   if(e.target.id==="img-modal")
     document.getElementById("img-modal").style.display="none";
 };
+
+window.showQDetail=function(key){
+  const d=(window._qd||{})[key]; if(!d) return;
+  document.getElementById('qd-title').textContent=
+    `${d.studentName} · ${d.qid.replace('q','Q')} (${d.attempts}회 시도)`;
+  let body='';
+  if(d.wrongInputs.length){
+    body+=`<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">오답 기록</div>
+      <div>${d.wrongInputs.map(w=>`<span class="wrong-chip">${w}</span>`).join('')}</div>
+    </div>`;
+  } else {
+    body+=`<div style="font-size:13px;color:var(--green);margin-bottom:14px">✅ 첫 번에 정답</div>`;
+  }
+  if(d.canvasImage){
+    body+=`<div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">풀이 이미지</div>
+      <img src="${d.canvasImage}" style="width:100%;border-radius:8px;border:1px solid var(--rule)">
+    </div>`;
+  } else {
+    body+=`<div style="font-size:12px;color:var(--ink3)">풀이 이미지 없음</div>`;
+  }
+  document.getElementById('qd-body').innerHTML=body;
+  document.getElementById('qd-modal').style.display='flex';
+};
+
 window.loadAll=loadAll;
 document.addEventListener('DOMContentLoaded',()=>{
   const el=document.getElementById('t-ver');

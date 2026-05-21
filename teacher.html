@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="app-version" content="t1.0">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -126,7 +127,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <div class="logo">수학 학습지<em>+</em> <small>교사 관리</small></div>
+  <div class="logo">수학 학습지<em>+</em> <small>교사 관리</small><span id="t-ver" style="font-size:10px;font-weight:400;color:rgba(255,255,255,.3);margin-left:6px;font-family:monospace"></span></div>
   <div class="hdr-right">
     <span class="tag tag-t">교사</span>
     <span id="t-name"></span>
@@ -177,6 +178,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
+const T_VERSION = "t1.0"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -663,6 +665,10 @@ window.closeModal=function(e){
     document.getElementById("img-modal").style.display="none";
 };
 window.loadAll=loadAll;
+document.addEventListener('DOMContentLoaded',()=>{
+  const el=document.getElementById('t-ver');
+  if(el) el.textContent='v'+T_VERSION;
+});
 </script>
 </body>
 </html>

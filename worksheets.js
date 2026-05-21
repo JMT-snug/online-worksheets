@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════
-   온라인 학습지 데이터 파일  v2.2.1
+   온라인 학습지 데이터 파일  v2.2.2
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.1";
+const WS_VERSION = "2.2.2";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -45,7 +45,7 @@ const WORKSHEETS = [
   { id:"m1-02", title:"정수와 유리수",          grade:1, category:"수와 연산",    questions:[] },
 
   // ── 소인수분해 용어 학습 ──────────────────────────────
-  { id:"ws-v1-01", title:"소인수분해 용어 학습", type:"vocab", unitId:"u1-01", diff:1,
+  { id:"ws-v1-01", title:"VOCA(소인수분해)", type:"vocab", unitId:"u1-01", diff:1,
     vocab:[
       { term:"소수",       def:"1보다 큰 자연수 중 약수가 1과 자기 자신뿐인 수" },
       { term:"합성수",     def:"소수가 아닌 1보다 큰 자연수" },
@@ -63,7 +63,7 @@ const WORKSHEETS = [
   },
 
   // ── 정수와 유리수 용어 학습 ───────────────────────────
-  { id:"ws-v1-02", title:"정수와 유리수 용어 학습", type:"vocab", unitId:"u1-02", diff:1,
+  { id:"ws-v1-02", title:"VOCA(정수와 유리수)", type:"vocab", unitId:"u1-02", diff:1,
     extras:[
       { type:"find_positive"       },
       { type:"find_negative"       },
@@ -165,7 +165,7 @@ const WORKSHEETS = [
   // ── 문자와 식 중단원 연습문제
 
   // ── 문자와 식 용어 학습 ──────────────────────────────
-  { id:"ws-v1-03", title:"문자와 식 용어 학습", type:"vocab", unitId:"u1-03", diff:1,
+  { id:"ws-v1-03", title:"VOCA(문자와 식)", type:"vocab", unitId:"u1-03", diff:1,
     extras:[
       { type:"find_poly"     },
       { type:"find_non_poly" },

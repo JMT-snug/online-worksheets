@@ -630,7 +630,7 @@ async function loadDash() {
   wsProgress = {};
   try {
     for (const ws of WORKSHEETS) {
-      if (ws.type==="vocab" || !ws.questions?.length) continue;
+      if (ws.type!=="vocab" && !ws.questions?.length) continue;
       const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
       if (snap.exists()) wsProgress[ws.id] = snap.data();
     }
@@ -759,8 +759,9 @@ function showUnitPage(unit) {
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
           <div class="wslc-title">${ws.title}</div>
-          <div class="wslc-meta">${ws.type==="vocab" ? (ws.vocab?.length||0)+"개 용어" : ws.questions.length+"문제"}
-            ${done ? ` · 정답률 ${rate}%` : ""}
+          <div class="wslc-meta">${ws.type==="vocab"
+              ? (wsProgress[ws.id]?.passed ? "✅ PASS" : "미완료")
+              : ws.questions.length+"문제"+( done ? ` · 정답률 ${rate}%` : "")}
           </div>
         </div>
         ${badgeHtml}`;
@@ -1999,7 +2000,17 @@ function vqAnswer(selected, correct){
   vqHighlight(correct, ok ? null : selected);
   if(ok){
     vqStreak++;
-    if(vqStreak>=VQ_TARGET){ setTimeout(()=>{ document.getElementById('vq-complete').style.display='flex'; },700); }
+    if(vqStreak>=VQ_TARGET){ setTimeout(async ()=>{
+      try{
+        await setDoc(doc(db,"results",user.uid,"worksheets",vqWS.id),{
+          passed:true, completedAt:new Date().toISOString(),
+          worksheetId:vqWS.id, worksheetTitle:vqWS.title,
+          studentEmail:user.email, studentName:user.displayName||""
+        });
+        wsProgress[vqWS.id]={passed:true,completedAt:new Date().toISOString()};
+      }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
+      document.getElementById('vq-complete').style.display='flex';
+    },700); }
     else setTimeout(vqNextQ, 700);
   } else {
     vqStreak=0;

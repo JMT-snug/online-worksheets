@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.1a">
+  <meta name="app-version" content="4.1b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.1a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.1b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1118,7 +1118,7 @@ function renderQuestion() {
               padding:0 14px;font-family:inherit;color:var(--ink);
               background:var(--paper);outline:none;box-sizing:border-box"
             placeholder="정답 입력..."
-            onkeydown="if(event.key==='Enter'){event.preventDefault();submitQAns();}">
+            onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}">
           <div class="ans-btns" style="margin-top:8px" onmousedown="event.preventDefault()">
             <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
             <button class="btn-clr-ans" onclick="document.getElementById('word-input').value=''">지우기</button>

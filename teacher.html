@@ -19,8 +19,6 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
-
-/* HEADER */
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
 .logo{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.5px;flex:1}
 .logo em{color:#60a5fa;font-style:normal}
@@ -31,8 +29,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn{padding:4px 12px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-btn-green{background:#15803d;border-color:#15803d}
-
-/* AUTH GATE */
 #auth-gate{min-height:calc(100vh - 52px);display:flex;align-items:center;justify-content:center;padding:40px 20px}
 .gate-card{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:48px 44px;text-align:center;max-width:380px;width:100%}
 .gate-card .icon{font-size:48px;margin-bottom:16px}
@@ -41,8 +37,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .btn-goog{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px;border:1.5px solid var(--rule);border-radius:8px;background:var(--paper);font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;transition:border-color .15s,background .15s}
 .btn-goog:hover{border-color:var(--accent);background:var(--acc-lt)}
 .btn-goog svg{width:20px;height:20px}
-
-/* LAYOUT */
 #app{display:none}
 .layout{display:flex;min-height:calc(100vh - 52px)}
 .sidebar{width:240px;flex-shrink:0;background:var(--paper);border-right:1px solid var(--rule);position:sticky;top:52px;height:calc(100vh - 52px);overflow-y:auto;padding:12px 0}
@@ -53,8 +47,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .sb-count{font-size:11px;color:var(--ink3);font-family:'DM Mono',monospace;margin-left:auto}
 .content{flex:1;padding:28px 32px;min-width:0}
-
-/* PAGE ELEMENTS */
 .pg-title{font-size:22px;font-weight:900;margin-bottom:4px}
 .pg-sub{color:var(--ink3);font-size:13px;margin-bottom:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sum-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
@@ -65,7 +57,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
 .card-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--rule);flex-wrap:wrap;gap:8px}
 .card-title{font-size:15px;font-weight:700}
-.card-actions{display:flex;gap:8px}
 table{width:100%;border-collapse:collapse}
 thead{background:var(--cream)}
 th,td{text-align:left;padding:10px 16px;font-size:13px;border-bottom:1px solid var(--rule)}
@@ -75,7 +66,6 @@ tr:hover td{background:var(--cream)}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
 .b-done{background:var(--grn-lt);color:var(--green)}
 .b-miss{background:var(--red-lt);color:var(--red)}
-.b-late{background:var(--amb-lt);color:var(--amber)}
 .rate-row{display:flex;align-items:center;gap:8px}
 .rate-bg{flex:1;height:5px;background:var(--rule);border-radius:3px;min-width:50px}
 .rate-fill{height:5px;border-radius:3px}
@@ -89,14 +79,9 @@ tr:hover td{background:var(--cream)}
 select,input[type=text]{padding:7px 10px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit;background:var(--paper);color:var(--ink)}
 select:focus,input:focus{outline:none;border-color:var(--accent)}
 .loading{text-align:center;padding:48px;color:var(--ink3);font-size:15px}
-
-/* STUDENT ROSTER / CLASS MGMT */
 .class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px}
 .class-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px}
 .class-card-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.class-form{display:flex;flex-direction:column;gap:8px}
-.class-form label{font-size:12px;color:var(--ink3);font-weight:600}
-.class-form input,.class-form select{width:100%}
 .class-row{display:flex;gap:8px}
 .class-row>*{flex:1}
 .student-list{margin-top:10px;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto}
@@ -105,51 +90,29 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .student-chip .remove:hover{color:var(--red)}
 .add-student-row{display:flex;gap:8px;margin-top:8px}
 .add-student-row input{flex:1}
-
-/* CAT BADGES */
 .cat-수와연산{background:#dbeafe;color:#1e40af}
 .cat-변화와관계{background:#dcfce7;color:#166534}
 .cat-도형과측정{background:#fef3c7;color:#92400e}
 .cat-자료와가능성{background:#fce7f3;color:#9d174d}
-
 @media(max-width:768px){.sidebar{display:none}.content{padding:20px}}
-
-/* 접기/펼치기 사이드바 */
-.sb-grade-header{
-  display:flex;align-items:center;gap:6px;
-  padding:9px 14px;font-size:12px;font-weight:700;
-  cursor:pointer;user-select:none;
-  color:var(--ink2);transition:background .1s;
-  border-radius:0;
-}
+.sb-grade-header{display:flex;align-items:center;gap:6px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;user-select:none;color:var(--ink2);transition:background .1s;}
 .sb-grade-header:hover{background:var(--cream)}
 .sb-grade-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .sb-chevron{margin-left:auto;font-size:10px;transition:transform .2s;display:inline-block}
 .sb-chevron.open{transform:rotate(90deg)}
 .sb-unit-group{overflow:hidden;transition:max-height .25s ease}
 .sb-unit-group.collapsed{max-height:0!important}
-.sb-unit-header{
-  display:flex;align-items:center;gap:6px;
-  padding:7px 14px 7px 24px;font-size:12px;
-  cursor:pointer;user-select:none;color:var(--ink3);
-  transition:background .1s;
-}
+.sb-unit-header{display:flex;align-items:center;gap:6px;padding:7px 14px 7px 24px;font-size:12px;cursor:pointer;user-select:none;color:var(--ink3);transition:background .1s;}
 .sb-unit-header:hover{background:var(--cream);color:var(--ink2)}
 .sb-unit-chevron{margin-left:auto;font-size:9px;transition:transform .2s;display:inline-block}
 .sb-unit-chevron.open{transform:rotate(90deg)}
 .sb-ws-group{overflow:hidden;transition:max-height .2s ease}
 .sb-ws-group.collapsed{max-height:0!important}
-.sb-ws-item{
-  display:flex;align-items:center;gap:8px;
-  padding:7px 14px 7px 36px;font-size:12px;
-  cursor:pointer;color:var(--ink2);transition:background .1s;
-}
+.sb-ws-item{display:flex;align-items:center;gap:8px;padding:7px 14px 7px 36px;font-size:12px;cursor:pointer;color:var(--ink2);transition:background .1s;}
 .sb-ws-item:hover{background:var(--cream)}
 .sb-ws-item.active{background:var(--acc-lt);color:var(--accent);font-weight:700}
 .sb-ws-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--ink3)}
 .sb-ws-item.active .sb-ws-dot{background:var(--accent)}
-
-/* 오답 이미지 모달 */
 .img-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:flex;align-items:center;justify-content:center}
 .img-modal{background:var(--paper);border-radius:var(--r);padding:20px;max-width:700px;width:90%;max-height:90vh;overflow-y:auto}
 .img-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -162,7 +125,6 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </style>
 </head>
 <body>
-
 <header>
   <div class="logo">수학 학습지<em>+</em> <small>교사 관리</small></div>
   <div class="hdr-right">
@@ -172,8 +134,6 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
-
-<!-- AUTH GATE -->
 <div id="auth-gate">
   <div class="gate-card">
     <div class="icon">🔐</div>
@@ -185,16 +145,12 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     </button>
   </div>
 </div>
-
-<!-- APP -->
 <div id="app">
   <div class="layout">
     <nav class="sidebar" id="sidebar"></nav>
     <div class="content" id="content"><div class="loading">데이터 불러오는 중…</div></div>
   </div>
 </div>
-
-<!-- 오답 이미지 모달 -->
 <div id="img-modal" class="img-modal-bg" style="display:none" onclick="closeModal(event)">
   <div class="img-modal">
     <div class="img-modal-head">
@@ -204,7 +160,6 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     <img id="modal-img" src="" alt="풀이 이미지">
   </div>
 </div>
-
 <script src="worksheets.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -225,8 +180,6 @@ const FB = {
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
-/* ── 학습지 목록 (index.html과 동일하게 유지) ── */
-/* ── 단원 목록 (사이드바용) ── */
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
   { id:"u1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
@@ -240,7 +193,7 @@ const UNITS = [
   { id:"u1-09", title:"대푯값",                 grade:1, category:"자료와 가능성" },
   { id:"u1-10", title:"도수분포표와 상대도수",   grade:1, category:"자료와 가능성" },
   { id:"u2-01", title:"유리수와 순환소수",       grade:2, category:"수와 연산" },
-  { id:"u2-02", title:"다항식의 계산",         grade:2, category:"변화와 관계" },
+  { id:"u2-02", title:"다항식의 계산",           grade:2, category:"변화와 관계" },
   { id:"u2-03", title:"일차부등식",             grade:2, category:"변화와 관계" },
   { id:"u2-04", title:"연립일차방정식",          grade:2, category:"변화와 관계" },
   { id:"u2-05", title:"일차함수와 그래프",        grade:2, category:"변화와 관계" },
@@ -263,6 +216,12 @@ const UNITS = [
 const CAT_CLASS={"수와 연산":"cat-수와연산","변화와 관계":"cat-변화와관계","도형과 측정":"cat-도형과측정","자료와 가능성":"cat-자료와가능성"};
 const GRADE_COLOR={1:"var(--g1)",2:"var(--g2)",3:"var(--g3)"};
 
+// ── Fix 1: UNIT_MAP (worksheets.js의 ws에는 grade/category 없음 → UNITS에서 조회) ──
+const UNIT_MAP={};
+UNITS.forEach(u=>UNIT_MAP[u.id]=u);
+function wsGrade(ws){ return UNIT_MAP[ws.unitId]?.grade; }
+function wsCategory(ws){ return UNIT_MAP[ws.unitId]?.category; }
+
 const fbApp   = initializeApp(FB);
 const auth    = getAuth(fbApp);
 const db      = getFirestore(fbApp);
@@ -270,14 +229,12 @@ const storage = getStorage(fbApp);
 
 let tUser=null, allData={}, classes={}, selView="overview";
 
-/* ── AUTH ── */
 document.getElementById("btn-login").addEventListener("click",async()=>{
   const p=new GoogleAuthProvider();
   try{ await signInWithPopup(auth,p); } catch(e){ alert("로그인 오류: "+e.message); }
 });
 document.getElementById("btn-logout").addEventListener("click",()=>signOut(auth));
 
-// worksheets.js의 데이터에 qCount 자동 계산
 WORKSHEETS.forEach(ws => {
   if(ws.questions && !ws.qCount) ws.qCount = ws.questions.length;
 });
@@ -296,7 +253,6 @@ function showGate(on){
   document.getElementById("app").style.display=on?"none":"block";
 }
 
-/* ── LOAD DATA ── */
 async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';
   allData={};
@@ -309,7 +265,6 @@ async function loadAll(){
       allData[uid][wsId]=d.data();
     });
   }catch(e){ console.error("Firestore 오류:",e); }
-  // 학급 데이터 로드
   try{
     const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
     if(cSnap.exists()) classes=cSnap.data().classes||{};
@@ -318,10 +273,8 @@ async function loadAll(){
   renderOverview();
 }
 
-/* ── SIDEBAR ── */
 const GCOL={1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
 const GRADE_LABEL={1:"🔵 1학년",2:"🟢 2학년",3:"🔴 3학년"};
-// 펼침 상태 저장
 const sbGradeOpen={1:true,2:true,3:true};
 const sbUnitOpen={};
 
@@ -332,7 +285,6 @@ function buildSidebar(){
     <div class="sb-item ${selView==='overview'?'active':''}" data-view="overview">📊 전체 현황</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
     <div class="sb-section" style="margin-top:8px">학습지</div>`;
-
   [1,2,3].forEach(grade=>{
     const gc=GCOL[grade];
     const gradeOpen=sbGradeOpen[grade]!==false;
@@ -343,15 +295,12 @@ function buildSidebar(){
         <span class="sb-chevron ${gradeOpen?'open':''}">›</span>
       </div>
       <div class="sb-unit-group" id="grade-group-${grade}" style="max-height:${gradeOpen?'2000px':'0'}">`;
-
-    // 이 학년의 단원들
     const gradeUnits=UNITS.filter(u=>u.grade===grade);
     gradeUnits.forEach(unit=>{
       const uKey=`${grade}-${unit.id}`;
       const unitOpen=sbUnitOpen[uKey]!==false;
       const sheets=WORKSHEETS.filter(ws=>ws.unitId===unit.id);
-      if(!sheets.length) return; // 학습지 없는 단원은 숨김
-
+      if(!sheets.length) return;
       h+=`
         <div class="sb-unit-header" data-ukey="${uKey}">
           <span style="font-size:11px">📂</span>
@@ -359,7 +308,6 @@ function buildSidebar(){
           <span class="sb-unit-chevron ${unitOpen?'open':''}">›</span>
         </div>
         <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
-
       sheets.forEach(ws=>{
         const done=Object.values(allData).filter(d=>d[ws.id]?.completedAt).length;
         h+=`
@@ -369,55 +317,38 @@ function buildSidebar(){
             <span class="sb-count">${done}</span>
           </div>`;
       });
-      h+=`</div>`; // ws-group
+      h+=`</div>`;
     });
-    h+=`</div>`; // unit-group (grade)
+    h+=`</div>`;
   });
-
   nav.innerHTML=h;
-
-  // 메뉴 버튼
   nav.querySelectorAll(".sb-item[data-view]").forEach(el=>{
     el.addEventListener("click",()=>navigate(el.dataset.view));
   });
-  // 학습지 버튼
   nav.querySelectorAll(".sb-ws-item[data-view]").forEach(el=>{
     el.addEventListener("click",()=>navigate(el.dataset.view));
   });
-  // 학년 펼치기/접기
   nav.querySelectorAll(".sb-grade-header").forEach(el=>{
     el.addEventListener("click",()=>{
       const g=parseInt(el.dataset.grade);
       sbGradeOpen[g]=!sbGradeOpen[g];
       const group=document.getElementById("grade-group-"+g);
       const chevron=el.querySelector(".sb-chevron");
-      if(sbGradeOpen[g]){
-        group.style.maxHeight="2000px";
-        chevron.classList.add("open");
-      } else {
-        group.style.maxHeight="0";
-        chevron.classList.remove("open");
-      }
+      if(sbGradeOpen[g]){group.style.maxHeight="2000px";chevron.classList.add("open");}
+      else{group.style.maxHeight="0";chevron.classList.remove("open");}
     });
   });
-  // 단원 펼치기/접기
   nav.querySelectorAll(".sb-unit-header").forEach(el=>{
     el.addEventListener("click",()=>{
       const uKey=el.dataset.ukey;
       sbUnitOpen[uKey]=!sbUnitOpen[uKey];
       const group=document.getElementById("unit-group-"+uKey);
       const chevron=el.querySelector(".sb-unit-chevron");
-      if(sbUnitOpen[uKey]!==false){
-        group.style.maxHeight="1000px";
-        chevron.classList.add("open");
-      } else {
-        group.style.maxHeight="0";
-        chevron.classList.remove("open");
-      }
+      if(sbUnitOpen[uKey]!==false){group.style.maxHeight="1000px";chevron.classList.add("open");}
+      else{group.style.maxHeight="0";chevron.classList.remove("open");}
     });
   });
 }
-
 
 function navigate(view){
   selView=view;
@@ -427,7 +358,7 @@ function navigate(view){
   else renderWS(view);
 }
 
-/* ── OVERVIEW ── */
+// ── Fix 2: renderOverview - ws.grade/category → wsGrade/wsCategory 함수 사용 ──
 function renderOverview(){
   const students=Object.keys(allData).length;
   let totalSub=0,totalTries=0,totalPct=0,pctN=0;
@@ -454,15 +385,19 @@ function renderOverview(){
       <th>단원</th><th>학년</th><th>영역</th><th>완료 학생</th><th>평균 정답률</th><th>평균 시도</th>
     </tr></thead><tbody>`;
   [1,2,3].forEach(g=>{
-    WORKSHEETS.filter(w=>w.grade===g).forEach(ws=>{
+    // Fix: ws.grade 없음 → wsGrade(ws) 사용
+    WORKSHEETS.filter(w=>wsGrade(w)===g).forEach(ws=>{
+      const cat=wsCategory(ws)||"-";
       const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
       const done=recs.length;
       const avgR=done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0;
       const avgT=done?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/done).toFixed(1):"-";
+      const gc=g===1?'#1e40af':g===2?'#166534':'#991b1b';
+      const gb=g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2';
       h+=`<tr>
         <td><strong>${ws.title}</strong></td>
-        <td><span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:${g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2'};color:${g===1?'#1e40af':g===2?'#166534':'#991b1b'}">${g}학년</span></td>
-        <td><span class="badge ${CAT_CLASS[ws.category]}">${ws.category}</span></td>
+        <td><span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:${gb};color:${gc}">${g}학년</span></td>
+        <td><span class="badge ${CAT_CLASS[cat]||''}">${cat}</span></td>
         <td>${done}명</td>
         <td>${done?rateBar(avgR):'<span style="color:var(--ink3)">-</span>'}</td>
         <td><span class="tries-badge ${avgT<=3?'tries-1':avgT<=6?'tries-2':'tries-many'}">${avgT}</span></td>
@@ -475,21 +410,25 @@ function renderOverview(){
   window.exportOverview=exportOverview;
 }
 
-/* ── PER-WS VIEW ── */
+// ── Fix 3: renderWS - ws.grade/category, completedAt, perfect 수정 ──
 function renderWS(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   if(!ws){renderOverview();return;}
+  const grade=wsGrade(ws)||"?";
+  const cat=wsCategory(ws)||"-";
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
   const done=recs.filter(r=>r.completedAt);
   const avgR=done.length?Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length):0;
   const avgT=done.length?(done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1):"-";
-  const perfect=done.filter(r=>r.totalAttempts===5).length; // 5문항 기준
+  // Fix: 하드코딩 5 → ws.qCount 사용
+  const qc=ws.qCount||(ws.questions?.length)||0;
+  const perfect=qc>0?done.filter(r=>r.totalAttempts===qc).length:"-";
 
   let h=`<div class="pg-title">${ws.title}</div>
   <div class="pg-sub">
-    <span class="badge ${CAT_CLASS[ws.category]}">${ws.category}</span>
-    수학 ${ws.grade}학년
+    <span class="badge ${CAT_CLASS[cat]||''}">${cat}</span>
+    수학 ${grade}학년
   </div>
   <div class="sum-grid">
     <div class="sum-card"><div class="sum-label">완료 학생</div><div class="sum-num">${done.length}</div></div>
@@ -508,10 +447,10 @@ function renderWS(wsId){
     h+=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">완료한 학생이 없습니다.</td></tr>`;
   } else {
     done.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0)).forEach(r=>{
-      const ts=r.completedAt?.toDate?r.completedAt.toDate().toLocaleString("ko-KR"):"-";
+      // Fix: formatDate 사용 (ISO 문자열 및 Timestamp 모두 처리)
+      const ts=formatDate(r.completedAt);
       const rate=r.correctRate??0;
       const tries=r.totalAttempts||0;
-      const qc=ws.qCount||5;
       const cls=tries<=qc?'tries-1':tries<=qc*1.5?'tries-2':'tries-many';
       const classInfo=findClass(r.studentEmail)||"-";
       let perQHtml="";
@@ -521,7 +460,7 @@ function renderWS(wsId){
           const col=t===1?"var(--green)":t<=2?"var(--amber)":"var(--red)";
           const wrongChips=(v.wrongInputs||[]).map(w=>`<span class="wrong-chip">${w}</span>`).join("");
           const thumb=v.canvasImage
-            ? `<img class="canvas-thumb" src="${v.canvasImage}" alt="풀이" onclick="openModal('${v.canvasImage}','${(r.studentName||'').replace(/'/g,"\'")} - ${qid}')">`
+            ? `<img class="canvas-thumb" src="${v.canvasImage}" alt="풀이" onclick="openModal('${v.canvasImage}','${(r.studentName||'').replace(/'/g,"\\'")} - ${qid}')">`
             : "";
           return `<div style="margin-bottom:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
             <span style="font-size:11px;font-family:'DM Mono',monospace;color:${col};font-weight:700;min-width:28px">${qid.replace('q','Q')}</span>
@@ -542,8 +481,6 @@ function renderWS(wsId){
     });
   }
   h+=`</tbody></table></div>`;
-
-  // 문항별 난이도
   const qStats={};
   recs.forEach(r=>{ if(!r.perQuestion) return;
     Object.entries(r.perQuestion).forEach(([qid,v])=>{
@@ -567,34 +504,22 @@ function renderWS(wsId){
   window.exportWS=exportWS;
 }
 
-/* ── CLASS MANAGEMENT ── */
 function renderClasses(){
   let h=`<div class="pg-title">🏫 학급 관리</div>
   <div class="pg-sub">학년도·학년·반 단위로 학생 이메일을 등록합니다.</div>
-  <div class="card-hdr" style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);margin-bottom:16px;padding:14px 18px">
-    <span class="card-title">새 학급 추가</span>
-  </div>
   <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:12px">새 학급 추가</div>
     <div class="class-row" style="gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년도</label>
-        <input type="text" id="new-year" value="${new Date().getFullYear()}" style="width:100%">
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년</label>
-        <select id="new-grade" style="width:100%">
-          <option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option>
-        </select>
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">반</label>
-        <input type="text" id="new-class" placeholder="예: 3" style="width:100%">
-      </div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년도</label>
+        <input type="text" id="new-year" value="${new Date().getFullYear()}" style="width:100%"></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">학년</label>
+        <select id="new-grade" style="width:100%"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">반</label>
+        <input type="text" id="new-class" placeholder="예: 3" style="width:100%"></div>
     </div>
     <button class="btn-sm btn-sm-accent" onclick="addClass()">+ 학급 추가</button>
   </div>
   <div class="class-grid" id="class-grid">`;
-
   const classKeys=Object.keys(classes).sort();
   if(!classKeys.length){
     h+=`<div style="color:var(--ink3);font-size:14px;padding:8px">등록된 학급이 없습니다.</div>`;
@@ -611,7 +536,7 @@ function renderClasses(){
         <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">${students.length}명 등록</div>
         <div class="student-list" id="list-${key}">
           ${students.map((e,i)=>{
-            const disp = e.endsWith(STUDENT_DOMAIN) ? e.replace(STUDENT_DOMAIN,'') : e;
+            const disp=e.endsWith(STUDENT_DOMAIN)?e.replace(STUDENT_DOMAIN,''):e;
             return `<div class="student-chip">
               <span>${disp}</span>
               <span style="font-size:11px;color:var(--ink3);margin-left:2px">${STUDENT_DOMAIN}</span>
@@ -621,8 +546,7 @@ function renderClasses(){
         </div>
         <div class="add-student-row">
           <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
-            <input type="text" id="add-${key}"
-              placeholder="아이디 입력"
+            <input type="text" id="add-${key}" placeholder="아이디 입력"
               style="border:none;outline:none;padding:7px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
               onkeydown="if(event.key==='Enter')addStudent('${key}')">
             <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
@@ -641,9 +565,8 @@ function renderClasses(){
 }
 
 async function saveClasses(){
-  try{
-    await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true});
-  }catch(e){ console.error("학급 저장 오류:",e); }
+  try{ await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true}); }
+  catch(e){ console.error("학급 저장 오류:",e); }
 }
 
 window.addClass=async function(){
@@ -654,41 +577,31 @@ window.addClass=async function(){
   const key=`${year}-${grade}-${cn}`;
   if(classes[key]){ alert("이미 존재하는 학급입니다."); return; }
   classes[key]={year,grade,classNum:cn,students:[]};
-  await saveClasses();
-  renderClasses();
+  await saveClasses(); renderClasses();
 };
-
 window.deleteClass=async function(key){
   if(!confirm(`${classes[key]?.year}학년도 ${classes[key]?.grade}학년 ${classes[key]?.classNum}반을 삭제할까요?`)) return;
-  delete classes[key];
-  await saveClasses();
-  renderClasses();
+  delete classes[key]; await saveClasses(); renderClasses();
 };
-
 window.addStudent=async function(key){
   const inp=document.getElementById("add-"+key);
   let val=inp.value.trim().toLowerCase();
   if(!val) return;
-  const email = val.includes("@") ? val : val + STUDENT_DOMAIN;
+  const email=val.includes("@")?val:val+STUDENT_DOMAIN;
   if(!classes[key].students) classes[key].students=[];
   if(classes[key].students.includes(email)){ alert("이미 등록된 학생입니다."); inp.select(); return; }
   classes[key].students.push(email);
-  await saveClasses();
-  renderClasses();
-  // 추가 후 같은 입력칸에 포커스 유지
+  await saveClasses(); renderClasses();
   requestAnimationFrame(()=>{
     const newInp=document.getElementById("add-"+key);
     if(newInp){ newInp.value=""; newInp.focus(); }
   });
 };
-
 window.removeStudent=async function(key,idx){
   classes[key].students.splice(idx,1);
-  await saveClasses();
-  renderClasses();
+  await saveClasses(); renderClasses();
 };
 
-/* ── HELPERS ── */
 function findClass(email){
   if(!email) return null;
   for(const [key,cls] of Object.entries(classes)){
@@ -696,6 +609,14 @@ function findClass(email){
       return `${cls.year}/${cls.grade}학년 ${cls.classNum}반`;
   }
   return null;
+}
+
+// ── Fix 4: formatDate - completedAt ISO 문자열 & Timestamp 모두 처리 ──
+function formatDate(v){
+  if(!v) return "-";
+  if(typeof v==="string") return new Date(v).toLocaleString("ko-KR");
+  if(v.toDate) return v.toDate().toLocaleString("ko-KR");
+  return "-";
 }
 function rateColor(r){ return r>=80?"var(--green)":r>=60?"var(--amber)":"var(--red)"; }
 function rateBar(rate){
@@ -705,14 +626,14 @@ function rateBar(rate){
   </div>`;
 }
 
-/* ── CSV ── */
+// ── Fix 5: exportOverview/exportWS - ws.grade/category → wsGrade/wsCategory, formatDate ──
 function exportOverview(){
   let csv="단원,학년,영역,완료학생수,평균정답률,평균시도\n";
   WORKSHEETS.forEach(ws=>{
     const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
     const avgR=recs.length?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/recs.length):0;
     const avgT=recs.length?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/recs.length).toFixed(1):0;
-    csv+=`"${ws.title}",${ws.grade},"${ws.category}",${recs.length},${avgR}%,${avgT}\n`;
+    csv+=`"${ws.title}",${wsGrade(ws)||"-"},"${wsCategory(ws)||"-"}",${recs.length},${avgR}%,${avgT}\n`;
   });
   dl(csv,"전체현황.csv");
 }
@@ -721,18 +642,17 @@ function exportWS(wsId){
   let csv="이름,이메일,학급,정답률,총시도,완료일시\n";
   Object.values(allData).forEach(d=>{
     const r=d[wsId]; if(!r?.completedAt) return;
-    const ts=r.completedAt?.toDate?r.completedAt.toDate().toLocaleString("ko-KR"):"-";
+    const ts=formatDate(r.completedAt);
     const cls=findClass(r.studentEmail)||"-";
     csv+=`"${r.studentName||""}","${r.studentEmail||""}","${cls}",${r.correctRate||0}%,${r.totalAttempts||0},"${ts}"\n`;
   });
-  dl(csv,`${ws.title}_결과.csv`);
+  dl(csv,`${ws?.title||wsId}_결과.csv`);
 }
 function dl(content,name){
   const blob=new Blob(['\uFEFF'+content],{type:"text/csv;charset=utf-8;"});
   const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(blob),download:name});
   a.click();
 }
-/* 이미지 모달 */
 window.openModal=function(url,title){
   document.getElementById("modal-img").src=url;
   document.getElementById("modal-title").textContent=title;

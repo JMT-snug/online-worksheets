@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t2.1a">
+<meta name="app-version" content="t2.1b">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -197,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t2.1a"; // teacher 버전
+const T_VERSION = "t2.1b"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -437,15 +437,16 @@ let _wsFilter="", _wsSortBy="tries";
 
 window.renderWSTable=function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
-  const qc=ws.qCount||(ws.questions?.length)||0;
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
   let rows=recs.filter(r=>r.completedAt);
+
   if(_wsFilter) rows=rows.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
-  if(_wsSortBy==="class") rows.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
-  else if(_wsSortBy==="name") rows.sort((a,b)=>(a.studentName||"").localeCompare(b.studentName||"","ko"));
-  else if(_wsSortBy==="time") rows.sort((a,b)=>String(a.completedAt||"").localeCompare(String(b.completedAt||"")));
-  else rows.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0));
+  if(_wsSortBy==="class")      rows.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
+  else if(_wsSortBy==="name")  rows.sort((a,b)=>(a.studentName||"").localeCompare(b.studentName||"","ko"));
+  else if(_wsSortBy==="time")  rows.sort((a,b)=>String(a.completedAt||"").localeCompare(String(b.completedAt||"")));
+  else                          rows.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0));
+
   const tbody=document.getElementById("ws-tbody"); if(!tbody) return;
   if(!rows.length){
     tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">${_wsFilter?"해당 학급의 완료 학생이 없습니다.":"완료한 학생이 없습니다."}</td></tr>`;
@@ -456,24 +457,33 @@ window.renderWSTable=function(wsId){
     const rate=r.correctRate??0;
     const tries=r.totalAttempts||0;
     const wrong=Math.max(0,tries-1);
-    const cls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
+    const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
     let perQHtml="";
     if(r.perQuestion){
+      window._qd=window._qd||{};
       const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
         const att=v.attempts||1;
         const wc=(v.wrongInputs||[]).length;
         const col=wc===0?"var(--green)":wc===1?"var(--amber)":"var(--red)";
-        const dkey=r.uid+"_"+qid;
-        window._qd=window._qd||{};
+        const dkey=`${r.uid}_${qid}`;
         window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-        return '<div class="qcell" onclick="showQDetail(''+dkey+'')" title="'+qid+': 오답 '+wc+'회"><span class="qcell-id" style="color:'+col+'">'+qid.replace('q','Q')+'</span><span class="qcell-try" style="color:'+col+'">'+(wc===0?'✓':wc+'회')+'</span></div>';
+        return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${wc===0?"✓":wc+"회"}</span></div>`;
       }).join("");
-      perQHtml='<div style="display:flex;flex-wrap:wrap;gap:3px">'+cells+'</div>';
+      perQHtml=`<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
     }
-    return '<tr><td><strong>'+(r.studentName||"-")+'</strong></td><td style="font-size:12px;color:var(--ink3)">'+(r.studentEmail||"-")+'</td><td style="font-size:12px">'+classInfo+'</td><td>'+rateBar(rate)+'</td><td><span class="tries-badge '+cls+'">'+wrong+'회</span></td><td style="min-width:180px">'+(perQHtml||"-")+'</td><td style="font-size:12px">'+ts+'</td></tr>';
+    return `<tr>
+      <td><strong>${r.studentName||"-"}</strong></td>
+      <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
+      <td style="font-size:12px">${classInfo}</td>
+      <td>${rateBar(rate)}</td>
+      <td><span class="tries-badge ${wcls}">${wrong}회</span></td>
+      <td style="min-width:180px">${perQHtml||"-"}</td>
+      <td style="font-size:12px">${ts}</td>
+    </tr>`;
   }).join("");
 };
+
 
 function renderWS(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);

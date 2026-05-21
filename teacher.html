@@ -432,41 +432,31 @@ function renderOverview(){
 }
 
 // ── Fix 3: renderWS - ws.grade/category, completedAt, perfect 수정 ──
+
 let _wsFilter="", _wsSortBy="tries";
 
-/* 학생 테이블만 재렌더링 (필터/정렬 변경 시) */
 window.renderWSTable=function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const qc=ws.qCount||(ws.questions?.length)||0;
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
-  let done=recs.filter(r=>r.completedAt);
-
-  // ── 필터 ──
-  if(_wsFilter) done=done.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
-
-  // ── 정렬 ──
-  if(_wsSortBy==="class")
-    done.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
-  else if(_wsSortBy==="name")
-    done.sort((a,b)=>(a.studentName||"").localeCompare(b.studentName||"","ko"));
-  else if(_wsSortBy==="time")
-    done.sort((a,b)=>String(a.completedAt||"").localeCompare(String(b.completedAt||"")));
-  else
-    done.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0));
-
+  let rows=recs.filter(r=>r.completedAt);
+  if(_wsFilter) rows=rows.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
+  if(_wsSortBy==="class") rows.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
+  else if(_wsSortBy==="name") rows.sort((a,b)=>(a.studentName||"").localeCompare(b.studentName||"","ko"));
+  else if(_wsSortBy==="time") rows.sort((a,b)=>String(a.completedAt||"").localeCompare(String(b.completedAt||"")));
+  else rows.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0));
   const tbody=document.getElementById("ws-tbody"); if(!tbody) return;
-  if(!done.length){
-    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">
-      ${_wsFilter?"해당 학급의 완료 학생이 없습니다.":"완료한 학생이 없습니다."}</td></tr>`;
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">${_wsFilter?"해당 학급의 완료 학생이 없습니다.":"완료한 학생이 없습니다."}</td></tr>`;
     return;
   }
-  tbody.innerHTML=done.map(r=>{
+  tbody.innerHTML=rows.map(r=>{
     const ts=formatDate(r.completedAt);
     const rate=r.correctRate??0;
     const tries=r.totalAttempts||0;
     const wrong=Math.max(0,tries-1);
-    const cls=wrong===0?'tries-1':wrong<=2?'tries-2':'tries-many';
+    const cls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
     let perQHtml="";
     if(r.perQuestion){
@@ -477,22 +467,11 @@ window.renderWSTable=function(wsId){
         const dkey=r.uid+"_"+qid;
         window._qd=window._qd||{};
         window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-        return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회">
-          <span class="qcell-id" style="color:${col}">${qid.replace('q','Q')}</span>
-          <span class="qcell-try" style="color:${col}">${wc===0?'✓':wc+'회'}</span>
-        </div>`;
+        return '<div class="qcell" onclick="showQDetail(''+dkey+'')" title="'+qid+': 오답 '+wc+'회"><span class="qcell-id" style="color:'+col+'">'+qid.replace('q','Q')+'</span><span class="qcell-try" style="color:'+col+'">'+(wc===0?'✓':wc+'회')+'</span></div>';
       }).join("");
-      perQHtml=`<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
+      perQHtml='<div style="display:flex;flex-wrap:wrap;gap:3px">'+cells+'</div>';
     }
-    return `<tr>
-      <td><strong>${r.studentName||"-"}</strong></td>
-      <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
-      <td style="font-size:12px">${classInfo}</td>
-      <td>${rateBar(rate)}</td>
-      <td><span class="tries-badge ${cls}">${wrong}회</span></td>
-      <td style="min-width:180px">${perQHtml||"-"}</td>
-      <td style="font-size:12px">${ts}</td>
-    </tr>`;
+    return '<tr><td><strong>'+(r.studentName||"-")+'</strong></td><td style="font-size:12px;color:var(--ink3)">'+(r.studentEmail||"-")+'</td><td style="font-size:12px">'+classInfo+'</td><td>'+rateBar(rate)+'</td><td><span class="tries-badge '+cls+'">'+wrong+'회</span></td><td style="min-width:180px">'+(perQHtml||"-")+'</td><td style="font-size:12px">'+ts+'</td></tr>';
   }).join("");
 };
 
@@ -510,6 +489,7 @@ function renderWS(wsId){
   const qc=ws.qCount||(ws.questions?.length)||0;
   const perfect=qc>0?done.filter(r=>r.totalAttempts===qc).length:"-";
 
+  // sum-grid까지 렌더링 후 템플릿 리터럴 닫기
   let h=`<div class="pg-title">${ws.title}</div>
   <div class="pg-sub">
     <span class="badge ${CAT_CLASS[cat]||''}">${cat}</span>
@@ -520,15 +500,14 @@ function renderWS(wsId){
     <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${rateColor(avgR)}">${avgR}%</div></div>
     <div class="sum-card"><div class="sum-label">평균 시도 횟수</div><div class="sum-num">${avgT}</div><div class="sum-sub">문제당</div></div>
     <div class="sum-card"><div class="sum-label">첫 번에 완료</div><div class="sum-num" style="color:var(--green)">${perfect}</div><div class="sum-sub">모두 1회 정답</div></div>
-  </div>
-  <div class="card">
-    // 학급 목록 추출 (완료 학생 기준)
-  const allRecs2=[];
-  Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) allRecs2.push({uid,...d[wsId]}); });
-  const classSet=new Set(allRecs2.filter(r=>r.completedAt).map(r=>findClass(r.studentEmail)||"").filter(Boolean));
+  </div>`;
+
+  // 학급 필터 옵션 생성 (JS 코드, 템플릿 리터럴 밖)
+  const classSet=new Set(done.map(r=>findClass(r.studentEmail)||"").filter(Boolean));
   const classOpts=[...classSet].sort((a,b)=>a.localeCompare(b,"ko"))
     .map(c=>`<option value="${c}">${c}</option>`).join("");
 
+  // 완료 학생 카드 (필터/정렬 컨트롤 포함)
   h+=`<div class="card">
     <div class="card-hdr">
       <span class="card-title">✅ 완료 학생 목록</span>
@@ -550,7 +529,7 @@ function renderWS(wsId){
     <table><thead><tr>
       <th>학생</th><th>이메일</th><th>학급</th><th>정답률</th><th>오답</th><th>문항별 오답</th><th>완료 일시</th>
     </tr></thead><tbody id="ws-tbody"></tbody></table>
-  </div>`;;
+  </div>`;
   const qStats={};
   recs.forEach(r=>{ if(!r.perQuestion) return;
     Object.entries(r.perQuestion).forEach(([qid,v])=>{
@@ -571,7 +550,6 @@ function renderWS(wsId){
     h+=`</tbody></table></div>`;
   }
   document.getElementById("content").innerHTML=h;
-  // 필터/정렬 상태 초기화 후 테이블 렌더링
   _wsFilter=""; _wsSortBy="tries";
   renderWSTable(wsId);
   window.exportWS=exportWS;

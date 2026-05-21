@@ -435,7 +435,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <button class="btn-back" id="btn-back">← 목록</button>
       <span class="quiz-ws-title" id="quiz-ws-title"></span>
       <div style="display:flex;gap:6px;margin-left:auto">
-        <button class="btn-back" id="btn-random" onclick="toggleRandom()" title="랜덤 출제">🔀</button>
         <button class="btn-back" id="btn-prev-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(-1)">◀ 이전</button>
         <button class="btn-back" id="btn-next-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(1)">다음 ▶</button>
       </div>
@@ -1395,23 +1394,10 @@ window.submitMulti = function(){
       </button>`;
     answered[curQIdx]=true; updateStrip();
   } else {
-    // 오답 표시
-    q.options.forEach((_,i)=>{
-      const el=document.getElementById(`mopt-${i}`);
-      if(!el) return;
-      if(ans.includes(i)) el.className="multi-opt ok";
-      else if(multiSel.has(i)) el.className="multi-opt ng";
-    });
+    // 오답: 피드백만 표시, 버튼 색 변경 없음
     fb.className="feedback-strip show fb-wrong";
     fb.innerHTML="❌ 틀렸어요. 다시 선택해보세요!";
-    setTimeout(()=>{
-      q.options.forEach((_,i)=>{
-        const el=document.getElementById(`mopt-${i}`);
-        if(!el) return;
-        el.className="multi-opt"+(multiSel.has(i)?" sel":"");
-      });
-      fb.className="feedback-strip";
-    },1200);
+    setTimeout(()=>{ fb.innerHTML=""; fb.className="feedback-strip"; },800);
   }
 };
 
@@ -1650,6 +1636,7 @@ async function submitQAns(){
   // ── 용어/수식 문제 채점 ──
   if(q.type==="word"){
     let ok=false, userAns="";
+    let input=null; // 블록 전체에서 접근 가능하도록 상단 선언
     if(q.answerType==="expr"){
       // 수식 동치 비교 (qTokens 사용)
       const rawInput=qTokens.map(t=>{
@@ -1683,7 +1670,7 @@ async function submitQAns(){
         return isFinite(uv)&&isFinite(av)&&Math.abs(uv-av)<0.001;
       }));
     } else {
-      const input=document.getElementById("word-input");
+      input=document.getElementById("word-input");
       userAns=(input?.value||"").trim().replace(/\s+/g," ");
       const correct=[q.answer,...(q.answerAlt||[])];
       ok=correct.some(a=>a.toLowerCase()===userAns.toLowerCase());

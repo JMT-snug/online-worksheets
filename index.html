@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.0"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.1"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -654,10 +654,14 @@ function unitProgress(unit) {
   const allSheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id &&
     (ws.type==="vocab" || (ws.questions?.length??0)>0));
   if(!allSheets.length) return {total:0, done:0, hasSheets:false};
-  // 진도는 일반 학습지만 집계
-  const regular = allSheets.filter(ws=>ws.type!=="vocab");
-  const done = regular.filter(ws=>wsProgress[ws.id]?.completedAt).length;
-  return {total:regular.length, done, hasSheets:true};
+  // 진도: 일반은 completedAt, vocab은 passCount≥1 기준
+  const total = allSheets.length;
+  const done = allSheets.filter(ws=>
+    ws.type==="vocab"
+      ? (wsProgress[ws.id]?.passCount||0)>=1
+      : !!wsProgress[ws.id]?.completedAt
+  ).length;
+  return {total, done, hasSheets:true};
 }
 
 /* 단원 셀 아이템 생성 */
@@ -760,7 +764,9 @@ function showUnitPage(unit) {
         <div class="wslc-body">
           <div class="wslc-title">${ws.title}</div>
           <div class="wslc-meta">${ws.type==="vocab"
-              ? (wsProgress[ws.id]?.passed ? "✅ PASS" : "미완료")
+              ? ((wsProgress[ws.id]?.passCount||0)>=1
+                  ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
+                  : "미완료")
               : ws.questions.length+"문제"+( done ? ` · 정답률 ${rate}%` : "")}
           </div>
         </div>
@@ -984,6 +990,9 @@ function updateStrip() {
 function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   qTokens=[]; qEditPart=null;
+  // 이전 문제 feedback 완전 초기화 (정답 잠깐 표시 방지)
+  const fbEl=document.getElementById("feedback-strip");
+  if(fbEl){fbEl.innerHTML=""; fbEl.className="feedback-strip";}
   updateStrip();
   canvasViewIdx=curQIdx;
   requestAnimationFrame(()=>{
@@ -1656,12 +1665,13 @@ async function submitQAns(){
           let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
           let prev;
           do{prev=t;
-            t=t.replace(/(\d|\)|x)\(/g,'$1*(');
-            t=t.replace(/\)(\d|x|\()/g,')*$1');
-            t=t.replace(/(\d)x/g,'$1*x');
-            t=t.replace(/x(\d)/g,'x*$1');
+            t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+            t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+            t=t.replace(/(\d)([a-z])/g,'$1*$2');
+            t=t.replace(/([a-z])(\d)/g,'$1*$2');
+            t=t.replace(/([a-z])([a-z])/g,'$1*$2');
           }while(prev!==t);
-          t=t.replace(/x/g,`(${x})`);
+          t=t.replace(/[a-z]/g,`(${x})`); // x,a,b 등 모든 단문자 변수 대입
           if(!/^[\d+\-*/().\/\s]+$/.test(t)) return NaN;
           return Function('"use strict";return('+t+')')();
         }catch(e){return NaN;}
@@ -1704,8 +1714,9 @@ async function submitQAns(){
       setTimeout(()=>{
         lp.classList.remove("shake");
         if(input){input.disabled=false;input.value="";input.focus();}
-        fb.className="feedback-strip";
-      },600);
+        qTokens=[]; qEditPart=null; renderInput(); // expr 입력 초기화
+        fb.innerHTML=""; fb.className="feedback-strip"; // flash 방지
+      },700);
     }
     return;
   }
@@ -1768,7 +1779,11 @@ async function submitQAns(){
     fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
     const lp=document.getElementById("quiz-left-panel");
     lp.classList.add("shake");
-    setTimeout(()=>lp.classList.remove("shake"),450);
+    setTimeout(()=>{
+      lp.classList.remove("shake");
+      qTokens=[]; qEditPart=null; renderInput(); // 입력 초기화
+      fb.innerHTML=""; fb.className="feedback-strip"; // 피드백 숨김
+    },700);
   }
 }
 
@@ -2002,13 +2017,18 @@ function vqAnswer(selected, correct){
     vqStreak++;
     if(vqStreak>=VQ_TARGET){ setTimeout(async ()=>{
       try{
+        const prevCount=(wsProgress[vqWS.id]?.passCount||0);
+        const newCount=prevCount+1;
         await setDoc(doc(db,"results",user.uid,"worksheets",vqWS.id),{
-          passed:true, completedAt:new Date().toISOString(),
+          passed:true, passCount:newCount,
+          completedAt:new Date().toISOString(),
           worksheetId:vqWS.id, worksheetTitle:vqWS.title,
           studentEmail:user.email, studentName:user.displayName||""
         });
-        wsProgress[vqWS.id]={passed:true,completedAt:new Date().toISOString()};
+        wsProgress[vqWS.id]={passed:true,passCount:newCount,completedAt:new Date().toISOString()};
       }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
+      const pc=document.getElementById('vq-pass-count');
+      if(pc){ const n=(wsProgress[vqWS.id]?.passCount||0); pc.textContent=`${n}회 통과! 용어를 완벽히 익혔어요.`; }
       document.getElementById('vq-complete').style.display='flex';
     },700); }
     else setTimeout(vqNextQ, 700);

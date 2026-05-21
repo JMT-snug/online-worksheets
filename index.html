@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.1e">
+  <meta name="app-version" content="4.2a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.1e"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.2a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -629,8 +629,10 @@ async function loadDash() {
   try {
     for (const ws of WORKSHEETS) {
       if (ws.type!=="vocab" && !ws.questions?.length) continue;
-      const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
-      if (snap.exists()) wsProgress[ws.id] = snap.data();
+      try {
+        const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
+        if (snap.exists()) wsProgress[ws.id] = snap.data();
+      } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
   renderCards();
@@ -1816,6 +1818,8 @@ async function submitQAns(){
 async function finishQuiz(){
   // 키보드 리스너 제거
   document.removeEventListener("keydown", quizKeyHandler);
+  // MathJax 렌더 대기 취소 (화면 전환 방해 방지)
+  if(window.MathJax?.typesetClear) MathJax.typesetClear();
   showPage("result-page");
   const total=curWS.questions.length;
   const tries=attempts.reduce((s,a,i)=>
@@ -1846,13 +1850,14 @@ async function finishQuiz(){
         canvasImage: wrongAnswers[i].imagePath||null,
       };
     });
+    const completedAt=new Date().toISOString(); // serverTimestamp 대신 로컬 시간 (캐시 불일치 방지)
     await setDoc(doc(db,"results",user.uid,"worksheets",curWS.id),{
       studentEmail:user.email, studentName:user.displayName||"",
       worksheetId:curWS.id, worksheetTitle:curWS.title,
       solvedQuestions:total, totalAttempts:tries, correctRate:100,
-      perQuestion:perQ, completedAt:serverTimestamp(),
+      perQuestion:perQ, completedAt,
     },{merge:true});
-    wsProgress[curWS.id]={solvedQuestions:total,totalAttempts:tries,correctRate:100,completedAt:true};
+    wsProgress[curWS.id]={solvedQuestions:total,totalAttempts:tries,correctRate:100,completedAt};
   } catch(e){ console.error("저장 오류:",e); }
 }
 

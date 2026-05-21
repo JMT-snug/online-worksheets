@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t2.1d">
+<meta name="app-version" content="t3.0a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -197,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t2.1d"; // teacher 버전
+const T_VERSION = "t3.0a"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -248,7 +248,7 @@ const auth    = getAuth(fbApp);
 const db      = getFirestore(fbApp);
 const storage = getStorage(fbApp);
 
-let tUser=null, allData={}, classes={}, selView="overview";
+let tUser=null, allData={}, progressData={}, classes={}, selView="overview";
 
 document.getElementById("btn-login").addEventListener("click",async()=>{
   const p=new GoogleAuthProvider();
@@ -278,12 +278,18 @@ async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';
   allData={};
   try{
+    progressData={};
     const snap=await getDocs(collectionGroup(db,"worksheets"));
     snap.forEach(d=>{
       const parts=d.ref.path.split("/");
-      const uid=parts[1], wsId=parts[3];
-      if(!allData[uid]) allData[uid]={};
-      allData[uid][wsId]=d.data();
+      const col=parts[0], uid=parts[1], wsId=parts[3];
+      if(col==="results"){
+        if(!allData[uid]) allData[uid]={};
+        allData[uid][wsId]=d.data();
+      } else if(col==="progress"){
+        if(!progressData[uid]) progressData[uid]={};
+        progressData[uid][wsId]=d.data();
+      }
     });
   }catch(e){ console.error("Firestore 오류:",e); }
   try{
@@ -562,8 +568,41 @@ function renderWS(wsId){
     });
     h+=`</tbody></table></div>`;
   }
+  // ── 진행 중 학생 ──
+  const inProg=[];
+  Object.entries(progressData).forEach(([uid,d])=>{
+    const p=d[wsId];
+    if(p && !p.isComplete) inProg.push({uid,...p});
+  });
+  if(inProg.length){
+    inProg.sort((a,b)=>(b.answeredCount||0)-(a.answeredCount||0));
+    h+=`<div class="card" style="margin-bottom:20px">
+      <div class="card-hdr"><span class="card-title">⏳ 진행 중 (${inProg.length}명)</span></div>
+      <table><thead><tr>
+        <th>학생</th><th>이메일</th><th>학급</th><th>진행</th><th>마지막 저장</th>
+      </tr></thead><tbody>
+      ${inProg.map(r=>{
+        const total=r.totalCount||0;
+        const done2=r.answeredCount||0;
+        const pct=total?Math.round(done2/total*100):0;
+        const cls=findClass(r.studentEmail)||"-";
+        return `<tr>
+          <td><strong>${r.studentName||"-"}</strong></td>
+          <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
+          <td style="font-size:12px">${cls}</td>
+          <td><div class="rate-row">
+            <div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div>
+            <span class="rate-n" style="color:var(--amber)">${done2}/${total}</span>
+          </div></td>
+          <td style="font-size:12px">${formatDate(r.lastUpdated)}</td>
+        </tr>`;
+      }).join("")}
+      </tbody></table>
+    </div>`;
+  }
+
   document.getElementById("content").innerHTML=h;
-  _wsFilter=""; _wsSortBy="tries";
+  _wsFilter=""; _wsSortBy="class";
   renderWSTable(wsId);
   window.exportWS=exportWS;
 }

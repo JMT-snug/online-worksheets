@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.1b">
+  <meta name="app-version" content="4.1c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.1b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.1c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1197,7 +1197,7 @@ function qRender(){
       h+=`<span class="chip-exp"><span class="base">${escH(t.base)}</span><span class="expo${ea}">${escH(t.expo)||"&thinsp;"}</span></span>`;
     }
   });
-  el.innerHTML=h+'<span class="ans-cur"></span>';
+  el.innerHTML=h+'<span class="ans-cur">|</span>';
 }
 function escH(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 
@@ -1228,6 +1228,22 @@ function qInput(v){
   }
   qRender();
 }
+
+function qArrowRight(){
+  // 분수 분자 → 분모, 분모 → 다음(편집 종료), 지수 → 편집 종료
+  qNextPart();
+}
+function qArrowLeft(){
+  if(!qEditPart) return;
+  const t=qTokens[qEditPart.idx];
+  if(t&&t.type==="frac"&&qEditPart.part==="den"){
+    qEditPart.part="num"; // 분모 → 분자
+  } else {
+    qEditPart=null; // 분자/지수 → 일반 입력으로
+  }
+  qRender();
+}
+
 function qNextPart(){
   if(!qEditPart){qRender();return;}
   const t=qTokens[qEditPart.idx];
@@ -1293,6 +1309,9 @@ function quizKeyHandler(e){
   // word 타입
   if(q?.type==="word"){
     if(q.answerType==="expr"){
+      // 방향키: 분수 분자↔분모 이동
+      if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
+      if(e.key==="ArrowLeft" ){e.preventDefault();qArrowLeft(); return;}
       // 수식 입력: equation 타입과 동일하게 키보드 처리
       const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
       e.preventDefault();
@@ -1314,6 +1333,9 @@ function quizKeyHandler(e){
     return;
   }
   if(!document.getElementById("ans-display")) return;
+  // 방향키: 분수 분자↔분모 이동
+  if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
+  if(e.key==="ArrowLeft" ){e.preventDefault();qArrowLeft(); return;}
   const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
   e.preventDefault();
   if(v==="TAB") qNextPart();

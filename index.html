@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.1d">
+  <meta name="app-version" content="4.1e">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.1d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.1e"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -136,11 +136,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .ans-hint{font-size:10px;color:var(--ink3);margin-bottom:5px;display:flex;align-items:center;gap:6px}
 .ans-hint strong{color:var(--ink2);font-size:12px}
 /* 답 표시창 */
-.ans-display{min-height:52px;padding:10px 14px;border:1.5px solid var(--rule);
+.ans-display{min-height:56px;padding:8px 16px;border:1.5px solid var(--rule);
   border-radius:12px 12px 0 0;background:var(--paper);
-  font-family:'Courier New',monospace;font-size:1.2rem;
-  cursor:text;display:flex;align-items:center;flex-wrap:wrap;gap:2px;
-  transition:border-color .15s}
+  cursor:text;display:flex;align-items:center;
+  transition:border-color .15s;overflow-x:auto}
 .ans-display.focused{border-color:var(--accent)}
 .ans-cur{color:var(--accent);animation:blink 1s infinite;font-weight:300;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
@@ -1183,21 +1182,39 @@ function renderQuestion() {
 }
 
 /* 토큰 렌더 */
-function qRender(){
-  const el=document.getElementById("ans-display"); if(!el)return;
-  let h="";
+/* ── 수식 입력기 LaTeX 렌더링 ── */
+function latexEsc(s){
+  return s.replace(/−/g,'-').replace(/×/g,'\\times ').replace(/÷/g,'\\div ');
+}
+
+function tokensToLatex(){
+  const CURSOR='{\\color{#4f46e5}|}';
+  let parts=[];
   qTokens.forEach((t,i)=>{
-    if(t.type==="char") h+=`<span class="tok">${escH(t.val)}</span>`;
-    else if(t.type==="frac"){
-      const na=qEditPart&&qEditPart.idx===i&&qEditPart.part==="num"?" ap":"";
-      const da=qEditPart&&qEditPart.idx===i&&qEditPart.part==="den"?" ap":"";
-      h+=`<span class="chip-frac"><span class="fn${na}">${escH(t.num)||"&thinsp;"}</span><span class="fd${da}">${escH(t.den)||"&thinsp;"}</span></span>`;
-    } else if(t.type==="exp"){
-      const ea=qEditPart&&qEditPart.idx===i?" ap":"";
-      h+=`<span class="chip-exp"><span class="base">${escH(t.base)}</span><span class="expo${ea}">${escH(t.expo)||"&thinsp;"}</span></span>`;
+    if(t.type==='char'){
+      parts.push(latexEsc(t.val));
+    } else if(t.type==='frac'){
+      const eN=qEditPart?.idx===i&&qEditPart?.part==='num';
+      const eD=qEditPart?.idx===i&&qEditPart?.part==='den';
+      const n=(t.num?latexEsc(t.num):'')+(eN?CURSOR:'');
+      const d=(t.den?latexEsc(t.den):'')+(eD?CURSOR:'');
+      parts.push('\\dfrac{'+(n||'\\phantom{0}')+'}{'+( d||'\\phantom{0}')+'}');
+    } else if(t.type==='exp'){
+      const eE=qEditPart?.idx===i;
+      const e=(t.expo?latexEsc(t.expo):'')+(eE?CURSOR:'');
+      parts.push((t.base?latexEsc(t.base):'')+'_{'+(e||'\\phantom{0}')+'}');
     }
   });
-  el.innerHTML=h+'<span class="ans-cur">|</span>';
+  if(!qEditPart) parts.push(CURSOR); // 기본 커서 (분수/지수 편집 외)
+  return parts.join('');
+}
+
+
+function qRender(){
+  const el=document.getElementById("ans-display"); if(!el)return;
+  const latex=tokensToLatex();
+  el.innerHTML='\\(\\displaystyle '+latex+'\\)';
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
 }
 function escH(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 

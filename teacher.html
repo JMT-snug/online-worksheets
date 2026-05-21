@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t2.1b">
+<meta name="app-version" content="t2.1c">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -197,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t2.1b"; // teacher 버전
+const T_VERSION = "t2.1c"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -434,6 +434,9 @@ function renderOverview(){
 // ── Fix 3: renderWS - ws.grade/category, completedAt, perfect 수정 ──
 
 let _wsFilter="", _wsSortBy="tries";
+// 인라인 onchange → 모듈 변수 접근용 래퍼
+window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
+window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
 window.renderWSTable=function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
@@ -522,11 +525,11 @@ function renderWS(wsId){
     <div class="card-hdr">
       <span class="card-title">✅ 완료 학생 목록</span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select onchange="_wsFilter=this.value;renderWSTable('${wsId}')"
+        <select onchange="setWSFilter(this.value,'${wsId}')"
           style="font-size:12px;padding:5px 8px;border-radius:6px;border:1.5px solid var(--rule);font-family:inherit">
           <option value="">전체 학급</option>${classOpts}
         </select>
-        <select onchange="_wsSortBy=this.value;renderWSTable('${wsId}')"
+        <select onchange="setWSSort(this.value,'${wsId}')"
           style="font-size:12px;padding:5px 8px;border-radius:6px;border:1.5px solid var(--rule);font-family:inherit">
           <option value="tries">오답 적은 순</option>
           <option value="class">학급 순</option>

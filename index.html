@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.2b">
+  <meta name="app-version" content="5.0a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.2b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.0a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -941,6 +941,48 @@ function toggleRandom(){
   startQuiz(curWS);
 }
 
+
+/* ══ 진도 자동 저장 ══
+   저장 경로: progress/{uid}/worksheets/{wsId}
+   트리거: 10분 주기 / 이탈 / 완료
+*/
+let _progressTimer=null;
+
+async function saveProgress(){
+  if(!curWS||!user) return;
+  try{
+    await setDoc(doc(db,"progress",user.uid,"worksheets",curWS.id),{
+      worksheetId:  curWS.id,
+      worksheetTitle: curWS.title,
+      studentEmail: user.email,
+      studentName:  user.displayName||"",
+      answeredCount: answered.filter(Boolean).length,
+      totalCount:   curWS.questions.length,
+      curQIdx,
+      attempts:  [...attempts],
+      answered:  [...answered],
+      wrongInputs: wrongAnswers.map(w=>w.inputs||[]),
+      lastUpdated:  new Date().toISOString(),
+      isComplete: false
+    },{merge:true});
+  }catch(e){ console.warn("진도 저장 실패:",e.message); }
+}
+
+function _startProgressTimer(){
+  clearInterval(_progressTimer);
+  _progressTimer=setInterval(saveProgress, 10*60*1000); // 10분
+}
+
+function _stopProgressTimer(){
+  clearInterval(_progressTimer);
+  _progressTimer=null;
+}
+
+// 탭 숨김(전환/닫기) 시 저장
+function _onVisibilityChange(){
+  if(document.hidden && curWS) saveProgress();
+}
+
 function startQuiz(ws) {
   curWS=ws; curQIdx=0;
   // 랜덤 출제: 원본 보존 후 셔플
@@ -955,10 +997,11 @@ function startQuiz(ws) {
   // 링크 제외 문항 수 캐싱
   curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
   buildStrip(); renderQuestion();
-  // 캔버스: quiz-page 표시 후 초기화 (width 정상 계산)
   requestAnimationFrame(()=>{ initCanvas(); });
-  // 키보드 입력 활성화
   document.addEventListener("keydown", quizKeyHandler);
+  // 진도 자동 저장 시작
+  _startProgressTimer();
+  document.addEventListener("visibilitychange", _onVisibilityChange);
 }
 
 function buildStrip() {
@@ -1858,7 +1901,12 @@ async function finishQuiz(){
         canvasImage: wrongAnswers[i].imagePath||null,
       };
     });
-    const completedAt=new Date().toISOString(); // serverTimestamp 대신 로컬 시간 (캐시 불일치 방지)
+    _stopProgressTimer();
+    document.removeEventListener("visibilitychange", _onVisibilityChange);
+    const completedAt=new Date().toISOString();
+    // 진행 중 진도 완료 표시
+    setDoc(doc(db,"progress",user.uid,"worksheets",curWS.id),
+      {isComplete:true, completedAt},{merge:true}).catch(()=>{});
     await setDoc(doc(db,"results",user.uid,"worksheets",curWS.id),{
       studentEmail:user.email, studentName:user.displayName||"",
       worksheetId:curWS.id, worksheetTitle:curWS.title,
@@ -1915,15 +1963,21 @@ function updateNavBtns(){
 
 document.getElementById("btn-retry").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  _stopProgressTimer();
+  document.removeEventListener("visibilitychange", _onVisibilityChange);
   startQuiz(curWS);
 });
 document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  _stopProgressTimer();
+  document.removeEventListener("visibilitychange", _onVisibilityChange);
   loadDash();
 });
 document.getElementById("btn-back").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
-  // 단원 페이지로 돌아가기 (unitId가 있으면)
+  _stopProgressTimer();
+  document.removeEventListener("visibilitychange", _onVisibilityChange);
+  saveProgress(); // 이탈 시 저장
   if(curWS?.unitId){
     const unit = UNITS.find(u=>u.id===curWS.unitId);
     if(unit){ showUnitPage(unit); return; }

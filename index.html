@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="4.2a">
+  <meta name="app-version" content="4.2b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "4.2a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "4.2b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1104,7 +1104,7 @@ function renderQuestion() {
           </div>
           <div class="feedback-strip" id="feedback-strip"></div>
           <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-            🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+            ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
           </div>
         </div>`;
     } else {
@@ -1126,7 +1126,7 @@ function renderQuestion() {
           </div>
           <div class="feedback-strip" id="feedback-strip"></div>
           <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-            🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+            ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
           </div>
         </div>`;
       requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
@@ -1176,7 +1176,7 @@ function renderQuestion() {
         </div>
         <div class="feedback-strip" id="feedback-strip"></div>
         <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-          🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+          ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
         </div>
       </div>`;
   }
@@ -1394,7 +1394,7 @@ function renderMultiQ(q, panel){
       <button class="btn-multi-submit" onmousedown="event.preventDefault()" onclick="submitMulti()">확인</button>
       <div class="feedback-strip" id="feedback-strip"></div>
       <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
-        🔄 시도: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+        ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
       </div>
     </div>`;
   setTimeout(()=>renderMath(panel),50);
@@ -1742,7 +1742,7 @@ async function submitQAns(){
       setTimeout(()=>{
         lp.classList.remove("shake");
         if(input){input.disabled=false;input.value="";input.focus();}
-        qTokens=[]; qEditPart=null; renderInput(); // expr 입력 초기화
+        qTokens=[]; qEditPart=null; qRender(); // expr 입력 초기화
         fb.innerHTML=""; fb.className="feedback-strip"; // flash 방지
       },700);
     }
@@ -1809,7 +1809,7 @@ async function submitQAns(){
     lp.classList.add("shake");
     setTimeout(()=>{
       lp.classList.remove("shake");
-      qTokens=[]; qEditPart=null; renderInput(); // 입력 초기화
+      qTokens=[]; qEditPart=null; qRender(); // 입력 초기화
       fb.innerHTML=""; fb.className="feedback-strip"; // 피드백 숨김
     },700);
   }
@@ -1827,18 +1827,26 @@ async function finishQuiz(){
   document.getElementById("r-score").textContent=total;
   document.getElementById("r-of").textContent=`/ ${total}`;
   const perfectFirst = tries===total;
+  // 오답 횟수 = 총 시도 - 문항 수 (각 문항당 마지막 시도는 정답)
+  const wrongTotal=attempts.reduce((s,a,i)=>{
+    const q=curWS.questions[i];
+    if(!q||q.type==="link") return s;
+    return s+Math.max(0,a-1);
+  },0);
   document.getElementById("r-msg").textContent=
-    perfectFirst?"GOOD JOB! 🏆":
-    tries<=total+2?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
+    wrongTotal===0?"완벽해요! 🏆":
+    wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
   const bp = curWS.bookPage || "교과서";
   document.getElementById("r-sub").textContent=
-    `총 ${tries}번 시도 · 교과서 ${bp}페이지를 푸세요 📖`;
+    wrongTotal===0
+      ? `모든 문제를 첫 번에 맞혔어요! 📖 교과서 ${bp}페이지`
+      : `총 오답 ${wrongTotal}회 · 교과서 ${bp}페이지를 푸세요 📖`;
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
     row.innerHTML=`<span class="r-icon">✅</span>
       <div class="r-body"><div class="r-qnum">문제 ${i+1} &nbsp;<span style="font-family:monospace">${q.text}</span></div>
-      ${attempts[i]>1?`<div class="r-tries">⟳ ${attempts[i]}번 만에 정답</div>`:""}</div>`;
+      ${attempts[i]>1?`<div class="r-tries">❌ 오답 ${attempts[i]-1}회</div>`:""}</div>`;
     list.appendChild(row);
   });
   try {

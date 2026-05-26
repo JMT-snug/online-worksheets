@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.3c">
+  <meta name="app-version" content="5.3d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.3c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.3d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1935,7 +1935,9 @@ async function finishQuiz(){
     const completedAt=new Date().toISOString();
     // 진행 중 진도 완료 표시
     setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),
-      {isComplete:true, completedAt},{merge:true}).catch(()=>{});
+      {isComplete:true, completedAt,
+       studentEmail:user.email, studentName:user.displayName||""
+      },{merge:true}).catch(()=>{});
     await setDoc(doc(db,"results",user.email,"worksheets",curWS.id),{
       studentEmail:user.email, studentName:user.displayName||"",
       worksheetId:curWS.id, worksheetTitle:curWS.title,

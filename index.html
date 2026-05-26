@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.3d">
+  <meta name="app-version" content="5.4a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.3d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.4a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -630,16 +630,12 @@ async function loadDash() {
     for (const ws of WORKSHEETS) {
       if (ws.type!=="vocab" && !ws.questions?.length) continue;
       try {
-        // results: 완료 데이터
-        const snap = await getDoc(doc(db,"results",user.email,"worksheets",ws.id));
-        if (snap.exists()) { wsProgress[ws.id] = snap.data(); continue; }
-        // results 없으면 progress: 진행 중 데이터
-        const pSnap = await getDoc(doc(db,"progress",user.email,"worksheets",ws.id));
-        console.log("[진도읽기]", ws.id, "exists:", pSnap.exists(), pSnap.exists()?("isComplete:"+pSnap.data().isComplete):"");
-        if (pSnap.exists() && !pSnap.data().isComplete) {
-          const p = pSnap.data();
-          wsProgress[ws.id] = { ...p, _inProgress: true };
-          console.log("[진도읽기] 진행중 감지:", ws.id, p.answeredCount+"/"+p.totalCount);
+        // records: 통합 진도/결과
+        const snap = await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
+        if (snap.exists()){
+          const d=snap.data();
+          wsProgress[ws.id] = d.isComplete ? d : {...d, _inProgress:true};
+          console.log("[진도읽기]", ws.id, d.isComplete?"완료":"진행중", (d.answeredCount||0)+"/"+(d.totalCount||"?"));
         }
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
@@ -756,8 +752,8 @@ function showUnitPage(unit) {
   } else {
     sheets.forEach(ws => {
       const prog  = wsProgress[ws.id];
-      const done  = !!(prog?.completedAt && !prog?._inProgress);
-      const inProg = !!(prog?._inProgress);
+      const done   = !!(prog?.isComplete);
+      const inProg = !!(prog && !prog.isComplete);
       const empty = ws.type==="vocab" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
 
@@ -777,7 +773,7 @@ function showUnitPage(unit) {
               ? ((wsProgress[ws.id]?.passCount||0)>=1
                   ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
                   : "미완료")
-              : ws.questions.length+"문제"+(done?` · 정답률 ${rate}%`:inProg?` · ${prog.answeredCount||0}문제 완료`:"")}
+              : ws.questions.length+"문제"+(done?` · 완료`:inProg?` · ${prog.answeredCount||0}/${prog.totalCount||ws.questions.length} 정답`:"")}
           </div>
         </div>
         ${badgeHtml}`;
@@ -958,42 +954,39 @@ function toggleRandom(){
 */
 let _progressTimer=null;
 
-async function saveProgress(){
+async function saveWorksheet(isComplete=false){
   if(!curWS||!user) return;
-  console.log("[진도저장] 시도:", curWS.id, "answered:", answered.filter(Boolean).length+"/"+curWS.questions.length);
   try{
-    await setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),{
-      worksheetId:  curWS.id,
-      worksheetTitle: curWS.title,
+    const perQ={};
+    curWS.questions.forEach((q,i)=>{
+      if(q.type==="link") return;
+      perQ[q.id]={
+        attempts:   attempts[i]||0,
+        wrongInputs: wrongAnswers[i]?.inputs||[],
+        correct:    !!answered[i],
+        canvasImage: wrongAnswers[i]?.imagePath||null,
+      };
+    });
+    const data={
       studentEmail: user.email,
       studentName:  user.displayName||"",
+      worksheetId:  curWS.id,
+      worksheetTitle: curWS.title,
+      totalCount:   curWS.questions.filter(q=>q.type!=="link").length,
       answeredCount: answered.filter(Boolean).length,
-      totalCount:   curWS.questions.length,
-      curQIdx,
-      attempts:  [...attempts],
-      answered:  [...answered],
-      wrongInputs: wrongAnswers.map(w=>w.inputs||[]),
+      isComplete,
+      perQuestion:  perQ,
       lastUpdated:  new Date().toISOString(),
-      isComplete: false
-    },{merge:true});
-    console.log("[진도저장] 성공 ✅");
-  }catch(e){
-    console.warn("[진도저장] 실패 ❌:", e.message);
-    // localStorage 백업
-    try{
-      localStorage.setItem("ws_progress_"+curWS.id, JSON.stringify({
-        worksheetId:curWS.id, studentEmail:user.email,
-        answeredCount:answered.filter(Boolean).length,
-        totalCount:curWS.questions.length, curQIdx,
-        lastUpdated:new Date().toISOString()
-      }));
-    }catch(_){}
-  }
+    };
+    if(isComplete) data.completedAt=new Date().toISOString();
+    await setDoc(doc(db,"records",user.email,"worksheets",curWS.id), data);
+    console.log("[저장]", isComplete?"완료✅":"진행중", data.answeredCount+"/"+data.totalCount);
+  }catch(e){ console.warn("[저장실패]", e.message); }
 }
 
 function _startProgressTimer(){
   clearInterval(_progressTimer);
-  _progressTimer=setInterval(saveProgress, 10*60*1000); // 10분
+  _progressTimer=setInterval(saveWorksheet, 10*60*1000); // 10분
 }
 
 function _stopProgressTimer(){
@@ -1006,7 +999,7 @@ function _onVisibilityChange(){
   if(document.hidden && curWS) saveProgress();
 }
 
-function startQuiz(ws) {
+async function startQuiz(ws) {
   curWS=ws; curQIdx=0;
   // 랜덤 출제: 원본 보존 후 셔플
   if(!ws._orig) ws._orig=ws.questions;
@@ -1015,6 +1008,22 @@ function startQuiz(ws) {
   answered=new Array(ws.questions.length).fill(false);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
   canvasStore={};
+  // ── 저장된 진도 복원 ──
+  try{
+    const _saved=await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
+    if(_saved.exists()&&!_saved.data().isComplete){
+      const _d=_saved.data(); const _pq=_d.perQuestion||{};
+      ws.questions.forEach((q,i)=>{
+        const s=_pq[q.id]; if(!s) return;
+        answered[i]=s.correct||false;
+        attempts[i]=s.attempts||0;
+        wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
+      });
+      const _first=answered.findIndex(a=>!a);
+      curQIdx=_first===-1?ws.questions.length-1:_first;
+      console.log("[복원] 진행중", answered.filter(Boolean).length+"/"+ws.questions.length, "→ Q"+(curQIdx+1)+"부터");
+    }
+  }catch(_e){ console.warn("[복원실패]",_e.message); }
   showPage("quiz-page");
   document.getElementById("quiz-ws-title").textContent=ws.title;
   // 링크 제외 문항 수 캐싱
@@ -1025,7 +1034,7 @@ function startQuiz(ws) {
   // 진도 자동 저장 시작
   _startProgressTimer();
   document.addEventListener("visibilitychange", _onVisibilityChange);
-  window.addEventListener("pagehide", saveProgress);
+  window.addEventListener("pagehide", saveWorksheet);
   }
 
 function buildStrip() {
@@ -1505,7 +1514,7 @@ window.submitMulti = function(){
         cursor:pointer;font-family:inherit">
         ${isLast?'결과 보기 →':'다음 문제 →'}
       </button>`;
-    answered[curQIdx]=true; updateStrip(); saveProgress();
+    answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     // 오답: 피드백만 표시, 버튼 색 변경 없음
     fb.className="feedback-strip show fb-wrong";
@@ -1706,7 +1715,7 @@ function submitStep3(stepNum){
     const ok=allAns.some(a=>a.toLowerCase()===val.toLowerCase());
     if(ok){
       st.done[2]=true;
-      answered[curQIdx]=true; updateStrip(); saveProgress();
+      answered[curQIdx]=true; updateStrip(); saveWorksheet();
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
       fb.innerHTML=`✅ 완료! 답: ${q.step3.answer}&nbsp;
@@ -1733,7 +1742,7 @@ async function submitQAns(){
 
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="link"){
-    answered[curQIdx]=true; updateStrip(); saveProgress();
+    answered[curQIdx]=true; updateStrip(); saveWorksheet();
     const isLast=curQIdx===curWS.questions.length-1;
     const fb=document.getElementById("feedback-strip");
     fb.className="feedback-strip show fb-correct";
@@ -1800,13 +1809,14 @@ async function submitQAns(){
           cursor:pointer;font-family:inherit">
           ${isLast?'결과 보기 →':'다음 문제 →'}
         </button>`;
-      answered[curQIdx]=true; updateStrip(); saveProgress();
+      answered[curQIdx]=true; updateStrip(); saveWorksheet();
     } else {
       attempts[curQIdx]++;
       const _ab=document.getElementById("attempt-badge");
       const _an=document.getElementById("attempt-num");
       if(_ab) _ab.style.display="flex"; if(_an) _an.textContent=attempts[curQIdx];
       wrongAnswers[curQIdx].inputs.push(userAns||"(빈칸)");
+      saveWorksheet();
       fb.className="feedback-strip show fb-wrong";
       fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
       const lp=document.getElementById("quiz-left-panel");
@@ -1857,11 +1867,12 @@ async function submitQAns(){
         cursor:pointer;font-family:inherit">
         ${isLast?'결과 보기 →':'다음 문제 →'}
       </button>`;
-    answered[curQIdx]=true; updateStrip(); saveProgress();
+    answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     attempts[curQIdx]++;
     if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
     wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
+    saveWorksheet();
     // 캔버스 이미지 Storage 업로드
     try {
       const canvas=document.getElementById("draw-canvas");
@@ -1932,19 +1943,10 @@ async function finishQuiz(){
     });
     _stopProgressTimer();
     document.removeEventListener("visibilitychange", _onVisibilityChange);
+    window.removeEventListener("pagehide", saveWorksheet);
+    await saveWorksheet(true);
     const completedAt=new Date().toISOString();
-    // 진행 중 진도 완료 표시
-    setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),
-      {isComplete:true, completedAt,
-       studentEmail:user.email, studentName:user.displayName||""
-      },{merge:true}).catch(()=>{});
-    await setDoc(doc(db,"results",user.email,"worksheets",curWS.id),{
-      studentEmail:user.email, studentName:user.displayName||"",
-      worksheetId:curWS.id, worksheetTitle:curWS.title,
-      solvedQuestions:total, totalAttempts:tries, correctRate:100,
-      perQuestion:perQ, completedAt,
-    },{merge:true});
-    wsProgress[curWS.id]={solvedQuestions:total,totalAttempts:tries,correctRate:100,completedAt};
+    wsProgress[curWS.id]={answeredCount:total,totalCount:total,isComplete:true,completedAt};
   } catch(e){ console.error("저장 오류:",e); }
 }
 
@@ -2003,14 +2005,14 @@ document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
-  window.removeEventListener("pagehide", saveProgress);
+  window.removeEventListener("pagehide", saveWorksheet);
   loadDash();
 });
 document.getElementById("btn-back").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
-  window.removeEventListener("pagehide", saveProgress);
+  window.removeEventListener("pagehide", saveWorksheet);
   saveProgress();
   if(curWS?.unitId){
     const unit = UNITS.find(u=>u.id===curWS.unitId);

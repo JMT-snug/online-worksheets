@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.3b">
+<meta name="app-version" content="t3.3d">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -199,7 +199,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.3b"; // teacher 버전
+const T_VERSION = "t3.3d"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -281,45 +281,62 @@ function showGate(on){
 async function migrateUidToEmail(){
   const btn=document.getElementById("migrate-btn");
   if(!btn) return;
-  btn.disabled=true; btn.textContent="마이그레이션 중...";
+  btn.disabled=true; btn.textContent="조회 중...";
 
   try{
+    // results + progress 각각 직접 조회
     const snap=await getDocs(collectionGroup(db,"worksheets"));
+    console.log("[마이그레이션] 전체 문서 수:", snap.size);
+
     const toMigrate=[];
     snap.forEach(d=>{
       const parts=d.ref.path.split("/");
-      const col=parts[0];          // results / progress
-      const currentId=parts[1];   // uid 또는 이미 email
+      const col=parts[0];
+      const currentId=parts[1];
       const wsId=parts[3];
       const data=d.data();
-      const email=data.studentEmail||data.studentEmail;
-      if(!email || currentId.includes("@")) return; // 이미 email 기반이면 스킵
+      const email=data.studentEmail;
+      console.log(`[마이그레이션] 경로: ${d.ref.path} / email: ${email} / 스킵: ${!email||currentId.includes("@")}`);
+      if(!email || currentId.includes("@")) return;
       toMigrate.push({ref:d.ref, col, email, wsId, data});
     });
 
+    btn.textContent=`대상: ${toMigrate.length}개 / 전체: ${snap.size}개`;
+    console.log("[마이그레이션] 이전 대상:", toMigrate.length);
+
     if(!toMigrate.length){
-      btn.textContent="✅ 이미 완료됨 (마이그레이션 불필요)";
+      btn.textContent="✅ 이미 완료됨 (이전할 uid 기반 문서 없음)";
+      btn.disabled=false;
       return;
     }
 
-    let done=0;
+    await new Promise(r=>setTimeout(r,800)); // 상태 표시 대기
+
+    let done=0, failed=0;
     for(const item of toMigrate){
-      const newRef=doc(db, item.col, item.email, "worksheets", item.wsId);
-      await setDoc(newRef, item.data);
-      await deleteDoc(item.ref);
-      done++;
-      btn.textContent=`마이그레이션 중... ${done}/${toMigrate.length}`;
+      try{
+        const newRef=doc(db, item.col, item.email, "worksheets", item.wsId);
+        await setDoc(newRef, item.data);
+        await deleteDoc(item.ref);
+        done++;
+        console.log(`[마이그레이션] 완료: ${item.ref.path} → ${item.col}/${item.email}/worksheets/${item.wsId}`);
+      }catch(err){
+        failed++;
+        console.error(`[마이그레이션] 실패: ${item.ref.path}`, err);
+      }
+      btn.textContent=`이전 중... ${done+failed}/${toMigrate.length} (실패:${failed})`;
     }
 
-    btn.textContent=`✅ 완료: ${done}개 문서 이전됨`;
-    btn.style.background="var(--green)";
-    setTimeout(()=>{ loadAll(); }, 1500);
+    btn.textContent=`✅ 완료: ${done}개 이전 / 실패: ${failed}개`;
+    btn.style.background=failed>0?"var(--amber)":"var(--green)";
+    setTimeout(()=>{ loadAll(); }, 2000);
   }catch(e){
     btn.textContent="❌ 오류: "+e.message;
     btn.disabled=false;
-    console.error(e);
+    console.error("[마이그레이션] 오류:", e);
   }
 }
+window.migrateUidToEmail=migrateUidToEmail;
 
 async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';

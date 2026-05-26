@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.3f">
+<meta name="app-version" content="t3.4a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -199,7 +199,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.3f"; // teacher 버전
+const T_VERSION = "t3.4a"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -295,23 +295,24 @@ async function migrateUidToEmail(){
       const wsId=parts[3];
       const data=d.data();
 
-      // email 이미 적용된 경우 스킵
+      // records 기반이면 스킵 (이미 완료)
+      if(col==="records"){ console.log("[스킵-records]", d.ref.path); return; }
+      // email 이미 경로에 있으면 스킵
       if(currentId.includes("@")){ console.log("[스킵-이미email]", d.ref.path); return; }
 
       const email=data.studentEmail;
       if(!email){
-        // studentEmail 없는 완료 마크: results에 이미 있으므로 삭제
-        if(data.isComplete){
-          console.log("[삭제-email없는완료문서]", d.ref.path);
-          toMigrate.push({ref:d.ref, col, email:null, wsId, data, deleteOnly:true});
-        } else {
-          console.warn("[스킵-email없음]", d.ref.path, data);
-        }
+        // studentEmail 없는 문서 삭제
+        console.log("[삭제-email없음]", d.ref.path);
+        toMigrate.push({ref:d.ref, col, email:null, wsId, data, deleteOnly:true});
         return;
       }
-
-      console.log(`[대상] ${col}/${currentId} → ${email}`);
-      toMigrate.push({ref:d.ref, col, email, wsId, data});
+      console.log(`[대상] ${col}/${currentId} → records/${email}`);
+      // results → records(완료), progress → records(진행중)
+      toMigrate.push({ref:d.ref, col, email, wsId, data,
+        targetCol:"records",
+        mergeData: col==="results" ? {isComplete:true} : {isComplete:data.isComplete||false}
+      });
     });
 
     btn.textContent=`대상: ${toMigrate.length}개 확인됨`;
@@ -328,10 +329,19 @@ async function migrateUidToEmail(){
           await deleteDoc(item.ref);
           console.log(`[삭제] ${item.ref.path}`);
         } else {
-          const newRef=doc(db, item.col, item.email, "worksheets", item.wsId);
-          await setDoc(newRef, item.data);
+          // records에 기존 데이터 있는지 확인 (results+progress 합산)
+          const newRef=doc(db,"records",item.email,"worksheets",item.wsId);
+          const existing=await getDoc(newRef);
+          let merged={...item.data, ...(item.mergeData||{})};
+          if(existing.exists()){
+            // 이미 records에 있으면 병합 (완료 우선, 오답기록 합산)
+            const ex=existing.data();
+            merged={...ex, ...merged};
+            if(ex.isComplete) merged.isComplete=true;
+          }
+          await setDoc(newRef, merged);
           await deleteDoc(item.ref);
-          console.log(`[이전] ${item.ref.path} → ${item.col}/${item.email}/worksheets/${item.wsId}`);
+          console.log(`[이전] ${item.ref.path} → records/${item.email}/worksheets/${item.wsId}`);
         }
         done++;
       }catch(err){
@@ -361,10 +371,13 @@ async function loadAll(){
     snap.forEach(d=>{
       const parts=d.ref.path.split("/");
       const col=parts[0], uid=parts[1], wsId=parts[3];
-      if(col==="results"){
+      if(col==="records"){                        // 새 통합 구조
         if(!allData[uid]) allData[uid]={};
         allData[uid][wsId]=d.data();
-      } else if(col==="progress"){
+      } else if(col==="results"){                 // 구 완료 데이터
+        if(!allData[uid]) allData[uid]={};
+        if(!allData[uid][wsId]) allData[uid][wsId]=d.data(); // records 우선
+      } else if(col==="progress"){                // 구 진행 중 데이터
         if(!progressData[uid]) progressData[uid]={};
         progressData[uid][wsId]=d.data();
       }

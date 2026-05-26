@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.2h">
+  <meta name="app-version" content="5.3a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.2h"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.3a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -543,7 +543,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, serverTimestamp, collectionGroup }
+import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collectionGroup }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage, ref, uploadString, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -631,10 +631,10 @@ async function loadDash() {
       if (ws.type!=="vocab" && !ws.questions?.length) continue;
       try {
         // results: 완료 데이터
-        const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
+        const snap = await getDoc(doc(db,"results",user.email,"worksheets",ws.id));
         if (snap.exists()) { wsProgress[ws.id] = snap.data(); continue; }
         // results 없으면 progress: 진행 중 데이터
-        const pSnap = await getDoc(doc(db,"progress",user.uid,"worksheets",ws.id));
+        const pSnap = await getDoc(doc(db,"progress",user.email,"worksheets",ws.id));
         if (pSnap.exists() && !pSnap.data().isComplete) {
           const p = pSnap.data();
           wsProgress[ws.id] = { ...p, _inProgress: true };
@@ -959,7 +959,7 @@ let _progressTimer=null;
 async function saveProgress(){
   if(!curWS||!user) return;
   try{
-    await setDoc(doc(db,"progress",user.uid,"worksheets",curWS.id),{
+    await setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),{
       worksheetId:  curWS.id,
       worksheetTitle: curWS.title,
       studentEmail: user.email,
@@ -1919,9 +1919,9 @@ async function finishQuiz(){
     document.removeEventListener("visibilitychange", _onVisibilityChange);
     const completedAt=new Date().toISOString();
     // 진행 중 진도 완료 표시
-    setDoc(doc(db,"progress",user.uid,"worksheets",curWS.id),
+    setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),
       {isComplete:true, completedAt},{merge:true}).catch(()=>{});
-    await setDoc(doc(db,"results",user.uid,"worksheets",curWS.id),{
+    await setDoc(doc(db,"results",user.email,"worksheets",curWS.id),{
       studentEmail:user.email, studentName:user.displayName||"",
       worksheetId:curWS.id, worksheetTitle:curWS.title,
       solvedQuestions:total, totalAttempts:tries, correctRate:100,
@@ -2134,7 +2134,7 @@ function vqAnswer(selected, correct){
       try{
         const prevCount=(wsProgress[vqWS.id]?.passCount||0);
         const newCount=prevCount+1;
-        await setDoc(doc(db,"results",user.uid,"worksheets",vqWS.id),{
+        await setDoc(doc(db,"results",user.email,"worksheets",vqWS.id),{
           passed:true, passCount:newCount,
           completedAt:new Date().toISOString(),
           worksheetId:vqWS.id, worksheetTitle:vqWS.title,

@@ -2,7 +2,7 @@
    온라인 학습지 데이터 파일  v2.2.3
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.7";
+const WS_VERSION = "2.2.8";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -267,7 +267,7 @@ const WORKSHEETS = [
         text:"(3) \\((4x-y)+3(2x+y)\\)",
         answer:"10*x+2*y", answerAlt:["10x+2y","2*y+10*x","2y+10x"] },
       { id:"q09d", type:"word", answerType:"expr", diff:3,
-        text:"(4) \\(3(2x+3y)+\\frac{1}{3}(-4x+2y)\\)",
+        text:"(4) \\(3(2x+3y)+\\frac{1}{2}(-4x+2y)\\)",
         answer:"4*x+10*y", answerAlt:["4x+10y","10*y+4*x","10y+4x"] },
       // ── 10번: A-2B 계산 ──
       { id:"q10", type:"word", answerType:"expr", diff:3,

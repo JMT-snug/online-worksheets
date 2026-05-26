@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.2a">
+<meta name="app-version" content="t3.3a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -197,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.2a"; // teacher 버전
+const T_VERSION = "t3.3a"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -272,6 +272,51 @@ onAuthStateChanged(auth,async u=>{
 function showGate(on){
   document.getElementById("auth-gate").style.display=on?"flex":"none";
   document.getElementById("app").style.display=on?"none":"block";
+}
+
+
+/* ── 데이터 마이그레이션: uid → email ── */
+async function migrateUidToEmail(){
+  const btn=document.getElementById("migrate-btn");
+  if(!btn) return;
+  btn.disabled=true; btn.textContent="마이그레이션 중...";
+
+  try{
+    const snap=await getDocs(collectionGroup(db,"worksheets"));
+    const toMigrate=[];
+    snap.forEach(d=>{
+      const parts=d.ref.path.split("/");
+      const col=parts[0];          // results / progress
+      const currentId=parts[1];   // uid 또는 이미 email
+      const wsId=parts[3];
+      const data=d.data();
+      const email=data.studentEmail||data.studentEmail;
+      if(!email || currentId.includes("@")) return; // 이미 email 기반이면 스킵
+      toMigrate.push({ref:d.ref, col, email, wsId, data});
+    });
+
+    if(!toMigrate.length){
+      btn.textContent="✅ 이미 완료됨 (마이그레이션 불필요)";
+      return;
+    }
+
+    let done=0;
+    for(const item of toMigrate){
+      const newRef=doc(db, item.col, item.email, "worksheets", item.wsId);
+      await setDoc(newRef, item.data);
+      await deleteDoc(item.ref);
+      done++;
+      btn.textContent=`마이그레이션 중... ${done}/${toMigrate.length}`;
+    }
+
+    btn.textContent=`✅ 완료: ${done}개 문서 이전됨`;
+    btn.style.background="var(--green)";
+    setTimeout(()=>{ loadAll(); }, 1500);
+  }catch(e){
+    btn.textContent="❌ 오류: "+e.message;
+    btn.disabled=false;
+    console.error(e);
+  }
 }
 
 async function loadAll(){

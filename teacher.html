@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4a">
+<meta name="app-version" content="t3.4b">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -199,7 +199,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.4a"; // teacher 버전
+const T_VERSION = "t3.4b"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -297,20 +297,17 @@ async function migrateUidToEmail(){
 
       // records 기반이면 스킵 (이미 완료)
       if(col==="records"){ console.log("[스킵-records]", d.ref.path); return; }
-      // email 이미 경로에 있으면 스킵
-      if(currentId.includes("@")){ console.log("[스킵-이미email]", d.ref.path); return; }
 
-      const email=data.studentEmail;
+      // ID가 이메일이면 그게 바로 email, uid면 data.studentEmail 사용
+      const email = currentId.includes("@") ? currentId : data.studentEmail;
+
       if(!email){
-        // studentEmail 없는 문서 삭제
         console.log("[삭제-email없음]", d.ref.path);
         toMigrate.push({ref:d.ref, col, email:null, wsId, data, deleteOnly:true});
         return;
       }
       console.log(`[대상] ${col}/${currentId} → records/${email}`);
-      // results → records(완료), progress → records(진행중)
       toMigrate.push({ref:d.ref, col, email, wsId, data,
-        targetCol:"records",
         mergeData: col==="results" ? {isComplete:true} : {isComplete:data.isComplete||false}
       });
     });

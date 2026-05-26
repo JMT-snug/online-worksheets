@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.0b">
+  <meta name="app-version" content="6.0d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "6.0b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.0d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -999,7 +999,9 @@ function _onVisibilityChange(){
   if(document.hidden && curWS) saveWorksheet();
 }
 
+let _activeWsId=null;
 async function startQuiz(ws) {
+  _activeWsId=ws.id;
   curWS=ws; curQIdx=0;
   // 랜덤 출제: 원본 보존 후 셔플
   if(!ws._orig) ws._orig=ws.questions;
@@ -1022,6 +1024,7 @@ async function startQuiz(ws) {
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
       qCursorIdx=qTokens.length; // 복원 후 커서는 끝으로
+      if(_activeWsId!==ws.id) return; // 다른 학습지로 전환됨
       console.log("[복원] 진행중", answered.filter(Boolean).length+"/"+ws.questions.length, "→ Q"+(curQIdx+1)+"부터");
     }
   }catch(_e){ console.warn("[복원실패]",_e.message); }
@@ -2013,7 +2016,7 @@ window.qClear=qClear;
 /* 한글 답이면 text 입력, 그 외 word 문항은 수식 입력도구 */
 function isExprInput(q){
   if(!q||q.type!=="word") return false;
-  if(isExprInput(q)) return true;
+  if(q.answerType==="expr") return true;
   if(q.answerType==="text"){
     return !/[가-힣]/.test((q.answer||"")+(q.answerAlt||[]).join(""));
   }
@@ -2061,14 +2064,30 @@ document.getElementById("btn-home").addEventListener("click",()=>{
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
+  if(curWS) wsProgress[curWS.id]={
+    answeredCount: answered.filter(Boolean).length,
+    totalCount: curWS.questions.filter(q=>q.type!=="link").length,
+    isComplete: false,
+    _inProgress: true,
+    lastUpdated: new Date().toISOString(),
+  };
+  saveWorksheet();
   loadDash();
 });
-document.getElementById("btn-back").addEventListener("click",()=>{
+document.getElementById("btn-back").addEventListener("click",async ()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
-  saveWorksheet();
+  // wsProgress 메모리 즉시 반영 (화면 갱신용)
+  if(curWS) wsProgress[curWS.id]={
+    answeredCount: answered.filter(Boolean).length,
+    totalCount: curWS.questions.filter(q=>q.type!=="link").length,
+    isComplete: false,
+    _inProgress: true,
+    lastUpdated: new Date().toISOString(),
+  };
+  saveWorksheet(); // fire-and-forget (Firestore 저장)
   if(curWS?.unitId){
     const unit = UNITS.find(u=>u.id===curWS.unitId);
     if(unit){ showUnitPage(unit); return; }

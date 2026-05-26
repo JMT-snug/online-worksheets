@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.4a">
+  <meta name="app-version" content="5.4b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.4a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.4b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -996,7 +996,7 @@ function _stopProgressTimer(){
 
 // 탭 숨김(전환/닫기) 시 저장
 function _onVisibilityChange(){
-  if(document.hidden && curWS) saveProgress();
+  if(document.hidden && curWS) saveWorksheet();
 }
 
 async function startQuiz(ws) {
@@ -2013,7 +2013,7 @@ document.getElementById("btn-back").addEventListener("click",()=>{
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
-  saveProgress();
+  saveWorksheet();
   if(curWS?.unitId){
     const unit = UNITS.find(u=>u.id===curWS.unitId);
     if(unit){ showUnitPage(unit); return; }

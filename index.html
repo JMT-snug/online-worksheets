@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.0a">
+  <meta name="app-version" content="6.0b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "6.0a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.0b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1280,14 +1280,16 @@ function tokensToLatex(){
     if(t.type==='char'){
       parts.push(latexEsc(t.val));
     } else if(t.type==='frac'){
-      const eN=qEditPart?.idx===i&&qEditPart?.part==='num';
-      const eD=qEditPart?.idx===i&&qEditPart?.part==='den';
-      const n=(t.num?latexEsc(t.num):'')+(eN?CURSOR:'');
-      const d=(t.den?latexEsc(t.den):'')+(eD?CURSOR:'');
+      const ep=qEditPart?.idx===i?qEditPart:null;
+      const nc=ep?.part==='num'?(ep.cursor??t.num.length):null;
+      const dc=ep?.part==='den'?(ep.cursor??t.den.length):null;
+      const n=nc!=null?(latexEsc(t.num.slice(0,nc))+CURSOR+latexEsc(t.num.slice(nc))):(t.num?latexEsc(t.num):'');
+      const d=dc!=null?(latexEsc(t.den.slice(0,dc))+CURSOR+latexEsc(t.den.slice(dc))):(t.den?latexEsc(t.den):'');
       parts.push('\\dfrac{'+(n||'\\phantom{0}')+'}{'+( d||'\\phantom{0}')+'}');
     } else if(t.type==='exp'){
-      const eE=qEditPart?.idx===i;
-      const e=(t.expo?latexEsc(t.expo):'')+(eE?CURSOR:'');
+      const ep2=qEditPart?.idx===i?qEditPart:null;
+      const ec=ep2?(ep2.cursor??t.expo.length):null;
+      const e=ec!=null?(latexEsc(t.expo.slice(0,ec))+CURSOR+latexEsc(t.expo.slice(ec))):(t.expo?latexEsc(t.expo):'');
       parts.push((t.base?latexEsc(t.base):'')+'^{'+(e||'\\phantom{0}')+'}');
     }
   });
@@ -1308,26 +1310,33 @@ function qInput(v){
   if(v==="←"){  // 커서 왼쪽 이동
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      if(t?.type==="frac"&&qEditPart.part==="den") qEditPart.part="num";
-      else { qCursorIdx=qEditPart.idx; qEditPart=null; }
+      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+      const cur=qEditPart.cursor??t[key].length;
+      if(cur>0){ qEditPart.cursor=cur-1; } // 내부 이동
+      else if(t?.type==="frac"&&qEditPart.part==="den"){
+        qEditPart.part="num"; qEditPart.cursor=t.num.length; // den→num 끝으로
+      } else { qCursorIdx=qEditPart.idx; qEditPart=null; } // 탈출
     } else if(qCursorIdx>0){
       qCursorIdx--;
-      // 분수/지수 토큰으로 들어가기
       const t=qTokens[qCursorIdx];
-      if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"den"};
-      else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo"};
+      if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"den",cursor:t.den.length};
+      else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo",cursor:t.expo.length};
     }
     qRender(); return;
   }
   if(v==="→"){  // 커서 오른쪽 이동
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      if(t?.type==="frac"&&qEditPart.part==="num") qEditPart.part="den";
-      else { qCursorIdx=qEditPart.idx+1; qEditPart=null; }
+      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+      const cur=qEditPart.cursor??t[key].length;
+      if(cur<t[key].length){ qEditPart.cursor=cur+1; } // 내부 이동
+      else if(t?.type==="frac"&&qEditPart.part==="num"){
+        qEditPart.part="den"; qEditPart.cursor=0; // num 끝→den 처음
+      } else { qCursorIdx=qEditPart.idx+1; qEditPart=null; } // 탈출
     } else if(qCursorIdx<qTokens.length){
       const t=qTokens[qCursorIdx];
-      if(t?.type==="frac") { qEditPart={idx:qCursorIdx,part:"num"}; }
-      else if(t?.type==="exp") { qEditPart={idx:qCursorIdx,part:"expo"}; }
+      if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"num",cursor:0};
+      else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo",cursor:0};
       else qCursorIdx++;
     }
     qRender(); return;
@@ -1336,14 +1345,12 @@ function qInput(v){
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
       if(t){
-        const field=qEditPart.part;
-        const cur=t[field]==="num"?t.num:t[field]==="den"?t.den:t.expo;
-        if(field==="num")t.num=t.num.slice(0,-1);
-        else if(field==="den")t.den=t.den.slice(0,-1);
-        else t.expo=t.expo.slice(0,-1);
-        // 내용 비면 편집 종료
-        const empty=!t.num&&!t.den&&!t.expo;
-        if(empty){ qTokens.splice(qEditPart.idx,1); qCursorIdx=qEditPart.idx; qEditPart=null; }
+        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+        const cur=qEditPart.cursor??t[key].length;
+        if(cur>0){
+          t[key]=t[key].slice(0,cur-1)+t[key].slice(cur);
+          qEditPart.cursor=cur-1;
+        }
       }
     } else if(qCursorIdx>0){
       qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
@@ -1355,7 +1362,7 @@ function qInput(v){
       num=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
     }
     qTokens.splice(qCursorIdx,0,{type:"frac",num,den:""});
-    qEditPart={idx:qCursorIdx,part:"den"};
+    qEditPart={idx:qCursorIdx,part:"den",cursor:0};
   } else if(v==="EXP"){
     if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t) t.expo+=v; qRender(); return; }
     let base="";
@@ -1363,11 +1370,16 @@ function qInput(v){
       base=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
     }
     qTokens.splice(qCursorIdx,0,{type:"exp",base,expo:""});
-    qEditPart={idx:qCursorIdx,part:"expo"};
+    qEditPart={idx:qCursorIdx,part:"expo",cursor:0};
   } else {
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      if(t){if(qEditPart.part==="num")t.num+=v;else if(qEditPart.part==="den")t.den+=v;else t.expo+=v;}
+      if(t){
+        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+        const cur=qEditPart.cursor??t[key].length;
+        t[key]=t[key].slice(0,cur)+v+t[key].slice(cur);
+        qEditPart.cursor=cur+1;
+      }
     } else {
       qTokens.splice(qCursorIdx,0,{type:"char",val:v}); qCursorIdx++;
     }

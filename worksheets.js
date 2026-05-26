@@ -2,7 +2,7 @@
    온라인 학습지 데이터 파일  v2.2.3
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.6";
+const WS_VERSION = "2.2.7";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -200,15 +200,15 @@ const WORKSHEETS = [
       { id:"q02a", type:"word", answerType:"expr", diff:1,
         text:"다음 식을 곱셈 기호 ×와 나눗셈 기호 ÷를 생략하여 간단히 나타내시오.<br>(1) \\(4\\times a\\times a\\)",
         answer:"4*a**2", answerAlt:["4a**2","4a^2","4a²"] },
-      { id:"q02b", type:"word", answerType:"text", diff:1,
+      { id:"q02b", type:"word", answerType:"expr", diff:1,
         text:"(2) \\(-11\\div b\\)",
-        answer:"-11/b", answerAlt:["−11/b","−11÷b 생략"] },
-      { id:"q02c", type:"word", answerType:"text", diff:1,
+        answer:"-11/b", answerAlt:["-11*b**-1"] },
+      { id:"q02c", type:"word", answerType:"expr", diff:1,
         text:"(3) \\(3\\times a\\div2\\)",
-        answer:"3a/2", answerAlt:["3a÷2 생략"] },
-      { id:"q02d", type:"word", answerType:"text", diff:2,
+        answer:"3*a/2", answerAlt:["3/2*a"] },
+      { id:"q02d", type:"word", answerType:"expr", diff:2,
         text:"(4) \\(-1\\times (x+y)\\div a\\)",
-        answer:"-(x+y)/a", answerAlt:["−(x+y)/a"] },
+        answer:"-(x+y)/a", answerAlt:["(-x-y)/a","-x/a-y/a"] },
       // ── 3번: 식의 값 ──
       { id:"q03a", type:"equation", diff:2,
         text:"\\(x=3,\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(1) \\(2x+y\\)", answer:2 },

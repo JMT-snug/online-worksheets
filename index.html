@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.2d">
+  <meta name="app-version" content="5.2f">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.2d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.2f"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1010,6 +1010,7 @@ function startQuiz(ws) {
   // 진도 자동 저장 시작
   _startProgressTimer();
   document.addEventListener("visibilitychange", _onVisibilityChange);
+  window.addEventListener("beforeunload", saveProgress);
 }
 
 function buildStrip() {
@@ -1260,7 +1261,7 @@ function tokensToLatex(){
     } else if(t.type==='exp'){
       const eE=qEditPart?.idx===i;
       const e=(t.expo?latexEsc(t.expo):'')+(eE?CURSOR:'');
-      parts.push((t.base?latexEsc(t.base):'')+'_{'+(e||'\\phantom{0}')+'}');
+      parts.push((t.base?latexEsc(t.base):'')+'^{'+(e||'\\phantom{0}')+'}');
     }
   });
   if(!qEditPart) parts.push(CURSOR); // 기본 커서 (분수/지수 편집 외)
@@ -1342,7 +1343,7 @@ function qTokensToNum(){
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
-  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":","};
+  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":","","(":"(","};
 function quizKeyHandler(e){
   const q=curWS?.questions[curQIdx];
   // multi 타입: Enter → 제출
@@ -1984,13 +1985,15 @@ document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
+  window.removeEventListener("beforeunload", saveProgress);
   loadDash();
 });
 document.getElementById("btn-back").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
-  saveProgress(); // 이탈 시 저장
+  window.removeEventListener("beforeunload", saveProgress);
+  saveProgress();
   if(curWS?.unitId){
     const unit = UNITS.find(u=>u.id===curWS.unitId);
     if(unit){ showUnitPage(unit); return; }

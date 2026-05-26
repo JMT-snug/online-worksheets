@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.2c">
+  <meta name="app-version" content="5.2d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.2c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.2d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1062,7 +1062,7 @@ function renderQuestion() {
       <div class="q-num">
         문제 ${curQIdx+1} / ${len}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
         if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;

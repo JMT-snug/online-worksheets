@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.1a">
+<meta name="app-version" content="t3.2a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -197,7 +197,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.1a"; // teacher 버전
+const T_VERSION = "t3.2a"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -521,6 +521,42 @@ function renderWS(wsId){
     <div class="sum-card"><div class="sum-label">첫 번에 완료</div><div class="sum-num" style="color:var(--green)">${perfect}</div><div class="sum-sub">모두 1회 정답</div></div>
   </div>`;
 
+  // ── 반별 완료 현황 ──
+  const classSummary=[];
+  // 등록된 학급별 집계
+  Object.entries(classes).sort().forEach(([key,cls])=>{
+    const students=cls.students||[];
+    const label=`${cls.grade}학년 ${cls.classNum}반`;
+    const clsDone=done.filter(r=>students.includes((r.studentEmail||"").toLowerCase())).length;
+    classSummary.push({label, done:clsDone, total:students.length, key});
+  });
+  // 미분류 (어떤 학급에도 없는 완료 학생)
+  const allEnrolled=new Set(Object.values(classes).flatMap(c=>c.students||[]));
+  const unclassified=done.filter(r=>!allEnrolled.has((r.studentEmail||"").toLowerCase())).length;
+  if(unclassified>0||classSummary.length===0)
+    classSummary.push({label:"미분류", done:unclassified, total:"-", key:"_unclassified"});
+
+  if(classSummary.length){
+    h+=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:stretch">
+      ${classSummary.map(c=>{
+        const pct=typeof c.total==="number"&&c.total>0?Math.round(c.done/c.total*100):null;
+        const col=pct===null?"var(--ink3)":pct>=80?"var(--green)":pct>=40?"var(--amber)":"var(--red)";
+        return `<div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
+          padding:12px 18px;min-width:120px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;
+            letter-spacing:.06em">${c.label}</div>
+          <div style="font-size:22px;font-weight:900;color:${col};line-height:1">
+            ${c.done}<span style="font-size:13px;color:var(--ink3);font-weight:400"> / ${c.total}</span>
+          </div>
+          ${pct!==null?`<div style="height:4px;border-radius:2px;background:var(--rule);overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div>
+          </div>`:""}
+        </div>`;
+      }).join("")}
+    </div>`;
+  }
+
+
   // 학급 필터 옵션 생성 (JS 코드, 템플릿 리터럴 밖)
   const classSet=new Set(done.map(r=>findClass(r.studentEmail)||"").filter(Boolean));
   const classOpts=[...classSet].sort((a,b)=>a.localeCompare(b,"ko"))
@@ -567,40 +603,6 @@ function renderWS(wsId){
         <td>${diff}</td></tr>`;
     });
     h+=`</tbody></table></div>`;
-  }
-  // ── 반별 완료 현황 ──
-  const classSummary=[];
-  // 등록된 학급별 집계
-  Object.entries(classes).sort().forEach(([key,cls])=>{
-    const students=cls.students||[];
-    const label=`${cls.grade}학년 ${cls.classNum}반`;
-    const clsDone=done.filter(r=>students.includes((r.studentEmail||"").toLowerCase())).length;
-    classSummary.push({label, done:clsDone, total:students.length, key});
-  });
-  // 미분류 (어떤 학급에도 없는 완료 학생)
-  const allEnrolled=new Set(Object.values(classes).flatMap(c=>c.students||[]));
-  const unclassified=done.filter(r=>!allEnrolled.has((r.studentEmail||"").toLowerCase())).length;
-  if(unclassified>0||classSummary.length===0)
-    classSummary.push({label:"미분류", done:unclassified, total:"-", key:"_unclassified"});
-
-  if(classSummary.length){
-    h+=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:stretch">
-      ${classSummary.map(c=>{
-        const pct=typeof c.total==="number"&&c.total>0?Math.round(c.done/c.total*100):null;
-        const col=pct===null?"var(--ink3)":pct>=80?"var(--green)":pct>=40?"var(--amber)":"var(--red)";
-        return `<div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
-          padding:12px 18px;min-width:120px;display:flex;flex-direction:column;gap:4px">
-          <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;
-            letter-spacing:.06em">${c.label}</div>
-          <div style="font-size:22px;font-weight:900;color:${col};line-height:1">
-            ${c.done}<span style="font-size:13px;color:var(--ink3);font-weight:400"> / ${c.total}</span>
-          </div>
-          ${pct!==null?`<div style="height:4px;border-radius:2px;background:var(--rule);overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${col};border-radius:2px"></div>
-          </div>`:""}
-        </div>`;
-      }).join("")}
-    </div>`;
   }
 
   // ── 진행 중 학생 ──

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4b">
+<meta name="app-version" content="t3.4d">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -139,8 +139,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     <span class="tag tag-t">교사</span>
     <span id="t-name"></span>
     <a href="index.html" class="hdr-btn hdr-btn-green">🏠 학생 화면</a>
-    <button class="hdr-btn" id="migrate-btn" style="background:#7c3aed;color:#fff"
-      onclick="if(confirm('uid→email 마이그레이션을 실행합니다. 계속?')) migrateUidToEmail()">🔄 DB 마이그레이션</button>
+    <button class="hdr-btn" id="
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
@@ -199,7 +198,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.4b"; // teacher 버전
+const T_VERSION = "t3.4d"; // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -277,87 +276,6 @@ function showGate(on){
 }
 
 
-/* ── 데이터 마이그레이션: uid → email ── */
-async function migrateUidToEmail(){
-  const btn=document.getElementById("migrate-btn");
-  if(!btn) return;
-  btn.disabled=true; btn.textContent="조회 중...";
-
-  try{
-    const snap=await getDocs(collectionGroup(db,"worksheets"));
-    console.log("[마이그레이션] 전체 문서:", snap.size);
-
-    const toMigrate=[];
-    snap.forEach(d=>{
-      const parts=d.ref.path.split("/");
-      const col=parts[0];       // results / progress
-      const currentId=parts[1]; // uid or email
-      const wsId=parts[3];
-      const data=d.data();
-
-      // records 기반이면 스킵 (이미 완료)
-      if(col==="records"){ console.log("[스킵-records]", d.ref.path); return; }
-
-      // ID가 이메일이면 그게 바로 email, uid면 data.studentEmail 사용
-      const email = currentId.includes("@") ? currentId : data.studentEmail;
-
-      if(!email){
-        console.log("[삭제-email없음]", d.ref.path);
-        toMigrate.push({ref:d.ref, col, email:null, wsId, data, deleteOnly:true});
-        return;
-      }
-      console.log(`[대상] ${col}/${currentId} → records/${email}`);
-      toMigrate.push({ref:d.ref, col, email, wsId, data,
-        mergeData: col==="results" ? {isComplete:true} : {isComplete:data.isComplete||false}
-      });
-    });
-
-    btn.textContent=`대상: ${toMigrate.length}개 확인됨`;
-    if(!toMigrate.length){
-      btn.textContent="✅ 이전할 문서 없음 (progress 문서가 없거나 이미 완료)";
-      btn.disabled=false; return;
-    }
-    await new Promise(r=>setTimeout(r,800));
-
-    let done=0, failed=0;
-    for(const item of toMigrate){
-      try{
-        if(item.deleteOnly){
-          await deleteDoc(item.ref);
-          console.log(`[삭제] ${item.ref.path}`);
-        } else {
-          // records에 기존 데이터 있는지 확인 (results+progress 합산)
-          const newRef=doc(db,"records",item.email,"worksheets",item.wsId);
-          const existing=await getDoc(newRef);
-          let merged={...item.data, ...(item.mergeData||{})};
-          if(existing.exists()){
-            // 이미 records에 있으면 병합 (완료 우선, 오답기록 합산)
-            const ex=existing.data();
-            merged={...ex, ...merged};
-            if(ex.isComplete) merged.isComplete=true;
-          }
-          await setDoc(newRef, merged);
-          await deleteDoc(item.ref);
-          console.log(`[이전] ${item.ref.path} → records/${item.email}/worksheets/${item.wsId}`);
-        }
-        done++;
-      }catch(err){
-        failed++;
-        console.error(`[실패] ${item.ref.path}`, err.code, err.message);
-      }
-      btn.textContent=`이전 중... ${done+failed}/${toMigrate.length} (실패:${failed})`;
-    }
-
-    btn.textContent=`✅ 완료: results+progress ${done}개 이전 / 실패: ${failed}개`;
-    btn.style.background=failed>0?"var(--amber)":"var(--green)";
-    setTimeout(()=>{ loadAll(); }, 2000);
-  }catch(e){
-    btn.textContent="❌ 오류: "+e.message;
-    btn.disabled=false;
-    console.error("[마이그레이션] 치명적 오류:", e);
-  }
-}
-window.migrateUidToEmail=migrateUidToEmail;
 
 async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';
@@ -536,35 +454,45 @@ window.renderWSTable=function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
-  let rows=recs.filter(r=>r.completedAt);
 
-  if(_wsFilter) rows=rows.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
-  if(_wsSortBy==="class")      rows.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
-  else if(_wsSortBy==="name")  rows.sort((a,b)=>(a.studentName||"").localeCompare(b.studentName||"","ko"));
-  else if(_wsSortBy==="time")  rows.sort((a,b)=>String(a.completedAt||"").localeCompare(String(b.completedAt||"")));
-  else                          rows.sort((a,b)=>(a.totalAttempts||0)-(b.totalAttempts||0));
+  // 완료 / 진행 중 분리
+  let done=recs.filter(r=>r.isComplete);
+  let inProg=recs.filter(r=>!r.isComplete);
+
+  // 필터 적용
+  if(_wsFilter){
+    done=done.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
+    inProg=inProg.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
+  }
+
+  // 정렬
+  const sortFn=(a,b)=>{
+    if(_wsSortBy==="class") return (findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko");
+    if(_wsSortBy==="name")  return (a.studentName||"").localeCompare(b.studentName||"","ko");
+    if(_wsSortBy==="time")  return String(a.completedAt||a.lastUpdated||"").localeCompare(String(b.completedAt||b.lastUpdated||""));
+    return (a.totalAttempts||0)-(b.totalAttempts||0);
+  };
+  done.sort(sortFn);
+  inProg.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
 
   const tbody=document.getElementById("ws-tbody"); if(!tbody) return;
-  if(!rows.length){
-    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">${_wsFilter?"해당 학급의 완료 학생이 없습니다.":"완료한 학생이 없습니다."}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML=rows.map(r=>{
+
+  // 완료 행
+  const doneRows=done.map(r=>{
     const ts=formatDate(r.completedAt);
-    const rate=r.correctRate??0;
-    const tries=r.totalAttempts||0;
-    const wrong=Math.max(0,tries-1);
+    const rate=r.correctRate??Math.round((r.answeredCount||0)/(r.totalCount||1)*100);
+    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const wrong=tries;
     const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
     let perQHtml="";
     if(r.perQuestion){
       window._qd=window._qd||{};
       const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
-        const att=v.attempts||1;
         const wc=(v.wrongInputs||[]).length;
         const col=wc===0?"var(--green)":wc===1?"var(--amber)":"var(--red)";
-        const dkey=`${r.uid}_${qid}`;
-        window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+        const dkey=r.uid+"_"+qid;
+        window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:v.attempts||1,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
         return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${wc===0?"✓":wc+"회"}</span></div>`;
       }).join("");
       perQHtml=`<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
@@ -576,9 +504,31 @@ window.renderWSTable=function(wsId){
       <td>${rateBar(rate)}</td>
       <td><span class="tries-badge ${wcls}">${wrong}회</span></td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
-      <td style="font-size:12px">${ts}</td>
+      <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
     </tr>`;
   }).join("");
+
+  // 진행 중 행
+  const inProgRows=inProg.map(r=>{
+    const classInfo=findClass(r.studentEmail)||"-";
+    const pct=r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0;
+    const upd=formatDate(r.lastUpdated);
+    return `<tr style="background:var(--acc-lt)">
+      <td><strong>${r.studentName||"-"}</strong></td>
+      <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
+      <td style="font-size:12px">${classInfo}</td>
+      <td><div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div></td>
+      <td>-</td>
+      <td>-</td>
+      <td style="font-size:12px"><span style="color:var(--amber);font-weight:600">⏳ 진행 중</span><br>${upd}</td>
+    </tr>`;
+  }).join("");
+
+  if(!doneRows&&!inProgRows){
+    tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--ink3);padding:28px">${_wsFilter?"해당 학급의 학생이 없습니다.":"제출 기록이 없습니다."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML=inProgRows+doneRows;
 };
 
 
@@ -603,7 +553,7 @@ function renderWS(wsId){
     수학 ${grade}학년
   </div>
   <div class="sum-grid">
-    <div class="sum-card"><div class="sum-label">완료 학생</div><div class="sum-num">${done.length}</div></div>
+    <div class="sum-card"><div class="sum-label">완료 학생</div><div class="sum-num">${done.length}<span style="font-size:14px;color:var(--amber)"> + ${recs.length-done.length}진행중</span></div></div>
     <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${rateColor(avgR)}">${avgR}%</div></div>
     <div class="sum-card"><div class="sum-label">평균 시도 횟수</div><div class="sum-num">${avgT}</div><div class="sum-sub">문제당</div></div>
     <div class="sum-card"><div class="sum-label">첫 번에 완료</div><div class="sum-num" style="color:var(--green)">${perfect}</div><div class="sum-sub">모두 1회 정답</div></div>
@@ -670,7 +620,7 @@ function renderWS(wsId){
       </div>
     </div>
     <table><thead><tr>
-      <th>학생</th><th>이메일</th><th>학급</th><th>정답률</th><th>오답</th><th>문항별 오답</th><th>완료 일시</th>
+      <th>학생</th><th>이메일</th><th>학급</th><th>정답률/진행률</th><th>오답</th><th>문항별 오답</th><th>상태</th>
     </tr></thead><tbody id="ws-tbody"></tbody></table>
   </div>`;
   const qStats={};
@@ -691,39 +641,6 @@ function renderWS(wsId){
         <td>${diff}</td></tr>`;
     });
     h+=`</tbody></table></div>`;
-  }
-
-  // ── 진행 중 학생 ──
-  const inProg=[];
-  Object.entries(progressData).forEach(([uid,d])=>{
-    const p=d[wsId];
-    if(p && !p.isComplete) inProg.push({uid,...p});
-  });
-  if(inProg.length){
-    inProg.sort((a,b)=>(b.answeredCount||0)-(a.answeredCount||0));
-    h+=`<div class="card" style="margin-bottom:20px">
-      <div class="card-hdr"><span class="card-title">⏳ 진행 중 (${inProg.length}명)</span></div>
-      <table><thead><tr>
-        <th>학생</th><th>이메일</th><th>학급</th><th>진행</th><th>마지막 저장</th>
-      </tr></thead><tbody>
-      ${inProg.map(r=>{
-        const total=r.totalCount||0;
-        const done2=r.answeredCount||0;
-        const pct=total?Math.round(done2/total*100):0;
-        const cls=findClass(r.studentEmail)||"-";
-        return `<tr>
-          <td><strong>${r.studentName||"-"}</strong></td>
-          <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
-          <td style="font-size:12px">${cls}</td>
-          <td><div class="rate-row">
-            <div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div>
-            <span class="rate-n" style="color:var(--amber)">${done2}/${total}</span>
-          </div></td>
-          <td style="font-size:12px">${formatDate(r.lastUpdated)}</td>
-        </tr>`;
-      }).join("")}
-      </tbody></table>
-    </div>`;
   }
 
   document.getElementById("content").innerHTML=h;

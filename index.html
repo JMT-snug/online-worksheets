@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.3a">
+  <meta name="app-version" content="5.3b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.3a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.3b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -973,7 +973,18 @@ async function saveProgress(){
       lastUpdated:  new Date().toISOString(),
       isComplete: false
     },{merge:true});
-  }catch(e){ console.warn("진도 저장 실패:",e.message); }
+  }catch(e){
+    console.warn("진도 저장 실패:",e.message);
+    // localStorage 백업
+    try{
+      localStorage.setItem("ws_progress_"+curWS.id, JSON.stringify({
+        worksheetId:curWS.id, studentEmail:user.email,
+        answeredCount:answered.filter(Boolean).length,
+        totalCount:curWS.questions.length, curQIdx,
+        lastUpdated:new Date().toISOString()
+      }));
+    }catch(_){}
+  }
 }
 
 function _startProgressTimer(){
@@ -1490,7 +1501,7 @@ window.submitMulti = function(){
         cursor:pointer;font-family:inherit">
         ${isLast?'결과 보기 →':'다음 문제 →'}
       </button>`;
-    answered[curQIdx]=true; updateStrip();
+    answered[curQIdx]=true; updateStrip(); saveProgress();
   } else {
     // 오답: 피드백만 표시, 버튼 색 변경 없음
     fb.className="feedback-strip show fb-wrong";
@@ -1691,7 +1702,7 @@ function submitStep3(stepNum){
     const ok=allAns.some(a=>a.toLowerCase()===val.toLowerCase());
     if(ok){
       st.done[2]=true;
-      answered[curQIdx]=true; updateStrip();
+      answered[curQIdx]=true; updateStrip(); saveProgress();
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
       fb.innerHTML=`✅ 완료! 답: ${q.step3.answer}&nbsp;
@@ -1718,7 +1729,7 @@ async function submitQAns(){
 
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="link"){
-    answered[curQIdx]=true; updateStrip();
+    answered[curQIdx]=true; updateStrip(); saveProgress();
     const isLast=curQIdx===curWS.questions.length-1;
     const fb=document.getElementById("feedback-strip");
     fb.className="feedback-strip show fb-correct";
@@ -1785,7 +1796,7 @@ async function submitQAns(){
           cursor:pointer;font-family:inherit">
           ${isLast?'결과 보기 →':'다음 문제 →'}
         </button>`;
-      answered[curQIdx]=true; updateStrip();
+      answered[curQIdx]=true; updateStrip(); saveProgress();
     } else {
       attempts[curQIdx]++;
       const _ab=document.getElementById("attempt-badge");
@@ -1842,7 +1853,7 @@ async function submitQAns(){
         cursor:pointer;font-family:inherit">
         ${isLast?'결과 보기 →':'다음 문제 →'}
       </button>`;
-    answered[curQIdx]=true; updateStrip();
+    answered[curQIdx]=true; updateStrip(); saveProgress();
   } else {
     attempts[curQIdx]++;
     if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];

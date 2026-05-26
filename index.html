@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.0a">
+  <meta name="app-version" content="5.2a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.0a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.2a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -630,8 +630,15 @@ async function loadDash() {
     for (const ws of WORKSHEETS) {
       if (ws.type!=="vocab" && !ws.questions?.length) continue;
       try {
+        // results: 완료 데이터
         const snap = await getDoc(doc(db,"results",user.uid,"worksheets",ws.id));
-        if (snap.exists()) wsProgress[ws.id] = snap.data();
+        if (snap.exists()) { wsProgress[ws.id] = snap.data(); continue; }
+        // results 없으면 progress: 진행 중 데이터
+        const pSnap = await getDoc(doc(db,"progress",user.uid,"worksheets",ws.id));
+        if (pSnap.exists() && !pSnap.data().isComplete) {
+          const p = pSnap.data();
+          wsProgress[ws.id] = { ...p, _inProgress: true };
+        }
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
@@ -747,13 +754,14 @@ function showUnitPage(unit) {
   } else {
     sheets.forEach(ws => {
       const prog  = wsProgress[ws.id];
-      const done  = !!(prog?.completedAt);
+      const done  = !!(prog?.completedAt && !prog?._inProgress);
+      const inProg = !!(prog?._inProgress);
       const empty = ws.type==="vocab" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
 
       let badgeHtml = "";
-      if(done)        badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
-      else if(prog?.solvedQuestions>0) badgeHtml=`<span class="wslc-badge s-partial">진행 중</span>`;
+      if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
+      else if(inProg) badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
       else if(empty)  badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
       else            badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
 
@@ -767,7 +775,7 @@ function showUnitPage(unit) {
               ? ((wsProgress[ws.id]?.passCount||0)>=1
                   ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
                   : "미완료")
-              : ws.questions.length+"문제"+( done ? ` · 정답률 ${rate}%` : "")}
+              : ws.questions.length+"문제"+(done?` · 정답률 ${rate}%`:inProg?` · ${prog.answeredCount||0}문제 완료`:"")}
           </div>
         </div>
         ${badgeHtml}`;
@@ -1054,15 +1062,15 @@ function renderQuestion() {
       <div class="q-num">
         문제 ${curQIdx+1} / ${len}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':
-                  '<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>'}
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(()=>{const raw=q.text.replace(/\\\\[([^\]]+)\\\\]/g,"").replace(/\\\\[^\\\\]*/g,"");return raw.includes("=")&&!raw.includes("일 때")&&!raw.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>';})()}
       </div>
       ${(()=>{
         if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
         const isSentence = /[가-힣]/.test(q.text);
         if(isSentence) return `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>`;
-        return `<div class="q-text" style="margin-top:2px">다음 일차방정식을 풀어라.</div>
-          <div class="q-text" style="margin-top:6px"><span class="eq">${fracText(q.text)}</span></div>`;
+        const _hasEq=q.text.includes("=");
+        return `<div class="q-text" style="margin-top:2px">${_hasEq?"다음 일차방정식을 풀어라.":""}</div>
+          <div class="q-text" style="margin-top:${_hasEq?"6":"2"}px"><span class="eq">${fracText(q.text)}</span></div>`;
       })()}
     </div>`;
 
@@ -1118,12 +1126,19 @@ function renderQuestion() {
           <div class="ans-hint"><strong>답:</strong><span>키보드 입력 가능 · Enter = 확인</span></div>
           <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
           <div class="kbd-wrap" onmousedown="event.preventDefault()">
+            ${(()=>{
+              const vs=[...new Set((q.answer||"").match(/[a-wyzA-WYZ]/g)||[])];
+              if(vs.length>2) return `<div class="kbd-grid" style="margin-bottom:4px">${vs.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join("")}</div>`;
+              return '';
+            })()}
             <div class="kbd-grid">
               <button class="kb"    onclick="qInput('7')">7</button>
               <button class="kb"    onclick="qInput('8')">8</button>
               <button class="kb"    onclick="qInput('9')">9</button>
-              <button class="kb v"  onclick="qInput('x')"><i style="font-family:serif">x</i></button>
-              <button class="kb v"  onclick="qInput('EXP')"><i style="font-family:serif">x</i><sup style="font-size:.7em">2</sup></button>
+              ${(()=>{
+  const vs=[...new Set((q.answer||"").match(/[a-wyzA-WYZ]/g)||["x"])];
+  return vs.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join("")+'<button class="kb v" onclick="qInput(\'EXP\')"><i style="font-family:serif">²</i></button>';
+})()}
               <button class="kb ac" onclick="qInput('⌫')">⌫</button>
               <button class="kb"    onclick="qInput('4')">4</button>
               <button class="kb"    onclick="qInput('5')">5</button>
@@ -1140,8 +1155,8 @@ function renderQuestion() {
               <button class="kb w2" onclick="qNeg()">(−)</button>
               <button class="kb"    onclick="qInput('0')">0</button>
               <button class="kb"    onclick="qInput('.')">.</button>
-              <button class="kb op" onclick="qInput('(')">( )</button>
-              <button class="kb v"  onclick="submitQAns()">↵</button>
+              <button class="kb op" onclick="qInput('(')">( </button>
+              <button class="kb op" onclick="qInput(')')">) </button>
               <button class="kb sub" onclick="submitQAns()">확인 (Enter)</button>
             </div>
           </div>
@@ -1210,7 +1225,8 @@ function renderQuestion() {
             <button class="kb w2" onclick="qNeg()">(−)</button>
             <button class="kb"    onclick="qInput('0')">0</button>
             <button class="kb"    onclick="qInput('.')">.</button>
-            <button class="kb op" onclick="qInput('(')">()</button>
+            <button class="kb op" onclick="qInput('(')">(</button>
+            <button class="kb op" onclick="qInput(')')">)</button>
             <button class="kb v"  onclick="submitQAns()">↵</button>
 
             <button class="kb sub" onclick="submitQAns()">확인 (Enter)</button>
@@ -1329,7 +1345,7 @@ function qTokensToNum(){
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
-  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","x":"x","X":"x"};
+  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":","};
 function quizKeyHandler(e){
   const q=curWS?.questions[curQIdx];
   // multi 타입: Enter → 제출
@@ -1726,7 +1742,7 @@ async function submitQAns(){
       const rawInput=qTokens.map(t=>{
         if(t.type==="char") return t.val;
         if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
-        if(t.type==="exp")  return `(${t.base||0})^(${t.expo||1})`;
+        if(t.type==="exp")  return `(${t.base||0})**(${t.expo||1})`;
         return "";
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
@@ -1759,10 +1775,6 @@ async function submitQAns(){
       const correct=[q.answer,...(q.answerAlt||[])];
       ok=correct.some(a=>a.toLowerCase()===userAns.toLowerCase());
     }
-    attempts[curQIdx]++;
-    const ab=document.getElementById("attempt-badge");
-    const an=document.getElementById("attempt-num");
-    if(ab) ab.style.display="flex"; if(an) an.textContent=attempts[curQIdx];
     const fb=document.getElementById("feedback-strip");
     if(ok){
       if(input) input.disabled=true;
@@ -1777,6 +1789,10 @@ async function submitQAns(){
         </button>`;
       answered[curQIdx]=true; updateStrip();
     } else {
+      attempts[curQIdx]++;
+      const _ab=document.getElementById("attempt-badge");
+      const _an=document.getElementById("attempt-num");
+      if(_ab) _ab.style.display="flex"; if(_an) _an.textContent=attempts[curQIdx];
       wrongAnswers[curQIdx].inputs.push(userAns||"(빈칸)");
       fb.className="feedback-strip show fb-wrong";
       fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
@@ -1814,11 +1830,9 @@ async function submitQAns(){
       }
     }
   }
-  attempts[curQIdx]++;
   const fb=document.getElementById("feedback-strip");
   const ab=document.getElementById("attempt-badge");
   const an=document.getElementById("attempt-num");
-  if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
   if(ok){
     fb.className="feedback-strip show fb-correct";
     const isLast = curQIdx===curWS.questions.length-1;
@@ -1832,6 +1846,8 @@ async function submitQAns(){
       </button>`;
     answered[curQIdx]=true; updateStrip();
   } else {
+    attempts[curQIdx]++;
+    if(ab){ab.style.display="flex";} if(an) an.textContent=attempts[curQIdx];
     wrongAnswers[curQIdx].inputs.push(rawInput||"(빈칸)");
     // 캔버스 이미지 Storage 업로드
     try {
@@ -1874,7 +1890,7 @@ async function finishQuiz(){
   const wrongTotal=attempts.reduce((s,a,i)=>{
     const q=curWS.questions[i];
     if(!q||q.type==="link") return s;
-    return s+Math.max(0,a-1);
+    return s+a; // attempts는 이미 오답만 카운트
   },0);
   document.getElementById("r-msg").textContent=
     wrongTotal===0?"완벽해요! 🏆":
@@ -1889,7 +1905,7 @@ async function finishQuiz(){
     const row=document.createElement("div"); row.className="result-row";
     row.innerHTML=`<span class="r-icon">✅</span>
       <div class="r-body"><div class="r-qnum">문제 ${i+1} &nbsp;<span style="font-family:monospace">${q.text}</span></div>
-      ${attempts[i]>1?`<div class="r-tries">❌ 오답 ${attempts[i]-1}회</div>`:""}</div>`;
+      ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:""}</div>`;
     list.appendChild(row);
   });
   try {

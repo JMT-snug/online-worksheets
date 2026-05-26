@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.4d">
+  <meta name="app-version" content="6.0a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.4d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.0a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -922,7 +922,7 @@ function renderMath(el, retry=0){
     setTimeout(()=>renderMath(el, retry+1), 150);
   }
 }
-let qTokens=[], qEditPart=null;
+let qTokens=[], qEditPart=null, qCursorIdx=0;
 
 /* ── 랜덤 출제 ── */
 let isRandom = false;
@@ -1021,6 +1021,7 @@ async function startQuiz(ws) {
       });
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
+      qCursorIdx=qTokens.length; // 복원 후 커서는 끝으로
       console.log("[복원] 진행중", answered.filter(Boolean).length+"/"+ws.questions.length, "→ Q"+(curQIdx+1)+"부터");
     }
   }catch(_e){ console.warn("[복원실패]",_e.message); }
@@ -1065,7 +1066,7 @@ function updateStrip() {
 
 function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
-  qTokens=[]; qEditPart=null;
+  qTokens=[]; qEditPart=null; qCursorIdx=0;
   // 이전 문제 feedback 완전 초기화 (정답 잠깐 표시 방지)
   const fbEl=document.getElementById("feedback-strip");
   if(fbEl){fbEl.innerHTML=""; fbEl.className="feedback-strip";}
@@ -1166,8 +1167,8 @@ function renderQuestion() {
               <button class="kb"    onclick="qInput('5')">5</button>
               <button class="kb"    onclick="qInput('6')">6</button>
               <button class="kb v"  onclick="qInput('FRAC')"><span class="frac-prev"><span class="fn"><i>a</i></span><span class="fd"><i>b</i></span></span></button>
-              <button class="kb v"  onclick="qNextPart()">▶칸</button>
-              <button class="kb ac" onclick="qClear()">C</button>
+              <button class="kb v"  onclick="qInput('←')">◀</button>
+              <button class="kb v"  onclick="qInput('→')">▶</button>
               <button class="kb"    onclick="qInput('1')">1</button>
               <button class="kb"    onclick="qInput('2')">2</button>
               <button class="kb"    onclick="qInput('3')">3</button>
@@ -1234,8 +1235,8 @@ function renderQuestion() {
             <button class="kb"    onclick="qInput('5')">5</button>
             <button class="kb"    onclick="qInput('6')">6</button>
             <button class="kb v"  onclick="qInput('FRAC')"><span class="frac-prev"><span class="fn"><i>a</i></span><span class="fd"><i>b</i></span></span></button>
-            <button class="kb v"  onclick="qNextPart()">▶칸</button>
-            <button class="kb ac" onclick="qClear()">C</button>
+            <button class="kb v"  onclick="qInput('←')">◀</button>
+            <button class="kb v"  onclick="qInput('→')">▶</button>
 
             <button class="kb"    onclick="qInput('1')">1</button>
             <button class="kb"    onclick="qInput('2')">2</button>
@@ -1274,6 +1275,8 @@ function tokensToLatex(){
   const CURSOR='{\\color{#4f46e5}|}';
   let parts=[];
   qTokens.forEach((t,i)=>{
+    // 커서: qCursorIdx 위치에 (edit 모드 아닐 때)
+    if(!qEditPart && i===qCursorIdx) parts.push(CURSOR);
     if(t.type==='char'){
       parts.push(latexEsc(t.val));
     } else if(t.type==='frac'){
@@ -1288,7 +1291,7 @@ function tokensToLatex(){
       parts.push((t.base?latexEsc(t.base):'')+'^{'+(e||'\\phantom{0}')+'}');
     }
   });
-  if(!qEditPart) parts.push(CURSOR); // 기본 커서 (분수/지수 편집 외)
+  if(!qEditPart && qCursorIdx>=qTokens.length) parts.push(CURSOR);
   return parts.join('');
 }
 
@@ -1302,56 +1305,82 @@ function qRender(){
 function escH(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 
 function qInput(v){
+  if(v==="←"){  // 커서 왼쪽 이동
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      if(t?.type==="frac"&&qEditPart.part==="den") qEditPart.part="num";
+      else { qCursorIdx=qEditPart.idx; qEditPart=null; }
+    } else if(qCursorIdx>0){
+      qCursorIdx--;
+      // 분수/지수 토큰으로 들어가기
+      const t=qTokens[qCursorIdx];
+      if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"den"};
+      else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo"};
+    }
+    qRender(); return;
+  }
+  if(v==="→"){  // 커서 오른쪽 이동
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      if(t?.type==="frac"&&qEditPart.part==="num") qEditPart.part="den";
+      else { qCursorIdx=qEditPart.idx+1; qEditPart=null; }
+    } else if(qCursorIdx<qTokens.length){
+      const t=qTokens[qCursorIdx];
+      if(t?.type==="frac") { qEditPart={idx:qCursorIdx,part:"num"}; }
+      else if(t?.type==="exp") { qEditPart={idx:qCursorIdx,part:"expo"}; }
+      else qCursorIdx++;
+    }
+    qRender(); return;
+  }
   if(v==="⌫"){
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      if(t){if(qEditPart.part==="num")t.num=t.num.slice(0,-1);else if(qEditPart.part==="den")t.den=t.den.slice(0,-1);else t.expo=t.expo.slice(0,-1);}
-    } else if(qTokens.length) qTokens.pop();
-  } else if(v==="FRAC"||v==="/"){
-    // 마지막 char 토큰을 분수 분자로 이동
-    let num="";
-    if(qTokens.length && qTokens[qTokens.length-1].type==="char"){
-      num=qTokens.pop().val;
+      if(t){
+        const field=qEditPart.part;
+        const cur=t[field]==="num"?t.num:t[field]==="den"?t.den:t.expo;
+        if(field==="num")t.num=t.num.slice(0,-1);
+        else if(field==="den")t.den=t.den.slice(0,-1);
+        else t.expo=t.expo.slice(0,-1);
+        // 내용 비면 편집 종료
+        const empty=!t.num&&!t.den&&!t.expo;
+        if(empty){ qTokens.splice(qEditPart.idx,1); qCursorIdx=qEditPart.idx; qEditPart=null; }
+      }
+    } else if(qCursorIdx>0){
+      qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
     }
-    qTokens.push({type:"frac",num,den:""});
-    qEditPart={idx:qTokens.length-1,part:"den"};
+  } else if(v==="FRAC"||v==="/"){
+    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==="num"){t.num+=v;} qRender(); return; }
+    let num="";
+    if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
+      num=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
+    }
+    qTokens.splice(qCursorIdx,0,{type:"frac",num,den:""});
+    qEditPart={idx:qCursorIdx,part:"den"};
   } else if(v==="EXP"){
+    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t) t.expo+=v; qRender(); return; }
     let base="";
-    if(qTokens.length&&qTokens[qTokens.length-1].type==="char") base=qTokens.pop().val;
-    qTokens.push({type:"exp",base,expo:""});
-    qEditPart={idx:qTokens.length-1,part:"expo"};
+    if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
+      base=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
+    }
+    qTokens.splice(qCursorIdx,0,{type:"exp",base,expo:""});
+    qEditPart={idx:qCursorIdx,part:"expo"};
   } else {
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
       if(t){if(qEditPart.part==="num")t.num+=v;else if(qEditPart.part==="den")t.den+=v;else t.expo+=v;}
-    } else qTokens.push({type:"char",val:v});
+    } else {
+      qTokens.splice(qCursorIdx,0,{type:"char",val:v}); qCursorIdx++;
+    }
   }
   qRender();
 }
 
-function qArrowRight(){
-  // 분수 분자 → 분모, 분모 → 다음(편집 종료), 지수 → 편집 종료
-  qNextPart();
-}
-function qArrowLeft(){
-  if(!qEditPart) return;
-  const t=qTokens[qEditPart.idx];
-  if(t&&t.type==="frac"&&qEditPart.part==="den"){
-    qEditPart.part="num"; // 분모 → 분자
-  } else {
-    qEditPart=null; // 분자/지수 → 일반 입력으로
-  }
-  qRender();
-}
 
-function qNextPart(){
-  if(!qEditPart){qRender();return;}
-  const t=qTokens[qEditPart.idx];
-  if(t&&t.type==="frac"&&qEditPart.part==="num") qEditPart.part="den";
-  else qEditPart=null;
-  qRender();
-}
-function qClear(){qTokens=[];qEditPart=null;qRender();}
+function qArrowLeft(){ qInput("←"); }
+
+function qNextPart(){ qInput("→"); }
+function qArrowRight(){ qInput("→"); }
+function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
 
 function qTokensToNum(){
   let s=qTokens.map(t=>{
@@ -1367,7 +1396,7 @@ function qTokensToNum(){
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
-  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"("};
+  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"("};
 function quizKeyHandler(e){
   const q=curWS?.questions[curQIdx];
   // multi 타입: Enter → 제출
@@ -1605,7 +1634,7 @@ function renderStep3Body(q){
           <button class="kb"    onclick="qInput('5')">5</button>
           <button class="kb"    onclick="qInput('6')">6</button>
           <button class="kb v"  onclick="qInput('FRAC')"><span class="frac-prev"><span class="fn"><i>a</i></span><span class="fd"><i>b</i></span></span></button>
-          <button class="kb v"  onclick="qNextPart()">▶칸</button>
+          <button class="kb v"  onclick="qInput('←')">◀</button>
           <button class="kb ac" onclick="qClear()">C</button>
           <button class="kb"    onclick="qInput('1')">1</button>
           <button class="kb"    onclick="qInput('2')">2</button>

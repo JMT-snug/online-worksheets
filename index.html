@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.3b">
+  <meta name="app-version" content="5.3c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.3b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.3c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -635,9 +635,11 @@ async function loadDash() {
         if (snap.exists()) { wsProgress[ws.id] = snap.data(); continue; }
         // results 없으면 progress: 진행 중 데이터
         const pSnap = await getDoc(doc(db,"progress",user.email,"worksheets",ws.id));
+        console.log("[진도읽기]", ws.id, "exists:", pSnap.exists(), pSnap.exists()?("isComplete:"+pSnap.data().isComplete):"");
         if (pSnap.exists() && !pSnap.data().isComplete) {
           const p = pSnap.data();
           wsProgress[ws.id] = { ...p, _inProgress: true };
+          console.log("[진도읽기] 진행중 감지:", ws.id, p.answeredCount+"/"+p.totalCount);
         }
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
@@ -958,6 +960,7 @@ let _progressTimer=null;
 
 async function saveProgress(){
   if(!curWS||!user) return;
+  console.log("[진도저장] 시도:", curWS.id, "answered:", answered.filter(Boolean).length+"/"+curWS.questions.length);
   try{
     await setDoc(doc(db,"progress",user.email,"worksheets",curWS.id),{
       worksheetId:  curWS.id,
@@ -973,8 +976,9 @@ async function saveProgress(){
       lastUpdated:  new Date().toISOString(),
       isComplete: false
     },{merge:true});
+    console.log("[진도저장] 성공 ✅");
   }catch(e){
-    console.warn("진도 저장 실패:",e.message);
+    console.warn("[진도저장] 실패 ❌:", e.message);
     // localStorage 백업
     try{
       localStorage.setItem("ws_progress_"+curWS.id, JSON.stringify({

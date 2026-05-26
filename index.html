@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.4c">
+  <meta name="app-version" content="5.4d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.4c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.4d"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1142,7 +1142,7 @@ function renderQuestion() {
     return;
   }
   if(isWord){
-    const useExprInput = q.answerType==="expr";
+    const useExprInput = isExprInput(q);
     if(useExprInput){
       // ── 수식 입력 UI (키패드) ──
       qTokens=[]; qEditPart=null;
@@ -1408,7 +1408,7 @@ function quizKeyHandler(e){
   }
   // word 타입
   if(q?.type==="word"){
-    if(q.answerType==="expr"){
+    if(isExprInput(q)){
       // 방향키: 분수 분자↔분모 이동
       if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
       if(e.key==="ArrowLeft" ){e.preventDefault();qArrowLeft(); return;}
@@ -1763,7 +1763,7 @@ async function submitQAns(){
   if(q.type==="word"){
     let ok=false, userAns="";
     let input=null; // 블록 전체에서 접근 가능하도록 상단 선언
-    if(q.answerType==="expr"){
+    if(isExprInput(q)){
       // 수식 동치 비교 (qTokens 사용)
       const rawInput=qTokens.map(t=>{
         if(t.type==="char") return t.val;
@@ -1969,6 +1969,16 @@ window.canvasGoToNow=canvasGoToNow;
 window.qInput=qInput;
 window.qNextPart=qNextPart;
 window.qClear=qClear;
+/* 한글 답이면 text 입력, 그 외 word 문항은 수식 입력도구 */
+function isExprInput(q){
+  if(!q||q.type!=="word") return false;
+  if(isExprInput(q)) return true;
+  if(q.answerType==="text"){
+    return !/[가-힣]/.test((q.answer||"")+(q.answerAlt||[]).join(""));
+  }
+  return false;
+}
+
 window.submitQAns=submitQAns;
 window.qNeg=function(){
   // 마지막 토큰이 숫자면 앞에 − 삽입, 아니면 − 연산자 추가

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="5.2b">
+  <meta name="app-version" content="5.2c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "5.2b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "5.2c"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1135,10 +1135,7 @@ function renderQuestion() {
               <button class="kb"    onclick="qInput('7')">7</button>
               <button class="kb"    onclick="qInput('8')">8</button>
               <button class="kb"    onclick="qInput('9')">9</button>
-              ${(()=>{
-  const vs=[...new Set((q.answer||"").match(/[a-wyzA-WYZ]/g)||["x"])];
-  return vs.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join("")+'<button class="kb v" onclick="qInput(\'EXP\')"><i style="font-family:serif">²</i></button>';
-})()}
+              ${(()=>{const vs=[...new Set((q.answer||"").match(/[a-wyzA-WYZ]/g)||["x"])];return vs.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join("")+`<button class="kb v" onclick="qInput('EXP')"><i style="font-family:serif">²</i></button>`;})()}
               <button class="kb ac" onclick="qInput('⌫')">⌫</button>
               <button class="kb"    onclick="qInput('4')">4</button>
               <button class="kb"    onclick="qInput('5')">5</button>

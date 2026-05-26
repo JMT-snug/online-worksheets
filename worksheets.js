@@ -2,7 +2,7 @@
    온라인 학습지 데이터 파일  v2.2.3
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.4";
+const WS_VERSION = "2.2.6";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -197,9 +197,9 @@ const WORKSHEETS = [
         text:"다음을 문자를 사용해 식으로 나타내시오.<br>(2) 하루에 500원씩 \\(x\\)일 동안 모아 5900원짜리 카네이션을 샀을 때 남은 금액",
         answer:"500x-5900", answerAlt:["500x−5900"] },
       // ── 2번: 기호 생략 ──
-      { id:"q02a", type:"word", answerType:"text", diff:1,
+      { id:"q02a", type:"word", answerType:"expr", diff:1,
         text:"다음 식을 곱셈 기호 ×와 나눗셈 기호 ÷를 생략하여 간단히 나타내시오.<br>(1) \\(4\\times a\\times a\\)",
-        answer:"4a²", answerAlt:["4a^2"] },
+        answer:"4*a**2", answerAlt:["4a**2","4a^2","4a²"] },
       { id:"q02b", type:"word", answerType:"text", diff:1,
         text:"(2) \\(-11\\div b\\)",
         answer:"-11/b", answerAlt:["−11/b","−11÷b 생략"] },
@@ -213,11 +213,11 @@ const WORKSHEETS = [
       { id:"q03a", type:"equation", diff:2,
         text:"\\(x=3,\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(1) \\(2x+y\\)", answer:2 },
       { id:"q03b", type:"equation", diff:2,
-        text:"(2) \\(\\frac{1}{3}x+\\frac{1}{2}y\\)", answer:-1 },
+        text:"\\(x=3,\\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(2) \\(\\frac{1}{3}x+\\frac{1}{2}y\\)", answer:-1 },
       { id:"q03c", type:"equation", diff:2,
-        text:"(3) \\(5(x+y)\\)", answer:-5 },
+        text:"\\(x=3,\\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(3) \\(5(x+y)\\)", answer:-5 },
       { id:"q03d", type:"equation", diff:3,
-        text:"(4) \\(x^2+y^2\\)", answer:25 },
+        text:"\\(x=3,\\ y=-4\\)일 때, 다음 식의 값을 구하시오.<br>(4) \\(x^2+y^2\\)", answer:25 },
       // ── 4번: 계수와 상수항 ──
       { id:"q04a", type:"equation", diff:2,
         text:"다항식 \\(-4x+y-5\\)에서 \\(x\\)의 계수를 구하시오.", answer:-4 },

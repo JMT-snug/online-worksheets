@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="app-version" content="edit-v1.0a">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>학습지 편집기</title>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+:root{
+  --cream:#faf8f3;--paper:#fff;--rule:#e8e4d9;
+  --ink:#1c1917;--ink2:#44403c;--ink3:#a8a29e;
+  --accent:#1d4ed8;--acc-lt:#eff6ff;
+  --green:#15803d;--grn-lt:#dcfce7;
+  --red:#b91c1c;--red-lt:#fee2e2;
+  --amber:#b45309;--amb-lt:#fef3c7;
+  --r:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--cream);color:var(--ink);height:100vh;display:flex;flex-direction:column}
+
+/* ── 헤더 ── */
+.hdr{background:#1e293b;color:#fff;padding:0 20px;height:52px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.hdr-title{font-size:16px;font-weight:700;letter-spacing:-.02em}
+.hdr-badge{font-size:11px;background:#334155;padding:2px 8px;border-radius:4px;color:#94a3b8}
+.hdr-space{flex:1}
+.hdr-btn{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s}
+.btn-draft{background:#334155;color:#cbd5e1}
+.btn-draft:hover{background:#475569}
+.btn-publish{background:#15803d;color:#fff}
+.btn-publish:hover{background:#166534}
+.btn-migrate{background:#7c3aed;color:#fff}
+.btn-logout{background:transparent;color:#94a3b8;border:1px solid #475569}
+
+/* ── 레이아웃 ── */
+.layout{display:flex;flex:1;overflow:hidden}
+
+/* ── 사이드바 ── */
+.sidebar{width:240px;background:#1e293b;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
+.sb-section{font-size:10px;font-weight:700;color:#64748b;letter-spacing:.08em;text-transform:uppercase;padding:16px 16px 6px}
+.unit-block{margin-bottom:4px}
+.unit-hdr{display:flex;align-items:center;gap:6px;padding:6px 12px;cursor:pointer;color:#94a3b8;font-size:12px;font-weight:600}
+.unit-hdr:hover{color:#e2e8f0}
+.unit-toggle{font-size:10px;transition:.2s;display:inline-block}
+.unit-toggle.open{transform:rotate(90deg)}
+.unit-wsList{padding:0 0 4px 24px;display:none}
+.unit-wsList.open{display:block}
+.ws-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer;color:#64748b;font-size:12px;margin-bottom:1px;position:relative}
+.ws-item:hover{background:#334155;color:#cbd5e1}
+.ws-item.active{background:#1d4ed8;color:#fff}
+.ws-item .ws-drag{cursor:grab;opacity:.4;font-size:14px;padding:0 2px}
+.ws-item .ws-drag:hover{opacity:.8}
+.ws-item .ws-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-item.drag-over{border:1px dashed #60a5fa}
+.sb-add{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;cursor:pointer;color:#475569;font-size:12px;margin:2px 0}
+.sb-add:hover{background:#1e3a5f;color:#7dd3fc}
+.sb-footer{padding:12px 16px;border-top:1px solid #334155;margin-top:auto}
+
+/* ── 메인 에디터 ── */
+.editor{flex:1;display:flex;overflow:hidden}
+.ws-editor{flex:1;overflow-y:auto;padding:24px;max-width:720px}
+.q-panel{width:360px;border-left:1px solid var(--rule);background:var(--paper);overflow-y:auto;padding:20px;flex-shrink:0}
+
+/* ── 학습지 메타 ── */
+.meta-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:20px;margin-bottom:20px}
+.meta-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-start}
+.meta-row:last-child{margin-bottom:0}
+.meta-label{font-size:12px;font-weight:600;color:var(--ink3);width:64px;padding-top:8px;flex-shrink:0}
+.meta-input{flex:1;border:1px solid var(--rule);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;outline:none;background:var(--cream)}
+.meta-input:focus{border-color:var(--accent);background:#fff}
+.meta-select{flex:1;border:1px solid var(--rule);border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit;background:var(--cream);cursor:pointer}
+
+/* ── 문항 목록 ── */
+.q-list-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.q-list-hdr h3{font-size:14px;font-weight:700}
+.btn-add-q{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-add-q:hover{background:#1e40af}
+
+.q-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:.15s;position:relative}
+.q-card:hover{border-color:var(--accent)}
+.q-card.selected{border-color:var(--accent);background:var(--acc-lt)}
+.q-card.drag-over{border:2px dashed var(--accent);background:var(--acc-lt)}
+.q-drag{cursor:grab;color:var(--ink3);font-size:18px;padding:2px;line-height:1;flex-shrink:0;margin-top:2px}
+.q-drag:active{cursor:grabbing}
+.q-num{font-size:11px;font-weight:700;color:var(--ink3);width:24px;flex-shrink:0;padding-top:2px}
+.q-info{flex:1;min-width:0}
+.q-type-badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-bottom:4px}
+.badge-word{background:#fef3c7;color:#92400e}
+.badge-equation{background:#ede9fe;color:#5b21b6}
+.badge-multi{background:#dcfce7;color:#14532d}
+.badge-vocab{background:#dbeafe;color:#1e3a8a}
+.q-text-preview{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px}
+.q-actions{display:flex;gap:4px;flex-shrink:0}
+.q-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:14px;padding:4px;border-radius:4px}
+.q-btn:hover{background:var(--rule);color:var(--red)}
+
+/* ── 문항 편집 패널 ── */
+.q-panel h3{font-size:14px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.field input,.field textarea,.field select{width:100%;border:1px solid var(--rule);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;background:var(--cream);outline:none}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);background:#fff}
+.field textarea{resize:vertical;min-height:70px;line-height:1.5}
+.latex-preview{background:#f8fafc;border:1px solid var(--rule);border-radius:6px;padding:10px;min-height:40px;font-size:14px;margin-top:6px;text-align:center}
+.ans-alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ans-alt-tag{background:var(--acc-lt);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:12px;display:flex;align-items:center;gap:4px}
+.ans-alt-tag button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:11px;padding:0 2px}
+
+/* 선지 목록 */
+.option-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.option-check{width:16px;height:16px;cursor:pointer;flex-shrink:0}
+.option-input{flex:1;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;background:var(--cream)}
+.option-input:focus{border-color:var(--accent);background:#fff;outline:none}
+.btn-rm-opt{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:16px;padding:2px}
+.btn-rm-opt:hover{color:var(--red)}
+.btn-add-opt{background:none;border:1px dashed var(--rule);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink3);width:100%;margin-top:4px}
+.btn-add-opt:hover{border-color:var(--accent);color:var(--accent)}
+
+/* vocab */
+.vocab-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.vocab-row input{flex:1;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;background:var(--cream)}
+.vocab-row input:focus{border-color:var(--accent);background:#fff;outline:none}
+
+/* 저장/삭제 버튼 */
+.panel-actions{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
+.btn-save-q{flex:1;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-save-q:hover{background:#1e40af}
+.btn-del-q{background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:8px 12px;font-size:13px;cursor:pointer}
+.btn-del-q:hover{background:var(--red);color:#fff}
+
+/* ── 빈 상태 ── */
+.empty{text-align:center;color:var(--ink3);padding:40px 20px;font-size:14px}
+
+/* ── 인증 게이트 ── */
+#auth-gate{display:flex;align-items:center;justify-content:center;height:100%;background:var(--cream)}
+.gate-card{background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:40px;text-align:center;max-width:360px}
+.gate-card h2{font-size:20px;font-weight:700;margin-bottom:8px}
+.gate-card p{color:var(--ink3);font-size:14px;margin-bottom:24px}
+.btn-goog{display:flex;align-items:center;gap:10px;padding:10px 20px;border:1px solid var(--rule);border-radius:8px;background:#fff;cursor:pointer;font-size:14px;font-weight:500;margin:0 auto}
+.btn-goog:hover{background:var(--cream)}
+
+/* ── 토스트 ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;display:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.toast.show{display:block;animation:fadeInUp .2s}
+@keyframes fadeInUp{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* ── 스피너 ── */
+.spinner{text-align:center;padding:40px;color:var(--ink3);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- 인증 게이트 -->
+<div id="auth-gate">
+  <div class="gate-card">
+    <div style="font-size:36px;margin-bottom:12px">✏️</div>
+    <h2>학습지 편집기</h2>
+    <p>교사 Google 계정으로 로그인하세요.</p>
+    <button class="btn-goog" id="btn-login">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.34-8.16 2.34-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google로 로그인
+    </button>
+  </div>
+</div>
+
+<!-- 메인 앱 (로그인 후 표시) -->
+<div id="app" style="display:none;flex:1;flex-direction:column;height:100vh;overflow:hidden">
+
+  <!-- 헤더 -->
+  <header class="hdr">
+    <span class="hdr-title">✏️ 학습지 편집기</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.0a</span>
+    <div class="hdr-space"></div>
+    <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
+    <button class="hdr-btn btn-draft" id="btn-draft">임시저장</button>
+    <button class="hdr-btn btn-publish" id="btn-publish">발행</button>
+    <a href="teacher.html" class="hdr-btn" style="background:#334155;color:#cbd5e1;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600">교사 페이지</a>
+    <button class="hdr-btn btn-logout" id="btn-logout">로그아웃</button>
+  </header>
+
+  <div class="layout" style="flex:1;overflow:hidden">
+
+    <!-- 사이드바: 단원/학습지 목록 -->
+    <aside class="sidebar">
+      <div class="sb-section">단원 / 학습지</div>
+      <div id="unit-list"></div>
+      <div style="padding:8px 12px">
+        <div class="sb-add" id="btn-add-unit">＋ 단원 추가</div>
+      </div>
+      <div class="sb-footer">
+        <div style="font-size:11px;color:#475569" id="sidebar-status">로딩 중...</div>
+      </div>
+    </aside>
+
+    <!-- 에디터 영역 -->
+    <div class="editor">
+
+      <!-- 학습지 편집 -->
+      <div class="ws-editor">
+        <div id="editor-empty" class="empty" style="padding-top:80px">
+          👈 사이드바에서 학습지를 선택하거나 새로 만드세요
+        </div>
+        <div id="editor-main" style="display:none">
+
+          <!-- 학습지 메타 -->
+          <div class="meta-card">
+            <div class="meta-row">
+              <span class="meta-label">제목</span>
+              <input class="meta-input" id="ws-title" placeholder="학습지 제목">
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">단원</span>
+              <select class="meta-select" id="ws-unit"></select>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">유형</span>
+              <select class="meta-select" id="ws-type">
+                <option value="regular">일반 학습지</option>
+                <option value="vocab">VOCA 학습지</option>
+              </select>
+              <select class="meta-select" id="ws-diff" style="max-width:100px">
+                <option value="1">★ 기본</option>
+                <option value="2">★★ 중급</option>
+                <option value="3">★★★ 고급</option>
+              </select>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">ID</span>
+              <input class="meta-input" id="ws-id" placeholder="ws-u1-01-01" style="font-family:monospace;font-size:12px">
+            </div>
+          </div>
+
+          <!-- 문항 목록 -->
+          <div class="q-list-hdr">
+            <h3 id="q-list-title">문항 목록</h3>
+            <button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>
+          </div>
+          <div id="q-list"></div>
+
+        </div>
+      </div>
+
+      <!-- 문항 편집 패널 -->
+      <div class="q-panel">
+        <div id="panel-empty" class="empty" style="padding-top:60px">
+          문항을 선택하면<br>여기서 편집할 수 있어요
+        </div>
+        <div id="panel-editor" style="display:none">
+          <h3 id="panel-title">문항 편집</h3>
+          <!-- 공통: 유형 선택 -->
+          <div class="field">
+            <label>문항 유형</label>
+            <select id="q-type-sel" onchange="onQTypeChange()">
+              <option value="word_text">용어형 (텍스트 답)</option>
+              <option value="word_expr">계산형 (수식 답)</option>
+              <option value="equation">방정식형 (숫자 답)</option>
+              <option value="multi">객관식</option>
+              <option value="vocab">VOCA 용어</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>난이도</label>
+            <select id="q-diff-sel">
+              <option value="1">★ 기본</option>
+              <option value="2">★★ 중급</option>
+              <option value="3">★★★ 고급</option>
+            </select>
+          </div>
+
+          <!-- 문제 텍스트 (word/equation/multi) -->
+          <div id="field-text" class="field">
+            <label>문제 텍스트 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \(...\))</span></label>
+            <textarea id="q-text" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
+            <div class="latex-preview" id="prev-text">미리보기</div>
+          </div>
+
+          <!-- 텍스트 답 -->
+          <div id="field-ans-text" class="field">
+            <label>정답</label>
+            <input id="q-ans-text" placeholder="정답 텍스트">
+            <div style="margin-top:8px">
+              <label style="font-size:12px;color:var(--ink3)">대안 정답 (Enter로 추가)</label>
+              <input id="q-alt-input" placeholder="대안 정답 입력 후 Enter" onkeydown="addAlt(event)" style="margin-top:4px">
+              <div class="ans-alt-list" id="alt-list"></div>
+            </div>
+          </div>
+
+          <!-- 수식 답 -->
+          <div id="field-ans-expr" class="field" style="display:none">
+            <label>정답 (수식, 예: 4*a**2)</label>
+            <input id="q-ans-expr" placeholder="4*a**2 또는 -11/b">
+            <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px">미리보기</div>
+          </div>
+
+          <!-- 숫자 답 -->
+          <div id="field-ans-num" class="field" style="display:none">
+            <label>정답 (숫자)</label>
+            <input id="q-ans-num" type="number" placeholder="숫자 입력">
+          </div>
+
+          <!-- 객관식 선지 -->
+          <div id="field-options" class="field" style="display:none">
+            <label>선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답)</span></label>
+            <div id="options-list"></div>
+            <button class="btn-add-opt" onclick="addOption()">＋ 선지 추가</button>
+          </div>
+
+          <!-- VOCA 용어 -->
+          <div id="field-vocab" class="field" style="display:none">
+            <label>용어</label>
+            <input id="q-vocab-term" placeholder="예: 등식">
+            <label style="margin-top:8px;display:block">정의</label>
+            <textarea id="q-vocab-def" rows="2" placeholder="예: 등호(=)를 사용하여 두 수나 식이 같음을 나타낸 식" style="margin-top:4px"></textarea>
+          </div>
+
+          <div class="panel-actions">
+            <button class="btn-save-q" onclick="saveQuestion()">✓ 적용</button>
+            <button class="btn-del-q" onclick="deleteQuestion()">삭제</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const FB = {
+  apiKey:"AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:"online-worksheets.firebaseapp.com",
+  projectId:"online-worksheets",
+  storageBucket:"online-worksheets.firebasestorage.app",
+  messagingSenderId:"404100779359",
+  appId:"1:404100779359:web:d94e5be4b4f29ae9c55bb0"
+};
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
+
+const fbApp = initializeApp(FB);
+const auth  = getAuth(fbApp);
+const db    = getFirestore(fbApp);
+
+// ── 상태 ──
+let currentUser = null;
+let units = [];          // [{id, title, grade, order, ...}]
+let worksheets = [];     // [{id, unitId, title, ...}]
+let currentWsId = null;  // 현재 편집 중인 학습지
+let currentWs = null;    // 현재 학습지 객체
+let selectedQIdx = null; // 현재 선택된 문항 인덱스
+let altAnswers = [];     // 대안 정답 배열
+
+// ── 인증 ──
+onAuthStateChanged(auth, user => {
+  if(user && TEACHER_EMAILS.includes(user.email)){
+    currentUser = user;
+    document.getElementById('auth-gate').style.display='none';
+    document.getElementById('app').style.display='flex';
+    loadAll();
+  } else if(user){
+    alert('접근 권한이 없습니다: ' + user.email);
+    signOut(auth);
+  }
+});
+
+document.getElementById('btn-login').onclick = async () => {
+  try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch(e){ alert('로그인 오류: '+e.message); }
+};
+document.getElementById('btn-logout').onclick = () => signOut(auth);
+
+// ── 데이터 로드 ──
+async function loadAll(){
+  document.getElementById('sidebar-status').textContent = '로딩 중...';
+  try{
+    // units
+    const uSnap = await getDocs(query(collection(db,'units'), orderBy('order')));
+    units = uSnap.docs.map(d=>({id:d.id,...d.data()}));
+
+    // worksheets (curriculum)
+    const wSnap = await getDocs(collection(db,'curriculum'));
+    worksheets = wSnap.docs.map(d=>({id:d.id,...d.data()}));
+    worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
+
+    renderSidebar();
+    document.getElementById('sidebar-status').textContent = `${units.length}개 단원, ${worksheets.length}개 학습지`;
+  }catch(e){
+    document.getElementById('sidebar-status').textContent = '로드 실패: '+e.message;
+    console.error(e);
+  }
+}
+
+// ── 사이드바 렌더 ──
+function renderSidebar(){
+  const ul = document.getElementById('unit-list');
+  ul.innerHTML = '';
+  units.forEach(unit=>{
+    const block = document.createElement('div');
+    block.className = 'unit-block';
+    block.dataset.unitId = unit.id;
+
+    const wsOfUnit = worksheets.filter(w=>w.unitId===unit.id);
+
+    block.innerHTML = `
+      <div class="unit-hdr" onclick="toggleUnit(this)">
+        <span class="unit-toggle">▶</span>
+        <span style="flex:1">${unit.grade}학년 ${unit.title}</span>
+        <span style="font-size:10px;color:#475569">${wsOfUnit.length}</span>
+      </div>
+      <div class="unit-wsList">
+        ${wsOfUnit.map(ws=>`
+          <div class="ws-item" data-wsid="${ws.id}" draggable="true"
+            ondragstart="wsDragStart(event,'${ws.id}')"
+            ondragover="wsDragOver(event)"
+            ondrop="wsDrop(event,'${ws.id}','${unit.id}')"
+            ondragleave="wsDragLeave(event)"
+            onclick="selectWs('${ws.id}')">
+            <span class="ws-drag">⣿</span>
+            <span class="ws-name">${ws.title||'제목 없음'}</span>
+          </div>
+        `).join('')}
+        <div class="sb-add" onclick="addWorksheet('${unit.id}')">＋ 학습지 추가</div>
+      </div>`;
+    ul.appendChild(block);
+
+    // 첫 단원 펼치기
+    if(unit === units[0]){
+      const toggle = block.querySelector('.unit-toggle');
+      const list   = block.querySelector('.unit-wsList');
+      toggle.classList.add('open');
+      list.classList.add('open');
+    }
+  });
+}
+
+window.toggleUnit = function(el){
+  const toggle = el.querySelector('.unit-toggle');
+  const list   = el.nextElementSibling;
+  toggle.classList.toggle('open');
+  list.classList.toggle('open');
+};
+
+// ── 학습지 선택 ──
+window.selectWs = async function(wsId){
+  currentWsId = wsId;
+  selectedQIdx = null;
+  // 사이드바 active 표시
+  document.querySelectorAll('.ws-item').forEach(el=>el.classList.toggle('active', el.dataset.wsid===wsId));
+  // Firestore에서 로드
+  const snap = await getDoc(doc(db,'curriculum',wsId));
+  if(!snap.exists()){ toast('학습지를 찾을 수 없습니다'); return; }
+  currentWs = {id:wsId, ...snap.data()};
+  // questions가 없으면 vocab 기반
+  if(!currentWs.questions) currentWs.questions = [];
+  if(!currentWs.vocab)     currentWs.vocab = [];
+  renderEditor();
+};
+
+// ── 에디터 렌더 ──
+function renderEditor(){
+  document.getElementById('editor-empty').style.display='none';
+  document.getElementById('editor-main').style.display='block';
+  document.getElementById('panel-empty').style.display='block';
+  document.getElementById('panel-editor').style.display='none';
+
+  document.getElementById('ws-title').value = currentWs.title||'';
+  document.getElementById('ws-id').value    = currentWs.id||'';
+  document.getElementById('ws-diff').value  = currentWs.diff||1;
+
+  // 단원 select
+  const uSel = document.getElementById('ws-unit');
+  uSel.innerHTML = units.map(u=>`<option value="${u.id}" ${u.id===currentWs.unitId?'selected':''}>${u.grade}학년 ${u.title}</option>`).join('');
+
+  // 유형
+  const wType = currentWs.type==='vocab'?'vocab':'regular';
+  document.getElementById('ws-type').value = wType;
+
+  // 문항 제목
+  document.getElementById('q-list-title').textContent =
+    wType==='vocab' ? `용어 목록 (${currentWs.vocab.length}개) + 연습 문항 (${currentWs.questions.length}개)` :
+    `문항 목록 (${currentWs.questions.length}개)`;
+
+  renderQList();
+}
+
+// ── 문항 목록 렌더 ──
+function renderQList(){
+  const list = document.getElementById('q-list');
+  list.innerHTML = '';
+
+  const isVocab = currentWs.type==='vocab';
+  const allItems = isVocab
+    ? [...currentWs.vocab.map((v,i)=>({...v, _type:'vocab', _idx:i})),
+       ...currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}))]
+    : currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}));
+
+  if(!allItems.length){
+    list.innerHTML = '<div class="empty">문항이 없습니다.<br>오른쪽 위 [+ 문항 추가]를 눌러주세요.</div>';
+    return;
+  }
+
+  allItems.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'q-card' + (selectedQIdx===i?' selected':'');
+    card.draggable = true;
+    card.dataset.idx = i;
+
+    const isVocabItem = item._type==='vocab';
+    const badge = isVocabItem ? 'vocab' : (item.type||'word');
+    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi'}[badge]||'badge-word';
+    const badgeLabel = {vocab:'VOCA',word:'용어',equation:'방정식',multi:'객관식'}[badge]||'계산';
+    const preview = isVocabItem
+      ? `${item.term} : ${item.def}`
+      : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
+
+    card.innerHTML = `
+      <span class="q-drag">⣿</span>
+      <span class="q-num">${i+1}</span>
+      <div class="q-info">
+        <span class="q-type-badge ${badgeClass}">${badgeLabel}</span>
+        <div class="q-text-preview">${preview}</div>
+      </div>
+      <div class="q-actions">
+        <button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>
+      </div>`;
+
+    card.onclick = () => selectQuestion(i, allItems);
+
+    // Drag & Drop
+    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); card.style.opacity='.4'; });
+    card.addEventListener('dragend',   e => { card.style.opacity='1'; });
+    card.addEventListener('dragover',  e => { e.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', e => { card.classList.remove('drag-over'); });
+    card.addEventListener('drop',      e => {
+      e.preventDefault(); card.classList.remove('drag-over');
+      const from = parseInt(e.dataTransfer.getData('text/plain'));
+      const to   = i;
+      if(from===to) return;
+      moveItem(from, to, isVocab, allItems);
+    });
+
+    list.appendChild(card);
+  });
+}
+
+// ── 문항 이동 (드래그앤드롭) ──
+function moveItem(from, to, isVocab, allItems){
+  const vocabCount = isVocab ? currentWs.vocab.length : 0;
+  const fromItem = allItems[from];
+  const toItem   = allItems[to];
+
+  // 같은 배열 내에서만 이동 (vocab↔questions 교차 이동 불가)
+  if(fromItem._type !== toItem._type){ toast('같은 유형 내에서만 이동할 수 있습니다'); return; }
+
+  if(fromItem._type==='vocab'){
+    const arr = [...currentWs.vocab];
+    const [moved] = arr.splice(fromItem._idx, 1);
+    arr.splice(toItem._idx, 0, moved);
+    currentWs.vocab = arr;
+  } else {
+    const arr = [...currentWs.questions];
+    const [moved] = arr.splice(fromItem._idx, 1);
+    arr.splice(toItem._idx, 0, moved);
+    currentWs.questions = arr;
+  }
+  selectedQIdx = to;
+  renderQList();
+}
+
+// ── 문항 선택 → 패널 ──
+function selectQuestion(idx, allItems){
+  selectedQIdx = idx;
+  renderQList(); // 선택 표시 업데이트
+  const item = allItems[idx];
+  showPanel(item);
+}
+
+// ── 패널 표시 ──
+function showPanel(item){
+  document.getElementById('panel-empty').style.display='none';
+  document.getElementById('panel-editor').style.display='block';
+  document.getElementById('panel-title').textContent = item._type==='vocab' ? 'VOCA 용어 편집' : '문항 편집';
+
+  altAnswers = [];
+
+  if(item._type==='vocab'){
+    setQType('vocab');
+    document.getElementById('q-vocab-term').value = item.term||'';
+    document.getElementById('q-vocab-def').value  = item.def||'';
+  } else {
+    const qtype = item.type==='word'
+      ? (item.answerType==='expr'?'word_expr':'word_text')
+      : item.type;
+    setQType(qtype);
+    document.getElementById('q-type-sel').value = qtype;
+    document.getElementById('q-diff-sel').value = item.diff||1;
+    document.getElementById('q-text').value = (item.text||'').replace(/\\\\/g,'\\');
+    previewText('q-text','prev-text');
+
+    if(qtype==='word_text'||qtype==='word'){
+      document.getElementById('q-ans-text').value = item.answer||'';
+      altAnswers = [...(item.answerAlt||[])];
+      renderAltList();
+    } else if(qtype==='word_expr'){
+      document.getElementById('q-ans-expr').value = item.answer||'';
+    } else if(qtype==='equation'){
+      document.getElementById('q-ans-num').value = item.answer??'';
+    } else if(qtype==='multi'){
+      renderOptions(item.options||[], item.answer||[]);
+    }
+  }
+}
+
+// ── 유형 변경 시 필드 전환 ──
+window.onQTypeChange = function(){
+  setQType(document.getElementById('q-type-sel').value);
+};
+function setQType(type){
+  document.getElementById('q-type-sel').value = type;
+  const show = id => document.getElementById(id).style.display='';
+  const hide = id => document.getElementById(id).style.display='none';
+  // 기본 모두 숨기기
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab']
+    .forEach(hide);
+  if(type==='vocab'){
+    show('field-vocab');
+  } else {
+    show('field-text');
+    if(type==='word_text') show('field-ans-text');
+    else if(type==='word_expr') show('field-ans-expr');
+    else if(type==='equation') show('field-ans-num');
+    else if(type==='multi'){ show('field-options'); if(!document.getElementById('options-list').children.length) renderOptions([],[]);}
+  }
+}
+
+// ── 선지 렌더 ──
+function renderOptions(opts, answers){
+  const list = document.getElementById('options-list');
+  list.innerHTML = '';
+  opts.forEach((opt,i)=>{
+    const row = document.createElement('div');
+    row.className='option-row';
+    row.innerHTML=`
+      <input type="checkbox" class="option-check" id="opt-chk-${i}" ${answers.includes(i)?'checked':''}>
+      <input class="option-input" id="opt-${i}" value="${opt}" placeholder="선지 ${i+1}">
+      <button class="btn-rm-opt" onclick="removeOption(${i})">✕</button>`;
+    list.appendChild(row);
+  });
+}
+window.addOption = function(){
+  const list = document.getElementById('options-list');
+  const i = list.children.length;
+  const row = document.createElement('div');
+  row.className='option-row';
+  row.innerHTML=`<input type="checkbox" class="option-check" id="opt-chk-${i}"><input class="option-input" id="opt-${i}" placeholder="선지 ${i+1}"><button class="btn-rm-opt" onclick="removeOption(${i})">✕</button>`;
+  list.appendChild(row);
+};
+window.removeOption = function(i){
+  const list=document.getElementById('options-list');
+  list.removeChild(list.children[i]);
+  // 번호 재조정
+  [...list.children].forEach((row,j)=>{
+    row.querySelector('.option-check').id=`opt-chk-${j}`;
+    row.querySelector('.option-input').id=`opt-${j}`;
+    row.querySelector('.option-input').placeholder=`선지 ${j+1}`;
+  });
+};
+
+// ── 대안 정답 ──
+window.addAlt = function(e){
+  if(e.key!=='Enter') return;
+  const v=e.target.value.trim(); if(!v) return;
+  altAnswers.push(v); e.target.value=''; renderAltList();
+};
+function renderAltList(){
+  const list=document.getElementById('alt-list');
+  list.innerHTML=altAnswers.map((a,i)=>`
+    <div class="ans-alt-tag">${a}
+      <button onclick="altAnswers.splice(${i},1);renderAltList()">✕</button>
+    </div>`).join('');
+}
+window.renderAltList = renderAltList;
+
+// ── LaTeX 미리보기 ──
+window.previewText = function(inputId, previewId){
+  const el=document.getElementById(previewId);
+  const val=document.getElementById(inputId).value;
+  el.innerHTML=val||'미리보기';
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
+};
+
+// ── 문항 저장 (적용) ──
+window.saveQuestion = function(){
+  if(selectedQIdx===null||!currentWs) return;
+  const type = document.getElementById('q-type-sel').value;
+  const diff = parseInt(document.getElementById('q-diff-sel').value);
+
+  // vocab 배열 + questions 배열 결합 기준 인덱스 계산
+  const isVocab = currentWs.type==='vocab';
+  const vocabCount = isVocab ? currentWs.vocab.length : 0;
+
+  if(type==='vocab'){
+    // vocab 항목 수정
+    const vIdx = selectedQIdx;
+    currentWs.vocab[vIdx] = {
+      term: document.getElementById('q-vocab-term').value.trim(),
+      def:  document.getElementById('q-vocab-def').value.trim(),
+    };
+  } else {
+    // questions 항목 수정
+    const qIdx = isVocab ? selectedQIdx - vocabCount : selectedQIdx;
+    const raw = document.getElementById('q-text').value;
+    // \( → \\( 이스케이프
+    const text = raw.replace(/\\/g,'\\\\').replace(/\\\\\\\\/g,'\\\\');
+    // 실제로는 사용자 입력 \ 을 \\ 로 처리해서 저장
+    let q = { id: currentWs.questions[qIdx]?.id||`q${Date.now()}`, diff };
+
+    if(type==='word_text'){
+      q.type='word'; q.answerType='text';
+      q.text=raw;
+      q.answer=document.getElementById('q-ans-text').value.trim();
+      q.answerAlt=[...altAnswers];
+    } else if(type==='word_expr'){
+      q.type='word'; q.answerType='expr';
+      q.text=raw;
+      q.answer=document.getElementById('q-ans-expr').value.trim();
+    } else if(type==='equation'){
+      q.type='equation';
+      q.text=raw;
+      q.answer=parseFloat(document.getElementById('q-ans-num').value)||0;
+    } else if(type==='multi'){
+      q.type='multi';
+      q.text=raw;
+      const optList=document.getElementById('options-list');
+      const opts=[...(optList.children)].map((_,i)=>document.getElementById(`opt-${i}`)?.value||'');
+      const ans=[...(optList.children)].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
+      q.options=opts; q.answer=ans;
+    }
+    if(qIdx >= 0 && qIdx < currentWs.questions.length)
+      currentWs.questions[qIdx] = q;
+  }
+  renderQList();
+  toast('적용됨 (저장하려면 [임시저장] 또는 [발행] 클릭)');
+};
+
+// ── 문항 삭제 ──
+window.deleteItemAt = function(idx){
+  if(!confirm('삭제하시겠습니까?')) return;
+  const isVocab = currentWs.type==='vocab';
+  const vocabCount = isVocab ? currentWs.vocab.length : 0;
+  if(isVocab && idx < vocabCount) currentWs.vocab.splice(idx,1);
+  else currentWs.questions.splice(isVocab ? idx-vocabCount : idx, 1);
+  selectedQIdx = null;
+  document.getElementById('panel-empty').style.display='block';
+  document.getElementById('panel-editor').style.display='none';
+  renderQList();
+};
+window.deleteQuestion = function(){
+  if(selectedQIdx!==null) deleteItemAt(selectedQIdx);
+};
+
+// ── 문항 추가 ──
+document.getElementById('btn-add-q').onclick = () => {
+  if(!currentWs){ toast('학습지를 먼저 선택하세요'); return; }
+  const isVocab = currentWs.type==='vocab';
+  if(isVocab){
+    currentWs.vocab.push({term:'새 용어',def:'정의'});
+    selectedQIdx = currentWs.vocab.length - 1;
+  } else {
+    currentWs.questions.push({id:`q${Date.now()}`,type:'word',answerType:'text',text:'',answer:'',answerAlt:[],diff:1});
+    selectedQIdx = currentWs.questions.length - 1;
+  }
+  renderQList();
+  // 새 항목 선택
+  const allItems = isVocab
+    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
+       ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
+    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  showPanel(allItems[selectedQIdx]);
+};
+
+// ── 학습지 추가 ──
+window.addWorksheet = function(unitId){
+  const title = prompt('새 학습지 제목:'); if(!title) return;
+  const id = `ws-${unitId}-${Date.now()}`;
+  const unit = units.find(u=>u.id===unitId);
+  const newWs = {
+    id, unitId, title, type:'regular',
+    grade: unit?.grade||1, category: unit?.category||'',
+    questions:[], vocab:[], diff:1,
+    order: worksheets.filter(w=>w.unitId===unitId).length,
+    status:'draft',
+  };
+  worksheets.push(newWs);
+  renderSidebar();
+  selectWsLocal(newWs);
+};
+
+function selectWsLocal(ws){
+  currentWsId = ws.id;
+  currentWs = ws;
+  selectedQIdx = null;
+  document.querySelectorAll('.ws-item').forEach(el=>el.classList.remove('active'));
+  renderEditor();
+}
+
+// ── 임시저장 ──
+document.getElementById('btn-draft').onclick = () => saveToFirestore('draft');
+document.getElementById('btn-publish').onclick = () => saveToFirestore('published');
+
+async function saveToFirestore(status){
+  if(!currentWs){ toast('학습지를 선택하세요'); return; }
+  const wsId = document.getElementById('ws-id').value.trim() || currentWs.id;
+  const saveData = {
+    ...currentWs,
+    id: wsId,
+    title: document.getElementById('ws-title').value.trim(),
+    unitId: document.getElementById('ws-unit').value,
+    type: document.getElementById('ws-type').value==='vocab'?'vocab':'regular',
+    diff: parseInt(document.getElementById('ws-diff').value)||1,
+    status,
+    lastModified: new Date().toISOString(),
+    createdBy: currentUser.email,
+  };
+  try{
+    await setDoc(doc(db,'curriculum',wsId), saveData);
+    currentWsId = wsId;
+    currentWs = saveData;
+    toast(status==='published'?'✅ 발행 완료':'💾 임시저장 완료');
+    await loadAll();
+    // 다시 선택
+    document.querySelectorAll('.ws-item').forEach(el=>el.classList.toggle('active',el.dataset.wsid===wsId));
+  }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
+}
+
+// ── JS 마이그레이션 ──
+document.getElementById('btn-migrate').onclick = async () => {
+  if(!confirm('worksheets.js 내용을 Firestore curriculum으로 업로드합니다.\n기존 데이터가 덮어씌워질 수 있습니다. 계속하시겠습니까?')) return;
+  const btn = document.getElementById('btn-migrate');
+  btn.disabled = true; btn.textContent = '마이그레이션 중...';
+  try{
+    // worksheets.js 동적 import
+    const mod = await import('./worksheets.js');
+    const { UNITS: US, WORKSHEETS: WS } = mod;
+
+    const batch1 = writeBatch(db);
+    US.forEach((u,i) => batch1.set(doc(db,'units',u.id), {...u, order:i}));
+    await batch1.commit();
+
+    // worksheets는 하나씩 (batch 500 limit)
+    let count=0;
+    for(let i=0; i<WS.length; i++){
+      const ws = WS[i];
+      await setDoc(doc(db,'curriculum',ws.id), {
+        ...ws, order:i, status:'published',
+        lastModified: new Date().toISOString(), createdBy: currentUser.email,
+      });
+      count++;
+      btn.textContent=`마이그레이션 중... ${count}/${WS.length}`;
+    }
+    btn.textContent='✅ 완료 ('+count+'개)';
+    toast(`✅ 마이그레이션 완료: 단원 ${US.length}개, 학습지 ${count}개`);
+    await loadAll();
+  }catch(e){
+    btn.textContent='❌ 오류: '+e.message;
+    console.error(e); toast('오류: '+e.message);
+  }finally{
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='⬆ JS 마이그레이션'; },3000);
+  }
+};
+
+// ── 학습지 사이드바 드래그 ──
+let wsDragId = null;
+window.wsDragStart = (e, wsId) => { wsDragId=wsId; };
+window.wsDragOver  = e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+window.wsDragLeave = e => { e.currentTarget.classList.remove('drag-over'); };
+window.wsDrop = async (e, targetId, unitId) => {
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if(wsDragId===targetId) return;
+  // 순서 업데이트
+  const unitWs = worksheets.filter(w=>w.unitId===unitId);
+  const from = unitWs.findIndex(w=>w.id===wsDragId);
+  const to   = unitWs.findIndex(w=>w.id===targetId);
+  if(from<0||to<0) return;
+  unitWs.splice(to, 0, unitWs.splice(from,1)[0]);
+  // Firestore에 order 업데이트
+  for(let i=0;i<unitWs.length;i++){
+    unitWs[i].order=i;
+    await setDoc(doc(db,'curriculum',unitWs[i].id), unitWs[i]);
+  }
+  worksheets = worksheets.filter(w=>w.unitId!==unitId);
+  worksheets.push(...unitWs);
+  worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
+  renderSidebar();
+  toast('순서 저장됨');
+};
+
+// ── 단원 추가 ──
+document.getElementById('btn-add-unit').onclick = async () => {
+  const title=prompt('단원명:'); if(!title) return;
+  const grade=parseInt(prompt('학년 (숫자):')||'1');
+  const id=`u${grade}-${Date.now()}`;
+  const newUnit={id, title, grade, category:'', order:units.length};
+  await setDoc(doc(db,'units',id), newUnit);
+  units.push(newUnit);
+  renderSidebar();
+  toast('단원 추가됨');
+};
+
+// ── 토스트 ──
+function toast(msg, dur=2500){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), dur);
+}
+window.toast=toast;
+</script>
+</body>
+</html>

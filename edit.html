@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0b">
+<meta name="app-version" content="edit-v1.0c">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -854,17 +854,12 @@ document.getElementById('btn-migrate').onclick = async () => {
   const btn = document.getElementById('btn-migrate');
   btn.disabled = true; btn.textContent = '마이그레이션 중...';
   try{
-    // worksheets.js를 script 태그로 로드 (export 없는 classic script)
-    await new Promise((res, rej) => {
-      if(window.WORKSHEETS){ res(); return; } // 이미 로드됨
-      const s = document.createElement('script');
-      s.src = './worksheets.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-    const US = window.UNITS;
-    const WS = window.WORKSHEETS;
-    if(!US || !WS) throw new Error('worksheets.js 로드 실패 (UNITS/WORKSHEETS 없음)');
+    // worksheets.js를 fetch로 읽어서 Function으로 실행
+    const wsText = await fetch('./worksheets.js').then(r=>r.text());
+    const mod = new Function(wsText + '\nreturn {UNITS, WORKSHEETS};')();
+    const US = mod.UNITS;
+    const WS = mod.WORKSHEETS;
+    if(!US || !WS) throw new Error('UNITS/WORKSHEETS를 찾을 수 없습니다');
 
     const batch1 = writeBatch(db);
     US.forEach((u,i) => batch1.set(doc(db,'units',u.id), {...u, order:i}));

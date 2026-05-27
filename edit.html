@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0a">
+<meta name="app-version" content="edit-v1.0b">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -390,9 +390,17 @@ async function loadAll(){
     worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
 
     renderSidebar();
-    document.getElementById('sidebar-status').textContent = `${units.length}개 단원, ${worksheets.length}개 학습지`;
+    const status = units.length===0 && worksheets.length===0
+      ? '⚠ 데이터 없음 — JS 마이그레이션 버튼을 눌러주세요'
+      : `${units.length}개 단원, ${worksheets.length}개 학습지`;
+    document.getElementById('sidebar-status').textContent = status;
   }catch(e){
-    document.getElementById('sidebar-status').textContent = '로드 실패: '+e.message;
+    if(e.code==='permission-denied'){
+      document.getElementById('sidebar-status').textContent = '❌ 권한 오류 — Firestore 규칙을 확인하세요';
+      toast('Firestore 규칙에 curriculum/units 읽기 권한을 추가해주세요', 5000);
+    } else {
+      document.getElementById('sidebar-status').textContent = '로드 실패: '+e.message;
+    }
     console.error(e);
   }
 }
@@ -846,9 +854,17 @@ document.getElementById('btn-migrate').onclick = async () => {
   const btn = document.getElementById('btn-migrate');
   btn.disabled = true; btn.textContent = '마이그레이션 중...';
   try{
-    // worksheets.js 동적 import
-    const mod = await import('./worksheets.js');
-    const { UNITS: US, WORKSHEETS: WS } = mod;
+    // worksheets.js를 script 태그로 로드 (export 없는 classic script)
+    await new Promise((res, rej) => {
+      if(window.WORKSHEETS){ res(); return; } // 이미 로드됨
+      const s = document.createElement('script');
+      s.src = './worksheets.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+    const US = window.UNITS;
+    const WS = window.WORKSHEETS;
+    if(!US || !WS) throw new Error('worksheets.js 로드 실패 (UNITS/WORKSHEETS 없음)');
 
     const batch1 = writeBatch(db);
     US.forEach((u,i) => batch1.set(doc(db,'units',u.id), {...u, order:i}));

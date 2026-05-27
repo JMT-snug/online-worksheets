@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0c">
+<meta name="app-version" content="edit-v1.0d">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -170,7 +170,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.0a</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.0d</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
     <button class="hdr-btn btn-draft" id="btn-draft">임시저장</button>
@@ -257,7 +257,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <option value="equation">방정식형 (숫자 답)</option>
               <option value="multi">객관식</option>
               <option value="vocab">VOCA 용어</option>
+              <option value="link">링크(다음 문항)</option>
+              <option value="step3">단계형(step3)</option>
             </select>
+            <div id="q-raw-type" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
           </div>
           <div class="field">
             <label>난이도</label>
@@ -379,6 +382,9 @@ document.getElementById('btn-logout').onclick = () => signOut(auth);
 // ── 데이터 로드 ──
 async function loadAll(){
   document.getElementById('sidebar-status').textContent = '로딩 중...';
+  // 버전 배지를 meta 태그에서 읽기
+  const vMeta = document.querySelector('meta[name="app-version"]');
+  if(vMeta) document.getElementById('edit-version').textContent = vMeta.content;
   try{
     // units
     const uSnap = await getDocs(query(collection(db,'units'), orderBy('order')));
@@ -603,11 +609,29 @@ function showPanel(item){
     document.getElementById('q-vocab-term').value = item.term||'';
     document.getElementById('q-vocab-def').value  = item.def||'';
   } else {
-    const qtype = item.type==='word'
-      ? (item.answerType==='expr'?'word_expr':'word_text')
-      : item.type;
+    // 저장된 type → UI 유형 매핑
+    let qtype;
+    if(item.type==='word'){
+      qtype = item.answerType==='expr' ? 'word_expr' : 'word_text';
+    } else if(item.type==='equation'||item.type==='multi'||item.type==='link'||item.type==='step3'){
+      qtype = item.type;
+    } else {
+      qtype = 'word_text'; // fallback
+    }
+    // dropdown에 없는 유형은 원본 표시
+    const sel = document.getElementById('q-type-sel');
+    if([...sel.options].some(o=>o.value===qtype)){
+      sel.value = qtype;
+    } else {
+      // 유형 옵션 동적 추가
+      const opt = document.createElement('option');
+      opt.value = qtype; opt.textContent = `(${qtype})`;
+      sel.appendChild(opt);
+      sel.value = qtype;
+    }
     setQType(qtype);
-    document.getElementById('q-type-sel').value = qtype;
+    // 원본 타입 참고 표시
+    document.getElementById('q-raw-type').textContent = `저장된 유형: type="${item.type}"${item.answerType?', answerType="'+item.answerType+'"':''}`;
     document.getElementById('q-diff-sel').value = item.diff||1;
     document.getElementById('q-text').value = (item.text||'').replace(/\\\\/g,'\\');
     previewText('q-text','prev-text');
@@ -639,6 +663,9 @@ function setQType(type){
     .forEach(hide);
   if(type==='vocab'){
     show('field-vocab');
+  } else if(type==='link'||type==='step3'){
+    // 편집 불가 유형: 안내만 표시
+    show('field-text');
   } else {
     show('field-text');
     if(type==='word_text') show('field-ans-text');
@@ -708,6 +735,9 @@ window.previewText = function(inputId, previewId){
 window.saveQuestion = function(){
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
+  if(type==='link'||type==='step3'){
+    toast('이 유형은 편집기에서 직접 수정할 수 없습니다'); return;
+  }
   const diff = parseInt(document.getElementById('q-diff-sel').value);
 
   // vocab 배열 + questions 배열 결합 기준 인덱스 계산

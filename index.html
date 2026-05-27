@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.0g">
+  <meta name="app-version" content="6.0h">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -11,7 +11,7 @@
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script src="worksheets.js"></script>
 <script>
-const VERSION = "6.0g"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.0h"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2426,6 +2426,7 @@ function vqFormatMath(s){
   if(!s) return s;
   if(/[가-힣]/.test(s)) return s;                     // 한국어: 그대로
   if(/^[-−]?\d+$/.test(s.trim())) return s;          // 정수: 그대로
+  if(s.trim().startsWith('\\(')) return s;           // 이미 LaTeX: 그대로
   const mapped=VQ_MATH_MAP[s];
   let t=mapped||s.replace(/²/g,'^2').replace(/³/g,'^3').replace(/⁴/g,'^4');
   return '\\('+t+'\\)';

@@ -574,7 +574,6 @@ const WORKSHEETS = [
     ]
   },
 
-  },
 
   // ── 일차방정식 중단원 마무리
   { id:"ws-u1-04-05", unitId:"u1-04",

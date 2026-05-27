@@ -2,7 +2,7 @@
    온라인 학습지 데이터 파일  v2.2.3
    버전 관리: 2.[학습지추가].[오류수정]
    ════════════════════════════════════════════ */
-const WS_VERSION = "2.2.8";
+const WS_VERSION = "v7";
 
 const UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -488,6 +488,79 @@ const WORKSHEETS = [
       { id:"q18", type:"equation", text:"둘레가 300m인 트랙에서 A는 분속 90m, B는 분속 60m로 같은 방향으로 동시에 출발했다. A가 B를 3번째로 따라잡는 것은 출발 후 몇 분 후인가?", answer:30, diff:4 },
       { id:"q19", type:"equation", text:"A혼자 하면 18일, B 혼자 하면 9일 걸리는 일을 A가 혼자 3일 한 후 B와 함께 끝냈다. B와 함께 일한 날수는?", answer:5, diff:4 },
       { id:"q20", type:"equation", text:"10%의 소금물 300g에 소금을 더 넣어 25%의 소금물을 만들었다. 더 넣은 소금의 양은 몇 g인가?", answer:60, diff:4 },
+    ]
+  },
+
+  // ── 일차방정식 용어 학습 ─────────────────────────────
+  { id:"ws-v1-04", title:"VOCA(일차방정식)", type:"vocab",
+    unitId:"u1-04", diff:1,
+    vocab:[
+      { term:"등식",   def:"등호(=)를 사용하여 두 수나 식이 같음을 나타낸 식" },
+      { term:"방정식", def:"미지수의 값에 따라 참이 되기도 하고 거짓이 되기도 하는 등식" },
+      { term:"항등식", def:"미지수에 어떤 수를 대입하여도 항상 참이 되는 등식" },
+      { term:"미지수", def:"방정식에서 값을 구하려는 문자" },
+      { term:"해(근)", def:"방정식을 참이 되게 하는 미지수의 값" },
+      { term:"이항",   def:"등식의 한 변에 있는 항을 부호를 바꾸어 다른 변으로 옮기는 것" },
+    ],
+    questions:[
+      // ── 이항 ──
+      { id:"q-t01", type:"multi", diff:2,
+        text:"\\(2x - a = b\\)에서 \\(-a\\)를 이항하면?",
+        options:["\\(2x = b + a\\)","\\(2x = b - a\\)","\\(2x = a - b\\)","\\(-2x = b + a\\)"],
+        answer:[0] },
+      { id:"q-t02", type:"multi", diff:2,
+        text:"\\(3x + 5 = 2x - 1\\)에서 \\(+5\\)를 이항하면?",
+        options:["\\(3x = 2x - 1 + 5\\)","\\(3x = 2x - 1 - 5\\)","\\(3x + 5 + 1 = 2x\\)","\\(3x = 2x + 4\\)"],
+        answer:[1] },
+      { id:"q-t03", type:"multi", diff:2,
+        text:"\\(5x = 3 - 2x\\)에서 \\(-2x\\)를 이항하면?",
+        options:["\\(5x - 2x = 3\\)","\\(5x + 2x = 3\\)","\\(5x = 3 + 2x\\)","\\(7x = -3\\)"],
+        answer:[1] },
+      { id:"q-t04", type:"multi", diff:2,
+        text:"\\(5 - 3x = 2x + 7\\)에서 \\(-3x\\)를 이항하면?",
+        options:["\\(5 = 2x + 7 + 3x\\)","\\(5 = 2x + 7 - 3x\\)","\\(5 - 3x - 7 = 2x\\)","\\(5 = 5x + 7\\)"],
+        answer:[0] },
+      { id:"q-t05", type:"multi", diff:2,
+        text:"\\(4x - 3 = x + 6\\)에서 \\(+6\\)을 이항하면?",
+        options:["\\(4x - 3 + 6 = x\\)","\\(4x - 3 - 6 = x\\)","\\(4x - 3 = x - 6\\)","\\(4x - 9 = x\\)"],
+        answer:[1] },
+      { id:"q-t06", type:"multi", diff:3,
+        text:"\\(x^2 - 3x = 5\\)에서 \\(-3x\\)를 이항하면?",
+        options:["\\(x^2 = 5 - 3x\\)","\\(x^2 = 5 + 3x\\)","\\(x^2 + 3x = 5\\)","\\(x^2 = 3x - 5\\)"],
+        answer:[1] },
+      { id:"q-t07", type:"multi", diff:3,
+        text:"\\(2x^2 + x - 4 = 3x + 1\\)에서 \\(+x\\)를 이항하면?",
+        options:["\\(2x^2 - 4 = 3x + 1 + x\\)","\\(2x^2 - 4 = 3x + 1 - x\\)","\\(2x^2 + 2x - 4 = 3x + 1\\)","\\(2x^2 + x - 4 - x = 3x + 1\\)"],
+        answer:[1] },
+      { id:"q-t08", type:"multi", diff:3,
+        text:"\\(-x^2 + 4x = x - 2\\)에서 \\(-x^2\\)를 이항하면?",
+        options:["\\(4x = x - 2 + x^2\\)","\\(4x = x - 2 - x^2\\)","\\(4x - x^2 = x - 2\\)","\\(-4x = x - 2 + x^2\\)"],
+        answer:[0] },
+      { id:"q-t09", type:"multi", diff:3,
+        text:"\\(3x^2 - 2x + 5 = x^2 + 1\\)에서 \\(+5\\)를 이항하면?",
+        options:["\\(3x^2 - 2x = x^2 + 1 - 5\\)","\\(3x^2 - 2x = x^2 + 1 + 5\\)","\\(3x^2 - 2x + 5 - 1 = x^2\\)","\\(3x^2 - 2x + 6 = x^2\\)"],
+        answer:[0] },
+      // ── 등식의 성질 ──
+      { id:"q-p01", type:"equation", diff:1,
+        text:"\\(a=b\\)이면 \\(a+4=b+\\square\\)", answer:4 },
+      { id:"q-p02", type:"equation", diff:1,
+        text:"\\(a=b\\)이면 \\(a+(-5)=b+\\square\\)", answer:-5 },
+      { id:"q-p03", type:"equation", diff:1,
+        text:"\\(a=b\\)이면 \\(a-7=b-\\square\\)", answer:7 },
+      { id:"q-p04", type:"equation", diff:2,
+        text:"\\(a=b\\)이면 \\(a-(-3)=b-\\square\\)", answer:-3 },
+      { id:"q-p05", type:"equation", diff:1,
+        text:"\\(a=b\\)이면 \\(3a=\\square\\times b\\)", answer:3 },
+      { id:"q-p06", type:"equation", diff:2,
+        text:"\\(a=b\\)이면 \\(-2a=\\square\\times b\\)", answer:-2 },
+      { id:"q-p07", type:"equation", diff:2,
+        text:"\\(a=b\\)이면 \\(\\dfrac{1}{4}a=\\square\\times b\\quad(b\\neq0)\\)", answer:"1/4" },
+      { id:"q-p08", type:"equation", diff:1,
+        text:"\\(a=b\\)이면 \\(\\dfrac{a}{5}=\\dfrac{b}{\\square}\\quad(\\square\\neq0)\\)", answer:5 },
+      { id:"q-p09", type:"equation", diff:2,
+        text:"\\(a=b\\)이면 \\(\\dfrac{a}{-2}=\\dfrac{b}{\\square}\\quad(\\square\\neq0)\\)", answer:-2 },
+      { id:"q-p10", type:"equation", diff:2,
+        text:"\\(a=b\\)이면 \\(\\dfrac{a}{\\square}=\\dfrac{b}{3}\\quad(\\square\\neq0)\\)", answer:3 },
     ]
   },
 

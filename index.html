@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1p">
+  <meta name="app-version" content="6.1q">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1p"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1q"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1621,67 +1621,70 @@ window.submitMulti = function(){
 // 각 문제별 step 상태
 const step3State = {}; // key: q.id → {curStep:1|2|3, done:[false,false,false]}
 
+function getSteps(q){
+  if(Array.isArray(q.steps) && q.steps.length) return q.steps;
+  // 구버전 step1/2/3 → steps[] 변환
+  const steps=[];
+  if(q.step1) steps.push({label:q.step1.label||'', answerType:'equation', answer:q.step1.equation||'', answerAlt:q.step1.equationAlt||[], hint:q.step1.hint||''});
+  if(q.step2) steps.push({label:q.step2.label||'', answerType:'number', answer:q.step2.answer, answerAlt:[], hint:q.step2.hint||''});
+  if(q.step3) steps.push({label:q.step3.label||'', answerType:'text', answer:q.step3.answer, answerAlt:q.step3.answerAlt||[], hint:q.step3.hint||''});
+  return steps;
+}
+
 function getS3State(qid){
-  if(!step3State[qid]) step3State[qid]={curStep:1,done:[false,false,false]};
+  const q=curWS.questions.find(x=>x.id===qid)||{};
+  const n=getSteps(q).length||1;
+  if(!step3State[qid] || step3State[qid].done.length!==n){
+    step3State[qid]={curStep:1, done:Array(n).fill(false)};
+  }
   return step3State[qid];
 }
 
+const STEP_TAB_LABELS = ['①','②','③','④','⑤','⑥','⑦','⑧'];
+
 function renderStep3Q(q, panel){
+  const steps=getSteps(q);
   const st=getS3State(q.id);
+  const tabs=steps.map((s,i)=>{
+    const done=st.done[i];
+    const active=st.curStep===i+1;
+    const locked=i>0 && !st.done[i-1] && !active;
+    const shortLabel=s.label && s.label.length<=10 ? s.label : `${i+1}단계`;
+    return `<button class="step3-tab ${active?'active':''} ${done?'done':''} ${locked?'locked':''}"
+      onclick="goStep3(${i+1},'${q.id}')">${STEP_TAB_LABELS[i]||(i+1)} ${shortLabel}${done?' ✓':''}</button>`;
+  }).join('');
   panel.innerHTML=`
     <div class="problem-card">
       <div class="q-num">
         문제 ${curQIdx+1} / ${curWS.questions.length}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        <span style="font-size:10px;font-weight:600;color:var(--green);margin-left:6px">3단계 풀이</span>
+        <span style="font-size:10px;font-weight:600;color:var(--green);margin-left:6px">${steps.length}단계 풀이</span>
       </div>
       <div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>
     </div>
     <div class="step3-wrap">
-      <div class="step3-tabs">
-        <button class="step3-tab ${st.curStep===1?'active':''} ${st.done[0]?'done':''}"
-          onclick="goStep3(1,'${q.id}')">① 식 세우기${st.done[0]?' ✓':''}</button>
-        <button class="step3-tab ${st.curStep===2?'active':''} ${st.done[1]?'done':''} ${!st.done[0]&&st.curStep!==2?'locked':''}"
-          onclick="goStep3(2,'${q.id}')">② 방정식 풀기${st.done[1]?' ✓':''}</button>
-        <button class="step3-tab ${st.curStep===3?'active':''} ${st.done[2]?'done':''} ${!st.done[1]&&st.curStep!==3?'locked':''}"
-          onclick="goStep3(3,'${q.id}')">③ 답 쓰기${st.done[2]?' ✓':''}</button>
-      </div>
+      <div class="step3-tabs">${tabs}</div>
       <div class="step3-body" id="step3-body"></div>
     </div>`;
   renderStep3Body(q);
 }
 
-function goStep3(n, qid){
-  const st=getS3State(qid);
-  if(n===2&&!st.done[0]) return;
-  if(n===3&&!st.done[1]) return;
-  st.curStep=n;
-  const panel=document.getElementById("quiz-left-panel");
-  const q=curWS.questions[curQIdx];
-  if(q.id===qid) renderStep3Q(q,panel);
-}
-
 function renderStep3Body(q){
+  const steps=getSteps(q);
   const st=getS3State(q.id);
   const body=document.getElementById("step3-body");
   if(!body) return;
+  const i=st.curStep-1;
+  const step=steps[i];
+  if(!step) return;
+  const at=step.answerType||'number';
+  const hint=step.hint?`<div class="step3-hint">💡 ${step.hint}</div>`:'';
+  const labelHtml=`<div class="step3-label">${fracText(step.label||'')}</div>`;
 
-  if(st.curStep===1){
-    // 방정식 입력 (텍스트)
-    body.innerHTML=`
-      <div class="step3-label">${q.step1.label}</div>
-      <div class="step3-hint">💡 곱하기는 * 로 입력하세요</div>
-      <input type="text" id="s3-inp" class="word-inp-full" placeholder="예: 2x+3=11"
-        autocomplete="off" spellcheck="false"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();submitStep3(1);}">
-      <div class="feedback-strip" id="s3-fb"></div>`;
-    setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
-  } else if(st.curStep===2){
-    // 수식 키패드 입력
+  if(at==='number'){
+    // 수식 키패드
     qTokens=[]; qEditPart=null;
-    body.innerHTML=`
-      <div class="step3-label">${q.step2.label}</div>
-      <div class="step3-hint">💡 ${q.step2.hint}</div>
+    body.innerHTML=labelHtml+(step.hint?hint:'<div class="step3-hint">💡 숫자/분수로 입력하세요</div>')+`
       <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
       <div class="kbd-wrap" onmousedown="event.preventDefault()">
         <div class="kbd-grid">
@@ -1707,112 +1710,98 @@ function renderStep3Body(q){
           <button class="kb"    onclick="qInput('0')">0</button>
           <button class="kb"    onclick="qInput('.')">.</button>
           <button class="kb op" onclick="qInput('(')">( )</button>
-          <button class="kb v"  onclick="submitStep3(2)">↵</button>
-          <button class="kb sub" onclick="submitStep3(2)">확인 (Enter)</button>
+          <button class="kb v"  onclick="submitStep3(${st.curStep})">↵</button>
+          <button class="kb sub" onclick="submitStep3(${st.curStep})">확인 (Enter)</button>
         </div>
       </div>
       <div class="feedback-strip" id="s3-fb"></div>`;
   } else {
-    // 최종 답 텍스트 입력
-    body.innerHTML=`
-      <div class="step3-label">${q.step3.label}</div>
-      <div class="step3-hint">💡 ${q.step3.hint}</div>
-      <input type="text" id="s3-inp" class="word-inp-full" placeholder="예: 21, 2년 후, 24cm"
+    // 텍스트 입력 (equation / expr / text)
+    const ph = at==='equation' ? '예: 2x+3=11'
+             : at==='expr'     ? '예: 2x+3'
+             : '예: 21, 2년 후, 24cm';
+    const defHint = at==='equation' ? '💡 곱하기는 * 로 입력하세요'
+                  : at==='expr'     ? '💡 다항식을 입력하세요 (곱하기는 *)'
+                  : '💡 단위까지 정확히 쓰세요';
+    body.innerHTML=labelHtml+(step.hint?hint:`<div class="step3-hint">${defHint}</div>`)+`
+      <input type="text" id="s3-inp" class="word-inp-full" placeholder="${ph}"
         autocomplete="off" spellcheck="false"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();submitStep3(3);}">
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitStep3(${st.curStep});}">
       <div class="feedback-strip" id="s3-fb"></div>`;
     setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
   }
 }
 
-// 방정식 동치성 판정
-function eqEquivCheck(userEq, correctEq){
-  function normEq(s){
-    s=s.replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
-    let prev;
-    do{prev=s;
-      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
-      s=s.replace(/\)(\d|x|\()/g,')*$1');
-      s=s.replace(/(\d)x/g,'$1*x');
-      s=s.replace(/x(\d)/g,'x*$1');
-    }while(prev!==s);
-    return s;
-  }
-  function evalSide(s,x){
+// 다항식/식 동치 판정 (샘플 대입)
+function exprEquivCheck(userExpr, correctExpr){
+  function ev(s,x){
     try{
-      let t=normEq(s).replace(/x/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t)) return NaN;
+      let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
+      let prev;
+      do{prev=t;
+        t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+        t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+        t=t.replace(/(\d)([a-z])/g,'$1*$2');
+        t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      }while(prev!==t);
+      t=t.replace(/\^/g,'**').replace(/[a-z]/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
       return Function('"use strict";return('+t+')')();
     }catch(e){return NaN;}
   }
-  try{
-    const uParts=userEq.split('=');
-    const cParts=correctEq.split('=');
-    if(uParts.length!==2||cParts.length!==2) return false;
-    const pts=[0.317,1.234,-2.57,4.91,-0.718,7.37];
-    let ratio=null;
-    for(const x of pts){
-      const du=evalSide(uParts[0],x)-evalSide(uParts[1],x);
-      const dc=evalSide(cParts[0],x)-evalSide(cParts[1],x);
-      if(!isFinite(du)||!isFinite(dc)) return false;
-      if(Math.abs(dc)<1e-9){if(Math.abs(du)>1e-6) return false; continue;}
-      const r=du/dc;
-      if(ratio===null) ratio=r;
-      else if(Math.abs(r-ratio)>1e-6) return false;
-    }
-    return ratio!==null&&Math.abs(ratio)>1e-9;
-  }catch(e){return false;}
+  const pts=[1,-1,2,-2,0.5,3];
+  return pts.every(x=>{
+    const uv=ev(userExpr,x), cv=ev(correctExpr,x);
+    return isFinite(uv)&&isFinite(cv)&&Math.abs(uv-cv)<0.001;
+  });
 }
 
 function submitStep3(stepNum){
   const q=curWS.questions[curQIdx];
   if(q.type!=="step3") return;
+  const steps=getSteps(q);
   const st=getS3State(q.id);
+  const i=stepNum-1;
+  const step=steps[i];
+  if(!step) return;
   const fb=document.getElementById("s3-fb");
-  attempts[curQIdx]++;
+  const at=step.answerType||'number';
+  const isLastStep = stepNum===steps.length;
+  const lp=()=>document.getElementById("quiz-left-panel");
 
-  if(stepNum===1){
-    const inp=document.getElementById("s3-inp");
-    const val=(inp?.value||"").trim();
-    // 정답 방정식과 동치 확인
-    const allEqs=[q.step1.equation,...(q.step1.equationAlt||[])];
-    const ok=allEqs.some(eq=>eqEquivCheck(val,eq));
-    if(ok){
-      st.done[0]=true; st.curStep=2;
-      fb.className="feedback-strip show fb-correct";
-      fb.innerHTML="✅ 맞았어요! ② 방정식 풀기로 넘어가세요.";
-      setTimeout(()=>{renderStep3Q(q,document.getElementById("quiz-left-panel"));},700);
-    } else {
-      fb.className="feedback-strip show fb-wrong";
-      fb.innerHTML="❌ 방정식을 다시 확인해보세요. (예: 2x+3=11 형식으로 입력)";
-      document.getElementById("quiz-left-panel").classList.add("shake");
-      setTimeout(()=>document.getElementById("quiz-left-panel")?.classList.remove("shake"),450);
-    }
-  } else if(stepNum===2){
+  let ok=false, userAns="";
+  if(at==='number'){
     const val=qTokensToNum();
-    const ok=!isNaN(val)&&Math.abs(val-q.step2.answer)<0.001;
-    if(ok){
-      st.done[1]=true; st.curStep=3;
-      fb.className="feedback-strip show fb-correct";
-      fb.innerHTML=`✅ 정답! x = ${q.step2.answer}  ③ 답 쓰기로 넘어가세요.`;
-      setTimeout(()=>{renderStep3Q(q,document.getElementById("quiz-left-panel"));},700);
-    } else {
-      fb.className="feedback-strip show fb-wrong";
-      fb.innerHTML="❌ 다시 풀어보세요!";
-      document.getElementById("quiz-left-panel").classList.add("shake");
-      setTimeout(()=>document.getElementById("quiz-left-panel")?.classList.remove("shake"),450);
-    }
+    userAns=String(val);
+    const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
+    ok=!isNaN(val)&&Math.abs(val-correctNum)<0.001;
   } else {
     const inp=document.getElementById("s3-inp");
-    const val=(inp?.value||"").trim();
-    const allAns=[q.step3.answer,...(q.step3.answerAlt||[])];
-    const ok=allAns.some(a=>a.toLowerCase()===val.toLowerCase());
-    if(ok){
-      st.done[2]=true;
+    userAns=(inp?.value||"").trim();
+    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
+    if(at==='equation'){
+      ok=alts.some(eq=>eqEquivCheck(userAns,eq));
+    } else if(at==='expr'){
+      ok=alts.some(ex=>exprEquivCheck(userAns,ex));
+    } else { // text
+      ok=alts.some(a=>a.toLowerCase()===userAns.toLowerCase());
+    }
+  }
+
+  attempts[curQIdx]++;
+  if(ok){
+    st.done[i]=true;
+    if(!isLastStep){
+      st.curStep=stepNum+1;
+      fb.className="feedback-strip show fb-correct";
+      fb.innerHTML=`✅ 맞았어요! ${STEP_TAB_LABELS[stepNum]||(stepNum+1)}단계로 넘어가세요.`;
+      setTimeout(()=>renderStep3Q(q,document.getElementById("quiz-left-panel")),700);
+    } else {
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
-      fb.innerHTML=`✅ 완료! 답: ${q.step3.answer}&nbsp;
+      const dispAns = at==='number' ? (typeof step.answer==='number'?step.answer:step.answer) : step.answer;
+      fb.innerHTML=`✅ 완료! 답: ${dispAns}&nbsp;
         <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
@@ -1820,13 +1809,25 @@ function submitStep3(stepNum){
           ${isLast?'결과 보기 →':'다음 문제 →'}
         </button>`;
       renderStep3Q(q,document.getElementById("quiz-left-panel"));
-    } else {
-      fb.className="feedback-strip show fb-wrong";
-      fb.innerHTML="❌ 다시 확인해보세요. (단위 포함해서 쓰세요)";
-      document.getElementById("quiz-left-panel").classList.add("shake");
-      setTimeout(()=>document.getElementById("quiz-left-panel")?.classList.remove("shake"),450);
     }
+  } else {
+    fb.className="feedback-strip show fb-wrong";
+    fb.innerHTML= at==='equation' ? "❌ 식을 다시 확인해보세요."
+                : at==='expr'     ? "❌ 다항식을 다시 확인해보세요."
+                : at==='number'   ? "❌ 다시 풀어보세요!"
+                : "❌ 다시 확인해보세요. (단위 포함)";
+    lp()?.classList.add("shake");
+    setTimeout(()=>lp()?.classList.remove("shake"),450);
   }
+}
+
+function goStep3(n, qid){
+  const st=getS3State(qid);
+  if(n>1 && !st.done[n-2]) return; // 이전 단계 완료 전 잠금
+  st.curStep=n;
+  const panel=document.getElementById("quiz-left-panel");
+  const q=curWS.questions[curQIdx];
+  if(q.id===qid) renderStep3Q(q,panel);
 }
 window.submitStep3=submitStep3;
 window.goStep3=goStep3;

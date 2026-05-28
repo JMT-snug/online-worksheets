@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.1f">
+<meta name="app-version" content="edit-v1.1g">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -989,11 +989,13 @@ async function saveToFirestore(status){
     createdBy: currentUser.email,
   };
   try{
-    // 빈 배열로 기존 데이터 삭제되지 않도록 재확인
-    if(!saveData.questions?.length && !saveData.vocab?.length){
+    // 빈 배열로 기존 데이터 삭제 방지: vocab/questions 독립 체크
+    if(!saveData.questions?.length || !saveData.vocab?.length){
       const existing = (await getDoc(doc(db,'curriculum',wsId))).data();
-      if(existing?.questions?.length) saveData.questions = existing.questions;
-      if(existing?.vocab?.length)     saveData.vocab     = existing.vocab;
+      if(!saveData.questions?.length && existing?.questions?.length)
+        saveData.questions = existing.questions;
+      if(!saveData.vocab?.length && existing?.vocab?.length)
+        saveData.vocab = existing.vocab;
     }
     await setDoc(doc(db,'curriculum',wsId), saveData);
     currentWsId = wsId;

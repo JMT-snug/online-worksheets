@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0d">
+<meta name="app-version" content="edit-v1.0e">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -637,13 +637,14 @@ function showPanel(item){
     previewText('q-text','prev-text');
 
     if(qtype==='word_text'||qtype==='word'){
-      document.getElementById('q-ans-text').value = item.answer||'';
+      document.getElementById('q-ans-text').value = item.answer??'';
       altAnswers = [...(item.answerAlt||[])];
       renderAltList();
     } else if(qtype==='word_expr'){
-      document.getElementById('q-ans-expr').value = item.answer||'';
+      document.getElementById('q-ans-expr').value = item.answer??'';
     } else if(qtype==='equation'){
-      document.getElementById('q-ans-num').value = item.answer??'';
+      // answerFrac가 있으면 분수 형태로 표시
+    document.getElementById('q-ans-num').value = item.answerFrac ?? (item.answer??'');
     } else if(qtype==='multi'){
       renderOptions(item.options||[], item.answer||[]);
     }
@@ -762,20 +763,27 @@ window.saveQuestion = function(){
 
     if(type==='word_text'){
       q.type='word'; q.answerType='text';
-      q.text=raw;
+      q.text=text;
       q.answer=document.getElementById('q-ans-text').value.trim();
       q.answerAlt=[...altAnswers];
     } else if(type==='word_expr'){
       q.type='word'; q.answerType='expr';
-      q.text=raw;
+      q.text=text;
       q.answer=document.getElementById('q-ans-expr').value.trim();
     } else if(type==='equation'){
       q.type='equation';
-      q.text=raw;
-      q.answer=parseFloat(document.getElementById('q-ans-num').value)||0;
+      q.text=text;
+      const ansVal = document.getElementById('q-ans-num').value.trim();
+      // 분수 형태(ex: 8/3)면 answerFrac 보존, 숫자로도 저장
+      if(/^-?\d+\/\d+$/.test(ansVal)){
+        q.answerFrac = ansVal;
+        q.answer = eval(ansVal); // 수치 비교용
+      } else {
+        q.answer = parseFloat(ansVal)||0;
+      }
     } else if(type==='multi'){
       q.type='multi';
-      q.text=raw;
+      q.text=text;
       const optList=document.getElementById('options-list');
       const opts=[...(optList.children)].map((_,i)=>document.getElementById(`opt-${i}`)?.value||'');
       const ans=[...(optList.children)].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);

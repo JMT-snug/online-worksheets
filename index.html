@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1y">
+  <meta name="app-version" content="6.1z">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1y"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1z"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1446,6 +1446,19 @@ function qArrowLeft(){ qInput("←"); }
 function qNextPart(){ qInput("→"); }
 function qArrowRight(){ qInput("→"); }
 function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
+
+function evalAnswer(s){
+  // 문자열 수식("8/3", "Math.sqrt(2)", "23/5")을 수치로 평가
+  if(typeof s==='number') return s;
+  if(s==null||s==='') return NaN;
+  let t=String(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**');
+  // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
+  if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
+    const n=parseFloat(s); return isNaN(n)?NaN:n;
+  }
+  try{ return Function('"use strict";return('+t+')')(); }
+  catch(e){ const n=parseFloat(s); return isNaN(n)?NaN:n; }
+}
 
 function qTokensToNum(){
   let s=qTokens.map(t=>{

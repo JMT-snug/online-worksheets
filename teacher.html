@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4j">
+<meta name="app-version" content="t3.5b">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -186,7 +186,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collectionGroup, getDocs, doc, getDoc, setDoc, deleteDoc }
+import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, doc, getDoc, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -198,13 +198,13 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.4j";
+const T_VERSION = "t3.5b";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount))); // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
-const UNITS = [
+let UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
   { id:"u1-02", title:"정수와 유리수",          grade:1, category:"수와 연산" },
   { id:"u1-03", title:"문자와 식",              grade:1, category:"변화와 관계" },
@@ -252,6 +252,7 @@ const db      = getFirestore(fbApp);
 const storage = getStorage(fbApp);
 
 let tUser=null, allData={}, progressData={}, classes={}, selView="overview";
+let WORKSHEETS = (typeof window!=="undefined" && window.WORKSHEETS) ? window.WORKSHEETS : [];  // 정적 기본값, loadCurriculum이 Firestore로 교체
 
 document.getElementById("btn-login").addEventListener("click",async()=>{
   const p=new GoogleAuthProvider();
@@ -269,6 +270,7 @@ onAuthStateChanged(auth,async u=>{
   tUser=u;
   document.getElementById("t-name").textContent=u.displayName||u.email;
   showGate(false);
+  await loadCurriculum();
   await loadAll();
 });
 
@@ -278,6 +280,24 @@ function showGate(on){
 }
 
 
+
+// Firestore curriculum에서 학습지 로드 (edit.html에서 만든 것 포함)
+async function loadCurriculum(){
+  try{
+    const [uSnap,wSnap]=await Promise.all([
+      getDocs(query(collection(db,'units'),orderBy('order'))),
+      getDocs(collection(db,'curriculum'))
+    ]);
+    const units=uSnap.docs.map(d=>({...d.data()}));
+    const sheets=wSnap.docs.map(d=>({...d.data()}))
+      .sort((a,b)=>(a.order??99)-(b.order??99));
+    sheets.forEach(ws=>{ if(!ws.questions) ws.questions=[]; if(!ws.vocab) ws.vocab=[];
+      if(ws.questions && !ws.qCount) ws.qCount=ws.questions.filter(q=>q.type!=="link").length; });
+    if(sheets.length) WORKSHEETS=sheets;   // Firestore 우선 (없으면 정적 worksheets.js 유지)
+    if(units.length){ UNITS=units; units.forEach(u=>UNIT_MAP[u.id]=u); }  // UNIT_MAP 병합(학년/영역 조회용)
+    console.log(`[teacher 커리큘럼] 단원 ${units.length}개, 학습지 ${sheets.length}개 (Firestore)`);
+  }catch(e){ console.warn('[커리큘럼 로드 실패 → 정적 worksheets.js 사용]', e.message); }
+}
 
 async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';

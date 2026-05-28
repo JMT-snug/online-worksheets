@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.1j">
+<meta name="app-version" content="edit-v1.1l">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -209,6 +209,11 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <span class="hdr-title">✏️ 학습지 편집기</span>
     <span class="hdr-badge" id="edit-version">edit-v1.0d</span>
     <div class="hdr-space"></div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
+    <input id="drive-folder-id" value="14q0Avz-ep3RAm9k1Q82_0wpbQCjp6Jpl" placeholder="폴더 ID 입력"
+      style="width:220px;padding:4px 8px;border-radius:4px;border:1px solid #475569;background:#1e293b;color:#cbd5e1;font-size:12px;font-family:monospace">
+  </div>
     <button class="hdr-btn" id="btn-preview"
     style="background:#0f766e;color:#fff">👁 미리보기</button>
   <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
@@ -328,6 +333,23 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <textarea id="q-text" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
             <div class="latex-preview" id="prev-text">미리보기</div>
           </div>
+          <!-- 이미지 첨부 -->
+          <div class="field" id="field-image">
+            <label>이미지 <span style="font-weight:400;color:var(--ink3)">(선택)</span></label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="cursor:pointer;background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600">
+                📁 이미지 선택
+                <input type="file" id="q-img-file" accept="image/*" style="display:none" onchange="previewLocalImage(this)">
+              </label>
+              <button onclick="uploadImageToDrive()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">⬆ Drive 업로드</button>
+              <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
+            </div>
+            <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
+            <div id="q-img-preview" style="margin-top:8px;display:none">
+              <img id="q-img-tag" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--rule)">
+              <div id="q-img-status" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
+            </div>
+          </div>
 
           <!-- 텍스트 답 -->
           <div id="field-ans-text" class="field">
@@ -373,12 +395,13 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <label>배지 텍스트</label>
             <input id="q-pool-badge" placeholder="예: 소수 찾기">
             <label style="margin-top:10px;display:block">문제 텍스트</label>
-            <input id="q-pool-question" placeholder="예: 소수인 것은?">
+            <input id="q-pool-question" placeholder="예: 소수인 것은?" oninput="previewText('q-pool-question','q-pool-q-prev')">
+            <div class="latex-preview" id="q-pool-q-prev" style="min-height:28px;font-size:13px;margin-top:4px">미리보기</div>
             <label style="margin-top:10px;display:block">✅ 정답 풀 <span style="font-weight:400;color:var(--ink3)">(Enter로 추가)</span></label>
-            <input id="q-pool-correct-input" placeholder="정답 항목 입력" onkeydown="addPoolItem(event,'correct')">
+            <input id="q-pool-correct-input" placeholder="예: 3, \(\frac{1}{2}\), \(2\sqrt{3}\)" onkeydown="addPoolItem(event,'correct')">
             <div id="pool-correct-list" class="ans-alt-list" style="margin-top:6px"></div>
             <label style="margin-top:10px;display:block">❌ 오답 풀 <span style="font-weight:400;color:var(--ink3)">(최소 3개)</span></label>
-            <input id="q-pool-wrong-input" placeholder="오답 항목 입력" onkeydown="addPoolItem(event,'wrong')">
+            <input id="q-pool-wrong-input" placeholder="예: -3, \(\frac{3}{4}\), \(\sqrt{2}\)" onkeydown="addPoolItem(event,'wrong')">
             <div id="pool-wrong-list" class="ans-alt-list" style="margin-top:6px"></div>
           </div>
 
@@ -439,10 +462,27 @@ onAuthStateChanged(auth, user => {
   }
 });
 
+let _googleAccessToken = null; // Drive API용 OAuth 토큰
+
 document.getElementById('btn-login').onclick = async () => {
-  try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
-  catch(e){ alert('로그인 오류: '+e.message); }
+  try{
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/drive.file');
+    const result = await signInWithPopup(auth, provider);
+    const cred = GoogleAuthProvider.credentialFromResult(result);
+    if(cred?.accessToken) _googleAccessToken = cred.accessToken;
+  } catch(e){ alert('로그인 오류: '+e.message); }
 };
+
+async function getDriveToken(){
+  if(_googleAccessToken) return _googleAccessToken;
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
+  const result = await signInWithPopup(auth, provider);
+  const cred = GoogleAuthProvider.credentialFromResult(result);
+  _googleAccessToken = cred?.accessToken;
+  return _googleAccessToken;
+}
 document.getElementById('btn-logout').onclick = () => signOut(auth);
 
 // ── 데이터 로드 ──
@@ -733,6 +773,16 @@ function showPanel(item){
     document.getElementById('q-diff-sel').value = item.diff||1;
     document.getElementById('q-text').value = (item.text||'').replace(/\\\\/g,'\\');
     previewText('q-text','prev-text');
+    // 이미지 URL 로드
+    const imgUrl = item.imageUrl||'';
+    document.getElementById('q-img-url').value = imgUrl;
+    if(imgUrl){
+      document.getElementById('q-img-tag').src = imgUrl;
+      document.getElementById('q-img-preview').style.display = '';
+      document.getElementById('q-img-status').textContent = '저장된 이미지';
+    } else {
+      document.getElementById('q-img-preview').style.display = 'none';
+    }
 
     if(qtype==='word_text'||qtype==='word'){
       document.getElementById('q-ans-text').value = item.answer??'';
@@ -764,7 +814,7 @@ function setQType(type){
   const show = id => document.getElementById(id).style.display='';
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image']
     .forEach(hide);
   if(type==='vocab'){
     show('field-vocab');
@@ -773,7 +823,7 @@ function setQType(type){
   } else if(type==='link'||type==='step3'){
     show('field-text');
   } else {
-    show('field-text');
+    show('field-text'); show('field-image');
     if(type==='word_text') show('field-ans-text');
     else if(type==='word_expr') show('field-ans-expr');
     else if(type==='equation') show('field-ans-num');
@@ -902,15 +952,19 @@ window.saveQuestion = function(){
     if(type==='word_text'){
       q.type='word'; q.answerType='text';
       q.text=text;
+      const imgUrl1=document.getElementById('q-img-url').value.trim();
+      if(imgUrl1) q.imageUrl=imgUrl1; else delete q.imageUrl;
       q.answer=document.getElementById('q-ans-text').value.trim();
       q.answerAlt=[...altAnswers];
     } else if(type==='word_expr'){
       q.type='word'; q.answerType='expr';
       q.text=text;
+      const imgUrl4=document.getElementById('q-img-url').value.trim(); if(imgUrl4) q.imageUrl=imgUrl4; else delete q.imageUrl;
       q.answer=document.getElementById('q-ans-expr').value.trim();
     } else if(type==='equation'){
       q.type='equation';
       q.text=text;
+      const imgUrl2=document.getElementById('q-img-url').value.trim(); if(imgUrl2) q.imageUrl=imgUrl2; else delete q.imageUrl;
       const ansVal = document.getElementById('q-ans-num').value.trim();
       // 분수(예: 8/3, -1/4), 무리수(예: Math.sqrt(2)) 또는 정수
       if(/^-?\d+\/\d+$/.test(ansVal)){
@@ -926,6 +980,7 @@ window.saveQuestion = function(){
     } else if(type==='multi'){
       q.type='multi';
       q.text=text;
+      const imgUrl3=document.getElementById('q-img-url').value.trim(); if(imgUrl3) q.imageUrl=imgUrl3; else delete q.imageUrl;
       const opts=[...document.querySelectorAll('[id^="opt-"]:not([id^="opt-chk-"]):not([id^="opt-prev-"])')].map(el=>el.value);
       const ans=[...document.querySelectorAll('[id^="opt-chk-"]')].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
       q.options=opts; q.answer=ans;
@@ -1145,6 +1200,82 @@ document.getElementById('btn-add-unit').onclick = async () => {
 };
 
 
+
+// ── 이미지 업로드 (Google Drive) ──
+window.previewLocalImage = function(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('q-img-tag').src = e.target.result;
+    document.getElementById('q-img-preview').style.display = '';
+    document.getElementById('q-img-status').textContent = `선택됨: ${file.name} (${(file.size/1024).toFixed(1)}KB) — Drive 업로드 버튼을 눌러주세요`;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.clearImage = function(){
+  document.getElementById('q-img-url').value = '';
+  document.getElementById('q-img-preview').style.display = 'none';
+  document.getElementById('q-img-file').value = '';
+};
+
+window.uploadImageToDrive = async function(){
+  const fileInput = document.getElementById('q-img-file');
+  const file = fileInput.files[0];
+  if(!file){ toast('이미지를 먼저 선택하세요'); return; }
+
+  const folderId = document.getElementById('drive-folder-id').value.trim();
+  if(!folderId){ toast('Drive 폴더 ID를 입력하세요'); return; }
+
+  const status = document.getElementById('q-img-status');
+  status.textContent = '⏳ Drive 토큰 요청 중...';
+
+  try{
+    const token = await getDriveToken();
+    if(!token) throw new Error('Drive 토큰 획득 실패');
+
+    status.textContent = '⏳ 업로드 중...';
+
+    // 1. 파일 업로드 (multipart)
+    const meta = JSON.stringify({ name: file.name, parents: [folderId] });
+    const body = new FormData();
+    body.append('metadata', new Blob([meta], {type:'application/json'}));
+    body.append('file', file);
+
+    const uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method:'POST', headers:{'Authorization':`Bearer ${token}`}, body }
+    );
+    if(!uploadRes.ok) throw new Error(`업로드 실패: ${uploadRes.status}`);
+    const { id } = await uploadRes.json();
+
+    // 2. 공개 권한 설정
+    status.textContent = '⏳ 공개 설정 중...';
+    await fetch(`https://www.googleapis.com/drive/v3/files/${id}/permissions`, {
+      method:'POST',
+      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+      body: JSON.stringify({ role:'reader', type:'anyone' })
+    });
+
+    // 3. URL 저장
+    const url = `https://drive.google.com/uc?export=view&id=${id}`;
+    document.getElementById('q-img-url').value = url;
+    document.getElementById('q-img-tag').src = url;
+    document.getElementById('q-img-preview').style.display = '';
+    status.textContent = `✅ 업로드 완료: ${file.name}`;
+    toast('이미지 업로드 완료');
+  }catch(e){
+    status.textContent = `❌ 오류: ${e.message}`;
+    toast('업로드 실패: ' + e.message);
+    console.error(e);
+    // 토큰 만료 가능성
+    if(e.message.includes('401') || e.message.includes('403')){
+      _googleAccessToken = null;
+      toast('토큰 만료 — 다시 시도하면 재인증됩니다');
+    }
+  }
+};
+
 // ── 랜덤 풀 헬퍼 ──
 window.addPoolItem = function(e, side){
   if(e.key!=='Enter') return;
@@ -1160,8 +1291,10 @@ function renderPoolList(side){
   const list = document.getElementById(`pool-${side}-list`);
   list.innerHTML = arr.map((v,i)=>`
     <div class="ans-alt-tag" style="background:${side==='correct'?'var(--grn-lt)':'var(--red-lt)'};color:${side==='correct'?'var(--green)':'var(--red)'}">
-      ${v}<button onclick="${side==='correct'?'poolCorrect':'poolWrong'}.splice(${i},1);renderPoolList('${side}')">✕</button>
+      <span class="pool-item-text">${v}</span>
+      <button onclick="${side==='correct'?'poolCorrect':'poolWrong'}.splice(${i},1);renderPoolList('${side}')">✕</button>
     </div>`).join('');
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([list]).catch(()=>{});
 }
 window.renderPoolList=renderPoolList;
 

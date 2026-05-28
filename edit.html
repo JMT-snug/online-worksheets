@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.1g">
+<meta name="app-version" content="edit-v1.1i">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -89,6 +89,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .badge-word{background:#fef3c7;color:#92400e}
 .badge-equation{background:#ede9fe;color:#5b21b6}
 .badge-multi{background:#dcfce7;color:#14532d}
+.badge-auto{background:#f3e8ff;color:#6b21a8}
 .badge-vocab{background:#dbeafe;color:#1e3a8a}
 .q-text-preview{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px}
 .q-actions{display:flex;gap:4px;flex-shrink:0}
@@ -348,8 +349,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
           <!-- 숫자 답 -->
           <div id="field-ans-num" class="field" style="display:none">
-            <label>정답 (숫자)</label>
-            <input id="q-ans-num" type="number" placeholder="숫자 입력">
+            <label>정답 <span style="font-weight:400;color:var(--ink3)">(정수: 5 / 분수: 2/3 / 수식: Math.sqrt(2))</span></label>
+            <input id="q-ans-num" type="text" placeholder="숫자 또는 분수 입력 (예: 5, -3, 2/3, 8/3)">
           </div>
 
           <!-- 객관식 선지 -->
@@ -566,9 +567,12 @@ function renderEditor(){
     addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>';
     document.getElementById('btn-add-q').onclick = addQuestionItem;
   }
+  const extrasCount = (currentWs.extras||[]).filter(e=>e.type&&!['vocab'].includes(e.type)).length;
   document.getElementById('q-list-title').textContent =
-    wType==='vocab' ? `용어 목록 (${currentWs.vocab.length}개) + 연습 문항 (${currentWs.questions.length}개)` :
-    `문항 목록 (${currentWs.questions.length}개)`;
+    wType==='vocab'
+      ? `용어 목록 (${currentWs.vocab.length}개) + 연습 문항 (${currentWs.questions.length}개)` +
+        (extrasCount ? ` + 자동생성 (${extrasCount}개)` : '')
+      : `문항 목록 (${currentWs.questions.length}개)`;
 
   renderQList();
 }
@@ -584,21 +588,27 @@ function renderQList(){
        ...currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}))]
     : currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}));
 
-  if(!allItems.length){
+  // extras (자동생성 유형) 추가
+  const extras = (currentWs.extras||[]).filter(e=>e.type&&e.type!=='vocab');
+  const extraItems = extras.map((e,i)=>({...e, _type:'extra', _idx:i}));
+  const combinedItems = [...allItems, ...extraItems];
+
+  if(!combinedItems.length){
     list.innerHTML = '<div class="empty">문항이 없습니다.<br>오른쪽 위 [+ 문항 추가]를 눌러주세요.</div>';
     return;
   }
 
-  allItems.forEach((item, i) => {
+  combinedItems.forEach((item, i) => {
     const card = document.createElement('div');
     card.className = 'q-card' + (selectedQIdx===i?' selected':'');
     card.draggable = true;
     card.dataset.idx = i;
 
     const isVocabItem = item._type==='vocab';
-    const badge = isVocabItem ? 'vocab' : (item.type||'word');
-    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word:'용어',equation:'방정식',multi:'객관식'}[badge]||'계산';
+    const isExtraItem = item._type==='extra';
+    const badge = isVocabItem ? 'vocab' : isExtraItem ? 'auto' : (item.type||'word');
+    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto'}[badge]||'badge-word';
+    const badgeLabel = {vocab:'VOCA',word:'용어',equation:'방정식',multi:'객관식',auto:'자동생성'}[badge]||'계산';
     const preview = isVocabItem
       ? `${item.term} : ${item.def}`
       : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
@@ -611,10 +621,13 @@ function renderQList(){
         <div class="q-text-preview">${preview}</div>
       </div>
       <div class="q-actions">
-        <button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>
+        ${isExtraItem ? '' : `<button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>`}
       </div>`;
 
-    card.onclick = () => selectQuestion(i, allItems);
+    card.onclick = () => {
+      if(isExtraItem){ toast('자동생성 문항은 코드로 처리되며 편집할 수 없습니다'); return; }
+      selectQuestion(i, combinedItems);
+    };
 
     // Drag & Drop
     card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); card.style.opacity='.4'; });
@@ -626,6 +639,7 @@ function renderQList(){
       const from = parseInt(e.dataTransfer.getData('text/plain'));
       const to   = i;
       if(from===to) return;
+      if(isExtraItem || combinedItems[from]?._type==='extra'){ toast('자동생성 문항은 순서 변경이 불가합니다'); return; }
       moveItem(from, to, isVocab, allItems);
     });
 
@@ -712,8 +726,8 @@ function showPanel(item){
     } else if(qtype==='word_expr'){
       document.getElementById('q-ans-expr').value = item.answer??'';
     } else if(qtype==='equation'){
-      // answerFrac가 있으면 분수 형태로 표시
-    document.getElementById('q-ans-num').value = item.answerFrac ?? (item.answer??'');
+      // 문자열 정답(분수/수식) 그대로 표시
+    document.getElementById('q-ans-num').value = item.answer??'';
     } else if(qtype==='multi'){
       renderOptions(item.options||[], item.answer||[]);
     }
@@ -858,12 +872,16 @@ window.saveQuestion = function(){
       q.type='equation';
       q.text=text;
       const ansVal = document.getElementById('q-ans-num').value.trim();
-      // 분수 형태(ex: 8/3)면 answerFrac 보존, 숫자로도 저장
+      // 분수(예: 8/3, -1/4), 무리수(예: Math.sqrt(2)) 또는 정수
       if(/^-?\d+\/\d+$/.test(ansVal)){
-        q.answerFrac = ansVal;
-        q.answer = eval(ansVal); // 수치 비교용
+        // 정수 분수: "8/3" 그대로 저장, 채점 시 evalAnswer로 처리
+        q.answer = ansVal;
+      } else if(/^-?[\d.]+$/.test(ansVal)){
+        // 정수 또는 소수
+        q.answer = parseFloat(ansVal);
       } else {
-        q.answer = parseFloat(ansVal)||0;
+        // 수식 문자열 (Math.sqrt(2) 등) 그대로 저장
+        q.answer = ansVal;
       }
     } else if(type==='multi'){
       q.type='multi';

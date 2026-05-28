@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4g">
+<meta name="app-version" content="t3.4h">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -456,8 +456,9 @@ window.renderWSTable=function(wsId){
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
 
   // 완료 / 진행 중 분리
-  let done=recs.filter(r=>r.isComplete);
-  let inProg=recs.filter(r=>!r.isComplete);
+  const isDone=r=>r.isComplete || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount);
+  let done=recs.filter(isDone);
+  let inProg=recs.filter(r=>!isDone(r));
 
   // 필터 적용
   if(_wsFilter){
@@ -479,25 +480,27 @@ window.renderWSTable=function(wsId){
   const tbody=document.getElementById("ws-tbody"); if(!tbody) return;
 
   // 완료 행
+  // perQuestion 정오답 셀 렌더 (완료/진행 중 공통)
+  function renderPerQ(r){
+    if(!r.perQuestion) return "";
+    window._qd=window._qd||{};
+    const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
+      const wc=(v.wrongInputs||[]).length;
+      const col=wc===0?"var(--green)":wc===1?"var(--amber)":"var(--red)";
+      const dkey=r.uid+"_"+qid;
+      window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:v.attempts||1,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${wc===0?"✓":wc+"회"}</span></div>`;
+    }).join("");
+    return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
+  }
   const doneRows=done.map(r=>{
-    const ts=formatDate(r.completedAt);
+    const ts=formatDate(r.completedAt||r.lastUpdated);
     const rate=r.correctRate??Math.round((r.answeredCount||0)/(r.totalCount||1)*100);
     const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
     const wrong=tries;
     const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
-    let perQHtml="";
-    if(r.perQuestion){
-      window._qd=window._qd||{};
-      const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
-        const wc=(v.wrongInputs||[]).length;
-        const col=wc===0?"var(--green)":wc===1?"var(--amber)":"var(--red)";
-        const dkey=r.uid+"_"+qid;
-        window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:v.attempts||1,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-        return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${wc===0?"✓":wc+"회"}</span></div>`;
-      }).join("");
-      perQHtml=`<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
-    }
+    const perQHtml=renderPerQ(r);
     return `<tr>
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
@@ -514,13 +517,16 @@ window.renderWSTable=function(wsId){
     const classInfo=findClass(r.studentEmail)||"-";
     const pct=r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0;
     const upd=formatDate(r.lastUpdated);
+    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const wcls=tries===0?"tries-1":tries<=2?"tries-2":"tries-many";
+    const perQHtml=renderPerQ(r);
     return `<tr style="background:var(--acc-lt)">
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
       <td><div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div></td>
-      <td>-</td>
-      <td>-</td>
+      <td>${tries>0?`<span class="tries-badge ${wcls}">${tries}회</span>`:"-"}</td>
+      <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--amber);font-weight:600">⏳ 진행 중</span><br>${upd}</td>
     </tr>`;
   }).join("");

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2g">
+<meta name="app-version" content="edit-v1.2h">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -341,7 +341,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <!-- 문제 텍스트 (word/equation/multi) -->
           <div id="field-text" class="field">
             <label>문제 텍스트 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \(...\))</span></label>
-            <textarea id="q-text" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
+            <textarea id="q-text" autocapitalize="off" autocorrect="off" spellcheck="false" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
             <div class="latex-preview" id="prev-text">미리보기</div>
           </div>
           <!-- 이미지 첨부 -->
@@ -1405,7 +1405,7 @@ function renderSteps(){
         <label style="font-size:11px">답 유형</label>
         <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         <label style="font-size:11px">정답</label>
-        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
+        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">

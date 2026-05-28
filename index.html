@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2c">
+  <meta name="app-version" content="6.2d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2c"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -656,8 +656,14 @@ async function loadDash() {
         const snap = await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
         if (snap.exists()){
           const d=snap.data();
-          wsProgress[ws.id] = d.isComplete ? d : {...d, _inProgress:true};
-          console.log("[진도읽기]", ws.id, d.isComplete?"완료":"진행중", (d.answeredCount||0)+"/"+(d.totalCount||"?"));
+          wsProgress[ws.id] = (d.isComplete||d.passed) ? d : {...d, _inProgress:true};
+          console.log("[진도읽기]", ws.id, (d.isComplete||d.passed)?"완료":"진행중", (d.answeredCount||0)+"/"+(d.totalCount||"?"));
+        } else if(ws.type==="vocab"){
+          // 구 데이터: results 컬렉션 폴백
+          try{
+            const vSnap=await getDoc(doc(db,"results",user.email,"worksheets",ws.id));
+            if(vSnap.exists()) wsProgress[ws.id]=vSnap.data();
+          }catch(e2){}
         }
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
@@ -774,8 +780,8 @@ function showUnitPage(unit) {
   } else {
     sheets.forEach(ws => {
       const prog  = wsProgress[ws.id];
-      const done   = !!(prog?.isComplete);
-      const inProg = !!(prog && !prog.isComplete);
+      const done   = !!(prog?.isComplete || (ws.type==="vocab" && prog?.passed));
+      const inProg = !!(prog && !prog.isComplete && !(ws.type==="vocab" && prog?.passed));
       const empty = ws.type==="vocab" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
       const isDraft  = ws.status === "draft";
@@ -2450,13 +2456,17 @@ function vqAnswer(selected, correct){
       try{
         const prevCount=(wsProgress[vqWS.id]?.passCount||0);
         const newCount=prevCount+1;
-        await setDoc(doc(db,"results",user.email,"worksheets",vqWS.id),{
+        const _vqTs=new Date().toISOString();
+        const _vqData={
           passed:true, passCount:newCount,
-          completedAt:new Date().toISOString(),
+          completedAt:_vqTs, isComplete:true,
           worksheetId:vqWS.id, worksheetTitle:vqWS.title,
-          studentEmail:user.email, studentName:user.displayName||""
-        });
-        wsProgress[vqWS.id]={passed:true,passCount:newCount,completedAt:new Date().toISOString()};
+          studentEmail:user.email, studentName:user.displayName||"",
+          answeredCount:VQ_TARGET, totalCount:VQ_TARGET, totalAttempts:0,
+          lastUpdated:_vqTs,
+        };
+        await setDoc(doc(db,"records",user.email,"worksheets",vqWS.id), _vqData);
+        wsProgress[vqWS.id]={..._vqData};
       }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
       const pc=document.getElementById('vq-pass-count');
       if(pc){ const n=(wsProgress[vqWS.id]?.passCount||0); pc.textContent=`${n}회 통과! 용어를 완벽히 익혔어요.`; }

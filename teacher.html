@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.5b">
+<meta name="app-version" content="t3.5c">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -198,7 +198,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.5b";
+const T_VERSION = "t3.5c";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount))); // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
@@ -338,6 +338,7 @@ function buildSidebar(){
   let h=`
     <div class="sb-section">메뉴</div>
     <div class="sb-item ${selView==='overview'?'active':''}" data-view="overview">📊 전체 현황</div>
+    <div class="sb-item ${selView==='students'||selView.startsWith('stu:')?'active':''}" data-view="students">👤 학생별 조회</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
     <div class="sb-section" style="margin-top:8px">학습지</div>`;
   [1,2,3].forEach(grade=>{
@@ -410,8 +411,159 @@ function navigate(view){
   buildSidebar();
   if(view==="overview") renderOverview();
   else if(view==="classes") renderClasses();
+  else if(view==="students") renderStudents();
+  else if(view.startsWith("stu:")) renderStudentDetail(view.slice(4));
   else renderWS(view);
 }
+window.navigate=navigate;
+
+// ── 학생별 조회: 공용 문항 셀 렌더 ──
+function perQCells(r, uid){
+  if(!r || !r.perQuestion) return '<span style="color:var(--ink3);font-size:12px">기록 없음</span>';
+  window._qd=window._qd||{};
+  const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
+    const wc=(v.wrongInputs||[]).length;
+    const att=v.attempts||0;
+    const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
+    const unanswered = (v.correct===false) && wc===0 && att===0;
+    let col, mark, ttl;
+    if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${qid}: 미응답`; }
+    else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
+    else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${qid}: 오답 ${wc}회`; }
+    const dkey=(uid||r.uid||"x")+"_"+qid;
+    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+    return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
+  }).join("");
+  return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
+}
+
+// ── 학생 목록 ──
+let _stuSort="class", _stuClass="", _stuSearch="";
+function studentList(){
+  return Object.entries(allData).map(([uid,wsMap])=>{
+    const recs=Object.values(wsMap);
+    const any=recs.find(r=>r.studentName)||recs[0]||{};
+    const email=any.studentEmail||"-";
+    const total=recs.length;
+    const done=recs.filter(isRecDone).length;
+    const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
+    const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
+    return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",total,done,avg};
+  });
+}
+
+function renderStudents(){
+  selView="students";
+  const list=studentList();
+  let students=[...list];
+  // 학급 필터
+  if(_stuClass) students=students.filter(s=>s.cls===_stuClass);
+  // 이름/이메일 검색
+  if(_stuSearch){ const kw=_stuSearch.toLowerCase();
+    students=students.filter(s=>(s.name||"").toLowerCase().includes(kw)||(s.email||"").toLowerCase().includes(kw)); }
+  // 정렬
+  if(_stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(_stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(_stuSort==="done") students.sort((a,b)=>b.done-a.done);
+  else if(_stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
+
+  const totalStu=list.length;
+  const filtered=students;
+  // 학급 목록 (필터 드롭다운용)
+  const allClasses=[...new Set(list.map(s=>s.cls).filter(c=>c&&c!=="-"))].sort((a,b)=>a.localeCompare(b,"ko"));
+  const rows=filtered.map(s=>`
+    <tr style="cursor:pointer" onclick="navigate('stu:${s.uid}')">
+      <td><strong>${s.name}</strong></td>
+      <td style="font-size:12px;color:var(--ink3)">${s.email}</td>
+      <td style="font-size:12px">${s.cls}</td>
+      <td style="text-align:center"><span class="tries-badge ${s.done>0?'tries-1':'tries-many'}">${s.done}개</span></td>
+      <td>${s.avg!=null?rateBar(s.avg):'<span style="color:var(--ink3)">-</span>'}</td>
+      <td style="text-align:center;color:var(--accent);font-size:12px;font-weight:600">상세 →</td>
+    </tr>`).join("");
+
+  document.getElementById("content").innerHTML=`
+    <div class="card">
+      <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
+        <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${_stuSearch||_stuClass?` / 전체 ${totalStu}명`:''}</span></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${_stuSearch}"
+            oninput="_stuSearch=this.value;renderStudents()"
+            style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;width:160px">
+          <select onchange="_stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="" ${!_stuClass?'selected':''}>전체 학급</option>
+            ${allClasses.map(c=>`<option value="${c}" ${_stuClass===c?'selected':''}>${c}</option>`).join('')}
+          </select>
+          <select onchange="_stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="class" ${_stuSort==='class'?'selected':''}>학급 순</option>
+            <option value="name"  ${_stuSort==='name'?'selected':''}>이름 순</option>
+            <option value="done"  ${_stuSort==='done'?'selected':''}>완료 많은 순</option>
+            <option value="rate"  ${_stuSort==='rate'?'selected':''}>정답률 높은 순</option>
+          </select>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>이름</th><th>이메일</th><th>학급</th><th style="text-align:center">완료 학습지</th><th>평균 정답률</th><th></th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:30px">학생 데이터가 없습니다</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+window.renderStudents=renderStudents;
+
+// ── 학생 상세: 한 학생의 모든 학습지 ──
+function renderStudentDetail(uid){
+  selView="stu:"+uid;
+  const wsMap=allData[uid]||{};
+  const recs=Object.values(wsMap);
+  const any=recs.find(r=>r.studentName)||recs[0]||{};
+  const name=any.studentName||"-", email=any.studentEmail||"-", cls=findClass(email)||"-";
+  const done=recs.filter(isRecDone).length;
+  const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
+  const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
+  const totalTries=recs.reduce((s,r)=>s+(r.totalAttempts||Object.values(r.perQuestion||{}).reduce((x,v)=>x+(v.attempts||0),0)),0);
+
+  // 학습지별 행 (WORKSHEETS 정의 순서, 학생이 시작한 것만)
+  const ordered=WORKSHEETS.filter(ws=>wsMap[ws.id]);
+  const startedIds=new Set(ordered.map(w=>w.id));
+  // WORKSHEETS에 없지만 기록이 있는 경우(삭제된 학습지 등)
+  Object.keys(wsMap).forEach(id=>{ if(!startedIds.has(id)){ ordered.push({id,title:wsMap[id].worksheetTitle||id,unitId:wsMap[id].unitId}); } });
+
+  const rows=ordered.map(ws=>{
+    const r=wsMap[ws.id]; if(!r) return "";
+    const dn=isRecDone(r);
+    const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
+    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const unit=UNIT_MAP[ws.unitId]?.title||"-";
+    const ts=formatDate(r.completedAt||r.lastUpdated);
+    const statusBadge=dn
+      ? `<span style="color:var(--green);font-weight:600">✅ 완료</span>`
+      : `<span style="color:var(--amber);font-weight:600">⏳ 진행 중 (${r.answeredCount||0}/${r.totalCount||"?"})</span>`;
+    return `<tr>
+      <td><strong>${ws.title||"-"}</strong><br><span style="font-size:11px;color:var(--ink3)">${unit}</span></td>
+      <td style="font-size:12px">${statusBadge}<br><span style="font-size:11px;color:var(--ink3)">${ts}</span></td>
+      <td>${rate!=null?rateBar(rate):'-'}</td>
+      <td style="text-align:center"><span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span></td>
+      <td style="min-width:200px">${perQCells(r,uid)}</td>
+    </tr>`;
+  }).join("");
+
+  document.getElementById("content").innerHTML=`
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">👤 ${name} <span style="color:var(--ink3);font-weight:400">· ${cls} · ${email}</span></span>
+        <button class="btn" onclick="navigate('students')">← 학생 목록</button>
+      </div>
+      <div class="summary-row" style="margin-bottom:16px">
+        <div class="sum-card"><div class="sum-label">완료 학습지</div><div class="sum-num">${done}<span style="font-size:14px;color:var(--ink3)">/${recs.length}</span></div></div>
+        <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
+        <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>학습지</th><th>상태</th><th>정답률</th><th style="text-align:center">시도</th><th>문항별 (클릭=상세)</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:30px">기록이 없습니다</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+window.renderStudentDetail=renderStudentDetail;
 
 // ── Fix 2: renderOverview - ws.grade/category → wsGrade/wsCategory 함수 사용 ──
 function renderOverview(){

@@ -863,8 +863,8 @@ const mathVars = s => s;
 */
 function fracText(text){
   if(!text) return text;
-  // LaTeX 구분자 정규화: \\( → \( (이중 백슬래시 → 단일)
-  text = text.replace(/\\\\\(/g,'\\(').replace(/\\\\\)/g,'\\)');
+  // LaTeX 정규화: 모든 이중 백슬래시 → 단일 (\\frac, \\(, \\) 등)
+  text = text.replace(/\\\\/g,'\\');
   // 줄바꿈 통일: \n(뉴라인) → <br>
   text = text.replace(/\n/g,'<br>');
 
@@ -2277,6 +2277,218 @@ function vqNextQ(){
     vqTimeLeft--; vqTick();
     if(vqTimeLeft<=0){ clearInterval(vqTimer); vqTimeout(correct); }
   },1000);
+}
+
+function vqTick(){
+  const n=document.getElementById('vq-time-num');
+  const bar=document.getElementById('vq-time-bar');
+  if(n){ n.textContent=vqTimeLeft; n.style.color=vqTimeLeft<=3?'var(--red)':'var(--ink)'; }
+  if(bar){ bar.style.transition=vqTimeLeft===VQ_TIME?'none':'width 1s linear'; bar.style.width=(vqTimeLeft/VQ_TIME*100)+'%'; }
+}
+
+function vqHighlight(correct, wrong){
+  document.querySelectorAll('.vq-choice').forEach(btn=>{
+    btn.disabled=true;
+    const val=btn.dataset.val??btn.textContent;
+    if(val===correct){ btn.style.background='#d1fae5'; btn.style.borderColor='#10b981'; btn.style.color='#065f46'; }
+    else if(wrong && val===wrong){ btn.style.background='var(--red-lt)'; btn.style.borderColor='var(--red)'; btn.style.color='var(--red)'; }
+  });
+}
+
+function vqAnswer(selected, correct){
+  clearInterval(vqTimer);
+  const ok=selected===correct;
+  vqHighlight(correct, ok ? null : selected);
+  if(ok){
+    vqStreak++;
+    if(vqStreak>=VQ_TARGET){ setTimeout(async ()=>{
+      try{
+        const prevCount=(wsProgress[vqWS.id]?.passCount||0);
+        const newCount=prevCount+1;
+        await setDoc(doc(db,"results",user.email,"worksheets",vqWS.id),{
+          passed:true, passCount:newCount,
+          completedAt:new Date().toISOString(),
+          worksheetId:vqWS.id, worksheetTitle:vqWS.title,
+          studentEmail:user.email, studentName:user.displayName||""
+        });
+        wsProgress[vqWS.id]={passed:true,passCount:newCount,completedAt:new Date().toISOString()};
+      }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
+      const pc=document.getElementById('vq-pass-count');
+      if(pc){ const n=(wsProgress[vqWS.id]?.passCount||0); pc.textContent=`${n}회 통과! 용어를 완벽히 익혔어요.`; }
+      document.getElementById('vq-complete').style.display='flex';
+    },700); }
+    else setTimeout(vqNextQ, 700);
+  } else {
+    vqStreak=0;
+    setTimeout(vqNextQ, 1500);
+  }
+}
+
+function vqTimeout(correct){
+  vqStreak=0;
+  vqHighlight(correct, null);
+  setTimeout(vqNextQ, 1500);
+}
+
+function leaveVocabQuiz(){
+  clearInterval(vqTimer);
+  showPage('unit-page');
+}
+window.leaveVocabQuiz=leaveVocabQuiz;
+window.startVocabQuiz=startVocabQuiz;
+
+
+
+/* ── 소인수분해 특수 문항 풀 ── */
+const VQ_PRIMES_POOL    = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47];
+const VQ_NONPRIMES_POOL = [1,4,6,8,9,10,12,14,15,16,18,20,21,22,24,25];
+const VQ_FACTOR_DATA = [
+  { n:12,  divs:[1,2,3,4,6,12],            primes:[2,3],   fp:true,fnp:false },
+  { n:18,  divs:[1,2,3,6,9,18],            primes:[2,3],   fp:true,fnp:false },
+  { n:20,  divs:[1,2,4,5,10,20],           primes:[2,5],   fp:true,fnp:false },
+  { n:28,  divs:[1,2,4,7,14,28],           primes:[2,7],   fp:true,fnp:false },
+  { n:30,  divs:[1,2,3,5,6,10,15,30],      primes:[2,3,5], fp:true,fnp:true  },
+  { n:42,  divs:[1,2,3,6,7,14,21,42],      primes:[2,3,7], fp:true,fnp:true  },
+  { n:60,  divs:[1,2,3,4,5,6,10,12,15,20,30,60], primes:[2,3,5], fp:true,fnp:true },
+  { n:70,  divs:[1,2,5,7,10,14,35,70],     primes:[2,5,7], fp:true,fnp:true  },
+];
+
+function vqGenExtra(type){
+  const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+  let badge, q, correct, choices;
+
+  if(type==='find_prime'){
+    badge   = '소수 찾기';
+    q       = '소수인 것은?';
+    correct = pick(shuffleArr(VQ_PRIMES_POOL));
+    choices = shuffleArr([correct, ...shuffleArr(VQ_NONPRIMES_POOL).slice(0,3)]);
+
+  } else if(type==='find_non_prime'){
+    badge   = '소수가 아닌 것 찾기';
+    q       = '소수가 아닌 것은?';
+    correct = pick(shuffleArr(VQ_NONPRIMES_POOL));
+    choices = shuffleArr([correct, ...shuffleArr(VQ_PRIMES_POOL).slice(0,3)]);
+
+  } else if(type==='find_prime_factor'){
+    badge        = '소인수 찾기';
+    const entry  = pick(shuffleArr(VQ_FACTOR_DATA.filter(d=>d.fp)));
+    correct      = pick(shuffleArr(entry.primes));
+    const others = shuffleArr(entry.divs.filter(d=>!VQ_PRIMES_POOL.includes(d))).slice(0,3);
+    choices      = shuffleArr([correct, ...others]);
+    q            = `${entry.n}의 소인수인 것은?`;
+
+  } else if(type==='find_non_prime_factor'){
+    badge          = '소인수가 아닌 것 찾기';
+    const entry    = pick(shuffleArr(VQ_FACTOR_DATA.filter(d=>d.fnp)));
+    const nonPrimes= entry.divs.filter(d=>!VQ_PRIMES_POOL.includes(d));
+    correct        = pick(shuffleArr(nonPrimes));
+    choices        = shuffleArr([correct, ...shuffleArr(entry.primes).slice(0,3)]);
+    q              = `${entry.n}의 소인수가 아닌 것은?`;
+
+  } else if(type==='find_positive'){
+    badge   = '양수 찾기';
+    q       = '양수인 것은?';
+    correct = pick(shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_POS_FRAC]));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_NEG_FRAC,...VQ_RAT_ZERO]).slice(0,3)]);
+
+  } else if(type==='find_negative'){
+    badge   = '음수 찾기';
+    q       = '음수인 것은?';
+    correct = pick(shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_NEG_FRAC]));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_POS_FRAC,...VQ_RAT_ZERO]).slice(0,3)]);
+
+  } else if(type==='find_pos_int'){
+    badge   = '양의 정수 찾기';
+    q       = '양의 정수인 것은?';
+    correct = pick(shuffleArr(VQ_RAT_POS_INT));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_ZERO,...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]).slice(0,3)]);
+
+  } else if(type==='find_neg_int'){
+    badge   = '음의 정수 찾기';
+    q       = '음의 정수인 것은?';
+    correct = pick(shuffleArr(VQ_RAT_NEG_INT));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_ZERO,...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]).slice(0,3)]);
+
+  } else if(type==='find_non_int_rat'){
+    badge   = '정수가 아닌 유리수 찾기';
+    q       = '정수가 아닌 유리수인 것은?';
+    correct = pick(shuffleArr([...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_NEG_INT,...VQ_RAT_ZERO]).slice(0,3)]);
+
+  } else if(type==='find_poly'){
+    badge   = '다항식 찾기';
+    q       = '다항식인 것은?';
+    correct = pick(shuffleArr([...VQ_POLY_DEG1,...VQ_POLY_DEG2,...VQ_POLY_DEG3,...VQ_POLY_DEG4]));
+    choices = shuffleArr([correct,...shuffleArr(VQ_RAT_EXPR).slice(0,3)]);
+
+  } else if(type==='find_non_poly'){
+    badge   = '다항식이 아닌 식 찾기';
+    q       = '다항식이 아닌 것은?';
+    correct = pick(shuffleArr(VQ_RAT_EXPR));
+    choices = shuffleArr([correct,...shuffleArr([...VQ_POLY_DEG1,...VQ_POLY_DEG2,...VQ_POLY_DEG3]).slice(0,3)]);
+
+  } else if(type==='find_deg1'){
+    badge   = '일차식 찾기';
+    q       = '일차식(1차식)인 것은?';
+    correct = pick(shuffleArr(VQ_POLY_DEG1));
+    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG3)), pick(shuffleArr(VQ_POLY_DEG4))]);
+
+  } else if(type==='find_deg2'){
+    badge   = '이차식 찾기';
+    q       = '이차식(2차식)인 것은?';
+    correct = pick(shuffleArr(VQ_POLY_DEG2));
+    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG3)), pick(shuffleArr(VQ_POLY_DEG4))]);
+
+  } else if(type==='find_deg3'){
+    badge   = '삼차식 찾기';
+    q       = '삼차식(3차식)인 것은?';
+    correct = pick(shuffleArr(VQ_POLY_DEG3));
+    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG4))]);
+
+  } else if(type==='find_deg4'){
+    badge   = '사차식 찾기';
+    q       = '사차식(4차식)인 것은?';
+    correct = pick(shuffleArr(VQ_POLY_DEG4));
+    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG3))]);
+  }
+  return {badge, q, correct, choices};
+}
+
+
+/* ── 정수와 유리수 특수 문항 풀 ── */
+const VQ_RAT_POS_INT  = ["1","2","3","4","5","6","7","8","9","10"];
+const VQ_RAT_NEG_INT  = ["-1","-2","-3","-4","-5","-6","-7","-8","-9","-10"];
+const VQ_RAT_ZERO     = ["0"];
+const VQ_RAT_POS_FRAC = ["1/2","3/4","2/3","1/3","5/2","3/2","4/3","7/4"];
+const VQ_RAT_NEG_FRAC = ["-1/2","-3/4","-2/3","-1/3","-5/2","-3/2","-4/3","-7/4"];
+
+
+
+/* ── VOCA 수식 표시 변환 ── */
+const VQ_MATH_MAP={
+  // 유리식 (비다항식)
+  "1/x":"\\frac{1}{x}","3/x":"\\frac{3}{x}",
+  "(x+1)/x":"\\frac{x+1}{x}","2/(x-1)":"\\frac{2}{x-1}",
+  "x/(x+2)":"\\frac{x}{x+2}","(2x+1)/x":"\\frac{2x+1}{x}",
+  "1/(x+3)":"\\frac{1}{x+3}","x/(x²+1)":"\\frac{x}{x^2+1}",
+  // 양의 분수
+  "1/2":"\\frac{1}{2}","3/4":"\\frac{3}{4}","2/3":"\\frac{2}{3}",
+  "1/3":"\\frac{1}{3}","5/2":"\\frac{5}{2}","3/2":"\\frac{3}{2}",
+  "4/3":"\\frac{4}{3}","7/4":"\\frac{7}{4}",
+  // 음의 분수
+  "-1/2":"-\\frac{1}{2}","-3/4":"-\\frac{3}{4}","-2/3":"-\\frac{2}{3}",
+  "-1/3":"-\\frac{1}{3}","-5/2":"-\\frac{5}{2}","-3/2":"-\\frac{3}{2}",
+  "-4/3":"-\\frac{4}{3}","-7/4":"-\\frac{7}{4}",
+};
+
+function vqFormatMath(s){
+  if(!s) return s;
+  if(/[가-힣]/.test(s)) return s;                     // 한국어: 그대로
+  if(/^[-−]?\d+$/.test(s.trim())) return s;          // 정수: 그대로
+  if(s.trim().startsWith('\\(')) return s;           // 이미 LaTeX: 그대로
+  const mapped=VQ_MATH_MAP[s];
+  let t=mapped||s.replace(/²/g,'^2').replace(/³/g,'^3').replace(/⁴/g,'^4');
+  return '\\('+t+'\\)';
 }
 
 /* ── 문자와 식 특수 문항 풀 ── */

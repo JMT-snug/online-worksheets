@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1o">
+  <meta name="app-version" content="6.1p">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1o"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1p"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2290,11 +2290,12 @@ function vqTick(){
 }
 
 function vqHighlight(correct, wrong){
+  const correctStr = String(correct), wrongStr = wrong!=null ? String(wrong) : null;
   document.querySelectorAll('.vq-choice').forEach(btn=>{
     btn.disabled=true;
-    const val=btn.dataset.val??btn.textContent;
-    if(val===correct){ btn.style.background='#d1fae5'; btn.style.borderColor='#10b981'; btn.style.color='#065f46'; }
-    else if(wrong && val===wrong){ btn.style.background='var(--red-lt)'; btn.style.borderColor='var(--red)'; btn.style.color='var(--red)'; }
+    const val=String(btn.dataset.val??btn.textContent);
+    if(val===correctStr){ btn.style.background='#d1fae5'; btn.style.borderColor='#10b981'; btn.style.color='#065f46'; }
+    else if(wrongStr!=null && val===wrongStr){ btn.style.background='var(--red-lt)'; btn.style.borderColor='var(--red)'; btn.style.color='var(--red)'; }
   });
 }
 
@@ -2485,7 +2486,8 @@ const VQ_MATH_MAP={
 };
 
 function vqFormatMath(s){
-  if(!s) return s;
+  if(s===null||s===undefined||s==='') return s;
+  s = String(s);  // 숫자 등 비문자열 → 문자열 변환
   if(/[가-힣]/.test(s)) return s;                     // 한국어: 그대로
   if(/^[-−]?\d+$/.test(s.trim())) return s;          // 정수: 그대로
   if(s.trim().startsWith('\\(')) return s;           // 이미 LaTeX: 그대로

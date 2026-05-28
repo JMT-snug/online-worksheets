@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1b">
+  <meta name="app-version" content="6.1c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.1c"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -593,7 +593,7 @@ document.getElementById("btn-logout").addEventListener("click", () => signOut(au
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
   const engineVer = typeof VERSION!=='undefined' ? VERSION : '';
-  const wsVer = typeof WS_VERSION!=='undefined' ? WS_VERSION : '';
+  const wsVer = '';  // Firestore 로드 방식으로 전환, JS 버전 불필요
   const ver = engineVer ? 'v'+engineVer+(wsVer ? ' · ws'+wsVer : '') : '';
   const _lv=document.getElementById('login-ver');
   if(_lv) _lv.textContent=ver;
@@ -619,10 +619,7 @@ async function loadCurriculum(){
     WORKSHEETS.forEach(ws=>{ if(!ws.questions) ws.questions=[]; if(!ws.vocab) ws.vocab=[]; });
     console.log(`[커리큘럼] 단원 ${UNITS.length}개, 학습지 ${WORKSHEETS.length}개`);
   }catch(e){
-    console.warn('[커리큘럼 로드 실패] worksheets.js fallback 시도:', e.message);
-    // fallback: window에 이미 로드된 UNITS/WORKSHEETS 사용
-    if(window.UNITS)      UNITS      = window.UNITS;
-    if(window.WORKSHEETS) WORKSHEETS = window.WORKSHEETS;
+    console.error('[커리큘럼 로드 실패]', e.message);
   }
 }
 

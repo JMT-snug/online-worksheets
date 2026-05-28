@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1z">
+  <meta name="app-version" content="6.2a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1z"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2a"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1483,7 +1483,7 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(isLast) finishQuiz(); else nextQ();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered();
       } else { window.submitMulti(); }
     }
     return;
@@ -1504,7 +1504,7 @@ function quizKeyHandler(e){
       else if(v==="ENTER"){
         if(answered[curQIdx]){
           const isLast=curQIdx===curWS.questions.length-1;
-          if(isLast) finishQuiz(); else nextQ();
+          if(allAnswered()) finishQuiz(); else goNextUnanswered();
         } else submitStep3(st.curStep);
       } else qInput(v);
       return;
@@ -1515,7 +1515,7 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(isLast) finishQuiz(); else nextQ();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered();
       } else {
         submitStep3(st.curStep);
       }
@@ -1528,7 +1528,7 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(isLast) finishQuiz(); else nextQ();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered();
       } else { submitQAns(); }
     }
     return;
@@ -1546,7 +1546,7 @@ function quizKeyHandler(e){
       else if(v==="ENTER"){
         if(answered[curQIdx]){
           const isLast=curQIdx===curWS.questions.length-1;
-          if(isLast) finishQuiz(); else nextQ();
+          if(allAnswered()) finishQuiz(); else goNextUnanswered();
         } else submitQAns();
       } else qInput(v);
     } else {
@@ -1554,7 +1554,7 @@ function quizKeyHandler(e){
       if((e.key==="Enter"||e.code==="NumpadEnter") && answered[curQIdx]){
         e.preventDefault();
         const isLast=curQIdx===curWS.questions.length-1;
-        if(isLast) finishQuiz(); else nextQ();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered();
       }
     }
     return;
@@ -1569,7 +1569,7 @@ function quizKeyHandler(e){
   else if(v==="ENTER"){
     if(answered[curQIdx]){
       const isLast=curQIdx===curWS.questions.length-1;
-      if(isLast) finishQuiz(); else nextQ();
+      if(allAnswered()) finishQuiz(); else goNextUnanswered();
     } else {
       submitQAns();
     }
@@ -1638,11 +1638,11 @@ window.submitMulti = function(){
     fb.className="feedback-strip show fb-correct";
     const isLast=curQIdx===curWS.questions.length-1;
     fb.innerHTML=`✅ 정답!&nbsp;
-      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+      <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;
         cursor:pointer;font-family:inherit">
-        ${isLast?'결과 보기 →':'다음 문제 →'}
+        ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
@@ -1905,11 +1905,11 @@ function submitStep3(stepNum){
       const isLast=curQIdx===curWS.questions.length-1;
       const dispAns = at==='number' ? (typeof step.answer==='number'?step.answer:step.answer) : step.answer;
       fb.innerHTML=`✅ 완료! 답: ${dispAns}&nbsp;
-        <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+        <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
           cursor:pointer;font-family:inherit">
-          ${isLast?'결과 보기 →':'다음 문제 →'}
+          ${allAnswered()?'결과 보기 →':'다음 문제 →'}
         </button>`;
       renderStep3Q(q,document.getElementById("quiz-left-panel"));
     }
@@ -1945,11 +1945,11 @@ async function submitQAns(){
     const fb=document.getElementById("feedback-strip");
     fb.className="feedback-strip show fb-correct";
     fb.innerHTML=`✅ 확인 완료!&nbsp;
-      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+      <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;
         cursor:pointer;font-family:inherit">
-        ${isLast?'결과 보기 →':'다음 문제 →'}
+        ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
     return;
   }
@@ -2001,11 +2001,11 @@ async function submitQAns(){
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
       fb.innerHTML=`✅ 정답! &nbsp;<strong>${q.answer}</strong>&nbsp;
-        <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+        <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
           cursor:pointer;font-family:inherit">
-          ${isLast?'결과 보기 →':'다음 문제 →'}
+          ${allAnswered()?'결과 보기 →':'다음 문제 →'}
         </button>`;
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
     } else {
@@ -2059,11 +2059,11 @@ async function submitQAns(){
     const isLast = curQIdx===curWS.questions.length-1;
     const dispAns = q.answerFrac || q.answer;
     fb.innerHTML=`✅ 정답! &nbsp; x = ${dispAns} &nbsp;
-      <button onclick="${isLast?'finishQuiz()':'nextQ()'}"
+      <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;
         cursor:pointer;font-family:inherit">
-        ${isLast?'결과 보기 →':'다음 문제 →'}
+        ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
@@ -2144,11 +2144,31 @@ async function finishQuiz(){
     window.removeEventListener("pagehide", saveWorksheet);
     await saveWorksheet(true);
     const completedAt=new Date().toISOString();
-    wsProgress[curWS.id]={answeredCount:total,totalCount:total,isComplete:true,completedAt};
+    const _realAns=answered.filter(Boolean).length;
+    const _allDone=_realAns>=total;
+    wsProgress[curWS.id]={answeredCount:_realAns,totalCount:total,isComplete:_allDone,completedAt:_allDone?completedAt:null};
   } catch(e){ console.error("저장 오류:",e); }
 }
 
 window.finishQuiz=finishQuiz;
+/* 모든 문항(링크 제외) 답안 완료 여부 */
+function allAnswered(){
+  return curWS.questions.every((q,i)=>q.type==="link"||answered[i]);
+}
+window.allAnswered=allAnswered;
+
+/* 다음 미완료 문항으로 이동 (없으면 결과) */
+function goNextUnanswered(){
+  saveCanvasState();
+  const n=curWS.questions.length;
+  for(let off=1;off<=n;off++){
+    const i=(curQIdx+off)%n;
+    if(curWS.questions[i].type!=="link" && !answered[i]){ curQIdx=i; renderQuestion(); return; }
+  }
+  finishQuiz(); // 전부 완료 시
+}
+window.goNextUnanswered=goNextUnanswered;
+
 /* 정답 후 다음 문제로 */
 function nextQ(){
   saveCanvasState();

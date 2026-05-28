@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2d">
+<meta name="app-version" content="edit-v1.2e">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -187,6 +187,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 #editor-main{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;padding:24px;padding-bottom:0}
 #q-list{overflow-y:auto;flex:1;padding-bottom:16px}
+#add-q-area{flex-shrink:0}
 .meta-card{flex-shrink:0}
 #editor-empty{padding:24px}
 </style>
@@ -636,7 +637,7 @@ window.selectWs = async function(wsId){
 // ── 에디터 렌더 ──
 function renderEditor(){
   document.getElementById('editor-empty').style.display='none';
-  document.getElementById('editor-main').style.display='block';
+  document.getElementById('editor-main').style.display='flex';
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0e">
+<meta name="app-version" content="edit-v1.0f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -173,7 +173,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <span class="hdr-badge" id="edit-version">edit-v1.0d</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
-    <button class="hdr-btn btn-draft" id="btn-draft">임시저장</button>
+    <button class="hdr-btn" id="btn-delete-ws"
+    style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
+  <button class="hdr-btn btn-draft" id="btn-draft">임시저장</button>
     <button class="hdr-btn btn-publish" id="btn-publish">발행</button>
     <a href="teacher.html" class="hdr-btn" style="background:#334155;color:#cbd5e1;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600">교사 페이지</a>
     <button class="hdr-btn btn-logout" id="btn-logout">로그아웃</button>
@@ -859,6 +861,22 @@ function selectWsLocal(ws){
 
 // ── 임시저장 ──
 document.getElementById('btn-draft').onclick = () => saveToFirestore('draft');
+document.getElementById('btn-delete-ws').onclick = async () => {
+  if(!currentWs){ toast('삭제할 학습지를 먼저 선택하세요'); return; }
+  const title = currentWs.title || currentWsId;
+  if(!confirm(`"${title}" 학습지를 삭제합니다.\n학생 진도(records)는 삭제되지 않습니다. 계속하시겠습니까?`)) return;
+  try{
+    await deleteDoc(doc(db,'curriculum',currentWsId));
+    worksheets = worksheets.filter(w=>w.id!==currentWsId);
+    currentWs = null; currentWsId = null; selectedQIdx = null;
+    document.getElementById('editor-empty').style.display='';
+    document.getElementById('editor-main').style.display='none';
+    document.getElementById('panel-empty').style.display='';
+    document.getElementById('panel-editor').style.display='none';
+    renderSidebar();
+    toast(`✅ "${title}" 삭제됨`);
+  }catch(e){ toast('삭제 실패: '+e.message); console.error(e); }
+};
 document.getElementById('btn-publish').onclick = () => saveToFirestore('published');
 
 async function saveToFirestore(status){

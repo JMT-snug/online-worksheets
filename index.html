@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1k">
+  <meta name="app-version" content="6.1l">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1k"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -475,6 +475,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
           <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;margin:0 2px"></span>
           <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:11px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">현재↩</button>
+          <button class="btn-back" id="cv-next-btn" onclick="canvasNext()" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -2295,6 +2296,12 @@ function updateCanvasNav(){
   const hasPrev=canvasViewIdx>0;
   prevBtn.disabled=!hasPrev;
   prevBtn.style.opacity=hasPrev?"1":"0.3";
+  const nextBtn=document.getElementById("cv-next-btn");
+  if(nextBtn){
+    const hasNext=canvasViewIdx<curQIdx;
+    nextBtn.disabled=!hasNext;
+    nextBtn.style.opacity=hasNext?"1":"0.3";
+  }
   const isAway=canvasViewIdx!==curQIdx;
   if(isAway){
     label.textContent=(canvasViewIdx+1)+"번 풀이";
@@ -2317,6 +2324,14 @@ function canvasPrev(){
 function canvasGoToNow(){
   saveCanvasState();
   canvasViewIdx=curQIdx;
+  restoreCanvasState(canvasViewIdx);
+  updateCanvasNav();
+}
+
+function canvasNext(){
+  if(canvasViewIdx>=curQIdx) return;
+  saveCanvasState();
+  canvasViewIdx++;
   restoreCanvasState(canvasViewIdx);
   updateCanvasNav();
 }

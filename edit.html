@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.1l">
+<meta name="app-version" content="edit-v1.1k">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -211,7 +211,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <div class="hdr-space"></div>
   <div style="display:flex;align-items:center;gap:6px">
     <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
-    <input id="drive-folder-id" value="14q0Avz-ep3RAm9k1Q82_0wpbQCjp6Jpl" placeholder="폴더 ID 입력"
+    <input id="drive-folder-id" placeholder="폴더 ID 입력"
       style="width:220px;padding:4px 8px;border-radius:4px;border:1px solid #475569;background:#1e293b;color:#cbd5e1;font-size:12px;font-family:monospace">
   </div>
     <button class="hdr-btn" id="btn-preview"
@@ -395,13 +395,12 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <label>배지 텍스트</label>
             <input id="q-pool-badge" placeholder="예: 소수 찾기">
             <label style="margin-top:10px;display:block">문제 텍스트</label>
-            <input id="q-pool-question" placeholder="예: 소수인 것은?" oninput="previewText('q-pool-question','q-pool-q-prev')">
-            <div class="latex-preview" id="q-pool-q-prev" style="min-height:28px;font-size:13px;margin-top:4px">미리보기</div>
+            <input id="q-pool-question" placeholder="예: 소수인 것은?">
             <label style="margin-top:10px;display:block">✅ 정답 풀 <span style="font-weight:400;color:var(--ink3)">(Enter로 추가)</span></label>
-            <input id="q-pool-correct-input" placeholder="예: 3, \(\frac{1}{2}\), \(2\sqrt{3}\)" onkeydown="addPoolItem(event,'correct')">
+            <input id="q-pool-correct-input" placeholder="정답 항목 입력" onkeydown="addPoolItem(event,'correct')">
             <div id="pool-correct-list" class="ans-alt-list" style="margin-top:6px"></div>
             <label style="margin-top:10px;display:block">❌ 오답 풀 <span style="font-weight:400;color:var(--ink3)">(최소 3개)</span></label>
-            <input id="q-pool-wrong-input" placeholder="예: -3, \(\frac{3}{4}\), \(\sqrt{2}\)" onkeydown="addPoolItem(event,'wrong')">
+            <input id="q-pool-wrong-input" placeholder="오답 항목 입력" onkeydown="addPoolItem(event,'wrong')">
             <div id="pool-wrong-list" class="ans-alt-list" style="margin-top:6px"></div>
           </div>
 
@@ -1291,10 +1290,8 @@ function renderPoolList(side){
   const list = document.getElementById(`pool-${side}-list`);
   list.innerHTML = arr.map((v,i)=>`
     <div class="ans-alt-tag" style="background:${side==='correct'?'var(--grn-lt)':'var(--red-lt)'};color:${side==='correct'?'var(--green)':'var(--red)'}">
-      <span class="pool-item-text">${v}</span>
-      <button onclick="${side==='correct'?'poolCorrect':'poolWrong'}.splice(${i},1);renderPoolList('${side}')">✕</button>
+      ${v}<button onclick="${side==='correct'?'poolCorrect':'poolWrong'}.splice(${i},1);renderPoolList('${side}')">✕</button>
     </div>`).join('');
-  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([list]).catch(()=>{});
 }
 window.renderPoolList=renderPoolList;
 

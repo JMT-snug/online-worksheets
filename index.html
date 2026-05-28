@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1w">
+  <meta name="app-version" content="6.1x">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1w"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1x"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1084,11 +1084,16 @@ async function startQuiz(ws) {
 
 function buildStrip() {
   const s=document.getElementById("q-progress-strip"); s.innerHTML="";
+  let realN=0;
   curWS.questions.forEach((q,i)=>{
     if(q.type==="link") return; // 링크 문항은 진도 표시 제외
+    realN++;
     const d=document.createElement("div");
     d.className="q-dot"+(i===0?" current":" locked");
-    d.id="qdot-"+i; s.appendChild(d);
+    d.id="qdot-"+i;
+    d.title=`${realN}번 문제로 이동`;
+    d.onclick=()=>goToQ(i);
+    s.appendChild(d);
   });
 }
 function updateStrip() {
@@ -1456,7 +1461,7 @@ function qTokensToNum(){
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
-  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"("};
+  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"(","=":"="};
 function quizKeyHandler(e){
   const q=curWS?.questions[curQIdx];
   // multi 타입: Enter → 제출
@@ -1475,7 +1480,7 @@ function quizKeyHandler(e){
     const st=getS3State(q.id);
     const steps=getSteps(q);
     const step=steps[st.curStep-1];
-    const isKeypad = step && (step.answerType||'number')==='number';
+    const isKeypad = step && ['number','expr','equation'].includes(step.answerType||'number');
     if(isKeypad){
       // 수 단계: 메인 키패드와 동일하게 물리 키보드 처리
       if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
@@ -2166,6 +2171,17 @@ window.qNeg=function(){
   }
   qInput('−');
 };
+
+/* 진행도 칸 클릭 → 해당 문제로 이동 */
+function goToQ(idx){
+  if(idx<0||idx>=curWS.questions.length) return;
+  if(idx===curQIdx) return;
+  if(curWS.questions[idx]?.type==="link") return;
+  saveCanvasState();
+  curQIdx=idx;
+  renderQuestion();
+}
+window.goToQ=goToQ;
 
 /* 이전/다음 문제 이동 */
 function moveQ(dir){

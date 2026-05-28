@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1a">
+  <meta name="app-version" content="6.1b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1a"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
+const VERSION = "6.1b"; // v[시스템변경].[오류수정] (학습지추가는 worksheets.js의 WS_VERSION에서 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2175,16 +2175,27 @@ function startVocabQuiz(ws){
 
 function vqNextQ(){
   clearInterval(vqTimer);
-  const vocab  = vqWS.vocab;
-  const extras = vqWS.extras || [];
+  const vocab     = vqWS.vocab;
+  const extras    = vqWS.extras || [];
+  const questions = vqWS.questions || [];
 
-  // 출제 비율: extras / (vocab×2 + extras) 확률로 특수 문항
-  const useExtra = extras.length > 0
-    && Math.random() < extras.length / (vocab.length * 2 + extras.length);
+  // 출제 풀: vocab×2(양방향) + extras + questions
+  const vocabW = vocab.length * 2;
+  const total  = vocabW + extras.length + questions.length;
+  const r = Math.random() * total;
+  const useExtra    = extras.length    > 0 && r >= vocabW && r < vocabW + extras.length;
+  const useQuestion = questions.length > 0 && r >= vocabW + extras.length;
 
   let badgeText, qText, qStyle, correct, choices;
 
-  if(useExtra){
+  if(useQuestion){
+    const q = questions[Math.floor(Math.random()*questions.length)];
+    badgeText = q.text?.includes('이항') ? '이항' : '등식의 성질';
+    qText  = q.text || '';
+    qStyle = 'normal';
+    correct = q.options[q.answer[0]];
+    choices = shuffleArr([...q.options]);
+  } else if(useExtra){
     const et  = extras[Math.floor(Math.random()*extras.length)].type;
     const gen = vqGenExtra(et);
     badgeText = gen.badge; qText = gen.q;
@@ -2204,7 +2215,8 @@ function vqNextQ(){
   // 렌더링
   document.getElementById('vq-mode-badge').textContent = badgeText;
   const qEl = document.getElementById('vq-question');
-  qEl.innerHTML = qText; // innerHTML로 LaTeX 포함 가능
+  qEl.innerHTML = qText;
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([qEl]).catch(()=>{}); // innerHTML로 LaTeX 포함 가능
   qEl.style.cssText = qStyle==='term'
     ? 'font-size:1.8rem;font-weight:700;line-height:1.4;word-break:keep-all'
     : 'font-size:1rem;font-weight:500;line-height:1.6;word-break:keep-all';
@@ -2438,6 +2450,7 @@ function vqFormatMath(s){
   if(!s) return s;
   if(/[가-힣]/.test(s)) return s;                     // 한국어: 그대로
   if(/^[-−]?\d+$/.test(s.trim())) return s;          // 정수: 그대로
+  if(s.trim().startsWith('\\(')) return s;           // 이미 LaTeX: 그대로
   const mapped=VQ_MATH_MAP[s];
   let t=mapped||s.replace(/²/g,'^2').replace(/³/g,'^3').replace(/⁴/g,'^4');
   return '\\('+t+'\\)';

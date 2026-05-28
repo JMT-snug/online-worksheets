@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.5e">
+<meta name="app-version" content="t3.5f">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -198,7 +198,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.5e";
+const T_VERSION = "t3.5f";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -606,7 +606,8 @@ function renderOverview(){
       const cat=wsCategory(ws)||"-";
       const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
       const done=recs.length;
-      const avgR=done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0;
+      const isVocaWs=ws.type==="vocab";
+      const avgR=isVocaWs?null:(done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0);
       const avgT=done?(recs.reduce((s,r)=>s+getAttempts(r),0)/done).toFixed(1):"-";
       const gc=g===1?'#1e40af':g===2?'#166534':'#991b1b';
       const gb=g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2';
@@ -683,6 +684,7 @@ window.renderWSTable=function(wsId){
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
   }
+  const isVoca=ws?.type==="vocab";
   const doneRows=done.map(r=>{
     const ts=formatDate(r.completedAt||r.lastUpdated);
     const rate=r.correctRate??Math.round((r.answeredCount||0)/(r.totalCount||1)*100);
@@ -691,12 +693,13 @@ window.renderWSTable=function(wsId){
     const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
     const perQHtml=renderPerQ(r);
+    const passCount=r.passCount||1;
     return `<tr>
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td>${rateBar(rate)}</td>
-      <td><span class="tries-badge ${wcls}">${wrong}회</span></td>
+      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:rateBar(rate)}</td>
+      <td>${isVoca?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
     </tr>`;

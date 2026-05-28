@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1u">
+  <meta name="app-version" content="6.1v">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1u"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1v"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -780,11 +780,13 @@ function showUnitPage(unit) {
       const rate  = prog?.correctRate ?? 0;
       const isDraft  = ws.status === "draft";
       const isLocked = ws.status === "locked";
-      const isBlocked = isDraft || isLocked;
+      const isTeacher = user && TEACHER_EMAILS.includes(user.email);
+      const isBlocked = (isDraft || isLocked) && !isTeacher; // 교사는 미리보기 접속 허용
 
       let badgeHtml = "";
-      if(isLocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 수정 중</span>`;
-      else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중</span>`;
+      const tPrev = isTeacher ? ' · 교사 미리보기' : '';
+      if(isLocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 수정 중${tPrev}</span>`;
+      else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중${tPrev}</span>`;
       else if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
       else if(inProg)  badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
       else if(empty)   badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;

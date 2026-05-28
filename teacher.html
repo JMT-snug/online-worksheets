@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4f">
+<meta name="app-version" content="t3.4g">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -465,15 +465,16 @@ window.renderWSTable=function(wsId){
     inProg=inProg.filter(r=>(findClass(r.studentEmail)||"")=== _wsFilter);
   }
 
-  // 정렬
+  // 정렬 (tries는 perQuestion에서 계산)
+  const triesOf=r=>r.totalAttempts??Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
   const sortFn=(a,b)=>{
     if(_wsSortBy==="class") return (findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko");
     if(_wsSortBy==="name")  return (a.studentName||"").localeCompare(b.studentName||"","ko");
     if(_wsSortBy==="time")  return String(a.completedAt||a.lastUpdated||"").localeCompare(String(b.completedAt||b.lastUpdated||""));
-    return (a.totalAttempts||0)-(b.totalAttempts||0);
+    return triesOf(a)-triesOf(b); // tries: 오답 적은 순
   };
   done.sort(sortFn);
-  inProg.sort((a,b)=>(findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko"));
+  inProg.sort(sortFn); // 진행 중도 선택한 정렬 적용
 
   const tbody=document.getElementById("ws-tbody"); if(!tbody) return;
 
@@ -607,14 +608,14 @@ function renderWS(wsId){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select onchange="setWSFilter(this.value,'${wsId}')"
           style="font-size:12px;padding:5px 8px;border-radius:6px;border:1.5px solid var(--rule);font-family:inherit">
-          <option value="">전체 학급</option>${classOpts}
+          <option value="" ${!_wsFilter?'selected':''}>전체 학급</option>${classOpts}
         </select>
         <select onchange="setWSSort(this.value,'${wsId}')"
           style="font-size:12px;padding:5px 8px;border-radius:6px;border:1.5px solid var(--rule);font-family:inherit">
-          <option value="tries">오답 적은 순</option>
-          <option value="class" selected>학급 순</option>
-          <option value="name">이름 순</option>
-          <option value="time">완료 시간 순</option>
+          <option value="tries" ${_wsSortBy==='tries'?'selected':''}>오답 적은 순</option>
+          <option value="class" ${_wsSortBy==='class'?'selected':''}>학급 순</option>
+          <option value="name" ${_wsSortBy==='name'?'selected':''}>이름 순</option>
+          <option value="time" ${_wsSortBy==='time'?'selected':''}>완료 시간 순</option>
         </select>
         <button class="btn-sm" onclick="exportWS('${wsId}')">CSV</button>
       </div>

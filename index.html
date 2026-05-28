@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1v">
+  <meta name="app-version" content="6.1w">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1v"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1w"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -324,7 +324,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .step3-tab.done{color:var(--green)}
 .step3-tab.locked{opacity:.4;cursor:default}
 .step3-body{padding:14px 16px}
-.step3-label{font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.step3-label{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:0;line-height:1.6}
 .step3-hint{font-size:12px;color:var(--ink3);margin-bottom:8px;background:var(--cream);padding:6px 10px;border-radius:6px}
 /* word input for step3 */
 .word-inp-full{width:100%;height:38px;font-size:15px;font-weight:700;
@@ -1701,13 +1701,30 @@ function renderStep3Body(q){
   const step=steps[i];
   if(!step) return;
   const at=step.answerType||'number';
-  const hint=step.hint?`<div class="step3-hint">💡 ${step.hint}</div>`:'';
   const labelHtml=`<div class="step3-label">${fracText(step.label||'')}</div>`;
 
-  if(at==='number'){
-    // 수식 키패드
+  // 수/다항식/방정식 → 수학 키패드, 텍스트 → 일반 입력
+  const useKeypad = (at==='number' || at==='expr' || at==='equation');
+
+  if(useKeypad){
     qTokens=[]; qEditPart=null;
-    body.innerHTML=labelHtml+(step.hint?hint:'<div class="step3-hint">💡 숫자/분수로 입력하세요</div>')+`
+    const defHint = at==='number'   ? '💡 숫자/분수로 입력하세요'
+                  : at==='expr'     ? '💡 다항식을 입력하세요 (x 버튼 사용)'
+                  : '💡 방정식을 입력하세요 (= 버튼 사용)';
+    const hintHtml = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>`
+                               : `<div class="step3-hint">${defHint}</div>`;
+    // 방정식이면 = 버튼, 아니면 (−)
+    const eqBtn = at==='equation'
+      ? `<button class="kb op" onclick="qInput('=')">=</button>`
+      : `<button class="kb w2" onclick="qNeg()">(−)</button>`;
+    const negRow = at==='equation'
+      ? `<button class="kb w2" onclick="qNeg()">(−)</button>
+         <button class="kb"    onclick="qInput('0')">0</button>
+         <button class="kb"    onclick="qInput('.')">.</button>`
+      : `<button class="kb"    onclick="qInput('0')">0</button>
+         <button class="kb"    onclick="qInput('.')">.</button>
+         <button class="kb op" onclick="qInput('(')">( )</button>`;
+    body.innerHTML=labelHtml+hintHtml+`
       <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
       <div class="kbd-wrap" onmousedown="event.preventDefault()">
         <div class="kbd-grid">
@@ -1729,26 +1746,21 @@ function renderStep3Body(q){
           <button class="kb op" onclick="qInput('+')">+</button>
           <button class="kb op" onclick="qInput('−')">−</button>
           <button class="kb op" onclick="qInput('/')" >∕</button>
-          <button class="kb w2" onclick="qNeg()">(−)</button>
-          <button class="kb"    onclick="qInput('0')">0</button>
-          <button class="kb"    onclick="qInput('.')">.</button>
-          <button class="kb op" onclick="qInput('(')">( )</button>
+          ${negRow}
+          ${at==='equation' ? `<button class="kb op" onclick="qInput('(')">( )</button>` : ''}
+          ${eqBtn}
           <button class="kb v"  onclick="submitStep3(${st.curStep})">↵</button>
           <button class="kb sub" onclick="submitStep3(${st.curStep})">확인 (Enter)</button>
         </div>
       </div>
       <div class="feedback-strip" id="s3-fb"></div>`;
   } else {
-    // 텍스트 입력 (equation / expr / text)
-    const ph = at==='equation' ? '예: 2x+3=11'
-             : at==='expr'     ? '예: 2x+3'
-             : '예: 21, 2년 후, 24cm';
-    const defHint = at==='equation' ? '💡 곱하기는 * 로 입력하세요'
-                  : at==='expr'     ? '💡 다항식을 입력하세요 (곱하기는 *)'
-                  : '💡 단위까지 정확히 쓰세요';
-    body.innerHTML=labelHtml+(step.hint?hint:`<div class="step3-hint">${defHint}</div>`)+`
-      <input type="text" id="s3-inp" class="word-inp-full" placeholder="${ph}"
-        autocomplete="off" spellcheck="false"
+    // text 유형: 일반 텍스트 입력
+    const hintHtml = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>`
+                               : `<div class="step3-hint">💡 단위까지 정확히 쓰세요</div>`;
+    body.innerHTML=labelHtml+hintHtml+`
+      <input type="text" id="s3-inp" class="word-inp-full" placeholder="예: 21, 2년 후, 24cm"
+        autocomplete="off" autocapitalize="off" spellcheck="false"
         onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitStep3(${st.curStep});}">
       <div class="feedback-strip" id="s3-fb"></div>`;
     setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
@@ -1771,8 +1783,8 @@ function eqEquivCheck(userEq, correctEq){
   }
   function evalSide(s,x){
     try{
-      let t=normEq(s).replace(/x/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t)) return NaN;
+      let t=normEq(s).replace(/\^/g,'**').replace(/x/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
       return Function('"use strict";return('+t+')')();
     }catch(e){return NaN;}
   }
@@ -1833,22 +1845,32 @@ function submitStep3(stepNum){
   const lp=()=>document.getElementById("quiz-left-panel");
 
   let ok=false, userAns="";
+  // 키패드 토큰 → 원시 문자열 변환 헬퍼
+  const tokensToRaw=()=>qTokens.map(t=>{
+    if(t.type==="char") return t.val;
+    if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
+    if(t.type==="exp")  return `(${t.base||0})^(${t.expo||1})`;
+    return "";
+  }).join("").replace(/−/g,"-");
+
   if(at==='number'){
     const val=qTokensToNum();
     userAns=String(val);
     const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
     ok=!isNaN(val)&&Math.abs(val-correctNum)<0.001;
-  } else {
+  } else if(at==='expr'){
+    userAns=tokensToRaw();
+    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
+    ok=alts.some(ex=>exprEquivCheck(userAns,ex));
+  } else if(at==='equation'){
+    userAns=tokensToRaw();
+    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
+    ok=alts.some(eq=>eqEquivCheck(userAns,eq));
+  } else { // text
     const inp=document.getElementById("s3-inp");
     userAns=(inp?.value||"").trim();
     const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
-    if(at==='equation'){
-      ok=alts.some(eq=>eqEquivCheck(userAns,eq));
-    } else if(at==='expr'){
-      ok=alts.some(ex=>exprEquivCheck(userAns,ex));
-    } else { // text
-      ok=alts.some(a=>a.toLowerCase()===userAns.toLowerCase());
-    }
+    ok=alts.some(a=>a.toLowerCase()===userAns.toLowerCase());
   }
 
   attempts[curQIdx]++;

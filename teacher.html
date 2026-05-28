@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4i">
+<meta name="app-version" content="t3.4j">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -198,7 +198,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.4i";
+const T_VERSION = "t3.4j";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount))); // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
@@ -488,10 +488,17 @@ window.renderWSTable=function(wsId){
     window._qd=window._qd||{};
     const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
       const wc=(v.wrongInputs||[]).length;
-      const col=wc===0?"var(--green)":wc===1?"var(--amber)":"var(--red)";
+      const att=v.attempts||0;
+      // 정답/오답/미응답 구분 (correct 필드 우선, 없으면 레거시 추정)
+      const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
+      const unanswered = (v.correct===false) && wc===0 && att===0;
+      let col, mark, ttl;
+      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${qid}: 미응답`; }
+      else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
+      else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${qid}: 오답 ${wc}회`; }
       const dkey=r.uid+"_"+qid;
-      window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:v.attempts||1,wrong:wc,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${qid}: 오답 ${wc}회"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${wc===0?"✓":wc+"회"}</span></div>`;
+      window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
   }
@@ -820,15 +827,21 @@ window.closeModal=function(e){
 window.showQDetail=function(key){
   const d=(window._qd||{})[key]; if(!d) return;
   document.getElementById('qd-title').textContent=
-    `${d.studentName} · ${d.qid.replace('q','Q')} (오답 ${d.wrong}회)`;
+    `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
   let body='';
-  if(d.wrongInputs.length){
+  if(d.unanswered){
+    body+=`<div style="font-size:13px;color:var(--ink3);margin-bottom:14px">— 아직 풀지 않은 문항입니다</div>`;
+  } else if(d.wrongInputs.length){
     body+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">오답 기록</div>
       <div>${d.wrongInputs.map(w=>`<span class="wrong-chip">${w}</span>`).join('')}</div>
     </div>`;
   } else {
     body+=`<div style="font-size:13px;color:var(--green);margin-bottom:14px">✅ 첫 번에 정답</div>`;
+  }
+  // (오답 후 정답인 경우 위 오답 기록 + 아래 표시)
+  if(!d.unanswered && d.wrongInputs.length && d.correct){
+    body+=`<div style="font-size:13px;color:var(--green);margin-bottom:14px">✅ 이후 정답 처리됨</div>`;
   }
   if(d.canvasImage){
     body+=`<div>

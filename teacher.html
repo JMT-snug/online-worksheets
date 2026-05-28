@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.4h">
+<meta name="app-version" content="t3.4i">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -198,7 +198,9 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.4h"; // teacher 버전
+const T_VERSION = "t3.4i";
+// 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
+const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount))); // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -342,7 +344,7 @@ function buildSidebar(){
         </div>
         <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
       sheets.forEach(ws=>{
-        const done=Object.values(allData).filter(d=>d[ws.id]?.completedAt).length;
+        const done=Object.values(allData).filter(d=>isRecDone(d[ws.id])).length;
         h+=`
           <div class="sb-ws-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
             <span class="sb-ws-dot"></span>
@@ -421,7 +423,7 @@ function renderOverview(){
     // Fix: ws.grade 없음 → wsGrade(ws) 사용
     WORKSHEETS.filter(w=>wsGrade(w)===g).forEach(ws=>{
       const cat=wsCategory(ws)||"-";
-      const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
+      const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
       const done=recs.length;
       const avgR=done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0;
       const avgT=done?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/done).toFixed(1):"-";
@@ -456,7 +458,7 @@ window.renderWSTable=function(wsId){
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
 
   // 완료 / 진행 중 분리
-  const isDone=r=>r.isComplete || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount);
+  const isDone=isRecDone;
   let done=recs.filter(isDone);
   let inProg=recs.filter(r=>!isDone(r));
 
@@ -546,7 +548,7 @@ function renderWS(wsId){
   const cat=wsCategory(ws)||"-";
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
-  const done=recs.filter(r=>r.completedAt);
+  const done=recs.filter(r=>isRecDone(r));
   const avgR=done.length?Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length):0;
   const avgT=done.length?(done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1):"-";
   // Fix: 하드코딩 5 → ws.qCount 사용
@@ -782,7 +784,7 @@ function rateBar(rate){
 function exportOverview(){
   let csv="단원,학년,영역,완료학생수,평균정답률,평균시도\n";
   WORKSHEETS.forEach(ws=>{
-    const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>r?.completedAt);
+    const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
     const avgR=recs.length?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/recs.length):0;
     const avgT=recs.length?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/recs.length).toFixed(1):0;
     csv+=`"${ws.title}",${wsGrade(ws)||"-"},"${wsCategory(ws)||"-"}",${recs.length},${avgR}%,${avgT}\n`;

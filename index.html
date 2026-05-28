@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1d">
+  <meta name="app-version" content="6.1e">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2188,9 +2188,8 @@ function vqNextQ(){
 
   if(useQuestion){
     // multi 타입만 VOCA 4지선다로 출제 가능
-    const multiQs = questions.filter(q=>q.type==='multi' && q.options?.length>=2);
-    if(multiQs.length===0){
-      // multi 없으면 vocab으로 fallback
+    if(playableQs.length===0){
+      // playable 없으면 vocab으로 fallback
       const idx2=Math.floor(Math.random()*vocab.length);
       const item2=vocab[idx2];
       const termMode2=Math.random()<0.5;
@@ -2201,14 +2200,25 @@ function vqNextQ(){
       const wrongs2=shuffleArr(vocab.filter((_,i)=>i!==idx2)).slice(0,3).map(v=>termMode2?v.def:v.term);
       choices=shuffleArr([correct,...wrongs2]);
     } else {
-      const q=multiQs[Math.floor(Math.random()*multiQs.length)];
-      // 배지: diff에 따라 표시
-      const diffLabel = q.diff===3?'★★★':q.diff===2?'★★':'★';
-      badgeText = diffLabel;
-      qText  = q.text||'';
-      qStyle = 'normal';
-      correct = q.options[q.answer[0]];
-      choices = shuffleArr([...q.options]);
+      const q=playableQs[Math.floor(Math.random()*playableQs.length)];
+      if(q.type==='pool_random'){
+        // 랜덤 풀 방식
+        badgeText = q.badge||'찾기';
+        qText     = q.question||'맞는 것은?';
+        qStyle    = 'normal';
+        const cPool=shuffleArr([...(q.correct_pool||[])]);
+        const wPool=shuffleArr([...(q.wrong_pool||[])]);
+        correct   = cPool[0];
+        choices   = shuffleArr([correct,...wPool.slice(0,3)]);
+      } else {
+        // multi 방식
+        const diffLabel = q.diff===3?'★★★':q.diff===2?'★★':'★';
+        badgeText = diffLabel;
+        qText  = q.text||'';
+        qStyle = 'normal';
+        correct = q.options[q.answer[0]];
+        choices = shuffleArr([...q.options]);
+      }
     }
   } else if(useExtra){
     const et  = extras[Math.floor(Math.random()*extras.length)].type;

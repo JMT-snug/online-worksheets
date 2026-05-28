@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1l">
+  <meta name="app-version" content="6.1m">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1m"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -204,7 +204,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .attempt-num{font-weight:700;color:var(--amber)}
 /* 오른쪽: 그림판 */
 .canvas-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;position:sticky;top:72px}
-.canvas-toolbar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:wrap}
+.canvas-toolbar{display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:nowrap;overflow:hidden}
 .canvas-toolbar-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
 .tool-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0}
 .tool-btn.active{background:var(--acc-lt);border-color:var(--accent)}
@@ -444,7 +444,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <!-- 오른쪽: 그림판 -->
       <div class="canvas-card">
         <div class="canvas-toolbar">
-          <span class="canvas-toolbar-label">풀이판</span>
           <button class="tool-btn active" id="tool-pen" title="펜">✏️</button>
           <button class="tool-btn" id="tool-eraser" title="지우개">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -473,9 +472,9 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
           <div class="divider-v"></div>
           <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
-          <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;margin:0 2px"></span>
-          <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:11px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">현재↩</button>
-          <button class="btn-back" id="cv-next-btn" onclick="canvasNext()" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
+          <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;white-space:nowrap"></span>
+          <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:10px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">↩</button>
+          <button class="btn-back" id="cv-next-btn" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -2301,6 +2300,8 @@ function updateCanvasNav(){
     const hasNext=canvasViewIdx<curQIdx;
     nextBtn.disabled=!hasNext;
     nextBtn.style.opacity=hasNext?"1":"0.3";
+    // onclick 재바인딩 (타이밍 문제 방지)
+    nextBtn.onclick = canvasNext;
   }
   const isAway=canvasViewIdx!==curQIdx;
   if(isAway){

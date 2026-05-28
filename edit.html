@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.1i">
+<meta name="app-version" content="edit-v1.1j">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -368,6 +368,20 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <textarea id="q-vocab-def" rows="2" placeholder="예: 등호(=)를 사용하여 두 수나 식이 같음을 나타낸 식" style="margin-top:4px"></textarea>
           </div>
 
+          <!-- 랜덤 풀 -->
+          <div id="field-pool" class="field" style="display:none">
+            <label>배지 텍스트</label>
+            <input id="q-pool-badge" placeholder="예: 소수 찾기">
+            <label style="margin-top:10px;display:block">문제 텍스트</label>
+            <input id="q-pool-question" placeholder="예: 소수인 것은?">
+            <label style="margin-top:10px;display:block">✅ 정답 풀 <span style="font-weight:400;color:var(--ink3)">(Enter로 추가)</span></label>
+            <input id="q-pool-correct-input" placeholder="정답 항목 입력" onkeydown="addPoolItem(event,'correct')">
+            <div id="pool-correct-list" class="ans-alt-list" style="margin-top:6px"></div>
+            <label style="margin-top:10px;display:block">❌ 오답 풀 <span style="font-weight:400;color:var(--ink3)">(최소 3개)</span></label>
+            <input id="q-pool-wrong-input" placeholder="오답 항목 입력" onkeydown="addPoolItem(event,'wrong')">
+            <div id="pool-wrong-list" class="ans-alt-list" style="margin-top:6px"></div>
+          </div>
+
           <div class="panel-actions">
             <button class="btn-save-q" onclick="saveQuestion()">✓ 적용</button>
             <button class="btn-del-q" onclick="deleteQuestion()">삭제</button>
@@ -410,6 +424,7 @@ let currentWsId = null;  // 현재 편집 중인 학습지
 let currentWs = null;    // 현재 학습지 객체
 let selectedQIdx = null; // 현재 선택된 문항 인덱스
 let altAnswers = [];     // 대안 정답 배열
+let poolCorrect = [], poolWrong = []; // 랜덤 풀
 
 // ── 인증 ──
 onAuthStateChanged(auth, user => {
@@ -607,8 +622,8 @@ function renderQList(){
     const isVocabItem = item._type==='vocab';
     const isExtraItem = item._type==='extra';
     const badge = isVocabItem ? 'vocab' : isExtraItem ? 'auto' : (item.type||'word');
-    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word:'용어',equation:'방정식',multi:'객관식',auto:'자동생성'}[badge]||'계산';
+    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto'}[badge]||'badge-word';
+    const badgeLabel = {vocab:'VOCA',word:'용어',equation:'방정식',multi:'객관식',auto:'자동생성',pool_random:'🎲랜덤풀'}[badge]||'계산';
     const preview = isVocabItem
       ? `${item.term} : ${item.def}`
       : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
@@ -685,7 +700,7 @@ function showPanel(item){
   document.getElementById('panel-editor').style.display='block';
   document.getElementById('panel-title').textContent = item._type==='vocab' ? 'VOCA 용어 편집' : '문항 편집';
 
-  altAnswers = [];
+  altAnswers = []; poolCorrect=[]; poolWrong=[];
 
   if(item._type==='vocab'){
     setQType('vocab');
@@ -696,7 +711,7 @@ function showPanel(item){
     let qtype;
     if(item.type==='word'){
       qtype = item.answerType==='expr' ? 'word_expr' : 'word_text';
-    } else if(item.type==='equation'||item.type==='multi'||item.type==='link'||item.type==='step3'){
+    } else if(['equation','multi','link','step3','pool_random'].includes(item.type)){
       qtype = item.type;
     } else {
       qtype = 'word_text'; // fallback
@@ -730,6 +745,12 @@ function showPanel(item){
     document.getElementById('q-ans-num').value = item.answer??'';
     } else if(qtype==='multi'){
       renderOptions(item.options||[], item.answer||[]);
+    } else if(qtype==='pool_random'){
+      document.getElementById('q-pool-badge').value    = item.badge||'';
+      document.getElementById('q-pool-question').value = item.question||'';
+      poolCorrect = [...(item.correct_pool||[])];
+      poolWrong   = [...(item.wrong_pool||[])];
+      renderPoolList('correct'); renderPoolList('wrong');
     }
   }
 }
@@ -743,12 +764,13 @@ function setQType(type){
   const show = id => document.getElementById(id).style.display='';
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool']
     .forEach(hide);
   if(type==='vocab'){
     show('field-vocab');
+  } else if(type==='pool_random'){
+    show('field-pool');
   } else if(type==='link'||type==='step3'){
-    // 편집 불가 유형: 안내만 표시
     show('field-text');
   } else {
     show('field-text');
@@ -836,6 +858,24 @@ window.saveQuestion = function(){
   const type = document.getElementById('q-type-sel').value;
   if(type==='link'||type==='step3'){
     toast('이 유형은 편집기에서 직접 수정할 수 없습니다'); return;
+  }
+  if(type==='pool_random'){
+    if(!poolCorrect.length){ toast('정답 풀을 1개 이상 추가하세요'); return; }
+    if(poolWrong.length<3){ toast('오답 풀을 최소 3개 추가하세요'); return; }
+    const isVocab2=currentWs.type==='vocab';
+    const qIdx2=isVocab2?selectedQIdx-currentWs.vocab.length:selectedQIdx;
+    currentWs.questions[qIdx2]={
+      id:currentWs.questions[qIdx2]?.id||`q${Date.now()}`,
+      type:'pool_random',
+      badge:document.getElementById('q-pool-badge').value.trim(),
+      question:document.getElementById('q-pool-question').value.trim(),
+      correct_pool:[...poolCorrect],
+      wrong_pool:[...poolWrong],
+      diff:parseInt(document.getElementById('q-diff-sel').value)||1,
+    };
+    renderQList();
+    toast('적용됨');
+    return;
   }
   const diff = parseInt(document.getElementById('q-diff-sel').value);
 
@@ -1104,6 +1144,27 @@ document.getElementById('btn-add-unit').onclick = async () => {
   toast('단원 추가됨');
 };
 
+
+// ── 랜덤 풀 헬퍼 ──
+window.addPoolItem = function(e, side){
+  if(e.key!=='Enter') return;
+  const inputId = side==='correct' ? 'q-pool-correct-input' : 'q-pool-wrong-input';
+  const v = document.getElementById(inputId).value.trim();
+  if(!v) return;
+  if(side==='correct') poolCorrect.push(v); else poolWrong.push(v);
+  document.getElementById(inputId).value='';
+  renderPoolList(side);
+};
+function renderPoolList(side){
+  const arr  = side==='correct' ? poolCorrect : poolWrong;
+  const list = document.getElementById(`pool-${side}-list`);
+  list.innerHTML = arr.map((v,i)=>`
+    <div class="ans-alt-tag" style="background:${side==='correct'?'var(--grn-lt)':'var(--red-lt)'};color:${side==='correct'?'var(--green)':'var(--red)'}">
+      ${v}<button onclick="${side==='correct'?'poolCorrect':'poolWrong'}.splice(${i},1);renderPoolList('${side}')">✕</button>
+    </div>`).join('');
+}
+window.renderPoolList=renderPoolList;
+
 // ── 토스트 ──
 function toast(msg, dur=2500){
   const t=document.getElementById('toast');
@@ -1131,6 +1192,7 @@ function _doAddQuestion(type){
   else if(type==='word_expr'){ newQ.type='word'; newQ.answerType='expr'; }
   else if(type==='equation'){ newQ.type='equation'; newQ.answer=0; }
   else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
+  else if(type==='pool_random'){ newQ.type='pool_random'; newQ.badge=''; newQ.question=''; newQ.correct_pool=[]; newQ.wrong_pool=[]; }
   currentWs.questions.push(newQ);
   const isVocab = currentWs.type==='vocab';
   const allItems = isVocab
@@ -1283,6 +1345,11 @@ window.deleteUnit = async function(unitId, e){
         <div class="type-icon">☑️</div>
         <div class="type-name">객관식</div>
         <div class="type-desc">선지 선택</div>
+      </div>
+      <div class="type-opt" data-type="pool_random" onclick="selectTypeOpt(this)" style="grid-column:1/-1">
+        <div class="type-icon">🎲</div>
+        <div class="type-name">랜덤 풀</div>
+        <div class="type-desc">정답/오답 풀 등록 → 퀴즈마다 무작위 선택</div>
       </div>
     </div>
     <div class="modal-actions">

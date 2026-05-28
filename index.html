@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1q">
+  <meta name="app-version" content="6.1s">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1q"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1s"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1666,6 +1666,7 @@ function renderStep3Q(q, panel){
       <div class="step3-tabs">${tabs}</div>
       <div class="step3-body" id="step3-body"></div>
     </div>`;
+  renderMath(panel);
   renderStep3Body(q);
 }
 
@@ -1730,13 +1731,53 @@ function renderStep3Body(q){
       <div class="feedback-strip" id="s3-fb"></div>`;
     setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
   }
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([body]).catch(()=>{});
+}
+
+// 방정식 동치성 판정
+function eqEquivCheck(userEq, correctEq){
+  function normEq(s){
+    s=String(s).toLowerCase().replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
+    let prev;
+    do{prev=s;
+      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
+      s=s.replace(/\)(\d|x|\()/g,')*$1');
+      s=s.replace(/(\d)x/g,'$1*x');
+      s=s.replace(/x(\d)/g,'x*$1');
+    }while(prev!==s);
+    return s;
+  }
+  function evalSide(s,x){
+    try{
+      let t=normEq(s).replace(/x/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t)) return NaN;
+      return Function('"use strict";return('+t+')')();
+    }catch(e){return NaN;}
+  }
+  try{
+    const uParts=userEq.split('=');
+    const cParts=correctEq.split('=');
+    if(uParts.length!==2||cParts.length!==2) return false;
+    const pts=[0.317,1.234,-2.57,4.91,-0.718,7.37];
+    let ratio=null;
+    for(const x of pts){
+      const du=evalSide(uParts[0],x)-evalSide(uParts[1],x);
+      const dc=evalSide(cParts[0],x)-evalSide(cParts[1],x);
+      if(!isFinite(du)||!isFinite(dc)) return false;
+      if(Math.abs(dc)<1e-9){if(Math.abs(du)>1e-6) return false; continue;}
+      const r=du/dc;
+      if(ratio===null) ratio=r;
+      else if(Math.abs(r-ratio)>1e-6) return false;
+    }
+    return ratio!==null&&Math.abs(ratio)>1e-9;
+  }catch(e){return false;}
 }
 
 // 다항식/식 동치 판정 (샘플 대입)
 function exprEquivCheck(userExpr, correctExpr){
   function ev(s,x){
     try{
-      let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
+      let t=String(s).toLowerCase().replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
       let prev;
       do{prev=t;
         t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');

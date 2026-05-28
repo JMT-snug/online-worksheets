@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.1e">
+  <meta name="app-version" content="6.1h">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.1e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.1h"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -778,15 +778,21 @@ function showUnitPage(unit) {
       const inProg = !!(prog && !prog.isComplete);
       const empty = ws.type==="vocab" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
+      const isDraft  = ws.status === "draft";
+      const isLocked = ws.status === "locked";
+      const isBlocked = isDraft || isLocked;
 
       let badgeHtml = "";
-      if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
-      else if(inProg) badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
-      else if(empty)  badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
-      else            badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
+      if(isLocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 수정 중</span>`;
+      else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중</span>`;
+      else if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
+      else if(inProg)  badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
+      else if(empty)   badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
+      else             badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
 
       const card = document.createElement("div");
-      card.className = "ws-list-card" + (empty?" empty":"");
+      card.className = "ws-list-card" + (empty||isBlocked?" empty":"");
+      if(isBlocked) card.style.cssText="opacity:.55;cursor:not-allowed;filter:grayscale(.4)";
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
@@ -800,7 +806,7 @@ function showUnitPage(unit) {
         </div>
         ${badgeHtml}`;
 
-      if(!empty) card.addEventListener("click", ()=> ws.type==="vocab" ? startVocabQuiz(ws) : startQuiz(ws));
+      if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="vocab" ? startVocabQuiz(ws) : startQuiz(ws));
       grid.appendChild(card);
     });
   }
@@ -1114,6 +1120,9 @@ function renderQuestion() {
   const panel=document.getElementById("quiz-left-panel");
 
   // 문제 헤더
+  const imgHtml = q.imageUrl
+    ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
+    : '';
   const qHeadHtml=`
     <div class="problem-card">
       <div class="q-num">
@@ -1129,6 +1138,7 @@ function renderQuestion() {
         return `<div class="q-text" style="margin-top:2px">${_hasEq?"다음 일차방정식을 풀어라.":""}</div>
           <div class="q-text" style="margin-top:${_hasEq?"6":"2"}px"><span class="eq">${fracText(q.text)}</span></div>`;
       })()}
+    ${imgHtml}
     </div>`;
 
   const isLink = q.type==="link";
@@ -1527,6 +1537,9 @@ let multiSel = new Set();
 
 function renderMultiQ(q, panel){
   multiSel = new Set();
+  const imgHtmlM = q.imageUrl
+    ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
+    : '';
   panel.innerHTML=`
     <div class="problem-card">
       <div class="q-num">

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2h">
+<meta name="app-version" content="edit-v1.2i">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -571,6 +571,7 @@ function renderSidebar(){
             onclick="selectWs('${ws.id}')">
             <span class="ws-drag">⣿</span>
             <span class="ws-name">${ws.title||'제목 없음'}</span>
+            <span class="ws-status-icon" title="${ws.status==='published'?'발행됨':ws.status==='locked'?'잠김':'준비 중'}" style="margin-left:auto;font-size:12px">${ws.status==='published'?'✅':ws.status==='locked'?'🔒':'📝'}</span>
           </div>
         `).join('')}
         <div class="sb-add" onclick="addWorksheet('${unit.id}')">＋ 학습지 추가</div>
@@ -612,16 +613,13 @@ window.selectWs = async function(wsId){
 };
 
 // ── 에디터 렌더 ──
-function renderEditor(){
-  document.getElementById('editor-empty').style.display='none';
-  document.getElementById('editor-main').style.display='flex';
-  document.getElementById('panel-empty').style.display='block';
-  document.getElementById('panel-editor').style.display='none';
-
-  // status에 따라 헤더 버튼 강조 + 상태 배지
+function updateStatusUI(){
+  if(!currentWs) return;
   const st = currentWs.status||'draft';
-  document.getElementById('btn-lock').style.outline    = st==='locked'    ? '2px solid #f59e0b' : '';
-  document.getElementById('btn-publish').style.outline = st==='published' ? '2px solid #4ade80' : '';
+  const lockBtn=document.getElementById('btn-lock');
+  const pubBtn=document.getElementById('btn-publish');
+  if(lockBtn) lockBtn.style.outline = st==='locked'    ? '2px solid #f59e0b' : '';
+  if(pubBtn)  pubBtn.style.outline  = st==='published' ? '2px solid #4ade80' : '';
   const badge=document.getElementById('ws-status-badge');
   if(badge){
     const map={
@@ -632,6 +630,17 @@ function renderEditor(){
     const m=map[st]||map.draft;
     badge.textContent=m.t; badge.style.background=m.bg; badge.style.color=m.c;
   }
+}
+window.updateStatusUI=updateStatusUI;
+
+function renderEditor(){
+  document.getElementById('editor-empty').style.display='none';
+  document.getElementById('editor-main').style.display='flex';
+  document.getElementById('panel-empty').style.display='block';
+  document.getElementById('panel-editor').style.display='none';
+
+  // status UI 갱신
+  updateStatusUI();
   document.getElementById('ws-title').value  = currentWs.title||'';
   document.getElementById('ws-id').value     = currentWs.id||'';
   document.getElementById('ws-diff').value   = currentWs.diff||1;
@@ -1193,6 +1202,7 @@ async function saveToFirestore(status, silent=false){
     document.querySelectorAll('.ws-item').forEach(el=>el.classList.toggle('active',el.dataset.wsid===wsId));
     // 편집 화면 유지 (renderEditor 재호출 없이 ID만 갱신)
     currentWsId = wsId; currentWs = saveData;
+    updateStatusUI(); // 상태 배지/버튼 실시간 갱신
   }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
 }
 

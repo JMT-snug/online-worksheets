@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2c">
+<meta name="app-version" content="edit-v1.2d">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -1033,9 +1033,8 @@ window.saveQuestion = function(){
     // questions 항목 수정
     const qIdx = isVocab ? selectedQIdx - vocabCount : selectedQIdx;
     const raw = document.getElementById('q-text').value;
-    // \( → \\( 이스케이프
-    const text = raw.replace(/\\/g,'\\\\').replace(/\\\\\\\\/g,'\\\\');
-    // 실제로는 사용자 입력 \ 을 \\ 로 처리해서 저장
+    // <br> 태그를 줄바꿈으로 통일 (중복 빈 줄 방지), 백슬래시는 그대로
+    const text = raw.replace(/<br\s*\/?>\n?/gi, '\n');
     let q = { id: currentWs.questions[qIdx]?.id||`q${Date.now()}`, diff };
 
     if(type==='word_text'){

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.5c">
+<meta name="app-version" content="t3.5d">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -198,9 +198,18 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.5c";
+const T_VERSION = "t3.5d";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
-const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount))); // teacher 버전
+const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
+// perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
+const getAttempts=r=>r.perQuestion
+  ? Object.values(r.perQuestion).reduce((s,v)=>s+(v.attempts||0),0)
+  : (r.totalAttempts||0);
+// 문항 ID 표시 정규화 (q00a→Q00①, q01→Q01)
+const STEP_MARK={a:'①',b:'②',c:'③',d:'④',e:'⑤',f:'⑥'};
+function fmtQid(qid){
+  return (qid||'').replace(/^q(\d+)([a-f]?)$/,(_,n,s)=>'Q'+n+(s?STEP_MARK[s]:''));
+} // teacher 버전
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
@@ -427,12 +436,12 @@ function perQCells(r, uid){
     const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
     const unanswered = (v.correct===false) && wc===0 && att===0;
     let col, mark, ttl;
-    if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${qid}: 미응답`; }
+    if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
     else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
-    else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${qid}: 오답 ${wc}회`; }
+    else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
     const dkey=(uid||r.uid||"x")+"_"+qid;
     window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-    return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
+    return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
   }).join("");
   return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
 }
@@ -519,7 +528,7 @@ function renderStudentDetail(uid){
   const done=recs.filter(isRecDone).length;
   const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
-  const totalTries=recs.reduce((s,r)=>s+(r.totalAttempts||Object.values(r.perQuestion||{}).reduce((x,v)=>x+(v.attempts||0),0)),0);
+  const totalTries=recs.reduce((s,r)=>s+getAttempts(r),0);
 
   // 학습지별 행 (WORKSHEETS 정의 순서, 학생이 시작한 것만)
   const ordered=WORKSHEETS.filter(ws=>wsMap[ws.id]);
@@ -531,7 +540,7 @@ function renderStudentDetail(uid){
     const r=wsMap[ws.id]; if(!r) return "";
     const dn=isRecDone(r);
     const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
-    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const tries=getAttempts(r);
     const unit=UNIT_MAP[ws.unitId]?.title||"-";
     const ts=formatDate(r.completedAt||r.lastUpdated);
     const statusBadge=dn
@@ -570,7 +579,7 @@ function renderOverview(){
   const students=Object.keys(allData).length;
   let totalSub=0,totalTries=0,totalPct=0,pctN=0;
   Object.values(allData).forEach(d=>Object.values(d).forEach(r=>{
-    totalSub++; totalTries+=r.totalAttempts||0;
+    totalSub++; totalTries+=getAttempts(r);
     if(r.correctRate!=null){totalPct+=r.correctRate;pctN++;}
   }));
   const avgPct=pctN?Math.round(totalPct/pctN):0;
@@ -598,7 +607,7 @@ function renderOverview(){
       const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
       const done=recs.length;
       const avgR=done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0;
-      const avgT=done?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/done).toFixed(1):"-";
+      const avgT=done?(recs.reduce((s,r)=>s+getAttempts(r),0)/done).toFixed(1):"-";
       const gc=g===1?'#1e40af':g===2?'#166534':'#991b1b';
       const gb=g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2';
       h+=`<tr>
@@ -641,7 +650,7 @@ window.renderWSTable=function(wsId){
   }
 
   // 정렬 (tries는 perQuestion에서 계산)
-  const triesOf=r=>r.totalAttempts??Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+  const triesOf=r=>getAttempts(r);
   const sortFn=(a,b)=>{
     if(_wsSortBy==="class") return (findClass(a.studentEmail)||"zzz").localeCompare(findClass(b.studentEmail)||"zzz","ko");
     if(_wsSortBy==="name")  return (a.studentName||"").localeCompare(b.studentName||"","ko");
@@ -665,19 +674,19 @@ window.renderWSTable=function(wsId){
       const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
       const unanswered = (v.correct===false) && wc===0 && att===0;
       let col, mark, ttl;
-      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${qid}: 미응답`; }
+      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
-      else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${qid}: 오답 ${wc}회`; }
+      else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
       const dkey=r.uid+"_"+qid;
       window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${qid.replace("q","Q")}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
+      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
   }
   const doneRows=done.map(r=>{
     const ts=formatDate(r.completedAt||r.lastUpdated);
     const rate=r.correctRate??Math.round((r.answeredCount||0)/(r.totalCount||1)*100);
-    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const tries=getAttempts(r);
     const wrong=tries;
     const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
@@ -698,7 +707,7 @@ window.renderWSTable=function(wsId){
     const classInfo=findClass(r.studentEmail)||"-";
     const pct=r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0;
     const upd=formatDate(r.lastUpdated);
-    const tries=r.totalAttempts||Object.values(r.perQuestion||{}).reduce((s,v)=>s+(v.attempts||0),0);
+    const tries=getAttempts(r);
     const wcls=tries===0?"tries-1":tries<=2?"tries-2":"tries-many";
     const perQHtml=renderPerQ(r);
     return `<tr style="background:var(--acc-lt)">
@@ -729,10 +738,10 @@ function renderWS(wsId){
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
   const done=recs.filter(r=>isRecDone(r));
   const avgR=done.length?Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length):0;
-  const avgT=done.length?(done.reduce((s,r)=>s+(r.totalAttempts||0),0)/done.length).toFixed(1):"-";
+  const avgT=done.length?(done.reduce((s,r)=>s+getAttempts(r),0)/done.length).toFixed(1):"-";
   // Fix: 하드코딩 5 → ws.qCount 사용
   const qc=ws.qCount||(ws.questions?.length)||0;
-  const perfect=qc>0?done.filter(r=>r.totalAttempts===qc).length:"-";
+  const perfect=qc>0?done.filter(r=>getAttempts(r)===0).length:"-";
 
   // sum-grid까지 렌더링 후 템플릿 리터럴 닫기
   let h=`<div class="pg-title">${ws.title}</div>
@@ -965,7 +974,7 @@ function exportOverview(){
   WORKSHEETS.forEach(ws=>{
     const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
     const avgR=recs.length?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/recs.length):0;
-    const avgT=recs.length?(recs.reduce((s,r)=>s+(r.totalAttempts||0),0)/recs.length).toFixed(1):0;
+    const avgT=recs.length?(recs.reduce((s,r)=>s+getAttempts(r),0)/recs.length).toFixed(1):0;
     csv+=`"${ws.title}",${wsGrade(ws)||"-"},"${wsCategory(ws)||"-"}",${recs.length},${avgR}%,${avgT}\n`;
   });
   dl(csv,"전체현황.csv");
@@ -977,7 +986,7 @@ function exportWS(wsId){
     const r=d[wsId]; if(!r?.completedAt) return;
     const ts=formatDate(r.completedAt);
     const cls=findClass(r.studentEmail)||"-";
-    csv+=`"${r.studentName||""}","${r.studentEmail||""}","${cls}",${r.correctRate||0}%,${r.totalAttempts||0},"${ts}"\n`;
+    csv+=`"${r.studentName||""}","${r.studentEmail||""}","${cls}",${r.correctRate||0}%,${getAttempts(r)},"${ts}"\n`;
   });
   dl(csv,`${ws?.title||wsId}_결과.csv`);
 }

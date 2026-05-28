@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.0f">
+<meta name="app-version" content="edit-v1.1c">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -147,6 +147,42 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 /* ── 스피너 ── */
 .spinner{text-align:center;padding:40px;color:var(--ink3);font-size:14px}
+
+/* ── 모달 공통 ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--paper);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);padding:24px;min-width:320px;max-width:90vw;max-height:88vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.modal-actions button{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.btn-modal-ok{background:var(--accent);color:#fff}
+.btn-modal-cancel{background:var(--rule);color:var(--ink2)}
+
+/* ── 유형 선택 모달 ── */
+.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}
+.type-opt{border:2px solid var(--rule);border-radius:8px;padding:12px;cursor:pointer;text-align:center;transition:.15s}
+.type-opt:hover{border-color:var(--accent);background:var(--acc-lt)}
+.type-opt.selected{border-color:var(--accent);background:var(--acc-lt)}
+.type-opt .type-icon{font-size:20px;margin-bottom:4px}
+.type-opt .type-name{font-size:12px;font-weight:600;color:var(--ink2)}
+.type-opt .type-desc{font-size:11px;color:var(--ink3);margin-top:2px}
+
+/* ── 미리보기 모달 ── */
+.preview-modal{max-width:680px;width:95vw}
+.prev-q{border:1px solid var(--rule);border-radius:8px;padding:14px;margin-bottom:10px}
+.prev-q-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.prev-q-num{font-size:12px;font-weight:700;color:var(--ink3)}
+.prev-q-text{font-size:14px;line-height:1.6;margin-bottom:8px}
+.prev-options{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.prev-opt{border:1px solid var(--rule);border-radius:6px;padding:7px 10px;font-size:13px}
+.prev-opt.correct{border-color:var(--green);background:var(--grn-lt);font-weight:600}
+.prev-ans{font-size:13px;color:var(--ink2);background:var(--cream);border-radius:6px;padding:6px 10px;margin-top:4px}
+.prev-vocab-pair{display:flex;gap:8px;font-size:13px}
+.prev-vocab-term{font-weight:700;min-width:80px}
+
+/* ── 단원 삭제 버튼 ── */
+.unit-hdr .unit-del{display:none;background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px;border-radius:4px;margin-left:auto}
+.unit-hdr:hover .unit-del{display:inline}
+.unit-del:hover{background:#fee2e2}
 </style>
 </head>
 <body>
@@ -172,7 +208,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <span class="hdr-title">✏️ 학습지 편집기</span>
     <span class="hdr-badge" id="edit-version">edit-v1.0d</span>
     <div class="hdr-space"></div>
-    <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
+    <button class="hdr-btn" id="btn-preview"
+    style="background:#0f766e;color:#fff">👁 미리보기</button>
+  <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
     <button class="hdr-btn" id="btn-delete-ws"
     style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
   <button class="hdr-btn btn-draft" id="btn-draft">임시저장</button>
@@ -216,6 +254,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <select class="meta-select" id="ws-unit"></select>
             </div>
             <div class="meta-row">
+              <span class="meta-label">학년</span>
+              <select class="meta-select" id="ws-grade" style="max-width:100px">
+                <option value="1">1학년</option>
+                <option value="2">2학년</option>
+                <option value="3">3학년</option>
+              </select>
+            </div>
+            <div class="meta-row">
               <span class="meta-label">유형</span>
               <select class="meta-select" id="ws-type">
                 <option value="regular">일반 학습지</option>
@@ -236,7 +282,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <!-- 문항 목록 -->
           <div class="q-list-hdr">
             <h3 id="q-list-title">문항 목록</h3>
+            <div style="display:flex;gap:6px" id="add-q-area">
             <button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>
+          </div>
           </div>
           <div id="q-list"></div>
 
@@ -415,6 +463,12 @@ async function loadAll(){
 
 // ── 사이드바 렌더 ──
 function renderSidebar(){
+  // 현재 열린 단원 ID 저장
+  const openUnits = new Set(
+    [...document.querySelectorAll('.unit-wsList.open')]
+      .map(el=>el.closest('.unit-block')?.dataset.unitId)
+      .filter(Boolean)
+  );
   const ul = document.getElementById('unit-list');
   ul.innerHTML = '';
   units.forEach(unit=>{
@@ -429,6 +483,7 @@ function renderSidebar(){
         <span class="unit-toggle">▶</span>
         <span style="flex:1">${unit.grade}학년 ${unit.title}</span>
         <span style="font-size:10px;color:#475569">${wsOfUnit.length}</span>
+        <button class="unit-del" onclick="deleteUnit('${unit.id}',event)" title="단원 삭제">✕</button>
       </div>
       <div class="unit-wsList">
         ${wsOfUnit.map(ws=>`
@@ -445,13 +500,14 @@ function renderSidebar(){
         <div class="sb-add" onclick="addWorksheet('${unit.id}')">＋ 학습지 추가</div>
       </div>`;
     ul.appendChild(block);
+    block.draggable = true;
+    bindUnitDrag(block);
 
-    // 첫 단원 펼치기
-    if(unit === units[0]){
-      const toggle = block.querySelector('.unit-toggle');
-      const list   = block.querySelector('.unit-wsList');
-      toggle.classList.add('open');
-      list.classList.add('open');
+    // 이전에 열린 단원 복원, 없으면 첫 단원만 펼치기
+    const shouldOpen = openUnits.size > 0 ? openUnits.has(unit.id) : (unit === units[0]);
+    if(shouldOpen){
+      block.querySelector('.unit-toggle').classList.add('open');
+      block.querySelector('.unit-wsList').classList.add('open');
     }
   });
 }
@@ -486,9 +542,10 @@ function renderEditor(){
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';
 
-  document.getElementById('ws-title').value = currentWs.title||'';
-  document.getElementById('ws-id').value    = currentWs.id||'';
-  document.getElementById('ws-diff').value  = currentWs.diff||1;
+  document.getElementById('ws-title').value  = currentWs.title||'';
+  document.getElementById('ws-id').value     = currentWs.id||'';
+  document.getElementById('ws-diff').value   = currentWs.diff||1;
+  document.getElementById('ws-grade').value  = currentWs.grade||1;
 
   // 단원 select
   const uSel = document.getElementById('ws-unit');
@@ -499,6 +556,16 @@ function renderEditor(){
   document.getElementById('ws-type').value = wType;
 
   // 문항 제목
+  // VOCA 타입이면 두 버튼
+  const addArea = document.getElementById('add-q-area');
+  if(wType==='vocab'){
+    addArea.innerHTML=`
+      <button class="btn-add-q" onclick="addVocabItem()" style="background:#1d4ed8">＋ 용어 추가</button>
+      <button class="btn-add-q" onclick="addQuestionItem()" style="background:#15803d">＋ 연습 문항 추가</button>`;
+  } else {
+    addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>';
+    document.getElementById('btn-add-q').onclick = addQuestionItem;
+  }
   document.getElementById('q-list-title').textContent =
     wType==='vocab' ? `용어 목록 (${currentWs.vocab.length}개) + 연습 문항 (${currentWs.questions.length}개)` :
     `문항 목록 (${currentWs.questions.length}개)`;
@@ -815,24 +882,30 @@ window.deleteQuestion = function(){
 };
 
 // ── 문항 추가 ──
-document.getElementById('btn-add-q').onclick = () => {
-  if(!currentWs){ toast('학습지를 먼저 선택하세요'); return; }
-  const isVocab = currentWs.type==='vocab';
-  if(isVocab){
-    currentWs.vocab.push({term:'새 용어',def:'정의'});
-    selectedQIdx = currentWs.vocab.length - 1;
-  } else {
-    currentWs.questions.push({id:`q${Date.now()}`,type:'word',answerType:'text',text:'',answer:'',answerAlt:[],diff:1});
-    selectedQIdx = currentWs.questions.length - 1;
-  }
+window.addVocabItem = function(){
+  if(!currentWs) return;
+  currentWs.vocab.push({term:'새 용어',def:'정의'});
+  const allItems=[...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
+    ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))];
+  selectedQIdx = currentWs.vocab.length - 1;
   renderQList();
-  // 새 항목 선택
+  showPanel(allItems[selectedQIdx]);
+};
+window.addQuestionItem = function(){
+  if(!currentWs){ toast('학습지를 먼저 선택하세요'); return; }
+  currentWs.questions.push({id:`q${Date.now()}`,type:'word',answerType:'text',text:'',answer:'',answerAlt:[],diff:1});
+  const isVocab = currentWs.type==='vocab';
   const allItems = isVocab
     ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
        ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
     : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  selectedQIdx = allItems.length - 1;
+  renderQList();
   showPanel(allItems[selectedQIdx]);
 };
+// 일반 학습지용 초기 바인딩 (renderEditor에서 재설정됨)
+const _initAddBtn = document.getElementById('btn-add-q');
+if(_initAddBtn) _initAddBtn.onclick = addQuestionItem;
 
 // ── 학습지 추가 ──
 window.addWorksheet = function(unitId){
@@ -848,6 +921,13 @@ window.addWorksheet = function(unitId){
   };
   worksheets.push(newWs);
   renderSidebar();
+  // 새 학습지가 속한 단원 강제 오픈
+  document.querySelectorAll('.unit-block').forEach(block=>{
+    if(block.dataset.unitId===unitId){
+      block.querySelector('.unit-toggle').classList.add('open');
+      block.querySelector('.unit-wsList').classList.add('open');
+    }
+  });
   selectWsLocal(newWs);
 };
 
@@ -887,20 +967,29 @@ async function saveToFirestore(status){
     id: wsId,
     title: document.getElementById('ws-title').value.trim(),
     unitId: document.getElementById('ws-unit').value,
-    type: document.getElementById('ws-type').value==='vocab'?'vocab':'regular',
+    grade: parseInt(document.getElementById('ws-grade').value)||1,
+      type: document.getElementById('ws-type').value==='vocab'?'vocab':'regular',
     diff: parseInt(document.getElementById('ws-diff').value)||1,
     status,
     lastModified: new Date().toISOString(),
     createdBy: currentUser.email,
   };
   try{
+    // 빈 배열로 기존 데이터 삭제되지 않도록 재확인
+    if(!saveData.questions?.length && !saveData.vocab?.length){
+      const existing = (await getDoc(doc(db,'curriculum',wsId))).data();
+      if(existing?.questions?.length) saveData.questions = existing.questions;
+      if(existing?.vocab?.length)     saveData.vocab     = existing.vocab;
+    }
     await setDoc(doc(db,'curriculum',wsId), saveData);
     currentWsId = wsId;
     currentWs = saveData;
     toast(status==='published'?'✅ 발행 완료':'💾 임시저장 완료');
     await loadAll();
-    // 다시 선택
+    // 저장 후 현재 학습지 active 복원
     document.querySelectorAll('.ws-item').forEach(el=>el.classList.toggle('active',el.dataset.wsid===wsId));
+    // 편집 화면 유지 (renderEditor 재호출 없이 ID만 갱신)
+    currentWsId = wsId; currentWs = saveData;
   }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
 }
 
@@ -988,6 +1077,185 @@ function toast(msg, dur=2500){
   setTimeout(()=>t.classList.remove('show'), dur);
 }
 window.toast=toast;
+
+// ── 문항 유형 선택 모달 ──
+let _addingForVocabWs = false;
+window.selectTypeOpt = function(el){
+  document.querySelectorAll('.type-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+};
+window.confirmAddQuestion = function(){
+  const sel = document.querySelector('.type-opt.selected');
+  const type = sel?.dataset.type || 'word_text';
+  document.getElementById('type-modal').style.display='none';
+  _doAddQuestion(type);
+};
+function _doAddQuestion(type){
+  if(!currentWs) return;
+  const newQ = {id:`q${Date.now()}`,diff:1,text:'',answer:''};
+  if(type==='word_text'){ newQ.type='word'; newQ.answerType='text'; newQ.answerAlt=[]; }
+  else if(type==='word_expr'){ newQ.type='word'; newQ.answerType='expr'; }
+  else if(type==='equation'){ newQ.type='equation'; newQ.answer=0; }
+  else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
+  currentWs.questions.push(newQ);
+  const isVocab = currentWs.type==='vocab';
+  const allItems = isVocab
+    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
+       ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
+    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  selectedQIdx = allItems.length - 1;
+  renderQList();
+  showPanel(allItems[selectedQIdx]);
+}
+
+// addQuestionItem 오버라이드 → 유형 선택 모달 표시
+window.addQuestionItem = function(){
+  if(!currentWs){ toast('학습지를 먼저 선택하세요'); return; }
+  document.getElementById('type-modal').style.display='flex';
+};
+
+// ── 미리보기 ──
+document.getElementById('btn-preview').onclick = () => {
+  if(!currentWs){ toast('미리볼 학습지를 선택하세요'); return; }
+  renderPreview();
+  document.getElementById('preview-modal').style.display='flex';
+};
+function renderPreview(){
+  const ws = currentWs;
+  document.getElementById('preview-title').textContent = `미리보기 — ${ws.title||'제목 없음'}`;
+  const body = document.getElementById('preview-body');
+  const isVocab = ws.type==='vocab';
+  let html = '';
+  let num = 1;
+
+  // vocab 항목
+  if(isVocab && ws.vocab?.length){
+    html += `<div style="margin-bottom:12px;font-size:13px;font-weight:700;color:var(--ink3)">VOCA 용어 (${ws.vocab.length}개)</div>`;
+    ws.vocab.forEach(v=>{
+      html += `<div class="prev-q"><div class="prev-vocab-pair">
+        <span class="prev-vocab-term">${v.term}</span>
+        <span style="color:var(--ink3)">→</span>
+        <span>${v.def}</span></div></div>`;
+    });
+  }
+
+  // questions
+  if(ws.questions?.length){
+    if(isVocab) html += `<div style="margin:12px 0 8px;font-size:13px;font-weight:700;color:var(--ink3)">연습 문항 (${ws.questions.length}개)</div>`;
+    ws.questions.forEach(q=>{
+      const typeLabel = {word:'용어',equation:'방정식',multi:'객관식'}[q.type]||q.type;
+      const badgeCls = {word:'badge-word',equation:'badge-equation',multi:'badge-multi'}[q.type]||'badge-word';
+      html += `<div class="prev-q">
+        <div class="prev-q-hdr">
+          <span class="prev-q-num">${num++}</span>
+          <span class="q-type-badge ${badgeCls}">${typeLabel}</span>
+          <span style="font-size:11px;color:var(--ink3)">★${q.diff||1}</span>
+        </div>
+        <div class="prev-q-text">${(q.text||'').replace(/\\\(/g,'\(').replace(/\\\)/g,'\)')}</div>`;
+      if(q.type==='multi' && q.options){
+        html += `<div class="prev-options">`;
+        q.options.forEach((opt,i)=>{
+          const isAns = (q.answer||[]).includes(i);
+          const optText = opt.replace(/\\\(/g,'\(').replace(/\\\)/g,'\)');
+          html += `<div class="prev-opt${isAns?' correct':''}">
+            ${String.fromCharCode(9312+i)} ${optText}${isAns?' ✓':''}
+          </div>`;
+        });
+        html += `</div>`;
+      } else if(q.answer!==undefined && q.answer!==''){
+        html += `<div class="prev-ans">정답: ${q.answer}</div>`;
+      }
+      html += `</div>`;
+    });
+  }
+  body.innerHTML = html || '<div class="empty">문항이 없습니다</div>';
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([body]).catch(()=>{});
+}
+
+// ── 단원 드래그앤드롭 ──
+let unitDragId = null;
+function bindUnitDrag(block){
+  block.addEventListener('dragstart', e=>{ unitDragId=block.dataset.unitId; block.style.opacity='.5'; e.stopPropagation(); });
+  block.addEventListener('dragend',   e=>{ block.style.opacity='1'; unitDragId=null; });
+  block.addEventListener('dragover',  e=>{ e.preventDefault(); e.stopPropagation(); block.style.outline='2px dashed #60a5fa'; });
+  block.addEventListener('dragleave', e=>{ block.style.outline=''; });
+  block.addEventListener('drop',      async e=>{
+    e.preventDefault(); e.stopPropagation(); block.style.outline='';
+    const toId = block.dataset.unitId;
+    if(!unitDragId || unitDragId===toId) return;
+    const from = units.findIndex(u=>u.id===unitDragId);
+    const to   = units.findIndex(u=>u.id===toId);
+    if(from<0||to<0) return;
+    units.splice(to,0,units.splice(from,1)[0]);
+    for(let i=0;i<units.length;i++){
+      units[i].order=i;
+      await setDoc(doc(db,'units',units[i].id),units[i]);
+    }
+    renderSidebar();
+    toast('단원 순서 저장됨');
+  });
+}
+
+// ── 단원 삭제 ──
+window.deleteUnit = async function(unitId, e){
+  e.stopPropagation();
+  const unit = units.find(u=>u.id===unitId);
+  const wsCount = worksheets.filter(w=>w.unitId===unitId).length;
+  if(wsCount>0){
+    if(!confirm(`"${unit?.title}" 단원에 학습지 ${wsCount}개가 있습니다.\n단원만 삭제됩니다 (학습지는 유지). 계속하시겠습니까?`)) return;
+  } else {
+    if(!confirm(`"${unit?.title}" 단원을 삭제하시겠습니까?`)) return;
+  }
+  await deleteDoc(doc(db,'units',unitId));
+  units = units.filter(u=>u.id!==unitId);
+  renderSidebar();
+  toast('단원 삭제됨');
+};
+
 </script>
+
+<!-- 문항 유형 선택 모달 -->
+<div class="modal-bg" id="type-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="width:360px">
+    <h3>문항 유형 선택</h3>
+    <div class="type-grid" id="type-grid">
+      <div class="type-opt selected" data-type="word_text" onclick="selectTypeOpt(this)">
+        <div class="type-icon">📝</div>
+        <div class="type-name">용어형</div>
+        <div class="type-desc">텍스트 정답</div>
+      </div>
+      <div class="type-opt" data-type="word_expr" onclick="selectTypeOpt(this)">
+        <div class="type-icon">🔢</div>
+        <div class="type-name">계산형</div>
+        <div class="type-desc">수식 정답</div>
+      </div>
+      <div class="type-opt" data-type="equation" onclick="selectTypeOpt(this)">
+        <div class="type-icon">⚖️</div>
+        <div class="type-name">방정식형</div>
+        <div class="type-desc">숫자/분수 정답</div>
+      </div>
+      <div class="type-opt" data-type="multi" onclick="selectTypeOpt(this)">
+        <div class="type-icon">☑️</div>
+        <div class="type-name">객관식</div>
+        <div class="type-desc">선지 선택</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('type-modal').style.display='none'">취소</button>
+      <button class="btn-modal-ok" onclick="confirmAddQuestion()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 미리보기 모달 -->
+<div class="modal-bg" id="preview-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal preview-modal">
+    <h3 id="preview-title">미리보기</h3>
+    <div id="preview-body"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('preview-modal').style.display='none'">닫기</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

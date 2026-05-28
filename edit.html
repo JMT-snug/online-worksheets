@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2e">
+<meta name="app-version" content="edit-v1.2g">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -258,6 +258,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
           <!-- 학습지 메타 -->
           <div class="meta-card">
+            <div class="meta-row" style="align-items:center">
+              <span class="meta-label">상태</span>
+              <span id="ws-status-badge" style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700"></span>
+            </div>
             <div class="meta-row">
               <span class="meta-label">제목</span>
               <input class="meta-input" id="ws-title" placeholder="학습지 제목">
@@ -412,39 +416,13 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div id="pool-wrong-list" class="ans-alt-list" style="margin-top:6px"></div>
           </div>
 
-          <!-- 단계형 문제 (step3) -->
+          <!-- 단계형 문제 (steps) -->
           <div id="field-step3" class="field" style="display:none">
-            <div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:10px">
-              <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px">📌 1단계: 방정식 세우기</div>
-              <label>단계 지시문</label>
-              <input id="s1-label" placeholder="예: 방정식을 세우시오." style="margin-bottom:6px">
-              <label>정답 방정식</label>
-              <input id="s1-eq" placeholder="예: (x-1)+x+(x+1)=60" style="margin-bottom:6px">
-              <label>대안 방정식 (Enter로 추가)</label>
-              <input id="s1-eq-alt-input" placeholder="대안 방정식 입력" onkeydown="addStep3Alt(event,'s1')">
-              <div id="s1-eq-alt-list" class="ans-alt-list" style="margin-top:4px"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <label style="margin:0">단계 구성</label>
+              <button onclick="addStep()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">＋ 단계 추가</button>
             </div>
-            <div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:10px">
-              <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px">📌 2단계: x값 구하기</div>
-              <label>단계 지시문</label>
-              <input id="s2-label" placeholder="예: x의 값을 구하시오." style="margin-bottom:6px">
-              <label>정답 (숫자)</label>
-              <input id="s2-ans" type="text" placeholder="예: 20, 4/3" style="margin-bottom:6px">
-              <label>힌트 (선택)</label>
-              <input id="s2-hint" placeholder="예: x를 가운데 수로 놓을 때">
-            </div>
-            <div style="background:var(--cream);border-radius:8px;padding:12px">
-              <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:8px">📌 3단계: 최종 답</div>
-              <label>단계 지시문</label>
-              <input id="s3-label" placeholder="예: 가장 큰 수를 구하시오." style="margin-bottom:6px">
-              <label>정답</label>
-              <input id="s3-ans" placeholder="예: 21" style="margin-bottom:6px">
-              <label>대안 정답 (Enter로 추가)</label>
-              <input id="s3-alt-input" placeholder="대안 정답 입력" onkeydown="addStep3Alt(event,'s3')">
-              <div id="s3-alt-list" class="ans-alt-list" style="margin-top:4px"></div>
-              <label style="margin-top:8px;display:block">힌트 (선택)</label>
-              <input id="s3-hint" placeholder="예: 가장 큰 수 = x+1">
-            </div>
+            <div id="steps-container"></div>
           </div>
 
           <div class="panel-actions">
@@ -490,7 +468,6 @@ let currentWs = null;    // 현재 학습지 객체
 let selectedQIdx = null; // 현재 선택된 문항 인덱스
 let altAnswers = [];     // 대안 정답 배열
 let poolCorrect = [], poolWrong = []; // 랜덤 풀
-let step3S1Alt = [], step3S3Alt = []; // step3 대안 정답
 
 // ── 인증 ──
 onAuthStateChanged(auth, user => {
@@ -641,10 +618,20 @@ function renderEditor(){
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';
 
-  // status에 따라 헤더 버튼 강조
-  const st = currentWs.status||'published';
+  // status에 따라 헤더 버튼 강조 + 상태 배지
+  const st = currentWs.status||'draft';
   document.getElementById('btn-lock').style.outline    = st==='locked'    ? '2px solid #f59e0b' : '';
   document.getElementById('btn-publish').style.outline = st==='published' ? '2px solid #4ade80' : '';
+  const badge=document.getElementById('ws-status-badge');
+  if(badge){
+    const map={
+      published:{t:'✅ 발행됨 (학생 접근 가능)', bg:'#dcfce7', c:'#15803d'},
+      locked:   {t:'🔒 잠김 (수정 중 · 접근 불가)', bg:'#fef3c7', c:'#b45309'},
+      draft:    {t:'📝 준비 중 (미발행 · 접근 불가)', bg:'#f1f5f9', c:'#64748b'},
+    };
+    const m=map[st]||map.draft;
+    badge.textContent=m.t; badge.style.background=m.bg; badge.style.color=m.c;
+  }
   document.getElementById('ws-title').value  = currentWs.title||'';
   document.getElementById('ws-id').value     = currentWs.id||'';
   document.getElementById('ws-diff').value   = currentWs.diff||1;
@@ -787,7 +774,7 @@ function showPanel(item){
   document.getElementById('panel-editor').style.display='block';
   document.getElementById('panel-title').textContent = item._type==='vocab' ? 'VOCA 용어 편집' : '문항 편집';
 
-  altAnswers = []; poolCorrect=[]; poolWrong=[]; step3S1Alt=[]; step3S3Alt=[];
+  altAnswers = []; poolCorrect=[]; poolWrong=[];
 
   if(item._type==='vocab'){
     setQType('vocab');
@@ -849,18 +836,20 @@ function showPanel(item){
       poolWrong   = [...(item.wrong_pool||[])];
       renderPoolList('correct'); renderPoolList('wrong');
     } else if(qtype==='step3'){
-      const s1=item.step1||{}, s2=item.step2||{}, s3=item.step3||{};
-      document.getElementById('s1-label').value = s1.label||'';
-      document.getElementById('s1-eq').value    = s1.equation||'';
-      document.getElementById('s2-label').value = s2.label||'';
-      document.getElementById('s2-ans').value   = s2.answer??'';
-      document.getElementById('s2-hint').value  = s2.hint||'';
-      document.getElementById('s3-label').value = s3.label||'';
-      document.getElementById('s3-ans').value   = s3.answer??'';
-      document.getElementById('s3-hint').value  = s3.hint||'';
-      step3S1Alt = [...(s1.equationAlt||[])];
-      step3S3Alt = [...(s3.answerAlt||[])];
-      renderStep3Alt('s1'); renderStep3Alt('s3');
+      // 신규 steps[] 우선, 없으면 기존 step1/2/3에서 변환
+      if(Array.isArray(item.steps) && item.steps.length){
+        editSteps = item.steps.map(s=>({
+          label:s.label||'', answerType:s.answerType||'number',
+          answer:s.answer??'', answerAlt:[...(s.answerAlt||[])], hint:s.hint||''
+        }));
+      } else {
+        editSteps=[];
+        if(item.step1) editSteps.push({label:item.step1.label||'',answerType:'equation',answer:item.step1.equation||'',answerAlt:[...(item.step1.equationAlt||[])],hint:item.step1.hint||''});
+        if(item.step2) editSteps.push({label:item.step2.label||'',answerType:'number',answer:item.step2.answer??'',answerAlt:[],hint:item.step2.hint||''});
+        if(item.step3) editSteps.push({label:item.step3.label||'',answerType:'text',answer:item.step3.answer??'',answerAlt:[...(item.step3.answerAlt||[])],hint:item.step3.hint||''});
+      }
+      if(!editSteps.length) editSteps=[{label:'',answerType:'number',answer:'',answerAlt:[],hint:''}];
+      renderSteps();
     }
   }
 }
@@ -959,7 +948,9 @@ window.renderAltList = renderAltList;
 // ── LaTeX 미리보기 ──
 window.previewText = function(inputId, previewId){
   const el=document.getElementById(previewId);
-  const val=document.getElementById(inputId).value;
+  let val=document.getElementById(inputId).value;
+  // 엔터(\n) → <br>, 기존 <br>+\n 중복 정리
+  val = val.replace(/<br\s*\/?>\s*\n/gi,'<br>').replace(/\n/g,'<br>');
   el.innerHTML=val||'미리보기';
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
 };
@@ -974,28 +965,19 @@ window.saveQuestion = function(){
   if(type==='step3'){
     const isVocabS=currentWs.type==='vocab';
     const qIdxS=isVocabS?selectedQIdx-currentWs.vocab.length:selectedQIdx;
-    const s1AnsVal=document.getElementById('s1-eq').value.trim();
-    const s2AnsVal=document.getElementById('s2-ans').value.trim();
+    if(!editSteps.length){ toast('단계를 1개 이상 추가하세요'); return; }
+    const steps = editSteps.map(s=>{
+      const o={ label:(s.label||'').trim(), answerType:s.answerType||'number', hint:(s.hint||'').trim() };
+      const av=(s.answer??'').toString().trim();
+      o.answer = (s.answerType==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
+      if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
+      return o;
+    });
     currentWs.questions[qIdxS]={
       id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,
       type:'step3', diff:parseInt(document.getElementById('q-diff-sel').value)||1,
       text:document.getElementById('q-text').value,
-      step1:{
-        label:document.getElementById('s1-label').value.trim(),
-        equation:s1AnsVal,
-        equationAlt:[...step3S1Alt],
-      },
-      step2:{
-        label:document.getElementById('s2-label').value.trim(),
-        answer:/^\d/.test(s2AnsVal)?parseFloat(s2AnsVal):s2AnsVal,
-        hint:document.getElementById('s2-hint').value.trim(),
-      },
-      step3:{
-        label:document.getElementById('s3-label').value.trim(),
-        answer:document.getElementById('s3-ans').value.trim(),
-        answerAlt:[...step3S3Alt],
-        hint:document.getElementById('s3-hint').value.trim(),
-      },
+      steps,
     };
     renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
   }
@@ -1369,24 +1351,72 @@ window.uploadImageToDrive = async function(){
 };
 
 
-// ── step3 대안 정답 ──
-window.addStep3Alt = function(e, prefix){
-  if(e.key!=='Enter') return;
-  const inputId = prefix==='s1' ? 's1-eq-alt-input' : 's3-alt-input';
-  const v = document.getElementById(inputId).value.trim(); if(!v) return;
-  if(prefix==='s1') step3S1Alt.push(v); else step3S3Alt.push(v);
-  document.getElementById(inputId).value='';
-  renderStep3Alt(prefix);
+// ── 동적 단계형(steps) 관리 ──
+let editSteps = []; // 현재 편집 중인 단계 배열
+
+const STEP_ANSWER_TYPES = [
+  {val:'equation', label:'방정식 (동치 판정)'},
+  {val:'number',   label:'수 (숫자 키패드)'},
+  {val:'expr',     label:'다항식 (수식)'},
+  {val:'text',     label:'텍스트'},
+];
+
+window.addStep = function(){
+  editSteps.push({ label:'', answerType:'number', answer:'', answerAlt:[], hint:'' });
+  renderSteps();
 };
-function renderStep3Alt(prefix){
-  const arr  = prefix==='s1' ? step3S1Alt : step3S3Alt;
-  const list = document.getElementById(prefix==='s1'?'s1-eq-alt-list':'s3-alt-list');
-  list.innerHTML = arr.map((v,i)=>`
-    <div class="ans-alt-tag">
-      ${v}<button onclick="${prefix==='s1'?'step3S1Alt':'step3S3Alt'}.splice(${i},1);renderStep3Alt('${prefix}')">✕</button>
-    </div>`).join('');
+window.removeStep = function(i){
+  if(editSteps.length<=1){ toast('최소 1단계는 필요합니다'); return; }
+  editSteps.splice(i,1);
+  renderSteps();
+};
+window.updateStep = function(i, field, val){
+  if(editSteps[i]) editSteps[i][field]=val;
+};
+window.addStepAlt = function(e, i){
+  if(e.key!=='Enter') return;
+  const inp=e.target; const v=inp.value.trim(); if(!v) return;
+  editSteps[i].answerAlt=editSteps[i].answerAlt||[];
+  editSteps[i].answerAlt.push(v); inp.value='';
+  renderSteps();
+};
+window.removeStepAlt = function(i, j){
+  editSteps[i].answerAlt.splice(j,1); renderSteps();
+};
+
+const STEP_COLORS=['var(--accent)','var(--green)','var(--amber)','#8b5cf6','#ec4899','#0891b2'];
+
+function renderSteps(){
+  const c=document.getElementById('steps-container');
+  if(!c) return;
+  c.innerHTML = editSteps.map((s,i)=>{
+    const color=STEP_COLORS[i%STEP_COLORS.length];
+    const typeOpts=STEP_ANSWER_TYPES.map(t=>`<option value="${t.val}" ${s.answerType===t.val?'selected':''}>${t.label}</option>`).join('');
+    const showAlt = s.answerType==='text' || s.answerType==='expr' || s.answerType==='equation';
+    const altTags=(s.answerAlt||[]).map((a,j)=>`<div class="ans-alt-tag">${a}<button onclick="removeStepAlt(${i},${j})">✕</button></div>`).join('');
+    return `
+      <div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:10px;border-left:3px solid ${color}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:${color}">📌 ${i+1}단계</span>
+          <button onclick="removeStep(${i})" style="background:var(--red-lt);color:var(--red);border:none;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">단계 삭제</button>
+        </div>
+        <label style="font-size:11px">단계 지시문</label>
+        <input value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'label',this.value)" placeholder="예: 방정식을 세우시오." style="margin-bottom:6px">
+        <label style="font-size:11px">답 유형</label>
+        <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
+        <label style="font-size:11px">정답</label>
+        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
+        ${showAlt?`
+        <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
+        <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">
+        <div class="ans-alt-list">${altTags}</div>`:''}
+        <label style="font-size:11px;margin-top:6px;display:block">힌트 (선택)</label>
+        <input value="${(s.hint||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'hint',this.value)" placeholder="힌트">
+      </div>`;
+  }).join('');
 }
-window.renderStep3Alt=renderStep3Alt;
+window.renderSteps=renderSteps;
+
 
 // ── 랜덤 풀 헬퍼 ──
 window.addPoolItem = function(e, side){
@@ -1438,9 +1468,11 @@ function _doAddQuestion(type){
   else if(type==='equation'){ newQ.type='equation'; newQ.answer=0; }
   else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
   else if(type==='step3'){ newQ.type='step3';
-    newQ.step1={label:'방정식을 세우시오.',equation:'',equationAlt:[]};
-    newQ.step2={label:'x의 값을 구하시오.',answer:'',hint:''};
-    newQ.step3={label:'답을 구하시오.',answer:'',answerAlt:[],hint:''}; }
+    newQ.steps=[
+      {label:'방정식을 세우시오.',answerType:'equation',answer:'',answerAlt:[],hint:''},
+      {label:'x의 값을 구하시오.',answerType:'number',answer:'',hint:''},
+      {label:'답을 구하시오.',answerType:'text',answer:'',answerAlt:[],hint:''},
+    ]; }
   else if(type==='pool_random'){ newQ.type='pool_random'; newQ.badge=''; newQ.question=''; newQ.correct_pool=[]; newQ.wrong_pool=[]; }
   currentWs.questions.push(newQ);
   const isVocab = currentWs.type==='vocab';

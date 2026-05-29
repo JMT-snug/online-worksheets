@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2h">
+  <meta name="app-version" content="6.2i">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2h"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2i"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1404,42 +1404,41 @@ function qArrowRight(){ qInput("→"); }
 function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
 
 // ── 공통 수식 키패드 HTML 생성 ──
-function buildKeypad(answer, {extraBtn='', onEnter='', showEq=false}={}){
-  // 답에서 모든 변수(소문자) 추출 (중복 제거, 순서 유지)
-  const vars=[...new Set((answer||'').toLowerCase().match(/[a-z]/g)||['x'])];
-  const varBtns=vars.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('');
-  const expBtn=`<button class="kb v" onclick="qInput('EXP')"><i style="font-family:serif">x</i><sup style="font-size:.7em">2</sup></button>`;
-  const fracBtn=`<button class="kb v" onclick="qInput('FRAC')"><span class="frac-prev"><span class="fn"><i>a</i></span><span class="fd"><i>b</i></span></span></button>`;
-  const leftBtn=`<button class="kb v" onclick="qInput('←')">◀</button>`;
-  const rightBtn=`<button class="kb v" onclick="qInput('→')">▶</button>`;
-  const eqBtn=showEq?`<button class="kb op" onclick="qInput('=')">=</button>`:'';
-  const confirmBtn=onEnter?`<button class="kb sub" onclick="${onEnter}">확인 (Enter)</button>`:'';
+function buildKeypad(answer, {onEnter='', showEq=false}={}){
+  // 변수 감지: answer가 숫자일 수 있으므로 String 변환
+  const vars=[...new Set(String(answer||'').toLowerCase().match(/[a-z]/g)||['x'])];
+  // 변수: 별도 최상단 행
+  const varRow=`<div class="kbd-var-row">${
+    vars.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
+  }</div>`;
+  const eqBtnHtml=showEq?`<button class="kb op" onclick="qInput('=')">=</button>`:'';
+  const confirmHtml=onEnter?`<button class="kbd-confirm" onclick="${onEnter}">확인 (Enter)</button>`:'';
   return `
+    ${varRow}
     <div class="kbd-grid">
       <button class="kb" onclick="qInput('7')">7</button>
       <button class="kb" onclick="qInput('8')">8</button>
       <button class="kb" onclick="qInput('9')">9</button>
-      ${varBtns}${expBtn}
+      <button class="kb v" onclick="qInput('EXP')" style="font-size:11px;line-height:1.3">지수<br>입력</button>
       <button class="kb ac" onclick="qInput('⌫')">⌫</button>
+      <button class="kb ac" onclick="qClear()">C</button>
       <button class="kb" onclick="qInput('4')">4</button>
       <button class="kb" onclick="qInput('5')">5</button>
       <button class="kb" onclick="qInput('6')">6</button>
-      ${fracBtn}${leftBtn}${rightBtn}
-      <button class="kb ac" onclick="qClear()">C</button>
+      <button class="kb v" onclick="qInput('FRAC')" style="font-size:11px;line-height:1.3">분수<br>입력</button>
+      <button class="kb v" onclick="qInput('←')">◀</button>
+      <button class="kb v" onclick="qInput('→')">▶</button>
       <button class="kb" onclick="qInput('1')">1</button>
       <button class="kb" onclick="qInput('2')">2</button>
       <button class="kb" onclick="qInput('3')">3</button>
       <button class="kb op" onclick="qInput('+')">+</button>
       <button class="kb op" onclick="qInput('−')">−</button>
-      <button class="kb op" onclick="qInput('/')">∕</button>
-      <button class="kb w2" onclick="qNeg()">(−)</button>
+      <button class="kb op" onclick="qInput('(')">( )</button>
       <button class="kb" onclick="qInput('0')">0</button>
       <button class="kb" onclick="qInput('.')">.</button>
-      <button class="kb op" onclick="qInput('(')">( )</button>
-      ${eqBtn}
-      ${onEnter?`<button class="kb v" onclick="${onEnter}">↵</button>`:''}
+      ${eqBtnHtml}
     </div>
-    ${confirmBtn}`;
+    ${confirmHtml}`;
 }
 
 function evalAnswer(s){
@@ -1740,31 +1739,7 @@ function renderStep3Body(q){
     body.innerHTML=labelHtml+hintHtml+`
       <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
       <div class="kbd-wrap" onmousedown="event.preventDefault()">
-        <div class="kbd-grid">
-          <button class="kb"    onclick="qInput('7')">7</button>
-          <button class="kb"    onclick="qInput('8')">8</button>
-          <button class="kb"    onclick="qInput('9')">9</button>
-          <button class="kb v"  onclick="qInput('x')"><i style="font-family:serif">x</i></button>
-          <button class="kb v"  onclick="qInput('EXP')"><i style="font-family:serif">x</i><sup style="font-size:.7em">2</sup></button>
-          <button class="kb ac" onclick="qInput('⌫')">⌫</button>
-          <button class="kb"    onclick="qInput('4')">4</button>
-          <button class="kb"    onclick="qInput('5')">5</button>
-          <button class="kb"    onclick="qInput('6')">6</button>
-          <button class="kb v"  onclick="qInput('FRAC')"><span class="frac-prev"><span class="fn"><i>a</i></span><span class="fd"><i>b</i></span></span></button>
-          <button class="kb v"  onclick="qInput('←')">◀</button>
-          <button class="kb ac" onclick="qClear()">C</button>
-          <button class="kb"    onclick="qInput('1')">1</button>
-          <button class="kb"    onclick="qInput('2')">2</button>
-          <button class="kb"    onclick="qInput('3')">3</button>
-          <button class="kb op" onclick="qInput('+')">+</button>
-          <button class="kb op" onclick="qInput('−')">−</button>
-          <button class="kb op" onclick="qInput('/')" >∕</button>
-          ${negRow}
-          ${at==='equation' ? `<button class="kb op" onclick="qInput('(')">( )</button>` : ''}
-          ${eqBtn}
-          <button class="kb v"  onclick="submitStep3(${st.curStep})">↵</button>
-          <button class="kb sub" onclick="submitStep3(${st.curStep})">확인 (Enter)</button>
-        </div>
+        ${buildKeypad(step.answer||'',{onEnter:`submitStep3(${st.curStep})`,showEq:at==='equation'})}
       </div>
       <div class="feedback-strip" id="s3-fb"></div>`;
   } else {
@@ -1930,6 +1905,8 @@ window.submitStep3=submitStep3;
 window.goStep3=goStep3;
 
 async function submitQAns(){
+  if(window._isSubmitting) return;
+  window._isSubmitting=true; setTimeout(()=>{window._isSubmitting=false;},600);
   const q=curWS.questions[curQIdx];
 
   // ── 링크 페이지: 항상 통과 ──

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2j">
+  <meta name="app-version" content="6.2k">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2j"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2k"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1426,36 +1426,36 @@ function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
 function buildKeypad(answer, {onEnter='', showEq=false}={}){
   const vars=[...new Set(String(answer||'').toLowerCase().match(/[a-z]/g)||['x'])];
   const varRow=`<div class="kbd-var-row">${
-    vars.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
+    vars.map(v=>`<button tabindex="-1" class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
-  const eqCell=showEq?`<button class="kb op" onclick="qInput('=')">=</button>`:`<span></span>`;
-  const enterBtn=onEnter?`<button class="kb enter" onclick="${onEnter}">엔터</button>`:'';
+  const eqCell=showEq?`<button tabindex="-1" class="kb op" onclick="qInput('=')">=</button>`:`<span></span>`;
+  const enterBtn=onEnter?`<button tabindex="-1" class="kb enter" onclick="${onEnter}">엔터</button>`:'';
   return `
     ${varRow}
     <div class="kbd-grid">
-      <button class="kb"   onclick="qInput('7')">7</button>
-      <button class="kb"   onclick="qInput('8')">8</button>
-      <button class="kb"   onclick="qInput('9')">9</button>
-      <button class="kb v" onclick="qInput('FRAC')" style="font-size:10px;line-height:1.4">분수<br>입력</button>
-      <button class="kb v" onclick="qInput('EXP')"  style="font-size:10px;line-height:1.4">지수<br>입력</button>
-      <button class="kb v" onclick="qInput('SQRT')">루트 √</button>
-      <button class="kb"   onclick="qInput('4')">4</button>
-      <button class="kb"   onclick="qInput('5')">5</button>
-      <button class="kb"   onclick="qInput('6')">6</button>
-      <button class="kb v" onclick="qInput('←')">◀</button>
-      <button class="kb v" onclick="qInput('→')">▶</button>
-      <button class="kb ac" onclick="qInput('⌫')">⌫</button>
-      <button class="kb"   onclick="qInput('1')">1</button>
-      <button class="kb"   onclick="qInput('2')">2</button>
-      <button class="kb"   onclick="qInput('3')">3</button>
-      <button class="kb op" onclick="qInput('+')">+</button>
-      <button class="kb op" onclick="qInput('−')">−</button>
-      <button class="kb ac" onclick="qClear()">C</button>
-      <button class="kb"   onclick="qInput('0')">0</button>
-      <button class="kb"   onclick="qInput('.')">.</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('7')">7</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('8')">8</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('9')">9</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('FRAC')" style="font-size:10px;line-height:1.4">분수<br>입력</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('EXP')"  style="font-size:10px;line-height:1.4">지수<br>입력</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('SQRT')">루트 √</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('4')">4</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('5')">5</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('6')">6</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('←')">◀</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('→')">▶</button>
+      <button tabindex="-1" class="kb ac" onclick="qInput('⌫')">⌫</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('1')">1</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('2')">2</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('3')">3</button>
+      <button tabindex="-1" class="kb op" onclick="qInput('+')">+</button>
+      <button tabindex="-1" class="kb op" onclick="qInput('−')">−</button>
+      <button tabindex="-1" class="kb ac" onclick="qClear()">C</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('0')">0</button>
+      <button tabindex="-1" class="kb"   onclick="qInput('.')">.</button>
       ${eqCell}
-      <button class="kb op" onclick="qInput('(')">(</button>
-      <button class="kb op" onclick="qInput(')')">)</button>
+      <button tabindex="-1" class="kb op" onclick="qInput('(')">(</button>
+      <button tabindex="-1" class="kb op" onclick="qInput(')')">)</button>
       ${enterBtn}
     </div>`;
 }
@@ -1934,6 +1934,7 @@ async function submitQAns(){
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
     const isLast=curQIdx===curWS.questions.length-1;
     const fb=document.getElementById("feedback-strip");
+    if(!fb) return;
     fb.className="feedback-strip show fb-correct";
     fb.innerHTML=`✅ 확인 완료!&nbsp;
       <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
@@ -1992,6 +1993,7 @@ async function submitQAns(){
       ok=correct.some(a=>normW(a)===normW(userAns));
     }
     const fb=document.getElementById("feedback-strip");
+    if(!fb) return;
     if(ok){
       if(input) input.disabled=true;
       fb.className="feedback-strip show fb-correct";
@@ -2049,6 +2051,7 @@ async function submitQAns(){
     }
   }
   const fb=document.getElementById("feedback-strip");
+  if(!fb) return;
   const ab=document.getElementById("attempt-badge");
   const an=document.getElementById("attempt-num");
   if(ok){

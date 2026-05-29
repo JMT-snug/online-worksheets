@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2k">
+  <meta name="app-version" content="6.2m">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2k"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2m"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1222,8 +1222,9 @@ function renderQuestion() {
           <div class="kbd-wrap" onmousedown="event.preventDefault()">
             ${buildKeypad(q.answer,{onEnter:'submitQAns()'})}
           </div>
-          <div class="ans-footer">
-            <span class="attempt-badge">오답 <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+          <div class="feedback-strip" id="feedback-strip"></div>
+          <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
+            ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
           </div>
         </div>`;
     } else {
@@ -1372,8 +1373,7 @@ function qInput(v){
     qTokens.splice(qCursorIdx,0,{type:'sqrt',inner:''});
     qEditPart={idx:qCursorIdx,part:'inner',cursor:0};
     qCursorIdx++; qRender(); return;
-  }
-  if(v==="FRAC"||v==="/"){
+  } else if(v==="FRAC"||v==="/"){
     if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==="num"){t.num+=v;} qRender(); return; }
     let num="";
     if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
@@ -1438,7 +1438,12 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
       <button tabindex="-1" class="kb"   onclick="qInput('9')">9</button>
       <button tabindex="-1" class="kb v" onclick="qInput('FRAC')" style="font-size:10px;line-height:1.4">분수<br>입력</button>
       <button tabindex="-1" class="kb v" onclick="qInput('EXP')"  style="font-size:10px;line-height:1.4">지수<br>입력</button>
-      <button tabindex="-1" class="kb v" onclick="qInput('SQRT')">루트 √</button>
+      <button tabindex="-1" class="kb v" onclick="qInput('SQRT')">
+        <span style="display:inline-flex;align-items:flex-start">
+          <span style="font-family:serif">√</span>
+          <span style="display:inline-block;border-top:2px solid currentColor;min-width:10px;height:5px;vertical-align:top;margin-top:3px;padding-right:2px"></span>
+        </span>
+      </button>
       <button tabindex="-1" class="kb"   onclick="qInput('4')">4</button>
       <button tabindex="-1" class="kb"   onclick="qInput('5')">5</button>
       <button tabindex="-1" class="kb"   onclick="qInput('6')">6</button>

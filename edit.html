@@ -710,7 +710,7 @@ function renderQList(){
       ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
       : _rawType;
     const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word:'용어',word_text:'용어',word_expr:'수식',equation:'방정식',multi:'객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'단계형',link:'링크'}[badge]||'계산';
+    const badgeLabel = {vocab:'VOCA',word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',word:'용어'}[badge]||'계산';
     const preview = isVocabItem
       ? `${item.term} : ${item.def}`
       : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
@@ -1105,18 +1105,7 @@ window.addVocabItem = function(){
   renderQList();
   showPanel(allItems[selectedQIdx]);
 };
-window.addQuestionItem = function(){
-  if(!currentWs){ toast('학습지를 먼저 선택하세요'); return; }
-  currentWs.questions.push({id:`q${Date.now()}`,type:'word',answerType:'text',text:'',answer:'',answerAlt:[],diff:1});
-  const isVocab = currentWs.type==='vocab';
-  const allItems = isVocab
-    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
-       ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
-    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
-  selectedQIdx = allItems.length - 1;
-  renderQList();
-  showPanel(allItems[selectedQIdx]);
-};
+
 // 일반 학습지용 초기 바인딩 (renderEditor에서 재설정됨)
 const _initAddBtn = document.getElementById('btn-add-q');
 if(_initAddBtn) _initAddBtn.onclick = addQuestionItem;
@@ -1370,10 +1359,10 @@ window.uploadImageToDrive = async function(){
 let editSteps = []; // 현재 편집 중인 단계 배열
 
 const STEP_ANSWER_TYPES = [
-  {val:'equation', label:'방정식 (동치 판정)'},
-  {val:'number',   label:'수 (숫자 키패드)'},
-  {val:'expr',     label:'다항식 (수식)'},
-  {val:'text',     label:'텍스트'},
+  {val:'number',   label:'② 숫자 값'},
+  {val:'expr',     label:'③ 문자 포함 식'},
+  {val:'equation', label:'③ 문자 포함 식 (= 포함)'},
+  {val:'text',     label:'① 한글 용어'},
 ];
 
 window.addStep = function(){
@@ -1624,28 +1613,28 @@ window.deleteUnit = async function(unitId, e){
     <div class="type-grid" id="type-grid">
       <div class="type-opt selected" data-type="word_text" onclick="selectTypeOpt(this)">
         <div class="type-icon">📝</div>
-        <div class="type-name">용어형</div>
-        <div class="type-desc">텍스트 정답</div>
+        <div class="type-name">① 한글 용어</div>
+        <div class="type-desc">한글/텍스트 정답</div>
       </div>
       <div class="type-opt" data-type="word_expr" onclick="selectTypeOpt(this)">
-        <div class="type-icon">🔢</div>
-        <div class="type-name">계산형</div>
-        <div class="type-desc">수식 정답</div>
+        <div class="type-icon">🔣</div>
+        <div class="type-name">③ 문자 포함 식</div>
+        <div class="type-desc">x, y 포함 수식 정답</div>
       </div>
       <div class="type-opt" data-type="equation" onclick="selectTypeOpt(this)">
-        <div class="type-icon">⚖️</div>
-        <div class="type-name">방정식형</div>
+        <div class="type-icon">🔢</div>
+        <div class="type-name">② 숫자 값</div>
         <div class="type-desc">숫자/분수 정답</div>
       </div>
       <div class="type-opt" data-type="multi" onclick="selectTypeOpt(this)">
         <div class="type-icon">☑️</div>
-        <div class="type-name">객관식</div>
+        <div class="type-name">⑥ 객관식</div>
         <div class="type-desc">선지 선택</div>
       </div>
       <div class="type-opt" data-type="step3" onclick="selectTypeOpt(this)">
         <div class="type-icon">🪜</div>
-        <div class="type-name">단계형</div>
-        <div class="type-desc">3단계 풀이 과정</div>
+        <div class="type-name">④ 단계형</div>
+        <div class="type-desc">단계별 풀이 과정</div>
       </div>
       <div class="type-opt" data-type="pool_random" onclick="selectTypeOpt(this)" style="grid-column:1/-1">
         <div class="type-icon">🎲</div>

@@ -634,6 +634,25 @@ let _wsFilter="", _wsSortBy="class";
 window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
 window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
+window.clearWSRecords=async function(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const title=ws?.title||wsId;
+  const targets=Object.entries(allData).filter(([uid,d])=>d[wsId]).map(([uid])=>uid);
+  if(!targets.length){ alert("삭제할 기록이 없습니다."); return; }
+  if(!confirm(`⚠️ "${title}" 학습기록 ${targets.length}명을 모두 삭제합니다.\n\n이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`)) return;
+  document.getElementById("content").innerHTML='<div class="loading">기록 삭제 중…</div>';
+  let ok=0, fail=0;
+  for(const uid of targets){
+    try{
+      await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+      try{ await deleteDoc(doc(db,"results",uid,"worksheets",wsId)); }catch(e2){}
+      delete allData[uid][wsId]; ok++;
+    }catch(e){ console.warn("삭제 실패:",uid,e.message); fail++; }
+  }
+  alert(`완료: ${ok}명 삭제${fail?`, ${fail}명 실패`:""}`);
+  await loadAll();
+};
+
 window.renderWSTable=function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const recs=[];

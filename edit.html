@@ -940,6 +940,7 @@ window.removeOption = function(i){
 };
 
 // ── 대안 정답 ──
+window.removeAlt = function(i){ altAnswers.splice(i,1); renderAltList(); };
 window.addAlt = function(e){
   if(e.key!=='Enter') return;
   const v=e.target.value.trim(); if(!v) return;
@@ -949,7 +950,7 @@ function renderAltList(){
   const list=document.getElementById('alt-list');
   list.innerHTML=altAnswers.map((a,i)=>`
     <div class="ans-alt-tag">${a}
-      <button onclick="altAnswers.splice(${i},1);renderAltList()">✕</button>
+      <button onclick="removeAlt(${i})">✕</button>
     </div>`).join('');
 }
 window.renderAltList = renderAltList;

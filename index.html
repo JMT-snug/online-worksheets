@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2i">
+  <meta name="app-version" content="6.2j">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2i"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2j"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -172,8 +172,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .kbd-wrap{background:var(--cream);border:1px solid var(--rule);border-top:none;border-radius:0 0 var(--r) var(--r);padding:7px}
 .kbd-var-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 .kbd-var-row .kb{flex:1;min-width:36px;font-size:1.1rem}
-.kbd-confirm{width:100%;margin-top:4px;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.kbd-confirm:active{opacity:.85}
+.kb.enter{background:var(--accent);color:#fff;font-weight:700;grid-column:auto}
 .kbd-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
 .kb{background:var(--paper);border:1px solid var(--rule);border-radius:7px;
   padding:9px 3px;color:var(--ink);font-size:1rem;font-family:'Courier New',monospace;
@@ -1300,6 +1299,11 @@ function tokensToLatex(){
       const ec=ep2?(ep2.cursor??t.expo.length):null;
       const e=ec!=null?(latexEsc(t.expo.slice(0,ec))+CURSOR+latexEsc(t.expo.slice(ec))):(t.expo?latexEsc(t.expo):'');
       parts.push((t.base?latexEsc(t.base):'')+'^{'+(e||'\\phantom{0}')+'}');
+    } else if(t.type==='sqrt'){
+      const ep2=qEditPart?.idx===i&&qEditPart.part==='inner'?qEditPart:null;
+      const ic=ep2?(ep2.cursor??t.inner.length):null;
+      const inner=ic!=null?(latexEsc(t.inner.slice(0,ic))+CURSOR+latexEsc(t.inner.slice(ic))):(t.inner?latexEsc(t.inner):'');
+      parts.push(`\\sqrt{${inner||'\\phantom{0}'}}`);
     }
   });
   if(!qEditPart && qCursorIdx>=qTokens.length) parts.push(CURSOR);
@@ -1319,7 +1323,7 @@ function qInput(v){
   if(v==="←"){  // 커서 왼쪽 이동
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":qEditPart.part==="inner"?"inner":"expo";
       const cur=qEditPart.cursor??t[key].length;
       if(cur>0){ qEditPart.cursor=cur-1; } // 내부 이동
       else if(t?.type==="frac"&&qEditPart.part==="den"){
@@ -1364,7 +1368,12 @@ function qInput(v){
     } else if(qCursorIdx>0){
       qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
     }
-  } else if(v==="FRAC"||v==="/"){
+  } else if(v==="SQRT"){
+    qTokens.splice(qCursorIdx,0,{type:'sqrt',inner:''});
+    qEditPart={idx:qCursorIdx,part:'inner',cursor:0};
+    qCursorIdx++; qRender(); return;
+  }
+  if(v==="FRAC"||v==="/"){
     if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==="num"){t.num+=v;} qRender(); return; }
     let num="";
     if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
@@ -1389,6 +1398,11 @@ function qInput(v){
         t[key]=t[key].slice(0,cur)+v+t[key].slice(cur);
         qEditPart.cursor=cur+1;
       }
+    } else if(qEditPart && ['num','den','expo','inner'].includes(qEditPart.part)){
+      const t=qTokens[qEditPart.idx]; if(t){
+        const k=qEditPart.part; const cur=qEditPart.cursor??t[k].length;
+        t[k]=t[k].slice(0,cur)+v+t[k].slice(cur); qEditPart.cursor=cur+1;
+      }
     } else {
       qTokens.splice(qCursorIdx,0,{type:"char",val:v}); qCursorIdx++;
     }
@@ -1399,47 +1413,53 @@ function qInput(v){
 
 function qArrowLeft(){ qInput("←"); }
 
-function qNextPart(){ qInput("→"); }
+function qNextPart(){
+  // sqrt: Tab → 내부 편집 종료
+  if(qEditPart){
+    const t=qTokens[qEditPart.idx];
+    if(t?.type==='sqrt'){qEditPart=null;qRender();return;}
+  } qInput("→"); }
 function qArrowRight(){ qInput("→"); }
 function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
 
 // ── 공통 수식 키패드 HTML 생성 ──
 function buildKeypad(answer, {onEnter='', showEq=false}={}){
-  // 변수 감지: answer가 숫자일 수 있으므로 String 변환
   const vars=[...new Set(String(answer||'').toLowerCase().match(/[a-z]/g)||['x'])];
-  // 변수: 별도 최상단 행
   const varRow=`<div class="kbd-var-row">${
     vars.map(v=>`<button class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
-  const eqBtnHtml=showEq?`<button class="kb op" onclick="qInput('=')">=</button>`:'';
-  const confirmHtml=onEnter?`<button class="kbd-confirm" onclick="${onEnter}">확인 (Enter)</button>`:'';
+  const eqCell=showEq?`<button class="kb op" onclick="qInput('=')">=</button>`:`<span></span>`;
+  const enterBtn=onEnter?`<button class="kb enter" onclick="${onEnter}">엔터</button>`:'';
   return `
     ${varRow}
     <div class="kbd-grid">
-      <button class="kb" onclick="qInput('7')">7</button>
-      <button class="kb" onclick="qInput('8')">8</button>
-      <button class="kb" onclick="qInput('9')">9</button>
-      <button class="kb v" onclick="qInput('EXP')" style="font-size:11px;line-height:1.3">지수<br>입력</button>
-      <button class="kb ac" onclick="qInput('⌫')">⌫</button>
-      <button class="kb ac" onclick="qClear()">C</button>
-      <button class="kb" onclick="qInput('4')">4</button>
-      <button class="kb" onclick="qInput('5')">5</button>
-      <button class="kb" onclick="qInput('6')">6</button>
-      <button class="kb v" onclick="qInput('FRAC')" style="font-size:11px;line-height:1.3">분수<br>입력</button>
+      <button class="kb"   onclick="qInput('7')">7</button>
+      <button class="kb"   onclick="qInput('8')">8</button>
+      <button class="kb"   onclick="qInput('9')">9</button>
+      <button class="kb v" onclick="qInput('FRAC')" style="font-size:10px;line-height:1.4">분수<br>입력</button>
+      <button class="kb v" onclick="qInput('EXP')"  style="font-size:10px;line-height:1.4">지수<br>입력</button>
+      <button class="kb v" onclick="qInput('SQRT')">루트 √</button>
+      <button class="kb"   onclick="qInput('4')">4</button>
+      <button class="kb"   onclick="qInput('5')">5</button>
+      <button class="kb"   onclick="qInput('6')">6</button>
       <button class="kb v" onclick="qInput('←')">◀</button>
       <button class="kb v" onclick="qInput('→')">▶</button>
-      <button class="kb" onclick="qInput('1')">1</button>
-      <button class="kb" onclick="qInput('2')">2</button>
-      <button class="kb" onclick="qInput('3')">3</button>
+      <button class="kb ac" onclick="qInput('⌫')">⌫</button>
+      <button class="kb"   onclick="qInput('1')">1</button>
+      <button class="kb"   onclick="qInput('2')">2</button>
+      <button class="kb"   onclick="qInput('3')">3</button>
       <button class="kb op" onclick="qInput('+')">+</button>
       <button class="kb op" onclick="qInput('−')">−</button>
-      <button class="kb op" onclick="qInput('(')">( )</button>
-      <button class="kb" onclick="qInput('0')">0</button>
-      <button class="kb" onclick="qInput('.')">.</button>
-      ${eqBtnHtml}
-    </div>
-    ${confirmHtml}`;
+      <button class="kb ac" onclick="qClear()">C</button>
+      <button class="kb"   onclick="qInput('0')">0</button>
+      <button class="kb"   onclick="qInput('.')">.</button>
+      ${eqCell}
+      <button class="kb op" onclick="qInput('(')">(</button>
+      <button class="kb op" onclick="qInput(')')">)</button>
+      ${enterBtn}
+    </div>`;
 }
+
 
 function evalAnswer(s){
   // 문자열 수식("8/3", "Math.sqrt(2)", "23/5")을 수치로 평가
@@ -1934,13 +1954,16 @@ async function submitQAns(){
         if(t.type==="char") return t.val;
         if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
         if(t.type==="exp")  return `(${t.base||0})**(${t.expo||1})`;
+        if(t.type==="sqrt") return `Math.sqrt(${t.inner||0})`;
         return "";
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
       // 수치 대입으로 동치 확인
       function evExpr(s,x){
         try{
-          let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
+          let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
+            .replace(/Math\.sqrt\(/g,'sqrt(')  // Math.sqrt → sqrt 통일
+            .replace(/sqrt\(([^)]+)\)/g,(_,x)=>`((${x})**0.5)`); // sqrt(x) → x^0.5
           let prev;
           do{prev=t;
             t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');

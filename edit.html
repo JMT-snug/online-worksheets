@@ -704,9 +704,13 @@ function renderQList(){
 
     const isVocabItem = item._type==='vocab';
     const isExtraItem = item._type==='extra';
-    const badge = isVocabItem ? 'vocab' : isExtraItem ? 'auto' : (item.type||'word');
+    const _rawType = isVocabItem ? 'vocab' : isExtraItem ? 'auto' : (item.type||'word');
+    // word 타입은 answerType으로 세분화 (word_text/word_expr 구분)
+    const badge = _rawType==='word'
+      ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
+      : _rawType;
     const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word:'용어',word_expr:'수식',equation:'방정식',multi:'객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'단계형',link:'링크'}[badge]||'계산';
+    const badgeLabel = {vocab:'VOCA',word:'용어',word_text:'용어',word_expr:'수식',equation:'방정식',multi:'객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'단계형',link:'링크'}[badge]||'계산';
     const preview = isVocabItem
       ? `${item.term} : ${item.def}`
       : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);

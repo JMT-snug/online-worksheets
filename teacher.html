@@ -489,89 +489,110 @@ function renderClassMatrix(){
   const content=document.getElementById("content");
   content.innerHTML='<div class="loading">분석 중…</div>';
 
-  // 모든 학급 목록 추출
+  // 학급 목록 추출
   const clsSet=new Set();
   Object.values(allData).forEach(d=>Object.values(d).forEach(r=>{
     const c=findClass(r.studentEmail); if(c) clsSet.add(c);
   }));
   const allCls=[...clsSet].sort((a,b)=>a.localeCompare(b,'ko'));
-  if(!allCls.length){ content.innerHTML='<div class="card"><p style="color:var(--ink3)">학급 데이터가 없습니다.</p></div>'; return; }
+  if(!allCls.length){content.innerHTML='<div class="card"><p style="color:var(--ink3)">학급 데이터가 없습니다.</p></div>';return;}
 
   // 학급별 전체 학생 수
   const clsTotalMap={};
-  allCls.forEach(c=>{ clsTotalMap[c]=new Set(); });
+  allCls.forEach(c=>{clsTotalMap[c]=new Set();});
   Object.values(allData).forEach(d=>{
     const emails=new Set(Object.values(d).map(r=>r.studentEmail).filter(Boolean));
-    emails.forEach(email=>{ const c=findClass(email); if(c) clsTotalMap[c].add(email); });
+    emails.forEach(email=>{const c=findClass(email); if(c) clsTotalMap[c].add(email);});
   });
 
-  // 학습지 × 학급 완료 집계 (사이드바와 동일한 단원 순서)
-  const orderedWS=[];
-  UNITS.forEach(unit=>{
-    WORKSHEETS.filter(ws=>ws.unitId===unit.id&&ws.type!=='link').forEach(ws=>orderedWS.push(ws));
-  });
-  // 단원 미지정 학습지는 맨 뒤
-  WORKSHEETS.filter(ws=>ws.type!=='link'&&!UNITS.find(u=>u.id===ws.unitId)).forEach(ws=>orderedWS.push(ws));
-
-  const rows=orderedWS.map(ws=>{
-    const clsDone={};
-    allCls.forEach(c=>clsDone[c]=0);
-    Object.values(allData).forEach(d=>{
-      const r=d[ws.id]; if(!r||!isRecDone(r)) return;
-      const c=findClass(r.studentEmail); if(c) clsDone[c]=(clsDone[c]||0)+1;
-    });
-    return {ws, clsDone};
-  }).filter(row=>
-    // 적어도 한 학생이 이 학습지에 기록이 있는 것만 표시
-    Object.values(allData).some(d=>d[row.ws.id])
-  );
-
-  // 색상 함수 (완료율)
+  // 색상 함수
   const cellColor=(done,total)=>{
     if(!total) return 'background:#f8f9fa;color:#94a3b8';
-    const pct=done/total;
-    if(pct>=0.9) return 'background:#dcfce7;color:#15803d;font-weight:700';
-    if(pct>=0.7) return 'background:#d1fae5;color:#166534';
-    if(pct>=0.5) return 'background:#fef9c3;color:#854d0e';
-    if(pct>=0.3) return 'background:#fed7aa;color:#9a3412';
-    if(pct>0)    return 'background:#fee2e2;color:#991b1b';
+    const p=done/total;
+    if(p>=0.9) return 'background:#dcfce7;color:#15803d;font-weight:700';
+    if(p>=0.7) return 'background:#d1fae5;color:#166534';
+    if(p>=0.5) return 'background:#fef9c3;color:#854d0e';
+    if(p>=0.3) return 'background:#fed7aa;color:#9a3412';
+    if(p>0)    return 'background:#fee2e2;color:#991b1b';
     return 'background:#f8f9fa;color:#94a3b8';
   };
 
-  // 헤더
-  const thCls=allCls.map(c=>`<th style="white-space:nowrap;font-size:12px;padding:6px 10px">${c.replace(/\d+\//,'')}</th>`).join('');
-  // 행
-  const trs=rows.map(({ws,clsDone})=>{
-    const tds=allCls.map(c=>{
-      const total=clsTotalMap[c].size, done=clsDone[c]||0;
-      const style=cellColor(done,total);
-      const pct=total?Math.round(done/total*100):0;
-      const label=total?`${done}/${total}`:'—';
-      return `<td onclick="navigate('${ws.id}')" style="cursor:pointer;text-align:center;padding:5px 10px;font-size:13px;${style}" title="${ws.title} · ${c}: ${label} (${pct}%)">${label}</td>`;
+  // 단원별 학습지 그룹핑
+  const unitGroups=[];
+  UNITS.forEach(unit=>{
+    const sheets=WORKSHEETS.filter(ws=>ws.unitId===unit.id&&ws.type!=='link')
+      .filter(ws=>Object.values(allData).some(d=>d[ws.id]));
+    if(sheets.length) unitGroups.push({unit,sheets});
+  });
+  const noUnit=WORKSHEETS.filter(ws=>ws.type!=='link'&&!UNITS.find(u=>u.id===ws.unitId)&&Object.values(allData).some(d=>d[ws.id]));
+  if(noUnit.length) unitGroups.push({unit:{id:'_etc',title:'기타',grade:''},sheets:noUnit});
+
+  if(!unitGroups.length){content.innerHTML='<div class="card"><p style="color:var(--ink3)">학생 기록이 있는 학습지가 없습니다.</p></div>';return;}
+
+  // 열린 상태 (기본: 모두 열림)
+  const _open={};
+  unitGroups.forEach(({unit})=>{_open[unit.id]=true;});
+
+  // 헤더 th
+  const thCls=allCls.map(c=>`<th style="white-space:nowrap;font-size:12px;padding:6px 10px;min-width:72px">${c.replace(/\d+\//,'')}</th>`).join('');
+
+  // 행 생성 함수
+  function makeRows(sheets){
+    return sheets.map(ws=>{
+      const clsDone={};
+      allCls.forEach(c=>clsDone[c]=0);
+      Object.values(allData).forEach(d=>{
+        const r=d[ws.id]; if(!r||!isRecDone(r)) return;
+        const c=findClass(r.studentEmail); if(c) clsDone[c]=(clsDone[c]||0)+1;
+      });
+      const tds=allCls.map(c=>{
+        const total=clsTotalMap[c].size, done=clsDone[c]||0;
+        const style=cellColor(done,total);
+        const label=total?`${done}/${total}`:'—';
+        return `<td onclick="navigate('${ws.id}')" style="cursor:pointer;text-align:center;padding:5px 8px;font-size:13px;${style}" title="${ws.title} · ${c}: ${label}">${label}</td>`;
+      }).join('');
+      return `<tr data-ws="${ws.id}">
+        <td style="padding:5px 12px;font-size:13px;font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.title}">${ws.title}</td>
+        ${tds}
+      </tr>`;
     }).join('');
-    const unit=UNIT_MAP[ws.unitId];
-    return `<tr>
-      <td style="padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${ws.title}">${ws.title}</td>
-      <td style="font-size:11px;color:var(--ink3);padding:6px 8px;white-space:nowrap">${unit?`${unit.grade}학년 ${unit.category}`:''}</td>
-      ${tds}
-    </tr>`;
-  }).join('');
+  }
+
+  // 단원별 섹션 생성
+  let sections='';
+  unitGroups.forEach(({unit,sheets})=>{
+    const gc=GCOL[unit.grade]||'#6b7280';
+    const rows=makeRows(sheets);
+    sections+=`
+      <tr class="matrix-unit-header" data-unit="${unit.id}" onclick="_toggleUnit('${unit.id}')" style="cursor:pointer;background:#f8fafc">
+        <td colspan="${allCls.length+1}" style="padding:8px 12px;font-size:13px;font-weight:700;color:${gc}">
+          <span id="unit-chevron-${unit.id}" style="display:inline-block;transition:transform .2s;margin-right:6px">▼</span>
+          ${unit.grade?`${unit.grade}학년 · `:''}${unit.title}
+          <span style="font-weight:400;color:var(--ink3);font-size:12px;margin-left:6px">(${sheets.length}개)</span>
+        </td>
+      </tr>
+      <tbody id="unit-body-${unit.id}">${rows}</tbody>`;
+  });
 
   content.innerHTML=`
     <div class="card">
-      <div class="card-hdr"><span class="card-title">📊 반별 학습지 완료 현황</span>
-        <span style="font-size:12px;color:var(--ink3)">셀 클릭 → 학습지 상세</span>
+      <div class="card-hdr">
+        <span class="card-title">📊 반별 학습지 완료 현황</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="_toggleAllUnits(true)" style="font-size:12px;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;cursor:pointer;background:var(--paper)">모두 펼치기</button>
+          <button onclick="_toggleAllUnits(false)" style="font-size:12px;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;cursor:pointer;background:var(--paper)">모두 접기</button>
+          <span style="font-size:12px;color:var(--ink3)">셀 클릭 → 학습지 상세</span>
+        </div>
       </div>
       <div style="overflow-x:auto">
-        <table style="border-collapse:collapse;width:100%;min-width:600px">
-          <thead style="position:sticky;top:0;background:var(--paper);z-index:1">
+        <table id="matrix-table" style="border-collapse:collapse;width:100%;min-width:500px">
+          <thead style="position:sticky;top:0;background:var(--paper);z-index:2">
             <tr>
-              <th style="padding:6px 12px;font-size:12px;text-align:left">학습지</th>
-              <th style="padding:6px 8px;font-size:12px">단원</th>
+              <th style="padding:6px 12px;font-size:12px;text-align:left;min-width:160px">학습지</th>
               ${thCls}
             </tr>
           </thead>
-          <tbody>${trs}</tbody>
+          ${sections}
         </table>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--ink3)">
@@ -581,6 +602,24 @@ function renderClassMatrix(){
         <span style="background:#f8f9fa;color:#94a3b8;padding:2px 8px;border-radius:4px">데이터 없음</span>
       </div>
     </div>`;
+
+  // 단원 토글 함수
+  window._toggleUnit=function(uid){
+    _open[uid]=!_open[uid];
+    const body=document.getElementById(`unit-body-${uid}`);
+    const chev=document.getElementById(`unit-chevron-${uid}`);
+    if(body){ body.style.display=_open[uid]?'':'none'; }
+    if(chev){ chev.style.transform=_open[uid]?'':'rotate(-90deg)'; }
+  };
+  window._toggleAllUnits=function(open){
+    unitGroups.forEach(({unit})=>{
+      _open[unit.id]=open;
+      const body=document.getElementById(`unit-body-${unit.id}`);
+      const chev=document.getElementById(`unit-chevron-${unit.id}`);
+      if(body) body.style.display=open?'':'none';
+      if(chev) chev.style.transform=open?'':'rotate(-90deg)';
+    });
+  };
 }
 
 function renderStudents(){

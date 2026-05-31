@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.5h">
+<meta name="app-version" content="t3.5i">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -130,6 +130,25 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .qcell:hover{background:var(--cream);border-color:var(--rule)}
 .qcell-id{font-size:11px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.2}
 .qcell-try{font-size:10px;line-height:1.2;margin-top:1px}
+/* ── 학급 비교 히트맵 ── */
+.heatmap-wrap{overflow-x:auto}
+.heatmap-table{border-collapse:collapse;width:100%;font-size:13px}
+.heatmap-table th{background:var(--cream);padding:8px 12px;text-align:center;
+  border:1px solid var(--rule);font-weight:700;white-space:nowrap}
+.heatmap-table th.ws-col{text-align:left;max-width:220px;min-width:120px}
+.heatmap-table td{padding:8px 10px;text-align:center;border:1px solid var(--rule);
+  white-space:nowrap;font-weight:600;font-size:12px;position:relative}
+.hm-cell{display:flex;flex-direction:column;align-items:center;gap:2px}
+.hm-num{font-size:13px;font-weight:700}
+.hm-bar{width:100%;height:4px;border-radius:2px;background:var(--rule);margin-top:2px}
+.hm-fill{height:100%;border-radius:2px}
+.hm-ws-name{font-size:12px;font-weight:600;max-width:200px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.hm-ws-unit{font-size:10px;color:var(--ink3)}
+.hm-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.hm-grade-btn{padding:5px 14px;border:1.5px solid var(--rule);border-radius:20px;
+  background:none;cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s}
+.hm-grade-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -198,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.5h";
+const T_VERSION = "t3.5i";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -420,7 +439,9 @@ function navigate(view){
   buildSidebar();
   if(view==="overview") renderOverview();
   else if(view==="classes") renderClasses();
+  else if(view==="comparison") renderComparison();
   else if(view==="students") renderStudents();
+  else if(view==="classmatrix") renderClassMatrix();
   else if(view.startsWith("stu:")) renderStudentDetail(view.slice(4));
   else renderWS(view);
 }
@@ -459,6 +480,96 @@ function studentList(){
     const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
     return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",total,done,avg};
   });
+}
+
+function renderClassMatrix(){
+  selView="classmatrix";
+  buildSidebar();
+  const content=document.getElementById("content");
+  content.innerHTML='<div class="loading">분석 중…</div>';
+
+  // 모든 학급 목록 추출
+  const clsSet=new Set();
+  Object.values(allData).forEach(d=>Object.values(d).forEach(r=>{
+    const c=findClass(r.studentEmail); if(c) clsSet.add(c);
+  }));
+  const allCls=[...clsSet].sort((a,b)=>a.localeCompare(b,'ko'));
+  if(!allCls.length){ content.innerHTML='<div class="card"><p style="color:var(--ink3)">학급 데이터가 없습니다.</p></div>'; return; }
+
+  // 학급별 전체 학생 수
+  const clsTotalMap={};
+  allCls.forEach(c=>{ clsTotalMap[c]=new Set(); });
+  Object.values(allData).forEach(d=>{
+    const emails=new Set(Object.values(d).map(r=>r.studentEmail).filter(Boolean));
+    emails.forEach(email=>{ const c=findClass(email); if(c) clsTotalMap[c].add(email); });
+  });
+
+  // 학습지 × 학급 완료 집계
+  const rows=WORKSHEETS.filter(ws=>ws.type!=='link').map(ws=>{
+    const clsDone={};
+    allCls.forEach(c=>clsDone[c]=0);
+    Object.values(allData).forEach(d=>{
+      const r=d[ws.id]; if(!r||!isRecDone(r)) return;
+      const c=findClass(r.studentEmail); if(c) clsDone[c]=(clsDone[c]||0)+1;
+    });
+    return {ws, clsDone};
+  }).filter(row=>allCls.some(c=>row.clsDone[c]>0||clsTotalMap[c].size>0));
+
+  // 색상 함수 (완료율)
+  const cellColor=(done,total)=>{
+    if(!total) return 'background:#f8f9fa;color:#94a3b8';
+    const pct=done/total;
+    if(pct>=0.9) return 'background:#dcfce7;color:#15803d;font-weight:700';
+    if(pct>=0.7) return 'background:#d1fae5;color:#166534';
+    if(pct>=0.5) return 'background:#fef9c3;color:#854d0e';
+    if(pct>=0.3) return 'background:#fed7aa;color:#9a3412';
+    if(pct>0)    return 'background:#fee2e2;color:#991b1b';
+    return 'background:#f8f9fa;color:#94a3b8';
+  };
+
+  // 헤더
+  const thCls=allCls.map(c=>`<th style="white-space:nowrap;font-size:12px;padding:6px 10px">${c.replace(/\d+\//,'')}</th>`).join('');
+  // 행
+  const trs=rows.map(({ws,clsDone})=>{
+    const tds=allCls.map(c=>{
+      const total=clsTotalMap[c].size, done=clsDone[c]||0;
+      const style=cellColor(done,total);
+      const pct=total?Math.round(done/total*100):0;
+      const label=total?`${done}/${total}`:'—';
+      return `<td onclick="navigate('${ws.id}')" style="cursor:pointer;text-align:center;padding:5px 10px;font-size:13px;${style}" title="${ws.title} · ${c}: ${label} (${pct}%)">${label}</td>`;
+    }).join('');
+    const unit=UNIT_MAP[ws.unitId];
+    return `<tr>
+      <td style="padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${ws.title}">${ws.title}</td>
+      <td style="font-size:11px;color:var(--ink3);padding:6px 8px;white-space:nowrap">${unit?`${unit.grade}학년 ${unit.category}`:''}</td>
+      ${tds}
+    </tr>`;
+  }).join('');
+
+  content.innerHTML=`
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">📊 반별 학습지 완료 현황</span>
+        <span style="font-size:12px;color:var(--ink3)">셀 클릭 → 학습지 상세</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="border-collapse:collapse;width:100%;min-width:600px">
+          <thead style="position:sticky;top:0;background:var(--paper);z-index:1">
+            <tr>
+              <th style="padding:6px 12px;font-size:12px;text-align:left">학습지</th>
+              <th style="padding:6px 8px;font-size:12px">단원</th>
+              ${thCls}
+            </tr>
+          </thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--ink3)">
+        <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-weight:700">90%+</span>
+        <span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:4px">50~70%</span>
+        <span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:4px">30% 미만</span>
+        <span style="background:#f8f9fa;color:#94a3b8;padding:2px 8px;border-radius:4px">데이터 없음</span>
+      </div>
+    </div>`;
 }
 
 function renderStudents(){

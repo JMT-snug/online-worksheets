@@ -367,6 +367,7 @@ function buildSidebar(){
     <div class="sb-section">메뉴</div>
     <div class="sb-item ${selView==='overview'?'active':''}" data-view="overview">📊 전체 현황</div>
     <div class="sb-item ${selView==='students'||selView.startsWith('stu:')?'active':''}" data-view="students">👤 학생별 조회</div>
+    <div class="sb-item ${selView==='classmatrix'?'active':''}" data-view="classmatrix">📊 반별 비교</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
     <div class="sb-section" style="margin-top:8px">학습지</div>`;
   [1,2,3].forEach(grade=>{

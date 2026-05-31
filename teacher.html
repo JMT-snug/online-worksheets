@@ -505,8 +505,15 @@ function renderClassMatrix(){
     emails.forEach(email=>{ const c=findClass(email); if(c) clsTotalMap[c].add(email); });
   });
 
-  // 학습지 × 학급 완료 집계
-  const rows=WORKSHEETS.filter(ws=>ws.type!=='link').map(ws=>{
+  // 학습지 × 학급 완료 집계 (사이드바와 동일한 단원 순서)
+  const orderedWS=[];
+  UNITS.forEach(unit=>{
+    WORKSHEETS.filter(ws=>ws.unitId===unit.id&&ws.type!=='link').forEach(ws=>orderedWS.push(ws));
+  });
+  // 단원 미지정 학습지는 맨 뒤
+  WORKSHEETS.filter(ws=>ws.type!=='link'&&!UNITS.find(u=>u.id===ws.unitId)).forEach(ws=>orderedWS.push(ws));
+
+  const rows=orderedWS.map(ws=>{
     const clsDone={};
     allCls.forEach(c=>clsDone[c]=0);
     Object.values(allData).forEach(d=>{
@@ -514,7 +521,10 @@ function renderClassMatrix(){
       const c=findClass(r.studentEmail); if(c) clsDone[c]=(clsDone[c]||0)+1;
     });
     return {ws, clsDone};
-  }).filter(row=>allCls.some(c=>row.clsDone[c]>0||clsTotalMap[c].size>0));
+  }).filter(row=>
+    // 적어도 한 학생이 이 학습지에 기록이 있는 것만 표시
+    Object.values(allData).some(d=>d[row.ws.id])
+  );
 
   // 색상 함수 (완료율)
   const cellColor=(done,total)=>{

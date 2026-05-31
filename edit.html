@@ -663,7 +663,7 @@ function renderEditor(){
       <button class="btn-add-q" onclick="addQuestionItem()" style="background:#15803d">＋ 연습 문항 추가</button>`;
   } else {
     addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>';
-    document.getElementById('btn-add-q').onclick = addQuestionItem;
+    document.getElementById('btn-add-q').onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
   }
   const extrasCount = (currentWs.extras||[]).filter(e=>e.type&&!['vocab'].includes(e.type)).length;
   document.getElementById('q-list-title').textContent =
@@ -1108,7 +1108,7 @@ window.addVocabItem = function(){
 
 // 일반 학습지용 초기 바인딩 (renderEditor에서 재설정됨)
 const _initAddBtn = document.getElementById('btn-add-q');
-if(_initAddBtn) _initAddBtn.onclick = addQuestionItem;
+if(_initAddBtn) _initAddBtn.onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
 
 // ── 학습지 추가 ──
 window.addWorksheet = function(unitId){

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2s">
+  <meta name="app-version" content="6.2u">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2s"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2u"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1765,7 +1765,6 @@ window.submitMulti = function(){
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     // 오답: 피드백만 표시, 버튼 색 변경 없음
-    attempts[curQIdx]++;
     if(ab) ab.style.display="flex"; if(an) an.textContent=attempts[curQIdx];
     wrongAnswers[curQIdx].inputs.push(sel.join(","));
     saveWorksheet();
@@ -2114,7 +2113,6 @@ async function submitQAns(){
       attempts[curQIdx]++;
       const _ab=document.getElementById("attempt-badge");
       const _an=document.getElementById("attempt-num");
-      attempts[curQIdx]++;
       if(_ab) _ab.style.display="flex"; if(_an) _an.textContent=attempts[curQIdx];
       wrongAnswers[curQIdx].inputs.push(userAns||"(빈칸)");
       saveWorksheet();

@@ -336,6 +336,7 @@ async function loadAll(){
     snap.forEach(d=>{
       const parts=d.ref.path.split("/");
       const col=parts[0], uid=parts[1], wsId=parts[3];
+      if(TEACHER_EMAILS.includes(uid)) return; // 교사 계정 제외
       if(col==="records"){                        // 새 통합 구조
         if(!allData[uid]) allData[uid]={};
         allData[uid][wsId]=d.data();

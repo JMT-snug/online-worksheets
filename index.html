@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2u">
+  <meta name="app-version" content="6.2w">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2u"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2w"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -411,6 +411,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   <div id="hdr-user">
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
+    <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집기</a>
     <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
@@ -696,8 +697,9 @@ function updateHeader(u) {
   const av = document.getElementById("hdr-avatar");
   if (u.photoURL) { av.src = u.photoURL; av.style.display = "block"; }
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
-  document.getElementById("hdr-teacher-link").style.display =
-    TEACHER_EMAILS.includes(u.email) ? "inline-flex" : "none";
+  const isT = TEACHER_EMAILS.includes(u.email);
+  document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
+  document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
 }
 
 /* ── DASHBOARD ── */
@@ -822,6 +824,27 @@ function renderCards() {
 }
 
 /* ── UNIT PAGE ── */
+window.toggleWsLock=async function(wsId, btn){
+  const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
+  const newStatus = ws.status==='published' ? 'locked' : 'published';
+  try{
+    await setDoc(doc(db,'curriculum',wsId),{status:newStatus},{merge:true});
+    ws.status=newStatus;
+    const isNowLocked=(newStatus==='locked');
+    btn.textContent=isNowLocked?'🔒 잠금됨':'🔓 잠금 해제';
+    btn.title=isNowLocked?'클릭하면 학생에게 공개':'클릭하면 학생 접근 차단';
+    btn.style.background=isNowLocked?'#fef3c7':'#f0fdf4';
+    btn.style.color=isNowLocked?'#b45309':'#15803d';
+    // 배지도 갱신
+    const card=btn.closest('.ws-list-card');
+    const badge=card?.querySelector('.wslc-badge');
+    if(badge){
+      if(isNowLocked){ badge.style.background='#fef3c7';badge.style.color='#b45309';badge.textContent='🔒 수정 중'; }
+      else { badge.style.background='';badge.style.color='';badge.textContent=''; }
+    }
+  }catch(e){ alert('저장 실패: '+e.message); }
+};
+
 window.toggleTeacherClass=async function(wsId,clsName,btn){
   if(!teacherProgress[wsId]) teacherProgress[wsId]={};
   const newVal=!teacherProgress[wsId][clsName];
@@ -898,6 +921,16 @@ function showUnitPage(unit) {
         const checkedCount=Object.values(progress).filter(Boolean).length;
         const row=document.createElement('div');
         row.className='teacher-cls-row';
+        // 잠금 토글 버튼
+        const lockBtn=document.createElement('button');
+        const isNowLocked=(ws.status==='locked');
+        const isNowDraft=(ws.status==='draft');
+        lockBtn.textContent=isNowLocked?'🔒 잠금됨':(isNowDraft?'📝 준비 중':'🔓 잠금 해제');
+        lockBtn.title=isNowLocked?'클릭하면 학생에게 공개':(isNowDraft?'edit에서 변경하세요':'클릭하면 학생 접근 차단');
+        lockBtn.style.cssText=`padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid;cursor:${isNowDraft?'default':'pointer'};font-family:inherit;background:${isNowLocked?'#fef3c7':isNowDraft?'#f1f5f9':'#f0fdf4'};color:${isNowLocked?'#b45309':isNowDraft?'#64748b':'#15803d'};border-color:${isNowLocked?'#b45309':isNowDraft?'#94a3b8':'#15803d'}`;
+        if(!isNowDraft) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
+        row.appendChild(lockBtn);
+
         if(teacherClasses.length){
           teacherClasses.forEach(({key,name})=>{
             const btn=document.createElement('button');

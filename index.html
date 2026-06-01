@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.2q">
+  <meta name="app-version" content="6.2r">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.2q"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.2r"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -643,19 +643,18 @@ async function loadTeacherData(){
   try{
     const cSnap=await getDoc(doc(db,"teacher_data",user.uid));
     if(cSnap.exists()){
-      const clsObj=cSnap.data().classes||{};
+      const data=cSnap.data();
+      // 학급 목록
+      const clsObj=data.classes||{};
       teacherClasses=Object.entries(clsObj)
         .map(([k,c])=>({key:k,name:`${c.year}/${c.grade}학년 ${c.classNum}반`}))
         .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-      console.log('[teacherData] 학급 로드:', teacherClasses.map(c=>c.name));
+      // 진도 체크 데이터 (teacher_data/{uid}.teacherProgress 필드)
+      teacherProgress=data.teacherProgress||{};
     } else {
       console.warn('[teacherData] teacher_data/'+user.uid+' 문서 없음');
     }
   }catch(e){console.error('[loadTeacherData 오류]',e);}
-  try{
-    const tpSnap=await getDocs(collection(db,'teacherProgress'));
-    tpSnap.docs.forEach(d=>{teacherProgress[d.id]=d.data().checkedClasses||{};});
-  }catch(e){console.error('[teacherProgress 오류]',e);}
 }
 
 async function loadCurriculum(){
@@ -819,6 +818,26 @@ function renderCards() {
 }
 
 /* ── UNIT PAGE ── */
+window.toggleTeacherClass=async function(wsId,clsName,btn){
+  if(!teacherProgress[wsId]) teacherProgress[wsId]={};
+  const newVal=!teacherProgress[wsId][clsName];
+  teacherProgress[wsId][clsName]=newVal;
+  btn.classList.toggle('checked',newVal);
+  // note 텍스트 갱신
+  const card=btn.closest('.ws-list-card');
+  if(card){
+    const note=card.querySelector('.teacher-ws-note');
+    if(note){
+      const cnt=Object.values(teacherProgress[wsId]).filter(Boolean).length;
+      note.textContent=cnt?`${cnt}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
+    }
+  }
+  try{
+    await setDoc(doc(db,'teacher_data',user.uid),
+      {teacherProgress:{[wsId]:teacherProgress[wsId]}},{merge:true});
+  }catch(e){console.error('[toggleTeacherClass]',e);}
+};
+
 function showUnitPage(unit) {
   const gc = GRADE_COLOR[unit.grade];
   const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};

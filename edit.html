@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.3d">
+<meta name="app-version" content="edit-v1.3g">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -212,9 +212,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
   <!-- 헤더 -->
   <header class="hdr">
+    <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer" title="타임스탬프 학습지 ID를 순번으로 정리">🔧 ID 정리</button>
     <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#334155;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px">← 학습지</a>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.3d</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.3g</span>
     <div class="hdr-space"></div>
   <div style="display:flex;align-items:center;gap:6px">
     <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
@@ -458,7 +459,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch, query, orderBy }
+import { getFirestore, collection, doc, getDoc, getDocs, collectionGroup, where, setDoc, deleteDoc, writeBatch, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -1151,7 +1152,10 @@ if(_initAddBtn) _initAddBtn.onclick = function(){ window.addQuestionItem && wind
 // ── 학습지 추가 ──
 window.addWorksheet = function(unitId){
   const title = prompt('새 학습지 제목:'); if(!title) return;
-  const id = `ws-${unitId}-${Date.now()}`;
+  // 순번 기반 ID (ws-u1-04-01, ws-u1-04-02...)
+  let seq=worksheets.filter(w=>w.unitId===unitId).length+1;
+  let id=`ws-${unitId}-${String(seq).padStart(2,'0')}`;
+  while(worksheets.find(w=>w.id===id)){ seq++; id=`ws-${unitId}-${String(seq).padStart(2,'0')}`; }
   const unit = units.find(u=>u.id===unitId);
   const newWs = {
     id, unitId, title, type:'regular',
@@ -1199,6 +1203,54 @@ document.getElementById('btn-delete-ws').onclick = async () => {
   }catch(e){ toast('삭제 실패: '+e.message); console.error(e); }
 };
 document.getElementById('btn-publish').onclick = () => saveToFirestore('published');
+
+// ── 학습지 ID 마이그레이션 (타임스탬프 → 순번) ──
+window.migrateWsIds=async function(){
+  const toMigrate=worksheets.filter(ws=>/[-_]\d{10,}$/.test(ws.id));
+  if(!toMigrate.length){ toast('정리할 학습지 ID가 없습니다.'); return; }
+  const preview=toMigrate.map(ws=>`• ${ws.id}  →  ws-${ws.unitId}-XX`).join('\n');
+  if(!confirm(`다음 학습지 ID를 순번 형식으로 변환합니다:\n\n${preview}\n\n⚠️ 학생 기록도 함께 이동됩니다.`)) return;
+
+  const statusEl=document.createElement('div');
+  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:280px';
+  document.body.appendChild(statusEl);
+  const log=msg=>{ statusEl.textContent=msg; console.log('[migration]',msg); };
+
+  let ok=0, errors=[];
+  for(const ws of toMigrate){
+    log(`처리 중: ${ws.id}...`);
+    try{
+      // 새 ID 생성
+      const unitId=ws.unitId||'etc';
+      let seq=worksheets.filter(w=>w.unitId===unitId&&w.id!==ws.id).length+1;
+      let newId=`ws-${unitId}-${String(seq).padStart(2,'0')}`;
+      while(worksheets.find(w=>w.id===newId)){ seq++; newId=`ws-${unitId}-${String(seq).padStart(2,'0')}`; }
+
+      // curriculum 새 문서 생성 → 구 문서 삭제
+      await setDoc(doc(db,'curriculum',newId),{...ws,id:newId});
+      await deleteDoc(doc(db,'curriculum',ws.id));
+
+      // 학생 records 이전 (collectionGroup으로 wsId 검색)
+      const recSnap=await getDocs(collectionGroup(db,'worksheets'));
+      let migrated=0;
+      for(const d of recSnap.docs){
+        if(d.id===ws.id && d.ref.path.startsWith('records/')){
+          const uid=d.ref.parent.parent.id;
+          await setDoc(doc(db,'records',uid,'worksheets',newId),d.data());
+          await deleteDoc(d.ref);
+          migrated++;
+        }
+      }
+
+      // 로컬 갱신
+      ws.id=newId; ok++;
+      log(`완료: ${newId} (학생 ${migrated}명)`);
+    }catch(e){ errors.push(`${ws.id}: ${e.message}`); console.error(e); }
+  }
+  statusEl.remove();
+  renderSidebar();
+  alert(`✅ 완료: ${ok}개 학습지 ID 변환`+(errors.length?`\n\n⚠️ 오류:\n${errors.join('\n')}`:''));
+};
 
 async function saveToFirestore(status, silent=false){
   if(!currentWs){ toast('학습지를 선택하세요'); return; }

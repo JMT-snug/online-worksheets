@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4e">
+  <meta name="app-version" content="6.4f">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4f"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2357,7 +2357,7 @@ function goNextUnanswered(){
   const n=curWS.questions.length;
   for(let off=1;off<=n;off++){
     const i=(curQIdx+off)%n;
-    if(curWS.questions[i].type!=="link" && !answered[i]){ curQIdx=i; renderQuestion(); return; }
+    if(!answered[i]){ curQIdx=i; renderQuestion(); return; }  // link 포함
   }
   finishQuiz(); // 전부 완료 시
 }
@@ -2403,7 +2403,6 @@ window.qNeg=function(){
 function goToQ(idx){
   if(idx<0||idx>=curWS.questions.length) return;
   if(idx===curQIdx) return;
-  if(curWS.questions[idx]?.type==="link") return;
   saveCanvasState();
   curQIdx=idx;
   renderQuestion();

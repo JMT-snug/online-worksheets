@@ -988,7 +988,7 @@ window.saveQuestion = function(){
     const linkLabel=document.getElementById('q-link-label').value.trim();
     const linkUrl=document.getElementById('q-link-url').value.trim();
     if(!linkUrl){ toast('URL을 입력하세요'); return; }
-    allItems[selectedQIdx]={...allItems[selectedQIdx], text:'', linkLabel:linkLabel||'링크 열기', linkUrl};
+    allItems[selectedQIdx]={...allItems[selectedQIdx], type:'link', text:'', linkLabel:linkLabel||'링크 열기', linkUrl};
     saveAllItems().then(()=>toast('저장됨')).catch(e=>toast('오류: '+e.message));
     renderQList();
     return;

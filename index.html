@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4s">
+  <meta name="app-version" content="6.4t">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4s"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4t"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -18,7 +18,7 @@ window.MathJax = {
   startup: { typeset: false }
 };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" async></script>
 <style>
 :root {
   --cream:#faf8f3; --paper:#fff; --rule:#e8e4d9;
@@ -1492,7 +1492,7 @@ function qInput(v){
   if(v==="→"){  // 커서 오른쪽 이동
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
-      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+      const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":qEditPart.part==="inner"?"inner":"expo";
       const cur=qEditPart.cursor??t[key].length;
       if(cur<t[key].length){ qEditPart.cursor=cur+1; } // 내부 이동
       else if(t?.type==="frac"&&qEditPart.part==="num"){
@@ -1510,11 +1510,13 @@ function qInput(v){
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
       if(t){
-        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
+        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":qEditPart.part==="inner"?"inner":"expo";
         const cur=qEditPart.cursor??t[key].length;
         if(cur>0){
           t[key]=t[key].slice(0,cur-1)+t[key].slice(cur);
           qEditPart.cursor=cur-1;
+        } else if(t?.type==="sqrt"){
+          qTokens.splice(qEditPart.idx,1); qCursorIdx=qEditPart.idx; qEditPart=null; // 내용 없을 때 sqrt 삭제
         }
       }
     } else if(qCursorIdx>0){
@@ -1614,10 +1616,9 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
       <button tabindex="-1" class="kb v" onclick="qInput('FRAC')" style="font-size:10px;line-height:1.4">분수<br>입력</button>
       <button tabindex="-1" class="kb v" onclick="qInput('EXP')"  style="font-size:10px;line-height:1.4">지수<br>입력</button>
       <button tabindex="-1" class="kb v" onclick="qInput('SQRT')">
-        <span style="display:inline-flex;align-items:flex-start">
-          <span style="font-family:serif">√</span>
-          <span style="display:inline-block;border-top:2px solid currentColor;min-width:10px;height:5px;vertical-align:top;margin-top:3px;padding-right:2px"></span>
-        </span>
+        <svg width="28" height="22" viewBox="0 0 28 22" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+          <polyline points="0,14 5,14 9,20 14,2 28,2" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
       </button>
       <button tabindex="-1" class="kb"   onclick="qInput('4')">4</button>
       <button tabindex="-1" class="kb"   onclick="qInput('5')">5</button>

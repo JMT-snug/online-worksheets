@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.4c">
+<meta name="app-version" content="edit-v1.5a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -212,25 +212,22 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
   <!-- 헤더 -->
   <header class="hdr">
-    <button onclick="cleanupTempWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer" title="ws-temp-* 임시 문서 정리">🚨 임시 정리</button>
-    <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer" title="타임스탬프 학습지 ID를 순번으로 정리">🔧 ID 정리</button>
-    <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#334155;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px">← 학습지</a>
+    <!-- 왼쪽: 유지보수 버튼 3개 -->
+    <div style="display:flex;gap:4px;flex-shrink:0">
+      <button onclick="cleanupTempWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="ws-temp-* 임시 문서 정리">🚨 임시 정리</button>
+      <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="학습지 ID 순번 정리">🔧 학습지 ID</button>
+      <button onclick="migrateQuestionIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="문항 ID 순번 정리">🔧 문항 ID</button>
+    </div>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.4c</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5a</span>
     <div class="hdr-space"></div>
-  <div style="display:flex;align-items:center;gap:6px">
-    <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
-    <input id="drive-folder-id" value="14q0Avz-ep3RAm9k1Q82_0wpbQCjp6Jpl" placeholder="폴더 ID 입력"
-      style="width:220px;padding:4px 8px;border-radius:4px;border:1px solid #475569;background:#1e293b;color:#cbd5e1;font-size:12px;font-family:monospace">
-  </div>
-    <button class="hdr-btn" id="btn-preview"
-    style="background:#0f766e;color:#fff">👁 미리보기</button>
-  <button class="hdr-btn btn-migrate" id="btn-migrate" title="worksheets.js → Firestore">⬆ JS 마이그레이션</button>
+    <!-- 오른쪽: 액션 버튼 -->
     <button class="hdr-btn" id="btn-delete-ws"
-    style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
-  <button class="hdr-btn" id="btn-lock"
-    style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d">🔒 잠금</button>
+      style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
+    <button class="hdr-btn" id="btn-lock"
+      style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d">🔒 잠금</button>
     <button class="hdr-btn btn-publish" id="btn-publish">발행</button>
+    <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#475569;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600">← 학습지</a>
     <a href="teacher.html" class="hdr-btn" style="background:#334155;color:#cbd5e1;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600">교사 페이지</a>
     <button class="hdr-btn btn-logout" id="btn-logout">로그아웃</button>
   </header>
@@ -1290,6 +1287,54 @@ window.cleanupTempWs=async function(){
   window.location.reload(); // 전체 새로고침
 };
 
+window.migrateQuestionIds=async function(){
+  const wsToMigrate=worksheets.filter(ws=>{
+    return (ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)); // 긴 숫자 ID만
+  });
+  if(!wsToMigrate.length){ toast('마이그레이션할 문항이 없습니다.'); return; }
+  const preview=wsToMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
+  if(!confirm(`다음 학습지의 문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}\n\n계속하시겠습니까?`)) return;
+
+  const statusEl=document.createElement('div');
+  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:260px';
+  document.body.appendChild(statusEl);
+  const log=msg=>{ statusEl.textContent=msg; console.log('[migration]',msg); };
+
+  let wsOk=0, recOk=0, errors=[];
+  for(const ws of wsToMigrate){
+    log(`처리 중: ${ws.title}...`);
+    try{
+      // 1. 구 ID → 신 ID 매핑 (q01, q02...)
+      const idMap={};
+      ws.questions.forEach((q,i)=>{
+        idMap[q.id]=`q${String(i+1).padStart(2,'0')}`;
+      });
+      // 2. curriculum 문서 업데이트
+      const newQs=ws.questions.map(q=>({...q,id:idMap[q.id]||q.id}));
+      await setDoc(doc(db,'curriculum',ws.id),{questions:newQs},{merge:true});
+      ws.questions=newQs; // 로컬도 갱신
+      wsOk++;
+      // 3. 이 학습지가 있는 모든 학생 records 업데이트
+      const students=Object.entries(allData).filter(([uid,d])=>d[ws.id]?.perQuestion);
+      for(const [uid,d] of students){
+        const oldPQ=d[ws.id].perQuestion;
+        const newPQ={};
+        for(const [oid,val] of Object.entries(oldPQ)){
+          newPQ[idMap[oid]||oid]=val; // 매핑 있으면 새 ID, 없으면 유지
+        }
+        await setDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ},{merge:true});
+        if(allData[uid]?.[ws.id]) allData[uid][ws.id].perQuestion=newPQ; // 로컬 갱신
+        recOk++;
+      }
+    }catch(e){ errors.push(`${ws.title}: ${e.message}`); }
+  }
+  statusEl.remove();
+  const msg=`✅ 완료\n학습지: ${wsOk}개 변환\n학생 기록: ${recOk}개 업데이트`
+           +(errors.length?`\n\n⚠️ 오류:\n${errors.join('\n')}`:'');
+  toast(msg.replace(/\n/g," | "));
+  navigate(selView); // 현재 뷰 새로고침
+}
+
 window.migrateWsIds=async function(){
   // 단원별로 order 순 정렬 후 ws-unitId-01, 02... 재번호
   const byUnit={};
@@ -1402,44 +1447,7 @@ async function saveToFirestore(status, silent=false){
   }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
 }
 
-// ── JS 마이그레이션 ──
-document.getElementById('btn-migrate').onclick = async () => {
-  if(!confirm('worksheets.js 내용을 Firestore curriculum으로 업로드합니다.\n기존 데이터가 덮어씌워질 수 있습니다. 계속하시겠습니까?')) return;
-  const btn = document.getElementById('btn-migrate');
-  btn.disabled = true; btn.textContent = '마이그레이션 중...';
-  try{
-    // worksheets.js를 fetch로 읽어서 Function으로 실행
-    const wsText = await fetch('./worksheets.js').then(r=>r.text());
-    const mod = new Function(wsText + '\nreturn {UNITS, WORKSHEETS};')();
-    const US = mod.UNITS;
-    const WS = mod.WORKSHEETS;
-    if(!US || !WS) throw new Error('UNITS/WORKSHEETS를 찾을 수 없습니다');
 
-    const batch1 = writeBatch(db);
-    US.forEach((u,i) => batch1.set(doc(db,'units',u.id), {...u, order:i}));
-    await batch1.commit();
-
-    // worksheets는 하나씩 (batch 500 limit)
-    let count=0;
-    for(let i=0; i<WS.length; i++){
-      const ws = WS[i];
-      await setDoc(doc(db,'curriculum',ws.id), {
-        ...ws, order:i, status:'published',
-        lastModified: new Date().toISOString(), createdBy: currentUser.email,
-      });
-      count++;
-      btn.textContent=`마이그레이션 중... ${count}/${WS.length}`;
-    }
-    btn.textContent='✅ 완료 ('+count+'개)';
-    toast(`✅ 마이그레이션 완료: 단원 ${US.length}개, 학습지 ${count}개`);
-    await loadAll();
-  }catch(e){
-    btn.textContent='❌ 오류: '+e.message;
-    console.error(e); toast('오류: '+e.message);
-  }finally{
-    setTimeout(()=>{ btn.disabled=false; btn.textContent='⬆ JS 마이그레이션'; },3000);
-  }
-};
 
 // ── 학습지 사이드바 드래그 ──
 let wsDragId = null;
@@ -1697,12 +1705,7 @@ window.addQuestionItem = function(){
   document.getElementById('type-modal').style.display='flex';
 };
 
-// ── 미리보기 ──
-document.getElementById('btn-preview').onclick = () => {
-  if(!currentWs){ toast('미리볼 학습지를 선택하세요'); return; }
-  renderPreview();
-  document.getElementById('preview-modal').style.display='flex';
-};
+
 function renderPreview(){
   const ws = currentWs;
   document.getElementById('preview-title').textContent = `미리보기 — ${ws.title||'제목 없음'}`;

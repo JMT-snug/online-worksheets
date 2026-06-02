@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.3c">
+  <meta name="app-version" content="6.4d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.3c"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -612,6 +612,7 @@ const db      = initializeFirestore(fbApp,{localCache:persistentLocalCache()});
 const storage = getStorage(fbApp);
 
 let user = null, wsProgress = {}, curWS = null;
+let _wsDataLoaded = false; // Firestore 데이터 로드 완료 전 저장 방지
 let teacherClasses = [];   // 학급 목록 [{key, name}]
 let teacherProgress = {};  // wsId → {className: bool}
 let curQIdx = 0, attempts = [], answered = [];
@@ -1202,23 +1203,26 @@ async function startQuiz(ws) {
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
   canvasStore={};
   // ── 저장된 진도 복원 ──
+  _wsDataLoaded = false; // 로드 전: 저장 차단
   try{
     const _saved=await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
-    if(_saved.exists()&&!_saved.data().isComplete){
+    if(_saved.exists()){
       const _d=_saved.data(); const _pq=_d.perQuestion||{};
+      // 완료 여부 무관하게 항상 복원
       ws.questions.forEach((q,i)=>{
         const s=_pq[q.id]; if(!s) return;
         answered[i]=s.correct||false;
         attempts[i]=s.attempts||0;
         wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
       });
+      if(_d.isComplete) _wsIsCompleted=true;
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
-      qCursorIdx=qTokens.length; // 복원 후 커서는 끝으로
-      if(_activeWsId!==ws.id) return; // 다른 학습지로 전환됨
-      console.log("[복원] 진행중", answered.filter(Boolean).length+"/"+ws.questions.length, "→ Q"+(curQIdx+1)+"부터");
+      if(_activeWsId!==ws.id) return;
+      console.log("[복원]", _d.isComplete?"완료":"진행중", answered.filter(Boolean).length+"/"+ws.questions.length);
     }
   }catch(_e){ console.warn("[복원실패]",_e.message); }
+  _wsDataLoaded = true; // 로드 완료: 저장 허용
   showPage("quiz-page");
   document.getElementById("quiz-ws-title").textContent=ws.title;
   // 링크 제외 문항 수 캐싱
@@ -1519,10 +1523,34 @@ function qInput(v){
     qEditPart={idx:qCursorIdx,part:"den",cursor:0};
   } else if(v==="EXP"){
     if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t) t.expo+=v; qRender(); return; }
-    let base="";
-    if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
-      base=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
+    let base="", removeFrom=-1, removeCount=0;
+    const prev=qTokens[qCursorIdx-1];
+    if(prev?.type==="char" && /[\d.]/.test(prev.val)){
+      // Case 1: 직전이 숫자 → 연속 숫자 전체 수집 (11^2 → base='11')
+      let j=qCursorIdx-1, baseChars=[];
+      while(j>=0 && qTokens[j]?.type==="char" && /[\d.]/.test(qTokens[j].val)){
+        baseChars.unshift(qTokens[j].val); j--;
+      }
+      base=baseChars.join(''); removeFrom=j+1; removeCount=baseChars.length;
+    } else if(prev?.type==="char" && prev.val===')'){
+      // Case 2: 직전이 ) → 매칭 ( 까지 전체 수집 ((11)^2 → base='(11)')
+      let depth2=0, k=qCursorIdx-1;
+      while(k>=0){
+        const tv=qTokens[k];
+        if(tv?.type==="char"){
+          if(tv.val===')') depth2++;
+          else if(tv.val==='('){ depth2--; if(depth2===0) break; }
+        }
+        k--;
+      }
+      const removed=qTokens.slice(k,qCursorIdx);
+      base=removed.map(t=>t.val||'').join('');
+      removeFrom=k; removeCount=qCursorIdx-k;
+    } else if(prev?.type==="char"){
+      // Case 3: 단일 변수 (x^2 → base='x')
+      base=prev.val; removeFrom=qCursorIdx-1; removeCount=1;
     }
+    if(removeCount>0){ qTokens.splice(removeFrom,removeCount); qCursorIdx-=removeCount; }
     qTokens.splice(qCursorIdx,0,{type:"exp",base,expo:""});
     qEditPart={idx:qCursorIdx,part:"expo",cursor:0};
   } else {
@@ -2100,7 +2128,31 @@ async function submitQAns(){
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
       // 수치 대입으로 동치 확인
-      function evExpr(s,x){
+      // 소수 판별
+function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
+// 곱의 형태 검증: 최상위 레벨에 +/- 없어야 함 (소인수분해·인수분해 공통)
+function isFactoredForm(tokens){
+  let depth=0;
+  for(const t of tokens){
+    if(t.type==='frac'||t.type==='exp'||t.type==='sqrt') continue; // 이런 토큰은 단일 atom
+    if(t.type==='char'){
+      if(t.val==='(') depth++;
+      else if(t.val===')') depth--;
+      else if(depth===0&&(t.val==='+'||t.val==='−'||t.val==='-')) return false;
+    }
+  }
+  return true;
+}
+// 소인수분해 형식 검증: 모든 밑수(base)가 소수인지 확인
+function isPrimeFactorExpr(tokens){
+  return tokens.every(t=>{
+    if(t.type==='char') return /[+*×\-()]/.test(t.val)||isPrime(Number(t.val));
+    if(t.type==='exp')  return isPrime(Number(t.base));
+    if(t.type==='frac') return false; // 분수는 소인수분해에 불허
+    return true;
+  });
+}
+function evExpr(s,x){
         try{
           let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
             .replace(/Math\.sqrt\(/g,'sqrt(')  // Math.sqrt → sqrt 통일
@@ -2424,8 +2476,14 @@ document.getElementById("btn-back").addEventListener("click",async ()=>{
 const canvas=document.getElementById("draw-canvas");
 const ctx=canvas.getContext("2d");
 let cvDrawing=false, penColor="#1c1917", penSize=3, eraser=false, cvLX=0, cvLY=0;
+let undoStack=[]; // 획 시작 전 스냅샷 배열
 let canvasStore={}; // key: qIdx, value: ImageData
 
+window.undoCanvas=function(){
+  if(undoStack.length===0) return;
+  ctx.putImageData(undoStack.pop(),0,0);
+};
+function resetUndoStack(){ undoStack=[]; }
 function initCanvas(){
   // quiz-page가 보이는 상태에서만 호출
   const w=canvas.parentElement.clientWidth||600;

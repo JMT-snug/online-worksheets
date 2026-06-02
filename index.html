@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4f">
+  <meta name="app-version" content="6.4g">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4f"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4g"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -510,6 +510,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <input type="range" class="stroke-slider" id="stroke-size" min="1" max="18" value="3">
           <div class="divider-v"></div>
           <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
+          <button class="btn-back" onclick="undoCanvas()" style="font-size:12px" title="한 획 되돌리기">↩ 실행취소</button>
           <div class="divider-v"></div>
           <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
           <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;white-space:nowrap"></span>
@@ -1340,6 +1341,7 @@ function renderQuestion() {
             ${q.linkLabel}
           </a>
         </div>
+        <div class="feedback-strip" id="feedback-strip"></div>
         <div class="ans-btns" onmousedown="event.preventDefault()">
           <button class="btn-submit" onclick="submitQAns()"
             style="background:var(--green)">

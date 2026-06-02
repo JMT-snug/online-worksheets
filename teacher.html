@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.7c">
+<meta name="app-version" content="t3.7e">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.7c";
+const T_VERSION = "t3.7e";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -797,6 +797,8 @@ window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
 window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
 // ── 문항 ID 마이그레이션 (타임스탬프 → q01, q02...) ──
+
+
 window.migrateQuestionIds=async function(){
   const wsToMigrate=WORKSHEETS.filter(ws=>{
     return (ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)); // 긴 숫자 ID만

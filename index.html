@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4d">
+  <meta name="app-version" content="6.4e">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1983,6 +1983,30 @@ function eqEquivCheck(userEq, correctEq){
   }catch(e){return false;}
 }
 
+// 소수 판별
+function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
+// 곱의 형태 검증: 최상위 레벨에 +/- 없어야 함
+function isFactoredForm(tokens){
+  let depth=0;
+  for(const t of tokens){
+    if(t.type==='frac'||t.type==='exp'||t.type==='sqrt') continue;
+    if(t.type==='char'){
+      if(t.val==='(') depth++;
+      else if(t.val===')') depth--;
+      else if(depth===0&&(t.val==='+'||t.val==='−'||t.val==='-')) return false;
+    }
+  }
+  return true;
+}
+// 소인수분해 형식 검증: 모든 밑수가 소수인지 확인
+function isPrimeFactorExpr(tokens){
+  return tokens.every(t=>{
+    if(t.type==='char') return /[+*×\-()]/.test(t.val)||isPrime(Number(t.val));
+    if(t.type==='exp')  return isPrime(Number(t.base));
+    if(t.type==='frac') return false;
+    return true;
+  });
+}
 // 다항식/식 동치 판정 (샘플 대입)
 function exprEquivCheck(userExpr, correctExpr){
   function ev(s,x){
@@ -2128,31 +2152,7 @@ async function submitQAns(){
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
       // 수치 대입으로 동치 확인
-      // 소수 판별
-function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
-// 곱의 형태 검증: 최상위 레벨에 +/- 없어야 함 (소인수분해·인수분해 공통)
-function isFactoredForm(tokens){
-  let depth=0;
-  for(const t of tokens){
-    if(t.type==='frac'||t.type==='exp'||t.type==='sqrt') continue; // 이런 토큰은 단일 atom
-    if(t.type==='char'){
-      if(t.val==='(') depth++;
-      else if(t.val===')') depth--;
-      else if(depth===0&&(t.val==='+'||t.val==='−'||t.val==='-')) return false;
-    }
-  }
-  return true;
-}
-// 소인수분해 형식 검증: 모든 밑수(base)가 소수인지 확인
-function isPrimeFactorExpr(tokens){
-  return tokens.every(t=>{
-    if(t.type==='char') return /[+*×\-()]/.test(t.val)||isPrime(Number(t.val));
-    if(t.type==='exp')  return isPrime(Number(t.base));
-    if(t.type==='frac') return false; // 분수는 소인수분해에 불허
-    return true;
-  });
-}
-function evExpr(s,x){
+      function evExpr(s,x){
         try{
           let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
             .replace(/Math\.sqrt\(/g,'sqrt(')  // Math.sqrt → sqrt 통일
@@ -2176,6 +2176,9 @@ function evExpr(s,x){
         const uv=evExpr(rawInput,x), av=evExpr(ans,x);
         return isFinite(uv)&&isFinite(av)&&Math.abs(uv-av)<0.001;
       }));
+      // 채점 모드 추가 검증
+      if(ok && q.factorMode==='prime')  ok=isPrimeFactorExpr(qTokens)&&isFactoredForm(qTokens);
+      if(ok && q.factorMode==='factor') ok=isFactoredForm(qTokens);
     } else {
       input=document.getElementById("word-input");
       userAns=(input?.value||"").trim().replace(/\s+/g," ");

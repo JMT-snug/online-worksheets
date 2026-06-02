@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.2j">
+<meta name="app-version" content="edit-v1.3a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -214,7 +214,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <header class="hdr">
     <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#334155;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px">← 학습지</a>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.0d</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.3a</span>
     <div class="hdr-space"></div>
   <div style="display:flex;align-items:center;gap:6px">
     <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
@@ -344,6 +344,13 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <label>문제 텍스트 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \(...\))</span></label>
             <textarea id="q-text" autocapitalize="off" autocorrect="off" spellcheck="false" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
             <div class="latex-preview" id="prev-text">미리보기</div>
+          </div>
+          <!-- 링크 URL -->
+          <div class="field" id="field-link" style="display:none">
+            <label>링크 표시 텍스트</label>
+            <input id="q-link-label" placeholder="예: GeoGebra 활동 열기" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
+            <label style="margin-top:8px;display:block">링크 URL</label>
+            <input id="q-link-url" placeholder="https://..." type="url" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
           </div>
           <!-- 이미지 첨부 -->
           <div class="field" id="field-image">
@@ -820,6 +827,9 @@ function showPanel(item){
     document.getElementById('q-raw-type').textContent = `저장된 유형: type="${item.type}"${item.answerType?', answerType="'+item.answerType+'"':''}`;
     document.getElementById('q-diff-sel').value = item.diff||1;
     document.getElementById('q-text').value = (item.text||'');
+    // 링크 타입 필드 로드
+    document.getElementById('q-link-label').value = item.linkLabel||'';
+    document.getElementById('q-link-url').value   = item.linkUrl||'';
     previewText('q-text','prev-text');
     // 이미지 URL 로드
     const imgUrl = item.imageUrl||'';
@@ -886,7 +896,7 @@ function setQType(type){
   } else if(type==='step3'){
     show('field-text'); show('field-image'); show('field-step3');
   } else if(type==='link'){
-    show('field-text');
+    show('field-link');
   } else {
     show('field-text'); show('field-image');
     if(type==='word_text') show('field-ans-text');
@@ -975,7 +985,13 @@ window.saveQuestion = function(){
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='link'){
-    toast('링크 유형은 편집기에서 수정할 수 없습니다'); return;
+    const linkLabel=document.getElementById('q-link-label').value.trim();
+    const linkUrl=document.getElementById('q-link-url').value.trim();
+    if(!linkUrl){ toast('URL을 입력하세요'); return; }
+    allItems[selectedQIdx]={...allItems[selectedQIdx], text:'', linkLabel:linkLabel||'링크 열기', linkUrl};
+    saveAllItems().then(()=>toast('저장됨')).catch(e=>toast('오류: '+e.message));
+    renderQList();
+    return;
   }
   if(type==='step3'){
     const isVocabS=currentWs.type==='vocab';

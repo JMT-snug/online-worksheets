@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4w">
+  <meta name="app-version" content="6.4x">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4w"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4x"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1486,6 +1486,7 @@ function qInput(v){
       const t=qTokens[qCursorIdx];
       if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"den",cursor:t.den.length};
       else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo",cursor:t.expo.length};
+      else if(t?.type==="sqrt") qEditPart={idx:qCursorIdx,part:"inner",cursor:t.inner.length};
     }
     qRender(); return;
   }
@@ -1502,6 +1503,7 @@ function qInput(v){
       const t=qTokens[qCursorIdx];
       if(t?.type==="frac") qEditPart={idx:qCursorIdx,part:"num",cursor:0};
       else if(t?.type==="exp") qEditPart={idx:qCursorIdx,part:"expo",cursor:0};
+      else if(t?.type==="sqrt") qEditPart={idx:qCursorIdx,part:"inner",cursor:0};
       else qCursorIdx++;
     }
     qRender(); return;

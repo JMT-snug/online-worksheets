@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4k">
+  <meta name="app-version" content="6.4l">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4k"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -118,10 +118,13 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .btn-back:hover{background:var(--rule)}
 .quiz-ws-title{font-weight:700;font-size:15px;flex:1}
 .q-progress-strip{display:flex;gap:3px;margin-bottom:14px}
-.q-dot{flex:1;min-height:26px;border-radius:6px;background:var(--rule);transition:background .3s,color .3s;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:transparent;user-select:none}
-.q-dot.current{color:var(--accent)!important}
-.q-dot.done{color:#15803d!important}
-.q-dot.locked{color:#94a3b8}
+.q-dot{flex:1;min-height:26px;border-radius:6px;background:var(--rule);transition:background .3s,color .3s;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#94a3b8;user-select:none}
+.q-dot.current{background:var(--accent);color:#fff!important}
+.q-dot.done{background:#16a34a;color:#fff!important}
+.q-dot.locked{background:var(--rule);color:#94a3b8}
+.q-dot.link-dot{background:#dbeafe;color:#2563eb;font-size:13px}
+.q-dot.link-dot.current{background:var(--accent);color:#fff!important}
+.q-dot.link-dot.done{background:#16a34a;color:#fff!important}
 .q-dot.done{background:var(--green)}.q-dot.current{background:var(--accent)}
 /* 좌우 분할 */
 .quiz-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
@@ -1241,13 +1244,13 @@ function buildStrip() {
   const s=document.getElementById("q-progress-strip"); s.innerHTML="";
   let realN=0;
   curWS.questions.forEach((q,i)=>{
-    if(q.type==="link") return; // 링크 문항은 진도 표시 제외
-    realN++;
+    const isLinkQ=q.type==="link";
+    if(!isLinkQ) realN++;
     const d=document.createElement("div");
-    d.className="q-dot"+(i===0?" current":" locked");
+    d.className="q-dot"+(isLinkQ?" link-dot":"")+(i===0?" current":" locked");
     d.id="qdot-"+i;
-    d.title=`${realN}번 문제로 이동`;
-    d.textContent=realN;
+    d.title=isLinkQ?`🔗 링크 문항`:`${realN}번 문제로 이동`;
+    d.textContent=isLinkQ?"🔗":realN;
     d.onclick=()=>goToQ(i);
     s.appendChild(d);
   });

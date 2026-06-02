@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5c">
+<meta name="app-version" content="edit-v1.5d">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -212,16 +212,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
   <!-- 헤더 -->
   <header class="hdr">
-    <!-- 왼쪽: 유지보수 버튼 3개 -->
-    <div style="display:flex;gap:4px;flex-shrink:0">
-      <button onclick="cleanupTempWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="ws-temp-* 임시 문서 정리">🚨 임시 정리</button>
-      <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="학습지 ID 순번 정리">🔧 학습지 ID</button>
-      <button onclick="migrateQuestionIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="문항 ID 순번 정리">🔧 문항 ID</button>
-    </div>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5c</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5d</span>
     <div class="hdr-space"></div>
-    <!-- 오른쪽: 액션 버튼 -->
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
     <button class="hdr-btn" id="btn-lock"

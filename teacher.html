@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.5i">
+<meta name="app-version" content="t3.7a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -205,7 +205,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, doc, getDoc, setDoc, deleteDoc }
+import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, deleteDoc, doc, getDoc, setDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.5i";
+const T_VERSION = "t3.7a";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -795,6 +795,19 @@ let _wsFilter="", _wsSortBy="class";
 window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
 window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
+window.deleteStudentRec=async function(wsId, uid){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const rec=allData[uid]?.[wsId];
+  const name=rec?.studentName||uid;
+  if(!confirm(`⚠️ "${name}"의 "${ws?.title||wsId}" 학습 기록을 삭제하시겠습니까?`)) return;
+  try{
+    await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+    if(allData[uid]) delete allData[uid][wsId];
+    renderWS(wsId); // 현재 뷰 새로고침
+    toast?.('삭제 완료');
+  }catch(e){ alert('삭제 실패: '+e.message); }
+};
+
 window.clearWSRecords=async function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   const title=ws?.title||wsId;
@@ -845,6 +858,11 @@ window.renderWSTable=function(wsId){
 
   // 완료 행
   // perQuestion 정오답 셀 렌더 (완료/진행 중 공통)
+  // 문항 ID → 순번 매핑 (Q1, Q2, Q3...)
+  const qidToNum={};
+  (ws.questions||[]).forEach((q,i)=>{ qidToNum[q.id]=i+1; });
+  const fmtQ=qid=>{ const n=qidToNum[qid]; return n?`Q${n}`:(fmtQid(qid)||qid); };
+
   function renderPerQ(r){
     if(!r.perQuestion) return "";
     window._qd=window._qd||{};
@@ -855,12 +873,12 @@ window.renderWSTable=function(wsId){
       const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
       const unanswered = (v.correct===false) && wc===0 && att===0;
       let col, mark, ttl;
-      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
+      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQ(qid)}: 미응답`; }
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
-      else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
+      else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQ(qid)}: 오답 ${wc}회`; }
       const dkey=r.uid+"_"+qid;
       window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
-      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
+      return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQ(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
   }
@@ -882,6 +900,7 @@ window.renderWSTable=function(wsId){
       <td>${isVoca?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
+      <td><button onclick="deleteStudentRec('${wsId}','${r.uid}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:600">🗑 삭제</button></td>
     </tr>`;
   }).join("");
 
@@ -1001,7 +1020,7 @@ function renderWS(wsId){
       </div>
     </div>
     <table><thead><tr>
-      <th>학생</th><th>이메일</th><th>학급</th><th>정답률/진행률</th><th>오답</th><th>문항별 오답</th><th>상태</th>
+      <th>학생</th><th>이메일</th><th>학급</th><th>정답률/진행률</th><th>오답</th><th>문항별 오답</th><th>상태</th><th></th>
     </tr></thead><tbody id="ws-tbody"></tbody></table>
   </div>`;
   const qStats={};

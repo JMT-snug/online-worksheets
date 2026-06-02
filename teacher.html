@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.8b">
+<meta name="app-version" content="3.8c">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.8b";
+const T_VERSION = "t3.8c";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -798,10 +798,82 @@ let _wsFilter="", _wsSortBy="class";
 window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
 window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
-// ── 문항 ID 마이그레이션 (타임스탬프 → q01, q02...) ──
+window.migrateQuestionIds=async function(){
+  const toMigrate=WORKSHEETS.filter(ws=>(ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)));
+  if(!toMigrate.length){ toast('마이그레이션할 문항이 없습니다.'); return; }
+  const preview=toMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
+  if(!confirm(`문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}`)) return;
+  let wsOk=0, recOk=0, errors=[];
+  for(const ws of toMigrate){
+    try{
+      const idMap={};
+      ws.questions.forEach((q,i)=>{ idMap[q.id]=`q${String(i+1).padStart(2,'0')}`; });
+      const newQs=ws.questions.map(q=>({...q,id:idMap[q.id]||q.id}));
+      await setDoc(doc(db,'curriculum',ws.id),{questions:newQs},{merge:true});
+      ws.questions=newQs; wsOk++;
+      for(const [uid,d] of Object.entries(allData)){
+        const rec=d[ws.id]; if(!rec?.perQuestion) continue;
+        const newPQ={};
+        for(const [oid,val] of Object.entries(rec.perQuestion))
+          newPQ[idMap[oid]||oid]=val;
+        await setDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ},{merge:true});
+        rec.perQuestion=newPQ; recOk++;
+      }
+    }catch(e){ errors.push(e.message); }
+  }
+  alert(`✅ 완료\n학습지: ${wsOk}개, 학생기록: ${recOk}개`+(errors.length?`\n⚠️ ${errors.join('\n')}`:''));
+  navigate(selView);
+};
 
-
-;
+window.migrateWsIds=async function(){
+  const byUnit={};
+  WORKSHEETS.forEach(ws=>{ (byUnit[ws.unitId||'etc']=byUnit[ws.unitId||'etc']||[]).push(ws); });
+  const changes=[];
+  for(const [unitId,list] of Object.entries(byUnit)){
+    list.sort((a,b)=>(a.order??99)-(b.order??99));
+    list.forEach((ws,i)=>{
+      const newId=`ws-${unitId}-${String(i+1).padStart(2,'0')}`;
+      if(ws.id!==newId) changes.push({ws,newId});
+    });
+  }
+  if(!changes.length){ toast('모든 학습지 ID가 순서와 일치합니다.'); return; }
+  const preview=changes.map(({ws,newId})=>`• ${ws.id} → ${newId}`).join('\n');
+  if(!confirm(`학습지 ID를 표시 순서 기준으로 변환합니다:\n\n${preview}`)) return;
+  const tempPfx='ws-tmp-'+Date.now()+'-';
+  let ok=0, errors=[];
+  for(const {ws,newId} of changes){
+    try{
+      const tmpId=tempPfx+ws.id;
+      const {_tmpId:_,...wsData}=ws;
+      await setDoc(doc(db,'curriculum',tmpId),{...wsData,id:tmpId});
+      await deleteDoc(doc(db,'curriculum',ws.id));
+      for(const [uid,d] of Object.entries(allData)){
+        const rec=d[ws.id]; if(!rec) continue;
+        await setDoc(doc(db,'records',uid,'worksheets',tmpId),rec);
+        await deleteDoc(doc(db,'records',uid,'worksheets',ws.id));
+        d[tmpId]=rec; delete d[ws.id];
+      }
+      ws._tmpId=tmpId;
+    }catch(e){ errors.push(`1단계 ${ws.id}: ${e.message}`); }
+  }
+  for(const {ws,newId} of changes){
+    if(!ws._tmpId) continue;
+    try{
+      const {_tmpId:_,...wsData}=ws;
+      await setDoc(doc(db,'curriculum',newId),{...wsData,id:newId});
+      await deleteDoc(doc(db,'curriculum',ws._tmpId));
+      for(const [uid,d] of Object.entries(allData)){
+        const rec=d[ws._tmpId]; if(!rec) continue;
+        await setDoc(doc(db,'records',uid,'worksheets',newId),rec);
+        await deleteDoc(doc(db,'records',uid,'worksheets',ws._tmpId));
+        d[newId]=rec; delete d[ws._tmpId];
+      }
+      ws.id=newId; delete ws._tmpId; ok++;
+    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
+  }
+  alert(`✅ 완료: ${ok}개 변환`+(errors.length?`\n⚠️ ${errors.join('\n')}`:''));
+  navigate('overview');
+};
 
 window.deleteStudentRec=async function(wsId, uid){
   const ws=WORKSHEETS.find(w=>w.id===wsId);

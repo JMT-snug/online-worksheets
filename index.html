@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4u">
+  <meta name="app-version" content="6.4w">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4u"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4w"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1525,7 +1525,6 @@ function qInput(v){
   } else if(v==="SQRT"){
     qTokens.splice(qCursorIdx,0,{type:'sqrt',inner:''});
     qEditPart={idx:qCursorIdx,part:'inner',cursor:0};
-    console.log('[SQRT] qEditPart=',JSON.stringify(qEditPart),'qCursorIdx=',qCursorIdx+1,'token=',qTokens[qCursorIdx]);
     qCursorIdx++; qRender(); return;
   } else if(v==="FRAC"||v==="/"){
     if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==="num"){t.num+=v;} qRender(); return; }
@@ -1571,18 +1570,13 @@ function qInput(v){
     if(qEditPart){
       const t=qTokens[qEditPart.idx];
       if(t){
-        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":"expo";
-        const cur=qEditPart.cursor??t[key].length;
-        t[key]=t[key].slice(0,cur)+v+t[key].slice(cur);
-        qEditPart.cursor=cur+1;
-      }
-    } else if(qEditPart && ['num','den','expo','inner'].includes(qEditPart.part)){
-      const t=qTokens[qEditPart.idx];
-      console.log('[inner edit] v=',v,'part=',qEditPart.part,'t=',t,'t[part]=',t?.[qEditPart.part]);
-      if(t){
-        const k=qEditPart.part; const cur=qEditPart.cursor??t[k].length;
-        t[k]=t[k].slice(0,cur)+v+t[k].slice(cur); qEditPart.cursor=cur+1;
-        console.log('[inner edit] 결과 t[k]=',t[k]);
+        // inner(sqrt), num(frac), den(frac), expo(exp) 모두 처리
+        const key=qEditPart.part==="num"?"num":qEditPart.part==="den"?"den":qEditPart.part==="inner"?"inner":"expo";
+        if(t[key]!==undefined){
+          const cur=qEditPart.cursor??t[key].length;
+          t[key]=t[key].slice(0,cur)+v+t[key].slice(cur);
+          qEditPart.cursor=cur+1;
+        }
       }
     } else {
       qTokens.splice(qCursorIdx,0,{type:"char",val:v}); qCursorIdx++;

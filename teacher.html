@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.8c";
+const VERSION = "3.8c";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -800,7 +800,7 @@ window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
 window.migrateQuestionIds=async function(){
   const toMigrate=WORKSHEETS.filter(ws=>(ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)));
-  if(!toMigrate.length){ toast('마이그레이션할 문항이 없습니다.'); return; }
+  if(!toMigrate.length){ alert('마이그레이션할 문항이 없습니다.'); return; }
   const preview=toMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
   if(!confirm(`문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}`)) return;
   let wsOk=0, recOk=0, errors=[];
@@ -836,7 +836,7 @@ window.migrateWsIds=async function(){
       if(ws.id!==newId) changes.push({ws,newId});
     });
   }
-  if(!changes.length){ toast('모든 학습지 ID가 순서와 일치합니다.'); return; }
+  if(!changes.length){ alert('모든 학습지 ID가 순서와 일치합니다.'); return; }
   const preview=changes.map(({ws,newId})=>`• ${ws.id} → ${newId}`).join('\n');
   if(!confirm(`학습지 ID를 표시 순서 기준으로 변환합니다:\n\n${preview}`)) return;
   const tempPfx='ws-tmp-'+Date.now()+'-';
@@ -1319,7 +1319,7 @@ window.showQDetail=function(key){
 window.loadAll=loadAll;
 document.addEventListener('DOMContentLoaded',()=>{
   const el=document.getElementById('t-ver');
-  if(el) el.textContent='v'+T_VERSION;
+  if(el) el.textContent='v'+VERSION;
 });
 </script>
 </body>

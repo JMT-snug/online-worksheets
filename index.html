@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4l">
+  <meta name="app-version" content="6.4n">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4n"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -509,16 +509,19 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <span class="color-swatch" data-color="#1d4ed8" style="background:#1d4ed8"></span>
           <span class="color-swatch" data-color="#15803d" style="background:#15803d"></span>
           <span class="color-swatch" data-color="#b91c1c" style="background:#b91c1c"></span>
-          <div class="divider-v"></div>
-          <input type="range" class="stroke-slider" id="stroke-size" min="1" max="18" value="3">
+          <span class="color-swatch" data-color="#7c3aed" style="background:#7c3aed"></span>
+          <span class="color-swatch" data-color="#d97706" style="background:#d97706"></span>
+          <span class="color-swatch" data-color="#ec4899" style="background:#ec4899"></span>
           <div class="divider-v"></div>
           <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
           <button class="btn-back" onclick="undoCanvas()" style="font-size:12px" title="한 획 되돌리기">↩ 실행취소</button>
           <div class="divider-v"></div>
-          <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
-          <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;white-space:nowrap"></span>
-          <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:10px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">↩</button>
-          <button class="btn-back" id="cv-next-btn" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
+          <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto">
+            <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
+            <span id="cv-nav-label" style="font-size:10px;color:var(--accent);font-weight:600;display:none;white-space:nowrap"></span>
+            <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:10px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">↩</button>
+            <button class="btn-back" id="cv-next-btn" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
+          </div>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -1297,7 +1300,7 @@ function renderQuestion() {
   const qHeadHtml=`
     <div class="problem-card">
       <div class="q-num">
-        문제 ${curQIdx+1} / ${len}
+        ${isLink?"🔗 링크":`문제 ${curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length+1} / ${curWS._realQCount||curWS.questions.filter(q=>q.type!=="link").length}`}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
         ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
@@ -2505,7 +2508,7 @@ function setCtx(){
   if(eraser){
     ctx.globalCompositeOperation="destination-out";
     ctx.strokeStyle="rgba(0,0,0,1)";
-    ctx.lineWidth=penSize*5;
+    ctx.lineWidth=penSize*3;
   } else {
     ctx.globalCompositeOperation="source-over";
     ctx.strokeStyle=penColor;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5a">
+<meta name="app-version" content="edit-v1.5b">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -215,11 +215,12 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <!-- 왼쪽: 유지보수 버튼 3개 -->
     <div style="display:flex;gap:4px;flex-shrink:0">
       <button onclick="cleanupTempWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="ws-temp-* 임시 문서 정리">🚨 임시 정리</button>
+      <button onclick="deleteEtcWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="단원 없는 ws-etc-* 학습지 삭제">🗑 etc 삭제</button>
       <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="학습지 ID 순번 정리">🔧 학습지 ID</button>
       <button onclick="migrateQuestionIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer;font-size:11px;padding:4px 8px" title="문항 ID 순번 정리">🔧 문항 ID</button>
     </div>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5a</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5b</span>
     <div class="hdr-space"></div>
     <!-- 오른쪽: 액션 버튼 -->
     <button class="hdr-btn" id="btn-delete-ws"
@@ -1203,6 +1204,23 @@ document.getElementById('btn-delete-ws').onclick = async () => {
 document.getElementById('btn-publish').onclick = () => saveToFirestore('published');
 
 // ── 학습지 ID 마이그레이션 (타임스탬프 → 순번) ──
+window.deleteEtcWs=async function(){
+  const etcList=worksheets.filter(w=>w.id.startsWith('ws-etc-'));
+  if(!etcList.length){ toast('ws-etc-* 학습지가 없습니다.'); return; }
+  const preview=etcList.map(w=>`• ${w.id} (${w.title||'제목없음'}, 문항 ${(w.questions||[]).length}개)`).join('\n');
+  if(!confirm(`다음 ${etcList.length}개 학습지를 삭제합니다:\n\n${preview}\n\n⚠️ 학생 기록도 함께 삭제됩니다.`)) return;
+  let ok=0, errors=[];
+  for(const ws of etcList){
+    try{
+      await deleteDoc(doc(db,'curriculum',ws.id));
+      ok++;
+    }catch(e){ errors.push(`${ws.id}: ${e.message}`); }
+  }
+  worksheets=worksheets.filter(w=>!w.id.startsWith('ws-etc-'));
+  renderSidebar();
+  alert(`✅ ${ok}개 삭제 완료`+(errors.length?`\n⚠️ 오류:\n${errors.join('\n')}`:''));
+};
+
 window.cleanupTempWs=async function(){
   // ws-temp-* 문서 탐색
   const allSnap=await getDocs(collection(db,'curriculum'));

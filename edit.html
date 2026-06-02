@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.4b">
+<meta name="app-version" content="edit-v1.4c">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -212,10 +212,11 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
   <!-- 헤더 -->
   <header class="hdr">
+    <button onclick="cleanupTempWs()" class="hdr-btn" style="background:#dc2626;color:#fff;border:none;cursor:pointer" title="ws-temp-* 임시 문서 정리">🚨 임시 정리</button>
     <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer" title="타임스탬프 학습지 ID를 순번으로 정리">🔧 ID 정리</button>
     <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#334155;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px">← 학습지</a>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.4b</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.4c</span>
     <div class="hdr-space"></div>
   <div style="display:flex;align-items:center;gap:6px">
     <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
@@ -1205,6 +1206,90 @@ document.getElementById('btn-delete-ws').onclick = async () => {
 document.getElementById('btn-publish').onclick = () => saveToFirestore('published');
 
 // ── 학습지 ID 마이그레이션 (타임스탬프 → 순번) ──
+window.cleanupTempWs=async function(){
+  // ws-temp-* 문서 탐색
+  const allSnap=await getDocs(collection(db,'curriculum'));
+  const tempDocs=allSnap.docs.filter(d=>d.id.startsWith('ws-temp-'));
+  if(!tempDocs.length){ toast('정리할 임시 문서가 없습니다.'); return; }
+
+  const preview=tempDocs.map(d=>`• ${d.id}`).join('\n');
+  if(!confirm(`임시 문서 ${tempDocs.length}개를 발견했습니다:\n\n${preview}\n\n처리 방법:\n- 최종 ID가 이미 있으면 임시 삭제\n- 없으면 임시→최종으로 완료\n\n계속할까요?`)) return;
+
+  const statusEl=document.createElement('div');
+  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:300px';
+  document.body.appendChild(statusEl);
+  const log=msg=>{ statusEl.textContent=msg; };
+
+  // 현재 curriculum ID 목록
+  const existingIds=new Set(allSnap.docs.map(d=>d.id));
+  let cleaned=0, errors=[];
+
+  for(const td of tempDocs){
+    const tmpId=td.id;
+    const data=td.data();
+    const originalWsId=data.id; // 임시 문서 안의 원래 id 필드
+
+    // 이 임시 문서에 해당하는 최종 ID 찾기
+    // 같은 unitId + 같은 title을 가진 최종 문서가 있는지 확인
+    const finalExists=allSnap.docs.some(d=>
+      !d.id.startsWith('ws-temp-') &&
+      d.data().title===data.title &&
+      d.data().unitId===data.unitId
+    );
+
+    log(finalExists ? `삭제: ${tmpId}` : `완료: ${tmpId} → 최종`);
+    try{
+      if(finalExists){
+        // 최종 문서가 이미 있음 → 임시 삭제, 학생 records도 정리
+        const recSnap=await getDocs(collectionGroup(db,'worksheets'));
+        for(const d of recSnap.docs){
+          if(d.id===tmpId && d.ref.path.startsWith('records/')){
+            const uid=d.ref.parent.parent.id;
+            // 최종 ID 찾기
+            const finalDoc=allSnap.docs.find(d2=>
+              !d2.id.startsWith('ws-temp-') &&
+              d2.data().title===data.title &&
+              d2.data().unitId===data.unitId
+            );
+            if(finalDoc){
+              // 기존 최종 기록과 병합 (없으면 이전)
+              const existRec=await getDoc(doc(db,'records',uid,'worksheets',finalDoc.id));
+              if(!existRec.exists()){
+                await setDoc(doc(db,'records',uid,'worksheets',finalDoc.id),d.data());
+              }
+              await deleteDoc(d.ref);
+            }
+          }
+        }
+        await deleteDoc(doc(db,'curriculum',tmpId));
+      } else {
+        // 최종 문서 없음 → 임시를 최종으로 완료
+        const unitId=data.unitId||'etc';
+        const siblings=worksheets.filter(w=>w.unitId===unitId);
+        let seq=siblings.length+1;
+        let newId=`ws-${unitId}-${String(seq).padStart(2,'0')}`;
+        while(existingIds.has(newId)||worksheets.find(w=>w.id===newId)){ seq++; newId=`ws-${unitId}-${String(seq).padStart(2,'0')}`; }
+        const {_tmpId:_t,...wsClean}=data;
+        await setDoc(doc(db,'curriculum',newId),{...wsClean,id:newId});
+        // 학생 records 이전
+        const recSnap=await getDocs(collectionGroup(db,'worksheets'));
+        for(const d of recSnap.docs){
+          if(d.id===tmpId && d.ref.path.startsWith('records/')){
+            const uid=d.ref.parent.parent.id;
+            await setDoc(doc(db,'records',uid,'worksheets',newId),d.data());
+            await deleteDoc(d.ref);
+          }
+        }
+        await deleteDoc(doc(db,'curriculum',tmpId));
+        existingIds.add(newId);
+      }
+      cleaned++;
+    }catch(e){ errors.push(`${tmpId}: ${e.message}`); }
+  }
+  statusEl.remove();
+  window.location.reload(); // 전체 새로고침
+};
+
 window.migrateWsIds=async function(){
   // 단원별로 order 순 정렬 후 ws-unitId-01, 02... 재번호
   const byUnit={};

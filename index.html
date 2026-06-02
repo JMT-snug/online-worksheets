@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.4g">
+  <meta name="app-version" content="6.4h">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.4g"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.4h"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2349,7 +2349,7 @@ async function finishQuiz(){
 window.finishQuiz=finishQuiz;
 /* 모든 문항(링크 제외) 답안 완료 여부 */
 function allAnswered(){
-  return curWS.questions.every((q,i)=>q.type==="link"||answered[i]);
+  return answered.every(Boolean); // link 포함 전체 완료 체크
 }
 window.allAnswered=allAnswered;
 
@@ -2930,6 +2930,7 @@ function cvPos(e){
     :[(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
 }
 function cvStart(e){
+  undoStack.push(ctx.getImageData(0,0,canvas.width,canvas.height));
   e.preventDefault(); cvDrawing=true;
   [cvLX,cvLY]=cvPos(e);
   setCtx();

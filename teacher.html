@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="t3.7e">
+<meta name="app-version" content="t3.8a">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const T_VERSION = "t3.7e";
+const T_VERSION = "t3.8a";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -370,7 +370,6 @@ function buildSidebar(){
     <div class="sb-item ${selView==='students'||selView.startsWith('stu:')?'active':''}" data-view="students">👤 학생별 조회</div>
     <div class="sb-item ${selView==='classmatrix'?'active':''}" data-view="classmatrix">📊 반별 비교</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
-    <div class="sb-item" onclick="migrateQuestionIds()" style="color:#f59e0b;font-size:12px">🔧 문항 ID 정리</div>
     <div class="sb-section" style="margin-top:8px">학습지</div>`;
   [1,2,3].forEach(grade=>{
     const gc=GCOL[grade];
@@ -799,53 +798,7 @@ window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 // ── 문항 ID 마이그레이션 (타임스탬프 → q01, q02...) ──
 
 
-window.migrateQuestionIds=async function(){
-  const wsToMigrate=WORKSHEETS.filter(ws=>{
-    return (ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)); // 긴 숫자 ID만
-  });
-  if(!wsToMigrate.length){ alert('마이그레이션할 문항이 없습니다.\n(이미 완료됐거나 q01 형식 사용 중)'); return; }
-  const preview=wsToMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
-  if(!confirm(`다음 학습지의 문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}\n\n계속하시겠습니까?`)) return;
-
-  const statusEl=document.createElement('div');
-  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:260px';
-  document.body.appendChild(statusEl);
-  const log=msg=>{ statusEl.textContent=msg; console.log('[migration]',msg); };
-
-  let wsOk=0, recOk=0, errors=[];
-  for(const ws of wsToMigrate){
-    log(`처리 중: ${ws.title}...`);
-    try{
-      // 1. 구 ID → 신 ID 매핑 (q01, q02...)
-      const idMap={};
-      ws.questions.forEach((q,i)=>{
-        idMap[q.id]=`q${String(i+1).padStart(2,'0')}`;
-      });
-      // 2. curriculum 문서 업데이트
-      const newQs=ws.questions.map(q=>({...q,id:idMap[q.id]||q.id}));
-      await setDoc(doc(db,'curriculum',ws.id),{questions:newQs},{merge:true});
-      ws.questions=newQs; // 로컬도 갱신
-      wsOk++;
-      // 3. 이 학습지가 있는 모든 학생 records 업데이트
-      const students=Object.entries(allData).filter(([uid,d])=>d[ws.id]?.perQuestion);
-      for(const [uid,d] of students){
-        const oldPQ=d[ws.id].perQuestion;
-        const newPQ={};
-        for(const [oid,val] of Object.entries(oldPQ)){
-          newPQ[idMap[oid]||oid]=val; // 매핑 있으면 새 ID, 없으면 유지
-        }
-        await setDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ},{merge:true});
-        if(allData[uid]?.[ws.id]) allData[uid][ws.id].perQuestion=newPQ; // 로컬 갱신
-        recOk++;
-      }
-    }catch(e){ errors.push(`${ws.title}: ${e.message}`); }
-  }
-  statusEl.remove();
-  const msg=`✅ 완료\n학습지: ${wsOk}개 변환\n학생 기록: ${recOk}개 업데이트`
-           +(errors.length?`\n\n⚠️ 오류:\n${errors.join('\n')}`:'');
-  alert(msg);
-  navigate(selView); // 현재 뷰 새로고침
-};
+;
 
 window.deleteStudentRec=async function(wsId, uid){
   const ws=WORKSHEETS.find(w=>w.id===wsId);

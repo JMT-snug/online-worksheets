@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.4a">
+<meta name="app-version" content="edit-v1.4b">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -215,7 +215,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
     <button onclick="migrateWsIds()" class="hdr-btn" style="background:#f59e0b;color:#fff;border:none;cursor:pointer" title="타임스탬프 학습지 ID를 순번으로 정리">🔧 ID 정리</button>
     <a href="index.html" class="hdr-btn" style="text-decoration:none;background:#334155;color:#f1f5f9;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:5px">← 학습지</a>
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.4a</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.4b</span>
     <div class="hdr-space"></div>
   <div style="display:flex;align-items:center;gap:6px">
     <span style="font-size:11px;color:#64748b;white-space:nowrap">Drive 폴더 ID</span>
@@ -1238,7 +1238,8 @@ window.migrateWsIds=async function(){
     log(`임시 이동: ${ws.id}...`);
     try{
       const tmpId=tempPrefix+ws.id;
-      await setDoc(doc(db,'curriculum',tmpId),{...ws,id:tmpId});
+      const {_tmpId:_t2,...wsTmp}=ws;
+      await setDoc(doc(db,'curriculum',tmpId),{...wsTmp,id:tmpId});
       await deleteDoc(doc(db,'curriculum',ws.id));
       // 학생 records도 임시로
       const recSnap=await getDocs(collectionGroup(db,'worksheets'));
@@ -1258,7 +1259,8 @@ window.migrateWsIds=async function(){
     if(!ws._tmpId) continue;
     log(`최종 이동: ${newId}...`);
     try{
-      await setDoc(doc(db,'curriculum',newId),{...ws,id:newId,_tmpId:undefined});
+      const {_tmpId:_t, ...wsClean}=ws;
+      await setDoc(doc(db,'curriculum',newId),{...wsClean,id:newId});
       await deleteDoc(doc(db,'curriculum',ws._tmpId));
       const recSnap2=await getDocs(collectionGroup(db,'worksheets'));
       for(const d of recSnap2.docs){

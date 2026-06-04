@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8d">
+<meta name="app-version" content="3.8e">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8d";
+const VERSION = "3.8e";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -829,23 +829,28 @@ window.repairPerQuestion=async function(){
   let ok=0, skipped=0, errors=[];
   for(const {uid,wsId,orphanKeys,missingKeys,rec} of toRepair){
     try{
-      // 고아 키 수 = 미싱 키 수일 때만 순서 매핑 가능
-      if(orphanKeys.length!==missingKeys.length){ skipped++; continue; }
-      // 타임스탬프 기준 정렬 (생성 순서)
-      orphanKeys.sort();
-      // 커리큘럼 문항 순서 기준 정렬
-      const ws=WORKSHEETS.find(w=>w.id===wsId);
-      const orderedMissing=missingKeys.sort((a,b)=>{
-        const ia=(ws?.questions||[]).findIndex(q=>q.id===a);
-        const ib=(ws?.questions||[]).findIndex(q=>q.id===b);
-        return ia-ib;
-      });
-      // 매핑 적용
       const newPQ={...rec.perQuestion};
-      orphanKeys.forEach((old,i)=>{
-        newPQ[orderedMissing[i]]=newPQ[old];
-        delete newPQ[old];
-      });
+      const ws=WORKSHEETS.find(w=>w.id===wsId);
+
+      if(missingKeys.length===0){
+        // 신키가 이미 있음 → 구키만 삭제
+        orphanKeys.forEach(k=>delete newPQ[k]);
+      } else if(orphanKeys.length===missingKeys.length){
+        // 구키↔신키 1:1 매핑 (타임스탬프 순 → 문항 순)
+        orphanKeys.sort();
+        const orderedMissing=missingKeys.sort((a,b)=>{
+          const ia=(ws?.questions||[]).findIndex(q=>q.id===a);
+          const ib=(ws?.questions||[]).findIndex(q=>q.id===b);
+          return ia-ib;
+        });
+        orphanKeys.forEach((old,i)=>{
+          newPQ[orderedMissing[i]]=newPQ[old];
+          delete newPQ[old];
+        });
+      } else {
+        // 그래도 불일치면 건너뜀
+        skipped++; continue;
+      }
       await setDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:newPQ},{merge:true});
       rec.perQuestion=newPQ; ok++;
     }catch(e){ errors.push(`${uid}/${wsId}: ${e.message}`); }

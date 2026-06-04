@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8c">
+<meta name="app-version" content="3.8d">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8c";
+const VERSION = "3.8d";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -373,6 +373,7 @@ function buildSidebar(){
     <div style="border-top:1px solid var(--rule);margin:8px 0 4px"></div>
     <div class="sb-item" onclick="migrateWsIds()" style="color:#f59e0b;font-size:12px">🔧 학습지 ID 정리</div>
     <div class="sb-item" onclick="migrateQuestionIds()" style="color:#f59e0b;font-size:12px">🔧 문항 ID 정리</div>
+    <div class="sb-item" onclick="repairPerQuestion()" style="color:#dc2626;font-size:12px">🔨 기록 ID 복구</div>
     <div class="sb-section" style="margin-top:8px">학습지</div>`;
   [1,2,3].forEach(grade=>{
     const gc=GCOL[grade];
@@ -798,6 +799,60 @@ let _wsFilter="", _wsSortBy="class";
 window.setWSFilter=function(v,wsId){_wsFilter=v; window.renderWSTable(wsId);};
 window.setWSSort  =function(v,wsId){_wsSortBy=v; window.renderWSTable(wsId);};
 
+window.repairPerQuestion=async function(){
+  // 커리큘럼 유효 문항 ID 목록 구축
+  const validIds={};  // wsId → Set of valid qIds
+  WORKSHEETS.forEach(ws=>{
+    validIds[ws.id]=new Set((ws.questions||[]).map(q=>q.id));
+  });
+
+  // 학생 기록에서 고아 키(orphan) 탐색
+  const toRepair=[];
+  for(const [uid,d] of Object.entries(allData)){
+    for(const [wsId,rec] of Object.entries(d)){
+      if(!rec?.perQuestion) continue;
+      const valid=validIds[wsId]; if(!valid) continue;
+      const orphanKeys=Object.keys(rec.perQuestion).filter(k=>!valid.has(k));
+      if(!orphanKeys.length) continue;
+      // 커리큘럼에 있지만 학생 기록에 없는 키
+      const missingKeys=[...valid].filter(k=>!rec.perQuestion[k]);
+      toRepair.push({uid,wsId,orphanKeys,missingKeys,rec});
+    }
+  }
+
+  if(!toRepair.length){ alert('복구할 기록이 없습니다.\n모든 학생 기록의 문항 ID가 커리큘럼과 일치합니다.'); return; }
+
+  const preview=toRepair.slice(0,5).map(({uid,wsId,orphanKeys})=>
+    `• ${uid.split('@')[0]} / ${wsId}: 고아키 ${orphanKeys.length}개`).join('\n');
+  if(!confirm(`문항 ID 불일치 기록 ${toRepair.length}건 발견:\n\n${preview}\n${toRepair.length>5?`...외 ${toRepair.length-5}건`:''}\n\n고아 키를 순서에 맞는 커리큘럼 ID로 매핑합니다.\n계속할까요?`)) return;
+
+  let ok=0, skipped=0, errors=[];
+  for(const {uid,wsId,orphanKeys,missingKeys,rec} of toRepair){
+    try{
+      // 고아 키 수 = 미싱 키 수일 때만 순서 매핑 가능
+      if(orphanKeys.length!==missingKeys.length){ skipped++; continue; }
+      // 타임스탬프 기준 정렬 (생성 순서)
+      orphanKeys.sort();
+      // 커리큘럼 문항 순서 기준 정렬
+      const ws=WORKSHEETS.find(w=>w.id===wsId);
+      const orderedMissing=missingKeys.sort((a,b)=>{
+        const ia=(ws?.questions||[]).findIndex(q=>q.id===a);
+        const ib=(ws?.questions||[]).findIndex(q=>q.id===b);
+        return ia-ib;
+      });
+      // 매핑 적용
+      const newPQ={...rec.perQuestion};
+      orphanKeys.forEach((old,i)=>{
+        newPQ[orderedMissing[i]]=newPQ[old];
+        delete newPQ[old];
+      });
+      await setDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:newPQ},{merge:true});
+      rec.perQuestion=newPQ; ok++;
+    }catch(e){ errors.push(`${uid}/${wsId}: ${e.message}`); }
+  }
+  alert(`✅ 복구 완료: ${ok}건\n건너뜀(키 수 불일치): ${skipped}건`+(errors.length?`\n⚠️ 오류:\n${errors.slice(0,3).join('\n')}`:''));
+  navigate(selView);
+};
 window.migrateQuestionIds=async function(){
   const toMigrate=WORKSHEETS.filter(ws=>(ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)));
   if(!toMigrate.length){ alert('마이그레이션할 문항이 없습니다.'); return; }

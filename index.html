@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5a">
+  <meta name="app-version" content="6.5b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5a"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5b"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -476,7 +476,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <button class="btn-back" id="btn-back">← 목록</button>
       <span class="quiz-ws-title" id="quiz-ws-title"></span>
       <div style="display:flex;gap:6px;margin-left:auto">
-        <button onclick="toggleHandedness()" id="btn-handedness" class="btn-back" style="font-size:11px;padding:5px 8px" title="왼손잡이 모드">🤚</button>
+        <button onclick="toggleHandedness()" id="btn-handedness" class="btn-back" style="font-size:11px;padding:5px 10px;white-space:nowrap" title="연습장 위치 변경">◀ 연습장 옮기기</button>
         <button class="btn-back" id="btn-prev-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(-1)">◀ 이전</button>
         <button class="btn-back" id="btn-next-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(1)">다음 ▶</button>
       </div>

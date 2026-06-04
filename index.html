@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5d">
+  <meta name="app-version" content="6.5e">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2170,6 +2170,7 @@ async function submitQAns(){
       function evExpr(s,x){
         try{
           let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
+            .replace(/\^/g,'**')  // ^ → ** (거듭제곱)
             .replace(/Math\.sqrt\(/g,'sqrt(')  // Math.sqrt → sqrt 통일
             .replace(/sqrt\(([^)]+)\)/g,(_,x)=>`((${x})**0.5)`); // sqrt(x) → x^0.5
           let prev;
@@ -2181,7 +2182,7 @@ async function submitQAns(){
             t=t.replace(/([a-z])([a-z])/g,'$1*$2');
           }while(prev!==t);
           t=t.replace(/[a-z]/g,`(${x})`); // x,a,b 등 모든 단문자 변수 대입
-          if(!/^[\d+\-*/().\/\s]+$/.test(t)) return NaN;
+          if(!/^[\d+\-*/().\/\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
           return Function('"use strict";return('+t+')')();
         }catch(e){return NaN;}
       }

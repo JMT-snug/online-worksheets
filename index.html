@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5b">
+  <meta name="app-version" content="6.5c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5b"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5c"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -2432,6 +2432,20 @@ function moveQ(dir){
   renderQuestion();
 }
 window.moveQ=moveQ;
+window.toggleHandedness=function(){
+  const left=document.getElementById('quiz-left-panel');
+  const right=document.getElementById('canvas-card');
+  if(!left||!right){ console.warn('패널 없음'); return; }
+  const parent=left.parentElement;
+  const btn=document.getElementById('btn-handedness');
+  if(parent.children[0]===left){
+    parent.insertBefore(right,left);
+    if(btn) btn.textContent='연습장 옮기기 ▶';
+  } else {
+    parent.insertBefore(left,right);
+    if(btn) btn.textContent='◀ 연습장 옮기기';
+  }
+};
 
 /* 이전/다음 버튼 활성 상태 업데이트 */
 function updateNavBtns(){

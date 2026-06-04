@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5c">
+  <meta name="app-version" content="6.5d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5c"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5d"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -506,14 +506,15 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
             </svg>
           </button>
           <div class="divider-v"></div>
-          <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917" title="검정"></span>
-          <span class="color-swatch" data-color="#dc2626" style="background:#dc2626" title="빨강"></span>
-          <span class="color-swatch" data-color="#ea580c" style="background:#ea580c" title="주황"></span>
-          <span class="color-swatch" data-color="#ca8a04" style="background:#ca8a04" title="노랑"></span>
-          <span class="color-swatch" data-color="#16a34a" style="background:#16a34a" title="초록"></span>
-          <span class="color-swatch" data-color="#2563eb" style="background:#2563eb" title="파랑"></span>
-          <span class="color-swatch" data-color="#4338ca" style="background:#4338ca" title="남색"></span>
-          <span class="color-swatch" data-color="#7c3aed" style="background:#7c3aed" title="보라"></span>
+                    <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917" title="검정"></span>
+          <span class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="빨강"></span>
+          <span class="color-swatch" data-color="#f97316" style="background:#f97316" title="주황"></span>
+          <span class="color-swatch" data-color="#eab308" style="background:#eab308" title="노랑"></span>
+          <span class="color-swatch" data-color="#22c55e" style="background:#22c55e" title="초록"></span>
+          <span class="color-swatch" data-color="#06b6d4" style="background:#06b6d4" title="하늘"></span>
+          <span class="color-swatch" data-color="#3b82f6" style="background:#3b82f6" title="파랑"></span>
+          <span class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="보라"></span>
+          <span class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="핑크"></span>
           <div class="divider-v"></div>
           <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
           <button class="btn-back" onclick="undoCanvas()" style="font-size:12px" title="한 획 되돌리기">↩ 실행취소</button>

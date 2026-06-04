@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8e">
+<meta name="app-version" content="3.8f">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8e";
+const VERSION = "3.8f";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -859,8 +859,12 @@ window.repairPerQuestion=async function(){
   navigate(selView);
 };
 window.migrateQuestionIds=async function(){
-  const toMigrate=WORKSHEETS.filter(ws=>(ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)));
-  if(!toMigrate.length){ alert('마이그레이션할 문항이 없습니다.'); return; }
+  // ID가 올바른 순번(q01,q02...)이 아닌 문항이 있는 학습지 탐색
+  const toMigrate=WORKSHEETS.filter(ws=>(ws.questions||[]).some((q,i)=>{
+    const expected=`q${String(i+1).padStart(2,'0')}`;
+    return q.id!==expected;
+  }));
+  if(!toMigrate.length){ alert('모든 문항 ID가 이미 올바른 순번입니다.'); return; }
   const preview=toMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
   if(!confirm(`문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}`)) return;
   let wsOk=0, recOk=0, errors=[];

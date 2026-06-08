@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8g">
+<meta name="app-version" content="3.8j">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8g";
+const VERSION = "3.8j";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1349,12 +1349,139 @@ window.closeModal=function(e){
     document.getElementById("img-modal").style.display="none";
 };
 
+
+
+let _tdUndoStack=[], _tdEraser=false;
+function initTeacherCanvas(canvas){
+  _tdUndoStack=[]; _tdEraser=false;
+  let drawing=false, lx=0, ly=0;
+  const ctx=canvas.getContext('2d');
+  ctx.strokeStyle='#dc2626'; ctx.lineWidth=2; ctx.lineCap='round';
+  const pos=e=>{
+    const r=canvas.getBoundingClientRect();
+    const scX=canvas.width/r.width, scY=canvas.height/r.height;
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    return [(cx-r.left)*scX,(cy-r.top)*scY];
+  };
+  const start=e=>{
+    e.preventDefault(); drawing=true;
+    _tdUndoStack.push(ctx.getImageData(0,0,canvas.width,canvas.height));
+    [lx,ly]=pos(e); ctx.beginPath(); ctx.moveTo(lx,ly);
+    if(_tdEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
+    else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#dc2626';}
+  };
+  const move=e=>{
+    if(!drawing) return; e.preventDefault();
+    const [x,y]=pos(e);
+    ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+  };
+  const end=()=>{ drawing=false; };
+  canvas.addEventListener('mousedown',start);
+  canvas.addEventListener('mousemove',move);
+  canvas.addEventListener('mouseup',end);
+  canvas.addEventListener('mouseleave',end);
+  canvas.addEventListener('touchstart',start,{passive:false});
+  canvas.addEventListener('touchmove',move,{passive:false});
+  canvas.addEventListener('touchend',end);
+
+  document.getElementById('td-pen-btn')?.addEventListener('click',()=>{
+    _tdEraser=false;
+    document.getElementById('td-pen-btn').style.background='#fee2e2';
+    document.getElementById('td-erase-btn').style.background='';
+  });
+  document.getElementById('td-erase-btn')?.addEventListener('click',()=>{
+    _tdEraser=true;
+    document.getElementById('td-erase-btn').style.background='#fee2e2';
+    document.getElementById('td-pen-btn').style.background='';
+  });
+}
+
+window.teacherDrawUndo=function(){
+  const c=document.getElementById('teacher-draw-canvas');
+  if(c&&_tdUndoStack.length) c.getContext('2d').putImageData(_tdUndoStack.pop(),0,0);
+};
+window.teacherDrawClear=function(){
+  const c=document.getElementById('teacher-draw-canvas');
+  if(!c) return;
+  _tdUndoStack.push(c.getContext('2d').getImageData(0,0,c.width,c.height));
+  c.getContext('2d').clearRect(0,0,c.width,c.height);
+};
+window.saveTeacherDrawing=async function(key){
+  const d=(window._qd||{})[key]; if(!d) return;
+  const canvas=document.getElementById('teacher-draw-canvas');
+  if(!canvas){ alert('캔버스를 찾을 수 없습니다'); return; }
+  const drawing=canvas.toDataURL('image/png');  // 투명 배경 유지
+  try{
+    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
+      [`perQuestion.${d.qid}.teacherDrawing`]: drawing,
+    });
+    d.v.teacherDrawing=drawing;
+    toast('교사 주석 저장됨');
+  }catch(e){ alert('저장 실패: '+e.message); }
+};
+
+window.saveGraphGrade=async function(key,correct){
+  const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
+  try{
+    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
+      [`perQuestion.${d.qid}.correct`]: correct,
+    });
+    d.v.correct=correct;
+    toast(`${d.studentName} ${d.qid.replace('q','Q')}번: ${correct?'⭕':'❌'} 저장`);
+    document.getElementById('qd-modal').style.display='none';
+    navigate(selView);
+  }catch(e){ alert('저장 실패: '+e.message); }
+};
+
+window.saveGraphFeedback=async function(key){
+  const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
+  const fb=document.getElementById('graph-feedback-input').value.trim();
+  try{
+    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
+      [`perQuestion.${d.qid}.feedback`]: fb,
+    });
+    d.v.feedback=fb;
+    toast('피드백 저장됨');
+  }catch(e){ alert('저장 실패: '+e.message); }
+};
+
 window.showQDetail=function(key){
   const d=(window._qd||{})[key]; if(!d) return;
   document.getElementById('qd-title').textContent=
-    `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
+    `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.v?.drawing?' (그래프)':d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
   let body='';
-  if(d.unanswered){
+  // 그래프 답안
+  if(d.v?.drawing){
+    const curScore=d.v.teacherScore??'';
+    body+=`<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:8px">📝 그래프 답안</div>
+      <div style="position:relative;display:inline-block;width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--rule)">
+        <img src="${d.v.drawing}" id="graph-student-img" style="display:block;width:100%">
+        ${d.v.teacherDrawing?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;pointer-events:none">`:''}
+        <canvas id="teacher-draw-canvas" style="position:absolute;inset:0;width:100%;touch-action:none;cursor:crosshair;opacity:0.9"></canvas>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        <button id="td-pen-btn" class="btn-back" style="font-size:12px;background:#fee2e2;border-color:var(--red);color:var(--red)">🖊 펜</button>
+        <button id="td-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
+        <button onclick="teacherDrawUndo()" class="btn-back" style="font-size:12px">↩ 실행취소</button>
+        <button onclick="teacherDrawClear()" class="btn-back" style="font-size:12px">전체 지우기</button>
+        <button onclick="saveTeacherDrawing('${key}')" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto">💾 그림 저장</button>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <button onclick="saveGraphGrade('${key}',true)"
+            style="flex:1;padding:8px;border-radius:8px;border:2px solid ${d.v.correct===true?'var(--green)':'var(--rule)'};background:${d.v.correct===true?'#dcfce7':'var(--paper)'};font-size:18px;font-weight:700;cursor:pointer;color:${d.v.correct===true?'var(--green)':'var(--ink3)'}">⭕</button>
+          <button onclick="saveGraphGrade('${key}',false)"
+            style="flex:1;padding:8px;border-radius:8px;border:2px solid ${d.v.correct===false&&d.v.correct!==undefined?'var(--red)':'var(--rule)'};background:${d.v.correct===false&&d.v.correct!==undefined?'#fee2e2':'var(--paper)'};font-size:18px;font-weight:700;cursor:pointer;color:${d.v.correct===false&&d.v.correct!==undefined?'var(--red)':'var(--ink3)'}">❌</button>
+        </div>
+        <textarea id="graph-feedback-input" placeholder="학생에게 피드백 (선택사항)" rows="2"
+          style="width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box">${d.v.feedback||''}</textarea>
+        <button onclick="saveGraphFeedback('${key}')"
+          style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start">피드백 저장</button>
+      </div>
+    </div>`;
+  } else if(d.unanswered){
     body+=`<div style="font-size:13px;color:var(--ink3);margin-bottom:14px">— 아직 풀지 않은 문항입니다</div>`;
   } else if(d.wrongInputs.length){
     body+=`<div style="margin-bottom:14px">
@@ -1378,6 +1505,22 @@ window.showQDetail=function(key){
   }
   document.getElementById('qd-body').innerHTML=body;
   document.getElementById('qd-modal').style.display='flex';
+  // 교사 드로잉 캔버스 초기화 (이미지 로드 후)
+  setTimeout(()=>{
+    const img=document.getElementById('graph-student-img');
+    const canvas=document.getElementById('teacher-draw-canvas');
+    if(!img||!canvas) return;
+    const setSize=()=>{
+      canvas.width=img.naturalWidth||img.clientWidth;
+      canvas.height=img.naturalHeight||img.clientHeight;
+      canvas.style.height=img.clientHeight+'px';
+      // 기존 교사 주석 복원
+      const td=window._qd[key]?.v?.teacherDrawing;
+      if(td){ const i2=new Image(); i2.onload=()=>canvas.getContext('2d').drawImage(i2,0,0,canvas.width,canvas.height); i2.src=td; }
+    };
+    if(img.complete) setSize(); else img.onload=setSize;
+    initTeacherCanvas(canvas);
+  },100);
 };
 
 window.loadAll=loadAll;

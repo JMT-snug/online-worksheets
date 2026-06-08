@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5e">
+  <meta name="app-version" content="6.5f">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5e"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5f"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1298,7 +1298,7 @@ function renderQuestion() {
 
   // 문제 헤더
   const imgHtml = q.imageUrl
-    ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
+    ? `<img src="${q.imageUrl.replace(/drive\.google\.com\/uc\?export=view&id=([\w-]+)/,'lh3.googleusercontent.com/d/$1')}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
     : '';
   const _realN=curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length+1;
   const _realT=curWS._realQCount||curWS.questions.filter(q=>q.type!=="link").length;

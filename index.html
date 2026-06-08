@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5o">
+  <meta name="app-version" content="6.5g">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5o"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5g"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1152,26 +1152,16 @@ async function saveWorksheet(isComplete=false){
     const perQ={};
     // 모든 문항 정답이면 자동 완료 처리
     const _total=curWS.questions.filter(q=>q.type!=="link").length;
-    const _ans=answered.filter(v=>v&&(typeof v!=='object'||v.drawing)).length;
+    const _ans=answered.filter(Boolean).length;
     if(!isComplete && _total>0 && _ans>=_total){ isComplete=true; _wsIsCompleted=true; }
     curWS.questions.forEach((q,i)=>{
       if(q.type==="link") return;
-      if(q.type==='graph'){
-        const prev=typeof answered[i]==='object'?answered[i]:{};
-        perQ[q.id]={
-          drawing:       prev.drawing||null,
-          teacherDrawing:prev.teacherDrawing||null,
-          feedback:      prev.feedback||null,
-          correct:       prev.correct,
-        };
-      } else {
-        perQ[q.id]={
-          attempts:   attempts[i]||0,
-          wrongInputs: wrongAnswers[i]?.inputs||[],
-          correct:    !!answered[i],
-          canvasImage: wrongAnswers[i]?.imagePath||null,
-        };
-      }
+      perQ[q.id]={
+        attempts:   attempts[i]||0,
+        wrongInputs: wrongAnswers[i]?.inputs||[],
+        correct:    !!answered[i],
+        canvasImage: wrongAnswers[i]?.imagePath||null,
+      };
     });
     const _totalQ=curWS.questions.filter(q=>q.type!=="link").length;
     const _ansQ=answered.filter(Boolean).length;
@@ -1231,15 +1221,10 @@ async function startQuiz(ws) {
       // 완료 여부 무관하게 항상 복원
       ws.questions.forEach((q,i)=>{
         const s=_pq[q.id]; if(!s) return;
-        if(curWS.questions[i]?.type==='graph'){
-          answered[i]=s.drawing?{drawing:s.drawing,teacherDrawing:s.teacherDrawing||null,feedback:s.feedback||null,correct:s.correct}:false;
-        } else {
-          answered[i]=s.correct||false;
-          attempts[i]=s.attempts||0;
-          answered[i]=s.correct||false;
+        answered[i]=s.correct||false;
         attempts[i]=s.attempts||0;
         wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
-        }      });
+      });
       if(_d.isComplete) _wsIsCompleted=true;
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
@@ -1323,7 +1308,7 @@ function renderQuestion() {
       <div class="q-num">
         ${_qNum}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
         if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
@@ -1337,7 +1322,6 @@ function renderQuestion() {
     </div>`;
 
   const isLink = q.type==="link";
-  const isGraph = q.type==="graph";
   const isStep3 = q.type==="step3";
   const isMulti = q.type==="multi";
   // 카운터: 링크 제외 순번
@@ -1346,7 +1330,6 @@ function renderQuestion() {
     const realTotal = curWS._realQCount || curWS.questions.filter(q=>q.type!=="link").length;
     document.getElementById("q-counter")?.setAttribute("data-real",`${realIdx+1} / ${realTotal}`);
   }
-  if(isGraph){ renderGraphQ(q, panel); return; }
   if(isStep3){
     renderStep3Q(q, panel);
     return;
@@ -1370,10 +1353,7 @@ function renderQuestion() {
             ${q.linkLabel}
           </a>
         </div>
-        ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px;color:var(--ink)">
-        💬 <strong>선생님 피드백:</strong> ${prevFeedback}
-      </div>`:''}
-      <div class="feedback-strip" id="feedback-strip"></div>
+        <div class="feedback-strip" id="feedback-strip"></div>
         <div class="ans-btns" onmousedown="event.preventDefault()">
           <button class="btn-submit" onclick="submitQAns()"
             style="background:var(--green)">
@@ -1899,209 +1879,6 @@ function getS3State(qid){
 
 const STEP_TAB_LABELS = ['①','②','③','④','⑤','⑥','⑦','⑧'];
 
-
-function renderGraphQ(q, panel){
-  const xMin=q.xMin??-5, xMax=q.xMax??5;
-  const yMin=q.yMin??-5, yMax=q.yMax??5;
-  const isNL = q.graphType==='numberline';
-  const nMin=q.nMin??-10, nMax=q.nMax??10;
-
-  // 기존 답안 그림 복원
-  const prevDrawing = answered[curQIdx]?.drawing||null;
-
-  panel.innerHTML=`${qHeadHtml}
-    <div class="math-input-card">
-      <div style="position:relative;display:inline-block;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;width:100%">
-        <canvas id="graph-bg-canvas" style="display:block;width:100%;touch-action:none"></canvas>
-        <canvas id="graph-answer-canvas" style="position:absolute;inset:0;width:100%;touch-action:none;cursor:crosshair"></canvas>
-        ${prevAns?.teacherDrawing?`<img src="${prevAns.teacherDrawing}" style="position:absolute;inset:0;width:100%;pointer-events:none" id="teacher-annotation">`:''}
-      </div>
-      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
-        <button id="graph-pen-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">✏️ 펜</button>
-        <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
-        <button onclick="graphUndo()" class="btn-back" style="font-size:12px">↩ 실행취소</button>
-        <button onclick="graphClear()" class="btn-back" style="font-size:12px">전체 지우기</button>
-        <span id="graph-grade-badge" style="margin-left:auto;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;${prevCorrect===true?'background:#dcfce7;color:var(--green)':prevCorrect===false?'background:#fee2e2;color:var(--red)':prevDrawing?'background:#fef3c7;color:#b45309':'color:var(--ink3)'}">
-          ${prevCorrect===true?'⭕ 정답':prevCorrect===false?'❌ 오답':prevDrawing?'📤 채점 대기 중':'그래프를 그린 후 제출'}
-        </span>
-      </div>
-      <div class="feedback-strip" id="feedback-strip"></div>
-      <div class="ans-btns" onmousedown="event.preventDefault()">
-        <button class="btn-submit" onclick="submitQAns()" style="background:var(--green)">제출 ✓</button>
-      </div>
-    </div>`;
-
-  // 캔버스 초기화
-  const bgC = document.getElementById('graph-bg-canvas');
-  const ansC = document.getElementById('graph-answer-canvas');
-  const W = panel.offsetWidth - 32 || 360;
-  const H = isNL ? 100 : Math.min(W, 400);
-  bgC.width = ansC.width = W;
-  bgC.height = ansC.height = H;
-  bgC.style.height = ansC.style.height = H+'px';
-
-  // 배경 격자 그리기
-  drawGraphGrid(bgC, q, W, H);
-
-  // 이전 답안 복원
-  if(prevDrawing){
-    const img=new Image(); img.onload=()=>ansC.getContext('2d').drawImage(img,0,0,W,H);
-    img.src=prevDrawing;
-  }
-
-  // 드로잉 이벤트 연결
-  initGraphCanvas(ansC, W, H);
-
-  // 렌더 후 MathJax
-  requestAnimationFrame(()=>renderMath(panel));
-}
-
-function drawGraphGrid(canvas, q, W, H){
-  const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
-  const isNL=q.graphType==='numberline';
-  if(isNL){
-    const nl=drawNumberLine(ctx,W,H,q.nMin??-10,q.nMax??10);
-  } else {
-    drawCoordPlane(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
-  }
-}
-
-function drawCoordPlane(ctx,W,H,xMin,xMax,yMin,yMax){
-  const PAD=32;
-  const cW=W-PAD*2, cH=H-PAD*2;
-  const xRange=xMax-xMin, yRange=yMax-yMin;
-  const toX=v=>PAD+((v-xMin)/xRange)*cW;
-  const toY=v=>PAD+((yMax-v)/yRange)*cH;
-
-  // 격자선
-  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=0.5;
-  for(let x=Math.ceil(xMin);x<=xMax;x++){
-    ctx.beginPath(); ctx.moveTo(toX(x),PAD); ctx.lineTo(toX(x),H-PAD); ctx.stroke();
-  }
-  for(let y=Math.ceil(yMin);y<=yMax;y++){
-    ctx.beginPath(); ctx.moveTo(PAD,toY(y)); ctx.lineTo(W-PAD,toY(y)); ctx.stroke();
-  }
-  // 축
-  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
-  // x축
-  ctx.beginPath(); ctx.moveTo(PAD,toY(0)); ctx.lineTo(W-PAD,toY(0)); ctx.stroke();
-  // y축
-  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0),H-PAD); ctx.stroke();
-  // 축 화살표
-  ctx.fillStyle='#374151';
-  const arw=6;
-  ctx.beginPath(); ctx.moveTo(W-PAD,toY(0)); ctx.lineTo(W-PAD-arw,toY(0)-arw/2); ctx.lineTo(W-PAD-arw,toY(0)+arw/2); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0)-arw/2,PAD+arw); ctx.lineTo(toX(0)+arw/2,PAD+arw); ctx.fill();
-  // 눈금 + 숫자
-  ctx.font='10px sans-serif'; ctx.fillStyle='#6b7280'; ctx.textAlign='center';
-  for(let x=Math.ceil(xMin);x<=xMax;x++){
-    if(x===0) continue;
-    ctx.beginPath(); ctx.moveTo(toX(x),toY(0)-4); ctx.lineTo(toX(x),toY(0)+4); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
-    ctx.fillText(x,toX(x),toY(0)+14);
-  }
-  ctx.textAlign='right';
-  for(let y=Math.ceil(yMin);y<=yMax;y++){
-    if(y===0) continue;
-    ctx.beginPath(); ctx.moveTo(toX(0)-4,toY(y)); ctx.lineTo(toX(0)+4,toY(y)); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
-    ctx.fillText(y,toX(0)-6,toY(y)+4);
-  }
-  // 원점
-  ctx.fillStyle='#374151'; ctx.textAlign='right';
-  ctx.fillText('O',toX(0)-4,toY(0)+14);
-  // 축 레이블
-  ctx.fillStyle='#374151'; ctx.font='12px sans-serif';
-  ctx.textAlign='left'; ctx.fillText('x',W-PAD+4,toY(0)+4);
-  ctx.textAlign='center'; ctx.fillText('y',toX(0),PAD-6);
-}
-
-function drawNumberLine(ctx,W,H,nMin,nMax){
-  const PAD=32; const MID=H/2;
-  const range=nMax-nMin;
-  const toX=v=>PAD+((v-nMin)/range)*(W-PAD*2);
-  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(W-PAD,MID); ctx.stroke();
-  // 화살표
-  ctx.fillStyle='#374151';
-  ctx.beginPath(); ctx.moveTo(W-PAD,MID); ctx.lineTo(W-PAD-8,MID-4); ctx.lineTo(W-PAD-8,MID+4); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(PAD+8,MID-4); ctx.lineTo(PAD+8,MID+4); ctx.fill();
-  // 눈금
-  ctx.font='11px sans-serif'; ctx.fillStyle='#374151'; ctx.textAlign='center';
-  for(let n=Math.ceil(nMin);n<=nMax;n++){
-    const x=toX(n);
-    ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.fillText(n,x,MID+18);
-    if(n===0){ctx.beginPath();ctx.arc(x,MID,3,0,Math.PI*2);ctx.fill();}
-  }
-}
-
-// 그래프 캔버스 드로잉
-let graphUndoStack=[], graphEraser=false;
-function initGraphCanvas(canvas, W, H){
-  let drawing=false, lx=0, ly=0;
-  graphUndoStack=[];
-  const ctx=canvas.getContext('2d');
-  ctx.strokeStyle='#1c1917'; ctx.lineWidth=2; ctx.lineCap='round';
-
-  const pos=e=>{
-    const r=canvas.getBoundingClientRect();
-    const scaleX=W/r.width, scaleY=H/r.height;
-    const cx=e.touches?e.touches[0].clientX:e.clientX;
-    const cy=e.touches?e.touches[0].clientY:e.clientY;
-    return [(cx-r.left)*scaleX,(cy-r.top)*scaleY];
-  };
-  const start=e=>{
-    e.preventDefault();
-    graphUndoStack.push(ctx.getImageData(0,0,W,H));
-    drawing=true; [lx,ly]=pos(e);
-    ctx.beginPath(); ctx.moveTo(lx,ly);
-    if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
-    else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
-  };
-  const move=e=>{
-    if(!drawing) return; e.preventDefault();
-    const [x,y]=pos(e);
-    ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
-    lx=x; ly=y;
-  };
-  const end=e=>{ drawing=false; };
-  canvas.addEventListener('mousedown',start);
-  canvas.addEventListener('mousemove',move);
-  canvas.addEventListener('mouseup',end);
-  canvas.addEventListener('touchstart',start,{passive:false});
-  canvas.addEventListener('touchmove',move,{passive:false});
-  canvas.addEventListener('touchend',end);
-
-  // 도구 버튼
-  document.getElementById('graph-pen-btn')?.addEventListener('click',()=>{
-    graphEraser=false;
-    document.getElementById('graph-pen-btn').style.background='var(--acc-lt)';
-    document.getElementById('graph-pen-btn').style.borderColor='var(--accent)';
-    document.getElementById('graph-erase-btn').style.background='';
-    document.getElementById('graph-erase-btn').style.borderColor='';
-  });
-  document.getElementById('graph-erase-btn')?.addEventListener('click',()=>{
-    graphEraser=true;
-    document.getElementById('graph-erase-btn').style.background='var(--acc-lt)';
-    document.getElementById('graph-erase-btn').style.borderColor='var(--accent)';
-    document.getElementById('graph-pen-btn').style.background='';
-    document.getElementById('graph-pen-btn').style.borderColor='';
-  });
-}
-
-window.graphUndo=function(){
-  const canvas=document.getElementById('graph-answer-canvas');
-  if(!canvas||!graphUndoStack.length) return;
-  canvas.getContext('2d').putImageData(graphUndoStack.pop(),0,0);
-};
-window.graphClear=function(){
-  const canvas=document.getElementById('graph-answer-canvas');
-  if(!canvas) return;
-  graphUndoStack.push(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height));
-  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
-};
-
-
 function renderStep3Q(q, panel){
   const steps=getSteps(q);
   const st=getS3State(q.id);
@@ -2360,19 +2137,6 @@ async function submitQAns(){
   const q=curWS.questions[curQIdx];
 
   // ── 링크 페이지: 항상 통과 ──
-  if(q.type==="graph"){
-    const gc=document.getElementById('graph-answer-canvas');
-    if(gc){ const prev=answered[curQIdx]||{}; answered[curQIdx]={...prev,drawing:gc.toDataURL('image/jpeg',0.5)}; }
-    else answered[curQIdx]=true;
-    updateStrip(); saveWorksheet();
-    const fb=document.getElementById('feedback-strip');
-    if(fb){
-      fb.className='feedback-strip show fb-correct';
-      fb.innerHTML=`<span>✅ 그래프 제출 완료</span>
-        <button class="btn-next" onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}">다음 문제 →</button>`;
-    }
-    return;
-  }
   if(q.type==="link"){
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
     const isLast=curQIdx===curWS.questions.length-1;
@@ -2563,24 +2327,19 @@ async function finishQuiz(){
   document.getElementById("r-msg").textContent=
     wrongTotal===0?"완벽해요! 🏆":
     wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
+  const bp = curWS.bookPage || "교과서";
   document.getElementById("r-sub").textContent=
-    wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
-                   : `총 오답 ${wrongTotal}회`;
+    wrongTotal===0
+      ? `모든 문제를 첫 번에 맞혔어요! 📖 교과서 ${bp}페이지`
+      : `총 오답 ${wrongTotal}회 · 교과서 ${bp}페이지를 푸세요 📖`;
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
-    const qTxt=(q.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>
-      <div class="r-body">
-        <div class="r-qnum">문제 ${i+1}&nbsp;
-          <span class="r-qtext">${q.text||""}</span>
-        </div>
-        ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
-      </div>`;
+    row.innerHTML=`<span class="r-icon">✅</span>
+      <div class="r-body"><div class="r-qnum">문제 ${i+1} &nbsp;<span style="font-family:monospace">${q.text}</span></div>
+      ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:""}</div>`;
     list.appendChild(row);
   });
-  // 결과 목록 MathJax 렌더
-  requestAnimationFrame(()=>renderMath(list));
   try {
     const perQ={};
     curWS.questions.forEach((q,i)=>{
@@ -2604,10 +2363,7 @@ async function finishQuiz(){
 window.finishQuiz=finishQuiz;
 /* 모든 문항(링크 제외) 답안 완료 여부 */
 function allAnswered(){
-  return curWS.questions.every((q,i)=>{
-    if(q.type==='graph') return typeof answered[i]==='object'&&!!answered[i].drawing;
-    return answered[i]&&answered[i]!==false;
-  }); // graph drawing 포함
+  return answered.every(Boolean); // link 포함 전체 완료 체크
 }
 window.allAnswered=allAnswered;
 

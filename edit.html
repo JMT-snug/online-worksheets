@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5p">
+<meta name="app-version" content="edit-v1.5q">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5p</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5q</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -360,6 +360,36 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
               <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
             </div>
+          <div class="field" id="field-graph" style="display:none">
+            <label>격자 설정</label>
+            <div style="display:flex;gap:12px;margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="radio" name="graph-grid" value="coordinate" id="g-coord" checked onchange="onGraphGridChange()"> 좌표평면
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="radio" name="graph-grid" value="numberline" id="g-nl" onchange="onGraphGridChange()"> 수직선
+              </label>
+            </div>
+            <div id="g-coord-settings">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <span style="width:32px;font-size:12px">x축</span>
+                <input id="g-xmin" type="number" value="-5" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px"> ~
+                <input id="g-xmax" type="number" value="5" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px">
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="width:32px;font-size:12px">y축</span>
+                <input id="g-ymin" type="number" value="-5" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px"> ~
+                <input id="g-ymax" type="number" value="5" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px">
+              </div>
+            </div>
+            <div id="g-nl-settings" style="display:none">
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="font-size:12px">범위</span>
+                <input id="g-nlmin" type="number" value="-10" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px"> ~
+                <input id="g-nlmax" type="number" value="10" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px">
+              </div>
+            </div>
+          </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
             <div id="q-img-preview" style="margin-top:8px;display:none">
               <img id="q-img-tag" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--rule)">
@@ -912,7 +942,7 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph']
-    .forEach(hide);
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   if(type==='vocab'){
     show('field-vocab');
   } else if(type==='pool_random'){

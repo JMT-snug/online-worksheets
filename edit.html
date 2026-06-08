@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5o">
+<meta name="app-version" content="edit-v1.5p">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5o</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5p</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -312,14 +312,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <div class="field">
             <label>문항 유형</label>
             <select id="q-type-sel" onchange="onQTypeChange()">
-              <option value="word_text">용어형 (텍스트 답)</option>
-              <option value="word_expr">계산형 (수식 답)</option>
-              <option value="equation">방정식형 (숫자 답)</option>
+              <option value="word_text">① 한글 용어</option>
+              <option value="word_expr">③ 문자 포함 식</option>
+              <option value="equation">② 숫자 값</option>
               <option value="multi">객관식</option>
               <option value="vocab">VOCA 용어</option>
               <option value="link">링크(다음 문항)</option>
               <option value="graph">그래프 그리기</option>
-              <option value="step3">단계형(step3)</option>
+              <option value="step3">④ 단계형</option>
             </select>
             <div id="q-raw-type" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
           </div>
@@ -724,7 +724,7 @@ function renderQList(){
       ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
       : _rawType;
     const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',word:'용어'}[badge]||'계산';
+    const badgeLabel = {vocab:'VOCA',word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',graph:'📈그래프',word:'용어'}[badge]||'계산';
     const preview = isVocabItem
       ? `${item.term} : ${item.def}`
       : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
@@ -911,7 +911,7 @@ function setQType(type){
   const show = id => document.getElementById(id).style.display='';
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph']
     .forEach(hide);
   if(type==='vocab'){
     show('field-vocab');
@@ -921,6 +921,8 @@ function setQType(type){
     show('field-text'); show('field-image'); show('field-step3');
   } else if(type==='link'){
     show('field-link');
+  } else if(type==='graph'){
+    show('field-text'); show('field-image'); show('field-graph');
   } else {
     show('field-text'); show('field-image');
     if(type==='word_text') show('field-ans-text');
@@ -1805,6 +1807,7 @@ function _doAddQuestion(type){
       {label:'x의 값을 구하시오.',answerType:'number',answer:'',hint:''},
       {label:'답을 구하시오.',answerType:'text',answer:'',answerAlt:[],hint:''},
     ]; }
+  else if(type==='graph'){ newQ.type='graph'; newQ.graphType='coordinate'; newQ.xMin=-5; newQ.xMax=5; newQ.yMin=-5; newQ.yMax=5; }
   else if(type==='pool_random'){ newQ.type='pool_random'; newQ.badge=''; newQ.question=''; newQ.correct_pool=[]; newQ.wrong_pool=[]; }
   currentWs.questions.push(newQ);
   const isVocab = currentWs.type==='vocab';
@@ -1958,6 +1961,11 @@ window.deleteUnit = async function(unitId, e){
         <div class="type-icon">🪜</div>
         <div class="type-name">④ 단계형</div>
         <div class="type-desc">단계별 풀이 과정</div>
+      </div>
+      <div class="type-opt" data-type="graph" onclick="selectTypeOpt(this)">
+        <div class="type-icon">📈</div>
+        <div class="type-name">그래프 그리기</div>
+        <div class="type-desc">수직선/좌표평면 답안</div>
       </div>
       <div class="type-opt" data-type="pool_random" onclick="selectTypeOpt(this)" style="grid-column:1/-1">
         <div class="type-icon">🎲</div>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5k">
+<meta name="app-version" content="edit-v1.5l">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5k</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5l</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -353,7 +353,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <input type="file" id="q-img-file" accept="image/*" style="display:none" onchange="previewLocalImage(this)">
               </label>
               <button onclick="pickFromDrive()" style="background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">📂 Drive에서 선택</button>
-              <button onclick="uploadToStorage()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">⬆ Storage 업로드</button>
+              <button onclick="uploadImageToDrive()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">⬆ Drive 업로드</button>
               <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
             </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
@@ -453,7 +453,6 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, collectionGroup, where, setDoc, deleteDoc, writeBatch, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
   apiKey:"AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
@@ -508,7 +507,7 @@ document.getElementById('btn-login').onclick = async () => {
 async function getDriveToken(){
   if(_googleAccessToken) return _googleAccessToken;
   const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive');
+  provider.addScope('https://www.googleapis.com/auth/drive.file');
   const result = await signInWithPopup(auth, provider);
   const cred = GoogleAuthProvider.credentialFromResult(result);
   if(cred?.accessToken) _googleAccessToken = cred.accessToken;
@@ -1565,28 +1564,6 @@ window.pickFromDrive = async function(){
 };
 
 
-window.uploadToStorage = async function(){
-  const fileInput = document.getElementById('q-img-file');
-  const file = fileInput.files[0];
-  if(!file){ toast('이미지를 먼저 선택하세요'); return; }
-  const status = document.getElementById('q-img-status');
-  status.textContent = '⏳ 업로드 중...';
-  try{
-    const path = `question-images/${Date.now()}_${file.name}`;
-    const storageRef = sRef(storage, path);
-    await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(storageRef);
-    document.getElementById('q-img-url').value = url;
-    document.getElementById('q-img-tag').src = url;
-    document.getElementById('q-img-preview').style.display = '';
-    status.textContent = `✅ 업로드 완료: ${file.name}`;
-    toast('이미지 업로드 완료');
-  }catch(e){
-    status.textContent = `❌ 오류: ${e.message}`;
-    toast('업로드 실패: '+e.message);
-    console.error(e);
-  }
-};
 
 window.uploadImageToDrive = async function(){
   const fileInput = document.getElementById('q-img-file');

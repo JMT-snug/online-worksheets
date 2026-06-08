@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5d">
+<meta name="app-version" content="edit-v1.5f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5d</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5f</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -349,9 +349,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <label>이미지 <span style="font-weight:400;color:var(--ink3)">(선택)</span></label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <label style="cursor:pointer;background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600">
-                📁 이미지 선택
+                📁 로컬 선택
                 <input type="file" id="q-img-file" accept="image/*" style="display:none" onchange="previewLocalImage(this)">
               </label>
+              <button onclick="pickFromDrive()" style="background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">📂 Drive에서 선택</button>
               <button onclick="uploadImageToDrive()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">⬆ Drive 업로드</button>
               <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
             </div>
@@ -1517,13 +1518,56 @@ window.clearImage = function(){
   document.getElementById('q-img-file').value = '';
 };
 
+
+window.pickFromDrive = async function(){
+  const folderId = '14q0Avz-ep3RAm9k1Q82_0wpbQCjp6Jpl';
+  const modal = document.getElementById('drive-picker-modal');
+  const grid  = document.getElementById('drive-picker-grid');
+  const status= document.getElementById('drive-picker-status');
+  modal.style.display='flex';
+  grid.innerHTML=''; status.textContent='⏳ 파일 목록 불러오는 중...';
+  try{
+    const token = await getDriveToken();
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+(mimeType+contains+'image/')+and+trashed=false&fields=files(id,name,thumbnailLink,mimeType)&pageSize=50`,
+      { headers:{ Authorization:`Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const files = data.files||[];
+    if(!files.length){ status.textContent='이미지 파일이 없습니다.'; return; }
+    status.textContent=`${files.length}개 이미지`;
+    files.forEach(f=>{
+      const card = document.createElement('div');
+      card.style.cssText='cursor:pointer;border:2px solid var(--rule);border-radius:8px;overflow:hidden;transition:border-color .15s';
+      card.onmouseover=()=>card.style.borderColor='var(--accent)';
+      card.onmouseout=()=>card.style.borderColor='var(--rule)';
+      const thumb = f.thumbnailLink
+        ? `<img src="${f.thumbnailLink}" style="width:100%;height:90px;object-fit:cover">`
+        : `<div style="width:100%;height:90px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:28px">🖼</div>`;
+      card.innerHTML=`${thumb}<div style="padding:4px 6px;font-size:10px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>`;
+      card.onclick=()=>{
+        const url=`https://drive.google.com/uc?export=view&id=${f.id}`;
+        document.getElementById('q-img-url').value=url;
+        document.getElementById('q-img-tag').src=url;
+        document.getElementById('q-img-preview').style.display='';
+        document.getElementById('q-img-status').textContent=`✅ ${f.name}`;
+        modal.style.display='none';
+        toast('이미지 선택 완료');
+      };
+      grid.appendChild(card);
+    });
+  }catch(e){
+    status.textContent='❌ 오류: '+e.message;
+    console.error(e);
+  }
+};
+
 window.uploadImageToDrive = async function(){
   const fileInput = document.getElementById('q-img-file');
   const file = fileInput.files[0];
   if(!file){ toast('이미지를 먼저 선택하세요'); return; }
 
-  const folderId = document.getElementById('drive-folder-id').value.trim();
-  if(!folderId){ toast('Drive 폴더 ID를 입력하세요'); return; }
+  const folderId = document.getElementById('drive-folder-id')?.value?.trim() || '14q0Avz-ep3RAm9k1Q82_0wpbQCjp6Jpl';
 
   const status = document.getElementById('q-img-status');
   status.textContent = '⏳ Drive 토큰 요청 중...';
@@ -1872,6 +1916,18 @@ window.deleteUnit = async function(unitId, e){
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="document.getElementById('preview-modal').style.display='none'">닫기</button>
     </div>
+  </div>
+</div>
+
+<!-- Drive 이미지 선택 모달 -->
+<div id="drive-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--paper);border-radius:14px;padding:20px;width:min(600px,90vw);max-height:80vh;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span style="font-weight:700;font-size:16px">📂 Drive 이미지 선택</span>
+      <button onclick="document.getElementById('drive-picker-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink3)">✕</button>
+    </div>
+    <div id="drive-picker-status" style="font-size:12px;color:var(--ink3)">로드 중...</div>
+    <div id="drive-picker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;overflow-y:auto;max-height:50vh;padding:4px"></div>
   </div>
 </div>
 </body>

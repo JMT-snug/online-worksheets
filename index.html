@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5l">
+  <meta name="app-version" content="6.5n">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5n"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1323,7 +1323,7 @@ function renderQuestion() {
       <div class="q-num">
         ${_qNum}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':isGraph?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
         if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
@@ -1346,6 +1346,7 @@ function renderQuestion() {
     const realTotal = curWS._realQCount || curWS.questions.filter(q=>q.type!=="link").length;
     document.getElementById("q-counter")?.setAttribute("data-real",`${realIdx+1} / ${realTotal}`);
   }
+  if(isGraph){ renderGraphQ(q, panel); return; }
   if(isStep3){
     renderStep3Q(q, panel);
     return;
@@ -2562,12 +2563,9 @@ async function finishQuiz(){
   document.getElementById("r-msg").textContent=
     wrongTotal===0?"완벽해요! 🏆":
     wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
-  const bp = curWS.bookPage;
-  const bpText = bp ? ` · 교과서 ${bp}페이지` : "";
   document.getElementById("r-sub").textContent=
-    wrongTotal===0
-      ? `모든 문제를 첫 번에 맞혔어요! 🏅${bpText}`
-      : `총 오답 ${wrongTotal}회${bpText}`;
+    wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
+                   : `총 오답 ${wrongTotal}회`;
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";

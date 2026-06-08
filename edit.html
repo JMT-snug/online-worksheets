@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5n">
+<meta name="app-version" content="edit-v1.5o">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5n</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5o</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -318,6 +318,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <option value="multi">객관식</option>
               <option value="vocab">VOCA 용어</option>
               <option value="link">링크(다음 문항)</option>
+              <option value="graph">그래프 그리기</option>
               <option value="step3">단계형(step3)</option>
             </select>
             <div id="q-raw-type" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
@@ -813,6 +814,8 @@ function showPanel(item){
       qtype = item.answerType==='expr' ? 'word_expr' : 'word_text';
     } else if(['equation','multi','link','step3','pool_random'].includes(item.type)){
       qtype = item.type;
+    } else if(item.type==='graph'){
+      qtype = 'graph';
     } else {
       qtype = 'word_text'; // fallback
     }
@@ -866,6 +869,20 @@ function showPanel(item){
       poolCorrect = [...(item.correct_pool||[])];
       poolWrong   = [...(item.wrong_pool||[])];
       renderPoolList('correct'); renderPoolList('wrong');
+    } else if(qtype==='graph'){
+      // graph 설정 로드
+      const gt=item.graphType||'coordinate';
+      document.getElementById(gt==='numberline'?'g-nl':'g-coord').checked=true;
+      onGraphGridChange();
+      if(gt==='coordinate'){
+        document.getElementById('g-xmin').value=item.xMin??-5;
+        document.getElementById('g-xmax').value=item.xMax??5;
+        document.getElementById('g-ymin').value=item.yMin??-5;
+        document.getElementById('g-ymax').value=item.yMax??5;
+      } else {
+        document.getElementById('g-nlmin').value=item.nMin??-10;
+        document.getElementById('g-nlmax').value=item.nMax??10;
+      }
     } else if(qtype==='step3'){
       // 신규 steps[] 우선, 없으면 기존 step1/2/3에서 변환
       if(Array.isArray(item.steps) && item.steps.length){
@@ -988,9 +1005,35 @@ window.previewText = function(inputId, previewId){
 };
 
 // ── 문항 저장 (적용) ──
-window.saveQuestion = function(){
+
+window.onGraphGridChange=function(){
+  const isCoord=document.getElementById('g-coord').checked;
+  document.getElementById('g-coord-settings').style.display=isCoord?'':'none';
+  document.getElementById('g-nl-settings').style.display=isCoord?'none':'';
+};
+
+window.saveQuestion = async function(){
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
+  if(type==='graph'){
+    const gt=document.getElementById('g-coord').checked?'coordinate':'numberline';
+    const qData={id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,type:'graph',
+      text:document.getElementById('q-text').value.trim(),
+      diff:parseInt(document.getElementById('q-diff-sel').value)||1,
+      imageUrl:document.getElementById('q-img-url').value.trim(),
+      graphType:gt};
+    if(gt==='coordinate'){
+      qData.xMin=parseFloat(document.getElementById('g-xmin').value)||(-5);
+      qData.xMax=parseFloat(document.getElementById('g-xmax').value)||5;
+      qData.yMin=parseFloat(document.getElementById('g-ymin').value)||(-5);
+      qData.yMax=parseFloat(document.getElementById('g-ymax').value)||5;
+    } else {
+      qData.nMin=parseFloat(document.getElementById('g-nlmin').value)||(-10);
+      qData.nMax=parseFloat(document.getElementById('g-nlmax').value)||10;
+    }
+    currentWs.questions[qIdxS]=qData;
+    await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
+  }
   if(type==='link'){
     const linkLabel=document.getElementById('q-link-label').value.trim();
     const linkUrl=document.getElementById('q-link-url').value.trim();

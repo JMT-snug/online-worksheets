@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5m">
+<meta name="app-version" content="edit-v1.5n">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5m</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5n</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -310,13 +310,53 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <h3 id="panel-title">문항 편집</h3>
           <!-- 공통: 유형 선택 -->
           <div class="field">
-            <div style="display:flex;gap:6px;align-items:center">
-                <input id="q-img-link-input" placeholder="Drive 공유 링크 붙여넣기 (drive.google.com/file/d/...)"
-                  style="flex:1;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;font-size:12px;font-family:monospace"
-                  oninput="importDriveLink(this.value)">
-                <button onclick="importDriveLink(document.getElementById('q-img-link-input').value)"
-                  style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">적용</button>
-              </div>
+            <label>문항 유형</label>
+            <select id="q-type-sel" onchange="onQTypeChange()">
+              <option value="word_text">용어형 (텍스트 답)</option>
+              <option value="word_expr">계산형 (수식 답)</option>
+              <option value="equation">방정식형 (숫자 답)</option>
+              <option value="multi">객관식</option>
+              <option value="vocab">VOCA 용어</option>
+              <option value="link">링크(다음 문항)</option>
+              <option value="step3">단계형(step3)</option>
+            </select>
+            <div id="q-raw-type" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
+          </div>
+          <div class="field">
+            <label>난이도</label>
+            <select id="q-diff-sel">
+              <option value="1">★ 기본</option>
+              <option value="2">★★ 중급</option>
+              <option value="3">★★★ 고급</option>
+            </select>
+          </div>
+
+          <!-- 문제 텍스트 (word/equation/multi) -->
+          <div id="field-text" class="field">
+            <label>문제 텍스트 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \(...\))</span></label>
+            <textarea id="q-text" autocapitalize="off" autocorrect="off" spellcheck="false" rows="3" placeholder="예: \(3x+5=2x-1\)에서 \(+5\)를 이항하면?" oninput="previewText('q-text','prev-text')"></textarea>
+            <div class="latex-preview" id="prev-text">미리보기</div>
+          </div>
+          <!-- 링크 URL -->
+          <div class="field" id="field-link" style="display:none">
+            <label>링크 표시 텍스트</label>
+            <input id="q-link-label" placeholder="예: GeoGebra 활동 열기" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
+            <label style="margin-top:8px;display:block">링크 URL</label>
+            <input id="q-link-url" placeholder="https://..." type="url" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
+          </div>
+          <!-- 이미지 첨부 -->
+          <div class="field" id="field-image">
+            <label>이미지 <span style="font-weight:400;color:var(--ink3)">(선택)</span></label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="cursor:pointer;background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600">
+                Drive 링크 입력
+                <input type="file" id="q-img-file" accept="image/*" style="display:none" onchange="previewLocalImage(this)">
+              </label>
+              <input id="q-img-link-input" placeholder="drive.google.com/file/d/... 붙여넣기"
+                style="flex:1;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;font-size:12px;font-family:monospace;min-width:0"
+                oninput="importDriveLink(this.value)">
+              <button onclick="importDriveLink(document.getElementById('q-img-link-input').value)"
+                style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
               <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
             </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
@@ -1531,24 +1571,16 @@ window.pickFromDrive = async function(){
 
 window.importDriveLink = function(raw){
   if(!raw) return;
-  // Drive URL에서 파일 ID 추출
-  let id = '';
-  const patterns = [
-    /\/file\/d\/([a-zA-Z0-9_-]+)/,   // /file/d/ID/view
-    /[?&]id=([a-zA-Z0-9_-]+)/,        // ?id=ID 또는 &id=ID
-    /\/d\/([a-zA-Z0-9_-]+)/,          // /d/ID (짧은 형식)
-  ];
-  for(const p of patterns){
-    const m = raw.match(p);
-    if(m){ id=m[1]; break; }
-  }
-  if(!id){ toast('Drive 링크에서 파일 ID를 찾을 수 없습니다'); return; }
-  const url = `https://drive.google.com/uc?export=view&id=${id}`;
-  document.getElementById('q-img-url').value = url;
-  document.getElementById('q-img-tag').src = url;
-  document.getElementById('q-img-preview').style.display = '';
-  document.getElementById('q-img-status').textContent = `✅ ID: ${id}`;
-  toast('이미지 링크 적용 완료');
+  let id='';
+  const pts=[/\/file\/d\/([\w-]+)/,/[?&]id=([\w-]+)/,/\/d\/([\w-]+)/];
+  for(const p of pts){ const m=raw.match(p); if(m){id=m[1];break;} }
+  if(!id){ toast('Drive 파일 ID를 찾을 수 없습니다'); return; }
+  const url=`https://lh3.googleusercontent.com/d/${id}`;
+  document.getElementById('q-img-url').value=url;
+  document.getElementById('q-img-tag').src=url;
+  document.getElementById('q-img-preview').style.display='';
+  document.getElementById('q-img-status').textContent=`✅ ID: ${id}`;
+  toast('이미지 링크 적용');
 };
 
 window.uploadImageToDrive = async function(){

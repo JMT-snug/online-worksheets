@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5j">
+  <meta name="app-version" content="6.5l">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5j"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5l"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1152,16 +1152,26 @@ async function saveWorksheet(isComplete=false){
     const perQ={};
     // 모든 문항 정답이면 자동 완료 처리
     const _total=curWS.questions.filter(q=>q.type!=="link").length;
-    const _ans=answered.filter(Boolean).length;
+    const _ans=answered.filter(v=>v&&(typeof v!=='object'||v.drawing)).length;
     if(!isComplete && _total>0 && _ans>=_total){ isComplete=true; _wsIsCompleted=true; }
     curWS.questions.forEach((q,i)=>{
       if(q.type==="link") return;
-      perQ[q.id]={
-        attempts:   attempts[i]||0,
-        wrongInputs: wrongAnswers[i]?.inputs||[],
-        correct:    !!answered[i],
-        canvasImage: wrongAnswers[i]?.imagePath||null,
-      };
+      if(q.type==='graph'){
+        const prev=typeof answered[i]==='object'?answered[i]:{};
+        perQ[q.id]={
+          drawing:       prev.drawing||null,
+          teacherDrawing:prev.teacherDrawing||null,
+          feedback:      prev.feedback||null,
+          correct:       prev.correct,
+        };
+      } else {
+        perQ[q.id]={
+          attempts:   attempts[i]||0,
+          wrongInputs: wrongAnswers[i]?.inputs||[],
+          correct:    !!answered[i],
+          canvasImage: wrongAnswers[i]?.imagePath||null,
+        };
+      }
     });
     const _totalQ=curWS.questions.filter(q=>q.type!=="link").length;
     const _ansQ=answered.filter(Boolean).length;
@@ -1221,10 +1231,15 @@ async function startQuiz(ws) {
       // 완료 여부 무관하게 항상 복원
       ws.questions.forEach((q,i)=>{
         const s=_pq[q.id]; if(!s) return;
-        answered[i]=s.correct||false;
+        if(curWS.questions[i]?.type==='graph'){
+          answered[i]=s.drawing?{drawing:s.drawing,teacherDrawing:s.teacherDrawing||null,feedback:s.feedback||null,correct:s.correct}:false;
+        } else {
+          answered[i]=s.correct||false;
+          attempts[i]=s.attempts||0;
+          answered[i]=s.correct||false;
         attempts[i]=s.attempts||0;
         wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
-      });
+        }      });
       if(_d.isComplete) _wsIsCompleted=true;
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
@@ -2547,19 +2562,27 @@ async function finishQuiz(){
   document.getElementById("r-msg").textContent=
     wrongTotal===0?"완벽해요! 🏆":
     wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
-  const bp = curWS.bookPage || "교과서";
+  const bp = curWS.bookPage;
+  const bpText = bp ? ` · 교과서 ${bp}페이지` : "";
   document.getElementById("r-sub").textContent=
     wrongTotal===0
-      ? `모든 문제를 첫 번에 맞혔어요! 📖 교과서 ${bp}페이지`
-      : `총 오답 ${wrongTotal}회 · 교과서 ${bp}페이지를 푸세요 📖`;
+      ? `모든 문제를 첫 번에 맞혔어요! 🏅${bpText}`
+      : `총 오답 ${wrongTotal}회${bpText}`;
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
-    row.innerHTML=`<span class="r-icon">✅</span>
-      <div class="r-body"><div class="r-qnum">문제 ${i+1} &nbsp;<span style="font-family:monospace">${q.text}</span></div>
-      ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:""}</div>`;
+    const qTxt=(q.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>
+      <div class="r-body">
+        <div class="r-qnum">문제 ${i+1}&nbsp;
+          <span class="r-qtext">${q.text||""}</span>
+        </div>
+        ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
+      </div>`;
     list.appendChild(row);
   });
+  // 결과 목록 MathJax 렌더
+  requestAnimationFrame(()=>renderMath(list));
   try {
     const perQ={};
     curWS.questions.forEach((q,i)=>{
@@ -2583,7 +2606,10 @@ async function finishQuiz(){
 window.finishQuiz=finishQuiz;
 /* 모든 문항(링크 제외) 답안 완료 여부 */
 function allAnswered(){
-  return curWS.questions.every((_,i)=>answered[i]&&answered[i]!==false); // graph drawing 포함
+  return curWS.questions.every((q,i)=>{
+    if(q.type==='graph') return typeof answered[i]==='object'&&!!answered[i].drawing;
+    return answered[i]&&answered[i]!==false;
+  }); // graph drawing 포함
 }
 window.allAnswered=allAnswered;
 

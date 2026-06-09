@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5z">
+  <meta name="app-version" content="6.6d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5z";
+const VERSION = "6.6d";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -366,6 +366,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .wslc-meta{font-size:12px;color:var(--ink3)}
 .wslc-icon{grid-column:1;grid-row:1/3;align-self:center;font-size:22px;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .teacher-cls-row{display:flex;flex-wrap:wrap;gap:4px;padding-top:6px;grid-column:2/5;grid-row:2;align-items:center}
+.cls-tog.auto{background:#fef3c7!important;color:#b45309!important;border-color:#fbbf24!important}
 .cls-tog{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
 .cls-tog.checked{background:var(--accent);color:#fff}
 .cls-tog:hover{opacity:.8}
@@ -419,6 +420,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
     <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집기</a>
+    <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
     <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
@@ -715,6 +717,7 @@ function updateHeader(u) {
   const isT = TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
   document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
+  document.getElementById("hdr-sync-progress").style.display= isT ? "inline-flex" : "none";
 }
 
 /* ── DASHBOARD ── */
@@ -860,6 +863,73 @@ window.toggleWsLock=async function(wsId, btn){
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
+
+window.syncAutoProgress = async function(){
+  const btn=document.getElementById('hdr-sync-progress');
+  if(!user||!TEACHER_EMAILS.includes(user.email)){ alert('교사 전용 기능'); return; }
+  btn.disabled=true; const orig=btn.textContent; btn.textContent='📊 계산 중...';
+
+  try{
+    // teacher_data 로드 - 학급 정보
+    const tdSnap = await getDoc(doc(db,"teacher_data",user.uid));
+    if(!tdSnap.exists()){ alert('teacher_data 없음'); btn.disabled=false; btn.textContent=orig; return; }
+    const classes = tdSnap.data().classes || {};
+    if(!Object.keys(classes).length){ alert('학급이 설정되지 않았습니다'); btn.disabled=false; btn.textContent=orig; return; }
+
+    // 학급별 학생 이메일 매핑
+    const classByEmail={};   // email → className
+    const classTotal={};      // className → 학생 수
+    for(const [k,c] of Object.entries(classes)){
+      const name=`${c.year}/${c.grade}학년 ${c.classNum}반`;
+      classTotal[name]=(c.students||[]).length;
+      (c.students||[]).forEach(e=>{ classByEmail[e.toLowerCase()]=name; });
+    }
+
+    // 모든 학생의 worksheets 컬렉션 그룹 조회 (완료된 것만)
+    const snap = await getDocs(collectionGroup(db,'worksheets'));
+    const wsClassDone={};   // wsId → {className: count}
+    snap.forEach(d=>{
+      const data=d.data();
+      if(!data.isComplete && !data.completedAt) return;
+      // path: records/{email}/worksheets/{wsId}
+      const parts=d.ref.path.split('/');
+      const email=parts[1]?.toLowerCase();
+      const wsId=parts[3];
+      const cls=classByEmail[email];
+      if(!cls||!wsId) return;
+      if(!wsClassDone[wsId]) wsClassDone[wsId]={};
+      wsClassDone[wsId][cls]=(wsClassDone[wsId][cls]||0)+1;
+    });
+
+    // 2/3 이상이면 teacherAutoProgress 갱신
+    const newAutoProg={};
+    for(const [wsId, byCls] of Object.entries(wsClassDone)){
+      newAutoProg[wsId]={};
+      for(const [cls, done] of Object.entries(byCls)){
+        const total=classTotal[cls]||0;
+        if(total>0 && done/total>=2/3) newAutoProg[wsId][cls]=true;
+      }
+    }
+
+    // Firestore 저장
+    console.log('[sync] classTotal:', classTotal);
+    console.log('[sync] wsClassDone:', wsClassDone);
+    console.log('[sync] newAutoProg:', newAutoProg);
+    await setDoc(doc(db,'teacher_data',user.uid),{teacherAutoProgress:newAutoProg},{merge:true});
+    window.teacherAutoProgress=newAutoProg;
+
+    // 화면 갱신 - 현재 표시 중인 학습지 카드 다시 그리기
+    const totalAuto=Object.values(newAutoProg).reduce((s,o)=>s+Object.keys(o).length,0);
+    alert(`✅ 진도 동기화 완료\n자동 완료: ${Object.keys(newAutoProg).length}개 학습지, ${totalAuto}개 학급\n\n페이지를 새로고침합니다.`);
+    location.reload();
+  }catch(e){
+    alert('동기화 실패: '+e.message);
+    console.error('[syncAutoProgress]',e);
+  }finally{
+    btn.disabled=false; btn.textContent=orig;
+  }
+};
+
 window.toggleTeacherClass=async function(wsId,clsName,btn){
   if(!teacherProgress[wsId]) teacherProgress[wsId]={};
   const newVal=!teacherProgress[wsId][clsName];
@@ -870,8 +940,10 @@ window.toggleTeacherClass=async function(wsId,clsName,btn){
   if(card){
     const note=card.querySelector('.teacher-ws-note');
     if(note){
-      const cnt=Object.values(teacherProgress[wsId]).filter(Boolean).length;
-      note.textContent=cnt?`${cnt}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
+      const manual=Object.values(teacherProgress[wsId]||{}).filter(Boolean).length;
+      const auto=Object.values(window.teacherAutoProgress?.[wsId]||{}).filter(Boolean).length;
+      const total=Math.max(manual,auto);
+      note.textContent=total?`${total}/${teacherClasses.length}개 학급 진도 완료${auto&&!manual?' (자동)':''}`:'학급 진도 체크';
     }
   }
   try{
@@ -881,6 +953,7 @@ window.toggleTeacherClass=async function(wsId,clsName,btn){
 };
 
 function showUnitPage(unit) {
+  window._currentUnit = unit;
   const gc = GRADE_COLOR[unit.grade];
   const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};
   document.getElementById("unit-title").textContent = unit.title;
@@ -949,9 +1022,12 @@ function showUnitPage(unit) {
         if(teacherClasses.length){
           teacherClasses.forEach(({key,name})=>{
             const btn=document.createElement('button');
-            btn.className='cls-tog'+(progress[name]?' checked':'');
+            const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
+            const isManual=progress[name]===true;
+            const isChecked=isManual||isAuto;
+            btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
             btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
-            btn.title=`${name}: ${progress[name]?'진도 완료 ✅':'미완료'}`;
+            btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
             btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
             row.appendChild(btn);
           });

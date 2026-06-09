@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8q">
+<meta name="app-version" content="3.8r">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8q";
+const VERSION = "3.8r";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1038,7 +1038,7 @@ window.renderWSTable=function(wsId){
     const wrong=tries;
     const wcls=wrong===0?"tries-1":wrong<=2?"tries-2":"tries-many";
     const classInfo=findClass(r.studentEmail)||"-";
-    r.uid=r.uid||r.studentEmail; const perQHtml=renderPerQ(r);
+    r.uid=r.uid||r.studentEmail; r.wsId=wsId; const perQHtml=renderPerQ(r);
     const passCount=r.passCount||1;
     return `<tr>
       <td><strong>${r.studentName||"-"}</strong></td>
@@ -1059,7 +1059,7 @@ window.renderWSTable=function(wsId){
     const upd=formatDate(r.lastUpdated);
     const tries=getAttempts(r);
     const wcls=tries===0?"tries-1":tries<=2?"tries-2":"tries-many";
-    r.uid=r.uid||r.studentEmail; const perQHtml=renderPerQ(r);
+    r.uid=r.uid||r.studentEmail; r.wsId=wsId; const perQHtml=renderPerQ(r);
     return `<tr style="background:var(--acc-lt)">
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>

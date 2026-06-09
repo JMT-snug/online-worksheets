@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5v">
+  <meta name="app-version" content="6.5w">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5v";
+const VERSION = "6.5w";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1159,6 +1159,7 @@ async function saveWorksheet(isComplete=false){
       if(q.type==="link") return;
       if(q.type==='graph'){
         const prev=typeof answered[i]==='object'?answered[i]:{};
+        console.log('[saveWS graph] q.id:',q.id,'answered type:',typeof answered[i],'drawing:',!!prev.drawing,'len:',prev.drawing?.length||0);
         perQ[q.id]={
           drawing:       prev.drawing||null,
           teacherDrawing:prev.teacherDrawing||null,
@@ -2367,8 +2368,15 @@ async function submitQAns(){
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="graph"){
     const gc=document.getElementById('graph-answer-canvas');
-    if(gc){ const prev=answered[curQIdx]||{}; answered[curQIdx]={...prev,drawing:gc.toDataURL('image/jpeg',0.5)}; }
-    else answered[curQIdx]=true;
+    if(gc){
+      const prev=answered[curQIdx]||{};
+      const drawing=gc.toDataURL('image/jpeg',0.5);
+      answered[curQIdx]={...prev,drawing};
+      console.log('[graph submit] canvas W:',gc.width,'H:',gc.height,'drawing len:',drawing.length);
+    } else {
+      answered[curQIdx]=true;
+      console.warn('[graph submit] canvas not found!');
+    }
     updateStrip(); saveWorksheet();
     const fb=document.getElementById('feedback-strip');
     if(fb){

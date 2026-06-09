@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6b">
+  <meta name="app-version" content="6.6c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6b";
+const VERSION = "6.6c";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -890,7 +890,7 @@ window.syncAutoProgress = async function(){
     const wsClassDone={};   // wsId → {className: count}
     snap.forEach(d=>{
       const data=d.data();
-      if(!data.isComplete) return;
+      if(!data.isComplete && !data.completedAt) return;
       // path: records/{email}/worksheets/{wsId}
       const parts=d.ref.path.split('/');
       const email=parts[1]?.toLowerCase();
@@ -912,6 +912,9 @@ window.syncAutoProgress = async function(){
     }
 
     // Firestore 저장
+    console.log('[sync] classTotal:', classTotal);
+    console.log('[sync] wsClassDone:', wsClassDone);
+    console.log('[sync] newAutoProg:', newAutoProg);
     await setDoc(doc(db,'teacher_data',user.uid),{teacherAutoProgress:newAutoProg},{merge:true});
     window.teacherAutoProgress=newAutoProg;
 

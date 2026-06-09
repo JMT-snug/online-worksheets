@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8s">
+<meta name="app-version" content="3.8t">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8s";
+const VERSION = "3.8t";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -353,6 +353,10 @@ async function loadAll(){
     const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
     if(cSnap.exists()) classes=cSnap.data().classes||{};
   }catch(e){ classes={}; }
+  try{
+    const pdDoc=await getDoc(doc(db,'teacher_data',tUser.email));
+    if(pdDoc.exists()) Object.assign(progressData, pdDoc.data().progress||{});
+  }catch(e){}
   buildSidebar();
   renderOverview();
 }
@@ -400,9 +404,15 @@ function buildSidebar(){
         <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
       sheets.forEach(ws=>{
         const done=Object.values(allData).filter(d=>isRecDone(d[ws.id])).length;
+        const total=Object.keys(allData).length;
+        const autoComplete=total>0&&done/total>=2/3;
+        const manualDone=progressData[ws.id];
+        const dotColor=manualDone===true?'#16a34a':(autoComplete&&manualDone!==false?'#86efac':'var(--ink3)');
+        const dotTitle=manualDone===true?'수동 완료 (클릭:해제)':(autoComplete?`자동 완료 (${done}/${total}명)`:`미완료 (${done}/${total}명)`);
         h+=`
           <div class="sb-ws-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
-            <span class="sb-ws-dot"></span>
+            <span class="sb-ws-dot" style="background:${dotColor};cursor:pointer" title="${dotTitle}"
+              onclick="event.stopPropagation();toggleProgress('${ws.id}',${manualDone===true})"></span>
             <span style="flex:1">${ws.title}</span>
             <span class="sb-count">${done}</span>
           </div>`;
@@ -1438,6 +1448,17 @@ function toast(msg, duration=2000){
   clearTimeout(t._tid);
   t._tid=setTimeout(()=>t.style.opacity='0', duration);
 }
+
+
+window.toggleProgress=async function(wsId, isManual){
+  const newVal=isManual?null:true;
+  if(newVal===null) delete progressData[wsId]; else progressData[wsId]=newVal;
+  try{
+    await setDoc(doc(db,'teacher_data',tUser.email),{progress:progressData},{merge:true});
+    toast(newVal===true?'✅ 완료 표시됨':'완료 표시 해제');
+  }catch(e){ toast('저장 실패: '+e.message); }
+  buildSidebar();
+};
 
 window.saveGraphGrade=async function(key,correct){
   const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;

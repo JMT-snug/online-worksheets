@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.5o">
+  <meta name="app-version" content="6.5p">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.5o"; // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
+const VERSION = "6.5p";
+document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
@@ -1308,6 +1309,7 @@ function renderQuestion() {
     if(panel) renderMath(panel);
   });
 
+  console.log('[Q]', JSON.stringify({type:q.type,text:q.text?.slice(0,30),graphType:q.graphType,diff:q.diff,id:q.id}));
   const isWord = q.type==="word";
   const panel=document.getElementById("quiz-left-panel");
 
@@ -1346,7 +1348,7 @@ function renderQuestion() {
     const realTotal = curWS._realQCount || curWS.questions.filter(q=>q.type!=="link").length;
     document.getElementById("q-counter")?.setAttribute("data-real",`${realIdx+1} / ${realTotal}`);
   }
-  if(isGraph){ renderGraphQ(q, panel); return; }
+  if(isGraph){ renderGraphQ(q, panel, qHeadHtml); return; }
   if(isStep3){
     renderStep3Q(q, panel);
     return;
@@ -1900,7 +1902,7 @@ function getS3State(qid){
 const STEP_TAB_LABELS = ['①','②','③','④','⑤','⑥','⑦','⑧'];
 
 
-function renderGraphQ(q, panel){
+function renderGraphQ(q, panel, qHeadHtml){
   const xMin=q.xMin??-5, xMax=q.xMax??5;
   const yMin=q.yMin??-5, yMax=q.yMax??5;
   const isNL = q.graphType==='numberline';

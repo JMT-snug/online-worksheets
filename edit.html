@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5q">
+<meta name="app-version" content="edit-v1.5r">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5q</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5r</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -1048,6 +1048,8 @@ window.saveQuestion = async function(){
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='graph'){
+    const _isVocabG=currentWs.type==='vocab';
+    const qIdxS=_isVocabG?selectedQIdx-(currentWs.vocab||[]).length:selectedQIdx;
     const gt=document.getElementById('g-coord').checked?'coordinate':'numberline';
     const qData={id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,type:'graph',
       text:document.getElementById('q-text').value.trim(),

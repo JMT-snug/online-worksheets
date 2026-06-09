@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8n">
+<meta name="app-version" content="3.8p">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8n";
+const VERSION = "3.8p";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1013,15 +1013,19 @@ window.renderWSTable=function(wsId){
     const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
       const wc=(v.wrongInputs||[]).length;
       const att=v.attempts||0;
-      // 정답/오답/미응답 구분 (correct 필드 우선, 없으면 레거시 추정)
       const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
       const unanswered = (v.correct===false) && wc===0 && att===0;
       let col, mark, ttl;
-      if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQ(qid)}: 미응답`; }
+      // 그래프 그리기 (drawing 필드 있으면)
+      if(v&&v.drawing){
+        col=v.correct===true?"var(--green)":v.correct===false?"var(--red)":"var(--amber)";
+        mark=v.correct===true?"⭕":v.correct===false?"❌":"📝";
+        ttl=`${fmtQ(qid)}: 그래프`;
+      } else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQ(qid)}: 미응답`; }
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
       else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQ(qid)}: 오답 ${wc}회`; }
       const dkey=r.uid+"_"+qid;
-      window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+      window._qd[dkey]={studentName:r.studentName||"-",qid,uid:r.uid,wsId:r.wsId,v,attempts:att,wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
       return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQ(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;

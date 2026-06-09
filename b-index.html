@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6c">
+  <meta name="app-version" content="6.6e">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6c";
+const VERSION = "6.6e";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -890,7 +890,7 @@ window.syncAutoProgress = async function(){
     const wsClassDone={};   // wsId → {className: count}
     snap.forEach(d=>{
       const data=d.data();
-      if(!data.isComplete && !data.completedAt) return;
+      if(!data.isComplete && !data.completedAt && !data.passed) return;
       // path: records/{email}/worksheets/{wsId}
       const parts=d.ref.path.split('/');
       const email=parts[1]?.toLowerCase();
@@ -914,16 +914,19 @@ window.syncAutoProgress = async function(){
     // Firestore 저장
     console.log('[sync] classTotal:', classTotal);
     console.log('[sync] wsClassDone:', wsClassDone);
+    // 학급별 비율 상세
+    for(const [wsId,byCls] of Object.entries(wsClassDone)){
+      const detail=Object.entries(byCls).map(([c,d])=>`${c}:${d}/${classTotal[c]||0}=${((d/(classTotal[c]||1))*100).toFixed(0)}%`).join(', ');
+      console.log(`  ${wsId}:`, detail);
+    }
     console.log('[sync] newAutoProg:', newAutoProg);
     await setDoc(doc(db,'teacher_data',user.uid),{teacherAutoProgress:newAutoProg},{merge:true});
     window.teacherAutoProgress=newAutoProg;
 
     // 화면 갱신 - 현재 표시 중인 학습지 카드 다시 그리기
     const totalAuto=Object.values(newAutoProg).reduce((s,o)=>s+Object.keys(o).length,0);
-    alert(`✅ 진도 동기화 완료\n자동 완료: ${Object.keys(newAutoProg).length}개 학습지, ${totalAuto}개 학급`);
-
-    // 현재 단원 페이지면 다시 렌더
-    if(typeof showUnitPage==='function' && window._currentUnit) showUnitPage(window._currentUnit);
+    alert(`✅ 진도 동기화 완료\n자동 완료: ${Object.keys(newAutoProg).length}개 학습지, ${totalAuto}개 학급\n\n페이지를 새로고침합니다.`);
+    location.reload();
   }catch(e){
     alert('동기화 실패: '+e.message);
     console.error('[syncAutoProgress]',e);

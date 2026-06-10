@@ -353,10 +353,6 @@ async function loadAll(){
     const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
     if(cSnap.exists()) classes=cSnap.data().classes||{};
   }catch(e){ classes={}; }
-  try{
-    const pdDoc=await getDoc(doc(db,'teacher_data',tUser.email));
-    if(pdDoc.exists()) Object.assign(progressData, pdDoc.data().progress||{});
-  }catch(e){}
   buildSidebar();
   renderOverview();
 }
@@ -404,15 +400,9 @@ function buildSidebar(){
         <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
       sheets.forEach(ws=>{
         const done=Object.values(allData).filter(d=>isRecDone(d[ws.id])).length;
-        const total=Object.keys(allData).length;
-        const autoComplete=total>0&&done/total>=2/3;
-        const manualDone=progressData[ws.id];
-        const dotColor=manualDone===true?'#16a34a':(autoComplete&&manualDone!==false?'#86efac':'var(--ink3)');
-        const dotTitle=manualDone===true?'수동 완료 (클릭:해제)':(autoComplete?`자동 완료 (${done}/${total}명)`:`미완료 (${done}/${total}명)`);
         h+=`
           <div class="sb-ws-item ${selView===ws.id?'active':''}" data-view="${ws.id}">
-            <span class="sb-ws-dot" style="background:${dotColor};cursor:pointer" title="${dotTitle}"
-              onclick="event.stopPropagation();toggleProgress('${ws.id}',${manualDone===true})"></span>
+            <span class="sb-ws-dot"></span>
             <span style="flex:1">${ws.title}</span>
             <span class="sb-count">${done}</span>
           </div>`;
@@ -1436,6 +1426,76 @@ window.saveTeacherDrawing=async function(key){
 };
 
 
+
+function drawGraphGridForTeacher(canvas, q, W, H){
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+  const isNL=q.graphType==='numberline';
+  if(isNL){
+    _drawNumberLineT(ctx,W,H,q.nMin??-10,q.nMax??10);
+  } else {
+    _drawCoordPlaneT(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
+  }
+}
+function _drawCoordPlaneT(ctx,W,H,xMin,xMax,yMin,yMax){
+  const PAD=32;
+  const cW=W-PAD*2, cH=H-PAD*2;
+  const xRange=xMax-xMin, yRange=yMax-yMin;
+  const toX=v=>PAD+((v-xMin)/xRange)*cW;
+  const toY=v=>PAD+((yMax-v)/yRange)*cH;
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=0.5;
+  for(let x=Math.ceil(xMin);x<=xMax;x++){
+    ctx.beginPath(); ctx.moveTo(toX(x),PAD); ctx.lineTo(toX(x),H-PAD); ctx.stroke();
+  }
+  for(let y=Math.ceil(yMin);y<=yMax;y++){
+    ctx.beginPath(); ctx.moveTo(PAD,toY(y)); ctx.lineTo(W-PAD,toY(y)); ctx.stroke();
+  }
+  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(PAD,toY(0)); ctx.lineTo(W-PAD,toY(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0),H-PAD); ctx.stroke();
+  ctx.fillStyle='#374151';
+  const arw=6;
+  ctx.beginPath(); ctx.moveTo(W-PAD,toY(0)); ctx.lineTo(W-PAD-arw,toY(0)-arw/2); ctx.lineTo(W-PAD-arw,toY(0)+arw/2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0)-arw/2,PAD+arw); ctx.lineTo(toX(0)+arw/2,PAD+arw); ctx.fill();
+  ctx.font='10px sans-serif'; ctx.fillStyle='#6b7280'; ctx.textAlign='center';
+  for(let x=Math.ceil(xMin);x<=xMax;x++){
+    if(x===0) continue;
+    ctx.beginPath(); ctx.moveTo(toX(x),toY(0)-4); ctx.lineTo(toX(x),toY(0)+4); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(x,toX(x),toY(0)+14);
+  }
+  ctx.textAlign='right';
+  for(let y=Math.ceil(yMin);y<=yMax;y++){
+    if(y===0) continue;
+    ctx.beginPath(); ctx.moveTo(toX(0)-4,toY(y)); ctx.lineTo(toX(0)+4,toY(y)); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(y,toX(0)-6,toY(y)+4);
+  }
+  ctx.fillStyle='#374151'; ctx.textAlign='right';
+  ctx.fillText('O',toX(0)-4,toY(0)+14);
+  ctx.fillStyle='#374151'; ctx.font='12px sans-serif';
+  ctx.textAlign='left'; ctx.fillText('x',W-PAD+4,toY(0)+4);
+  ctx.textAlign='center'; ctx.fillText('y',toX(0),PAD-6);
+}
+function _drawNumberLineT(ctx,W,H,nMin,nMax){
+  const PAD=32; const MID=H/2;
+  const range=nMax-nMin;
+  const toX=v=>PAD+((v-nMin)/range)*(W-PAD*2);
+  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(W-PAD,MID); ctx.stroke();
+  ctx.fillStyle='#374151';
+  ctx.beginPath(); ctx.moveTo(W-PAD,MID); ctx.lineTo(W-PAD-8,MID-4); ctx.lineTo(W-PAD-8,MID+4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(PAD+8,MID-4); ctx.lineTo(PAD+8,MID+4); ctx.fill();
+  ctx.font='11px sans-serif'; ctx.fillStyle='#374151'; ctx.textAlign='center';
+  for(let n=Math.ceil(nMin);n<=nMax;n++){
+    const x=toX(n);
+    const nearLeft=x<PAD+10, nearRight=x>W-PAD-10;
+    if(!nearLeft && !nearRight){
+      ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+    ctx.fillText(n,x,MID+18);
+    if(n===0){ctx.beginPath();ctx.arc(x,MID,3,0,Math.PI*2);ctx.fill();}
+  }
+}
+
 function toast(msg, duration=2000){
   let t=document.getElementById('_toast');
   if(!t){
@@ -1448,17 +1508,6 @@ function toast(msg, duration=2000){
   clearTimeout(t._tid);
   t._tid=setTimeout(()=>t.style.opacity='0', duration);
 }
-
-
-window.toggleProgress=async function(wsId, isManual){
-  const newVal=isManual?null:true;
-  if(newVal===null) delete progressData[wsId]; else progressData[wsId]=newVal;
-  try{
-    await setDoc(doc(db,'teacher_data',tUser.email),{progress:progressData},{merge:true});
-    toast(newVal===true?'✅ 완료 표시됨':'완료 표시 해제');
-  }catch(e){ toast('저장 실패: '+e.message); }
-  buildSidebar();
-};
 
 window.saveGraphGrade=async function(key,correct){
   const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
@@ -1496,9 +1545,10 @@ window.showQDetail=function(key){
     body+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:8px">📝 그래프 답안</div>
       <div style="position:relative;display:inline-block;width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--rule)">
-        <img src="${d.v.drawing}" id="graph-student-img" style="display:block;width:100%">
-        ${d.v.teacherDrawing?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;pointer-events:none">`:''}
-        <canvas id="teacher-draw-canvas" style="position:absolute;inset:0;width:100%;touch-action:none;cursor:crosshair;opacity:0.9"></canvas>
+        <canvas id="graph-grid-canvas" style="display:block;width:100%;background:#fff"></canvas>
+        <img src="${d.v.drawing}" id="graph-student-img" style="position:absolute;inset:0;width:100%;height:100%">
+        ${d.v.teacherDrawing?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">`:''}
+        <canvas id="teacher-draw-canvas" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;opacity:0.9"></canvas>
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
         <button id="td-pen-btn" class="btn-back" style="font-size:12px;background:#fee2e2;border-color:var(--red);color:var(--red)">🖊 펜</button>
@@ -1548,11 +1598,22 @@ window.showQDetail=function(key){
   setTimeout(()=>{
     const img=document.getElementById('graph-student-img');
     const canvas=document.getElementById('teacher-draw-canvas');
+    const gridCanvas=document.getElementById('graph-grid-canvas');
     if(!img||!canvas) return;
+    // 학습지에서 그래프 정보 가져오기
+    const ws=WORKSHEETS.find(w=>w.id===d.wsId);
+    const q=ws?.questions?.find(q=>q.id===d.qid);
     const setSize=()=>{
-      canvas.width=img.naturalWidth||img.clientWidth;
-      canvas.height=img.naturalHeight||img.clientHeight;
+      const W=img.naturalWidth||img.clientWidth||400;
+      const H=img.naturalHeight||img.clientHeight||300;
+      canvas.width=W; canvas.height=H;
       canvas.style.height=img.clientHeight+'px';
+      if(gridCanvas){
+        gridCanvas.width=W; gridCanvas.height=H;
+        gridCanvas.style.height=img.clientHeight+'px';
+        // 격자 그리기
+        if(q){ drawGraphGridForTeacher(gridCanvas, q, W, H); }
+      }
       // 기존 교사 주석 복원
       const td=window._qd[key]?.v?.teacherDrawing;
       if(td){ const i2=new Image(); i2.onload=()=>canvas.getContext('2d').drawImage(i2,0,0,canvas.width,canvas.height); i2.src=td; }

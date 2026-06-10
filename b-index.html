@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6o">
+  <meta name="app-version" content="6.6q">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6o";
+const VERSION = "6.6q";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2461,15 +2461,8 @@ async function submitQAns(){
     const gc=document.getElementById('graph-answer-canvas');
     if(gc){
       const prev=answered[curQIdx]||{};
-      // 배경(격자) + 학생 답안 합성 후 JPEG 저장
-      const bgC=document.getElementById('graph-bg-canvas');
-      const tmp=document.createElement('canvas');
-      tmp.width=gc.width; tmp.height=gc.height;
-      const tCtx=tmp.getContext('2d');
-      tCtx.fillStyle='#ffffff'; tCtx.fillRect(0,0,tmp.width,tmp.height);
-      if(bgC) tCtx.drawImage(bgC,0,0);
-      tCtx.drawImage(gc,0,0);
-      const drawing=tmp.toDataURL('image/jpeg',0.8);
+      // 학생 답안만 PNG(투명 배경)로 저장
+      const drawing=gc.toDataURL('image/png');
       answered[curQIdx]={...prev,drawing};
     } else {
       answered[curQIdx]=true;

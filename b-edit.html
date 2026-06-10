@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5s">
+<meta name="app-version" content="edit-v1.5t">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5s</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5t</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -1262,9 +1262,25 @@ document.getElementById('btn-lock').onclick = () => saveToFirestore('locked');
 document.getElementById('btn-delete-ws').onclick = async () => {
   if(!currentWs){ toast('삭제할 학습지를 먼저 선택하세요'); return; }
   const title = currentWs.title || currentWsId;
-  if(!confirm(`"${title}" 학습지를 삭제합니다.\n학생 진도(records)는 삭제되지 않습니다. 계속하시겠습니까?`)) return;
+  const delRecords = confirm(`"${title}" 학습지를 삭제합니다.\n\n학생들의 학습 기록(records)도 함께 삭제하시겠습니까?\n\n[확인] 학습지 + 학생 기록 모두 삭제\n[취소] 학습지만 삭제 (학생 기록 유지)`);
+  if(!confirm(`정말 "${title}"을(를) 삭제하시겠습니까?${delRecords?'\n⚠️ 학생 기록도 함께 삭제됩니다.':''}`)) return;
   try{
     await deleteDoc(doc(db,'curriculum',currentWsId));
+    // 학생 기록 삭제
+    if(delRecords){
+      try{
+        const snap=await getDocs(collectionGroup(db,'worksheets'));
+        const targets=[];
+        snap.forEach(d=>{
+          const parts=d.ref.path.split('/');
+          if(parts[3]===currentWsId) targets.push(d.ref);
+        });
+        for(const ref of targets){ await deleteDoc(ref); }
+        toast(`✅ 학습지 + 학생 기록 ${targets.length}건 삭제`);
+      }catch(e){ console.error('[기록 삭제 실패]',e); toast('학습지는 삭제했으나 기록 삭제 실패: '+e.message); }
+    } else {
+      toast(`✅ "${title}" 삭제됨 (기록 유지)`);
+    }
     worksheets = worksheets.filter(w=>w.id!==currentWsId);
     currentWs = null; currentWsId = null; selectedQIdx = null;
     document.getElementById('editor-empty').style.display='';
@@ -1272,7 +1288,6 @@ document.getElementById('btn-delete-ws').onclick = async () => {
     document.getElementById('panel-empty').style.display='';
     document.getElementById('panel-editor').style.display='none';
     renderSidebar();
-    toast(`✅ "${title}" 삭제됨`);
   }catch(e){ toast('삭제 실패: '+e.message); console.error(e); }
 };
 document.getElementById('btn-publish').onclick = () => saveToFirestore('published');

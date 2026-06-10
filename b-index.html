@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6k">
+  <meta name="app-version" content="6.6l">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6k";
+const VERSION = "6.6l";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -888,7 +888,6 @@ window.syncAutoProgress = async function(){
     // 모든 학생의 worksheets 컬렉션 그룹 조회 (완료된 것만)
     const snap = await getDocs(collectionGroup(db,'worksheets'));
     const wsClassDone={};   // wsId → {className: count}
-    window._allRecords=[];
     snap.forEach(d=>{
       const data=d.data();
       const parts=d.ref.path.split('/');
@@ -896,13 +895,13 @@ window.syncAutoProgress = async function(){
       const wsId=parts[3];
       const cls=classByEmail[email];
       // 모든 기록을 window에 저장 (디버그용)
-      window._allRecords.push({email,wsId,cls,isComplete:data.isComplete,completedAt:data.completedAt,passed:data.passed,answeredCount:data.answeredCount,totalCount:data.totalCount,correctRate:data.correctRate});
-      if(!data.isComplete && !data.completedAt && !data.passed) return;
+      const _done=data.isComplete||data.completedAt||data.passed||(data.totalCount>0&&data.answeredCount>=data.totalCount);
+      if(!_done) return;
       if(!cls||!wsId) return;
       if(!wsClassDone[wsId]) wsClassDone[wsId]={};
       wsClassDone[wsId][cls]=(wsClassDone[wsId][cls]||0)+1;
     });
-    console.log('[디버그] window._allRecords에 전체 기록 저장됨. 콘솔에서 필터링 가능');
+    
 
     // 2/3 이상이면 teacherAutoProgress 갱신
     const newAutoProg={};

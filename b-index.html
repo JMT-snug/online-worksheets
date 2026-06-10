@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6n">
+  <meta name="app-version" content="6.6o">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6n";
+const VERSION = "6.6o";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2120,14 +2120,13 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
   // 눈금 (양 끝 화살표 위치 제외)
   ctx.font='11px sans-serif'; ctx.fillStyle='#374151'; ctx.textAlign='center';
   for(let n=Math.ceil(nMin);n<=nMax;n++){
-    if(n===Math.ceil(nMin)||n===Math.floor(nMax)) {
-      // 양 끝값은 숫자만 표시, 눈금선 없음
-      ctx.fillText(n,toX(n),MID+18);
-      if(n===0){ctx.beginPath();ctx.arc(toX(n),MID,3,0,Math.PI*2);ctx.fill();}
-      continue;
-    }
     const x=toX(n);
-    ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
+    // 화살표 위치(PAD, W-PAD)에 가까우면 눈금선 생략
+    const nearLeft = x < PAD + 10;
+    const nearRight = x > W - PAD - 10;
+    if(!nearLeft && !nearRight){
+      ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
+    }
     ctx.fillText(n,x,MID+18);
     if(n===0){ctx.beginPath();ctx.arc(x,MID,3,0,Math.PI*2);ctx.fill();}
   }

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6q">
+  <meta name="app-version" content="6.6r">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6q";
+const VERSION = "6.6r";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2474,12 +2474,21 @@ async function submitQAns(){
       const _ans=answered[curQIdx];
       const _drawing=typeof _ans==='object'?_ans.drawing||null:null;
       if(_drawing){
-        updateDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
-          [`perQuestion.${_qId}.drawing`]: _drawing,
-          [`perQuestion.${_qId}.correct`]: _ans.correct??null,
-          [`perQuestion.${_qId}.teacherDrawing`]: _ans.teacherDrawing||null,
-          [`perQuestion.${_qId}.feedback`]: _ans.feedback||null,
-        }).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length))
+        setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
+          studentEmail: user.email,
+          studentName: user.displayName||"",
+          worksheetId: curWS.id,
+          worksheetTitle: curWS.title,
+          lastUpdated: new Date().toISOString(),
+          perQuestion: {
+            [_qId]: {
+              drawing: _drawing,
+              correct: _ans.correct??null,
+              teacherDrawing: _ans.teacherDrawing||null,
+              feedback: _ans.feedback||null,
+            }
+          }
+        },{merge:true}).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length))
           .catch(e=>console.error('[graph 저장 오류]',e.message));
       }
     }

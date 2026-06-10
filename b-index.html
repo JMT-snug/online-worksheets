@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6l">
+  <meta name="app-version" content="6.6n">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6l";
+const VERSION = "6.6n";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -673,6 +673,7 @@ async function loadTeacherData(){
         .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
       // 진도 체크 데이터 (teacher_data/{uid}.teacherProgress 필드)
       teacherProgress=data.teacherProgress||{};
+      window.teacherAutoProgress=data.teacherAutoProgress||{};
     } else {
       console.warn('[teacherData] teacher_data/'+user.uid+' 문서 없음');
     }
@@ -2006,7 +2007,6 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     : prevDrawing ? '📤 채점 대기 중' : '그래프를 그린 후 제출';
 
   panel.innerHTML=`${qHeadHtml}
-    ${q.text?`<div style="padding:10px 16px 4px;font-size:15px">${q.text}</div>`:''}
     <div class="math-input-card">
       <div id="graph-canvas-wrap" style="position:relative;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff">
         <canvas id="graph-bg-canvas" style="display:block;width:100%"></canvas>
@@ -2117,9 +2117,15 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
   ctx.fillStyle='#374151';
   ctx.beginPath(); ctx.moveTo(W-PAD,MID); ctx.lineTo(W-PAD-8,MID-4); ctx.lineTo(W-PAD-8,MID+4); ctx.fill();
   ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(PAD+8,MID-4); ctx.lineTo(PAD+8,MID+4); ctx.fill();
-  // 눈금
+  // 눈금 (양 끝 화살표 위치 제외)
   ctx.font='11px sans-serif'; ctx.fillStyle='#374151'; ctx.textAlign='center';
   for(let n=Math.ceil(nMin);n<=nMax;n++){
+    if(n===Math.ceil(nMin)||n===Math.floor(nMax)) {
+      // 양 끝값은 숫자만 표시, 눈금선 없음
+      ctx.fillText(n,toX(n),MID+18);
+      if(n===0){ctx.beginPath();ctx.arc(toX(n),MID,3,0,Math.PI*2);ctx.fill();}
+      continue;
+    }
     const x=toX(n);
     ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
     ctx.fillText(n,x,MID+18);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0b">
+<meta name="app-version" content="edit-v2.0c">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v2.0b</span>
+    <span class="hdr-badge" id="edit-version">edit-v2.0c</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -1107,13 +1107,15 @@ window.saveQuestion = async function(){
     const vocabCntL=(currentWs.vocab||[]).length;
     const qIdxL=isVocabL?selectedQIdx-vocabCntL:selectedQIdx;
     if(qIdxL>=0 && qIdxL<currentWs.questions.length){
-      currentWs.questions[qIdxL]={
+      const _linkQ={
         ...currentWs.questions[qIdxL],
         type:'link',
         text:'',
         linkLabel:linkLabel||'링크 열기',
         linkUrl
       };
+      _addScore(_linkQ);
+      currentWs.questions[qIdxL]=_linkQ;
     }
     renderQList();
     saveToFirestore(currentWs.status||'draft', true);

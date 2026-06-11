@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.6r">
+  <meta name="app-version" content="6.7a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.6r";
+const VERSION = "6.7a";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -478,6 +478,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <div class="quiz-topbar">
       <button class="btn-back" id="btn-back">← 목록</button>
       <span class="quiz-ws-title" id="quiz-ws-title"></span>
+      <span id="exam-timer" style="font-family:monospace;font-weight:700;color:#dc2626;font-size:14px;display:none"></span>
       <div style="display:flex;gap:6px;margin-left:auto">
         <button onclick="toggleHandedness()" id="btn-handedness" class="btn-back" style="font-size:11px;padding:5px 10px;white-space:nowrap" title="연습장 위치 변경">◀ 연습장 옮기기</button>
         <button class="btn-back" id="btn-prev-q" style="font-size:12px;padding:5px 12px" onclick="moveQ(-1)">◀ 이전</button>
@@ -1009,6 +1010,8 @@ function showUnitPage(unit) {
               ? ((wsProgress[ws.id]?.passCount||0)>=1
                   ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
                   : "미완료")
+              : ws.type==="exam"
+              ? `📝 시험지 · ${ws.questions.length}문항${ws.timeLimit?` · ${ws.timeLimit}분`:''}${done?' · 완료':inProg?` · 진행 중`:''}`
               : ws.questions.length+"문제"+(done?` · 완료`:inProg?` · ${prog.answeredCount||0}/${prog.totalCount||ws.questions.length} 정답`:"")}
           </div>
         </div>
@@ -1304,6 +1307,11 @@ let _activeWsId=null;
 async function startQuiz(ws) {
   _activeWsId=ws.id; _wsIsCompleted=false;
   curWS=ws; curQIdx=0;
+  // 시험지 모드 초기화
+  window._examMode = ws.type==='exam';
+  window._examTimeLimit = (ws.timeLimit||0)*60; // 초 단위
+  window._examStartTime = null;  // 첫 진입 시 설정
+  window._examEnded = false;
   // 랜덤 출제: 원본 보존 후 셔플
   if(!ws._orig) ws._orig=ws.questions;
   ws.questions = isRandom ? shuffleArr(ws._orig) : ws._orig;
@@ -1384,6 +1392,11 @@ function updateStrip() {
 
 function renderQuestion() {
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
+  // 시험지: 타이머 시작 + 표시
+  if(window._examMode){
+    const tEl=document.getElementById('exam-timer');
+    if(tEl && window._examTimeLimit){ tEl.style.display='inline'; startExamTimer(); }
+  }
   qTokens=[]; qEditPart=null; qCursorIdx=0;
   // 이전 문제 feedback 완전 초기화 (정답 잠깐 표시 방지)
   const fbEl=document.getElementById("feedback-strip");
@@ -1460,10 +1473,6 @@ function renderQuestion() {
             ${q.linkLabel}
           </a>
         </div>
-        ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px;color:var(--ink)">
-        💬 <strong>선생님 피드백:</strong> ${prevFeedback}
-      </div>`:''}
-      <div class="feedback-strip" id="feedback-strip"></div>
         <div class="ans-btns" onmousedown="event.preventDefault()">
           <button class="btn-submit" onclick="submitQAns()"
             style="background:var(--green)">
@@ -2451,10 +2460,143 @@ function goStep3(n, qid){
 window.submitStep3=submitStep3;
 window.goStep3=goStep3;
 
+
+// 시험지: 답안만 저장 (채점 X)
+async function submitExamAns(q){
+  let userAns=null;
+  if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
+    if(isExprInput(q)){
+      userAns=qTokens.map(t=>{
+        if(t.type==='char') return t.val;
+        if(t.type==='frac') return `(${t.num||0})/(${t.den||1})`;
+        if(t.type==='exp') return `(${t.base||0})^(${t.expo||1})`;
+        if(t.type==='sqrt') return `Math.sqrt(${t.inner||0})`;
+        return '';
+      }).join('').replace(/−/g,'-');
+    } else {
+      const ip=document.getElementById('word-input');
+      userAns=(ip?.value||'').trim();
+    }
+  } else if(q.type==='multi'){
+    userAns=[...multiSel].sort((a,b)=>a-b);
+  } else if(q.type==='graph'){
+    const gc=document.getElementById('graph-answer-canvas');
+    userAns=gc?gc.toDataURL('image/png'):null;
+  } else if(q.type==='link'){
+    userAns=true;
+  }
+  // 답안 저장 (수정 가능하도록)
+  answered[curQIdx]={examAnswer:userAns,_isExam:true};
+  // perQuestion에 저장
+  if(curWS && user){
+    setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
+      studentEmail:user.email, studentName:user.displayName||'',
+      worksheetId:curWS.id, worksheetTitle:curWS.title,
+      lastUpdated:new Date().toISOString(),
+      examMode:true,
+      perQuestion:{[q.id]:{examAnswer:userAns,examSubmittedAt:new Date().toISOString()}}
+    },{merge:true}).catch(e=>console.error('[exam save]',e));
+  }
+  updateStrip();
+  // 피드백: "답안 저장됨 (수정 가능)"
+  const fb=document.getElementById('feedback-strip');
+  if(fb){
+    fb.className='feedback-strip show fb-correct';
+    const allDone=allExamAnswered();
+    fb.innerHTML=`💾 답안 저장 (수정 가능) ${allDone?'<button class="btn-next" onclick="confirmExamEnd()" style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;background:#dc2626;color:#fff;font-size:13px;font-weight:700;cursor:pointer">🏁 시험 종료</button>':`<button class="btn-next" onclick="goNextUnanswered()" style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer">다음 문제 →</button>`}`;
+  }
+}
+
+function allExamAnswered(){
+  return curWS.questions.every((q,i)=>answered[i]?.examAnswer!=null||answered[i]?.examAnswer===true);
+}
+
+window.confirmExamEnd=function(){
+  if(confirm('시험을 종료하시겠습니까?\n\n종료 후에는 답안을 수정할 수 없으며 즉시 채점됩니다.')){
+    endExamAndGrade();
+  }
+};
+
+async function endExamAndGrade(){
+  window._examEnded=true;
+  if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
+  // 각 문제 채점
+  let totalScore=0, maxScore=0;
+  for(let i=0;i<curWS.questions.length;i++){
+    const q=curWS.questions[i];
+    const ans=answered[i]?.examAnswer;
+    const score=q.score??1;
+    maxScore+=score;
+    let ok=false;
+    if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
+      if(ans){
+        const norm=s=>String(s||'').replace(/−/g,'-').replace(/\s+/g,'').toLowerCase();
+        ok=[q.answer,...(q.answerAlt||[])].some(a=>norm(a)===norm(ans));
+        if(!ok && !isNaN(parseFloat(ans))){
+          ok=Math.abs(parseFloat(ans)-evalAnswer(q.answer))<0.001;
+        }
+      }
+    } else if(q.type==='multi'){
+      if(Array.isArray(ans)){
+        const expected=[...q.answer].sort((a,b)=>a-b);
+        ok=ans.length===expected.length && ans.every((v,i)=>v===expected[i]);
+      }
+    } else if(q.type==='link'){
+      ok=ans===true;
+    }
+    // graph는 수동 채점 → 일단 미채점
+    answered[i]={...answered[i],correct:ok,score:ok?score:0};
+    if(ok) totalScore+=score;
+  }
+  // Firestore 저장
+  if(curWS && user){
+    const perQ={};
+    curWS.questions.forEach((q,i)=>{
+      perQ[q.id]={
+        examAnswer:answered[i]?.examAnswer||null,
+        correct:answered[i]?.correct||false,
+        score:answered[i]?.score||0,
+        maxScore:q.score??1,
+      };
+    });
+    await setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
+      examFinished:true, examScore:totalScore, examMaxScore:maxScore,
+      isComplete:true, completedAt:new Date().toISOString(),
+      perQuestion:perQ,
+    },{merge:true});
+  }
+  // 결과 화면 표시
+  alert(`📝 시험 완료\n점수: ${totalScore} / ${maxScore}`);
+  finishQuiz();
+}
+
+// 시험지 타이머 시작 (renderQuestion 안에서 첫 호출)
+function startExamTimer(){
+  if(!window._examMode||window._examTimer||!window._examTimeLimit) return;
+  window._examStartTime=Date.now();
+  const endTime=window._examStartTime+window._examTimeLimit*1000;
+  window._examTimer=setInterval(()=>{
+    const remain=Math.max(0,Math.floor((endTime-Date.now())/1000));
+    const m=Math.floor(remain/60), s=remain%60;
+    const el=document.getElementById('exam-timer');
+    if(el) el.textContent=`⏱ ${m}:${String(s).padStart(2,'0')}`;
+    if(remain<=0 && !window._examEnded){
+      clearInterval(window._examTimer);
+      alert('⏰ 시험 시간이 종료되었습니다.\n자동 채점됩니다.');
+      endExamAndGrade();
+    }
+  },1000);
+}
+
+
 async function submitQAns(){
   if(window._isSubmitting) return;
   window._isSubmitting=true; setTimeout(()=>{window._isSubmitting=false;},600);
   const q=curWS.questions[curQIdx];
+  // 시험지 모드: 답안만 저장하고 채점 안 함
+  if(window._examMode && !window._examEnded){
+    return submitExamAns(q);
+  }
 
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="graph"){

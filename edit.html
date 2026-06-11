@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5t">
+<meta name="app-version" content="edit-v2.0f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5t</span>
+    <span class="hdr-badge" id="edit-version">edit-v2.0f</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -273,9 +273,18 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
             <div class="meta-row">
               <span class="meta-label">유형</span>
-              <select class="meta-select" id="ws-type">
+              <select class="meta-select" id="ws-type" onchange="onWsTypeChange()">
                 <option value="regular">일반 학습지</option>
                 <option value="vocab">VOCA 학습지</option>
+                <option value="exam">📝 시험지</option>
+              </select>
+              <select class="meta-select" id="ws-time-limit" style="max-width:110px;display:none" title="시험지 시간 제한">
+                <option value="0">시간 무제한</option>
+                <option value="5">5분</option><option value="10">10분</option>
+                <option value="15">15분</option><option value="20">20분</option>
+                <option value="25">25분</option><option value="30">30분</option>
+                <option value="35">35분</option><option value="40">40분</option>
+                <option value="45">45분</option>
               </select>
               <select class="meta-select" id="ws-diff" style="max-width:100px">
                 <option value="1">★ 기본</option>
@@ -325,7 +334,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           </div>
           <div class="field">
             <label>난이도</label>
-            <select id="q-diff-sel">
+            <input id="q-score" type="number" min="0" step="0.5" placeholder="점수" title="시험지일 때만 적용"
+                style="display:none;width:60px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;font-size:13px;margin-right:6px">
+              <select id="q-diff-sel">
               <option value="1">★ 기본</option>
               <option value="2">★★ 중급</option>
               <option value="3">★★★ 고급</option>
@@ -695,8 +706,13 @@ function renderEditor(){
   uSel.innerHTML = units.map(u=>`<option value="${u.id}" ${u.id===currentWs.unitId?'selected':''}>${u.grade}학년 ${u.title}</option>`).join('');
 
   // 유형
-  const wType = currentWs.type==='vocab'?'vocab':'regular';
+  const wType = currentWs.type==='vocab'?'vocab':(currentWs.type==='exam'?'exam':'regular');
   document.getElementById('ws-type').value = wType;
+  // 시험지 시간 제한 + 점수 필드 표시
+  const _tl=document.getElementById('ws-time-limit');
+  if(_tl){ _tl.value=currentWs.timeLimit||0; _tl.style.display=wType==='exam'?'':'none'; }
+  const _qsc=document.getElementById('q-score');
+  if(_qsc) _qsc.style.display=wType==='exam'?'':'none';
 
   // 문항 제목
   // VOCA 타입이면 두 버튼
@@ -864,6 +880,12 @@ function showPanel(item){
     // 원본 타입 참고 표시
     document.getElementById('q-raw-type').textContent = `저장된 유형: type="${item.type}"${item.answerType?', answerType="'+item.answerType+'"':''}`;
     document.getElementById('q-diff-sel').value = item.diff||1;
+    // 시험지 점수 로드
+    const _qsc=document.getElementById('q-score');
+    if(_qsc){
+      _qsc.value=item.score??'';
+      _qsc.style.display=currentWs?.type==='exam'?'':'none';
+    }
     document.getElementById('q-text').value = (item.text||'');
     // 링크 타입 필드 로드
     document.getElementById('q-link-label').value = item.linkLabel||'';
@@ -1044,7 +1066,22 @@ window.onGraphGridChange=function(){
   document.getElementById('g-nl-settings').style.display=isCoord?'none':'';
 };
 
+
+window.onWsTypeChange=function(){
+  const t=document.getElementById('ws-type').value;
+  document.getElementById('ws-time-limit').style.display=t==='exam'?'':'none';
+  // 현재 학습지 type 즉시 반영
+  if(currentWs) currentWs.type=t;
+  // 점수 입력 필드 표시 토글
+  const _qsc=document.getElementById('q-score');
+  if(_qsc) _qsc.style.display=t==='exam'?'':'none';
+  if(typeof renderSidebar==='function') renderSidebar();
+};
+
 window.saveQuestion = async function(){
+  const _qScore=parseFloat(document.getElementById('q-score')?.value);
+  console.log('[saveQuestion] 시작', {selectedQIdx, _qScore, currentWsType:currentWs?.type, qScoreRaw:document.getElementById('q-score')?.value});
+  const _addScore=q=>{ if(!isNaN(_qScore)&&_qScore>=0){ q.score=_qScore; console.log('[_addScore]', q.id||'(no id)', '→ score:', _qScore); } return q; };
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='graph'){
@@ -1065,7 +1102,7 @@ window.saveQuestion = async function(){
       qData.nMin=parseFloat(document.getElementById('g-nlmin').value)||(-10);
       qData.nMax=parseFloat(document.getElementById('g-nlmax').value)||10;
     }
-    currentWs.questions[qIdxS]=qData;
+    currentWs.questions[qIdxS]=_addScore(qData);
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
   if(type==='link'){
@@ -1076,13 +1113,15 @@ window.saveQuestion = async function(){
     const vocabCntL=(currentWs.vocab||[]).length;
     const qIdxL=isVocabL?selectedQIdx-vocabCntL:selectedQIdx;
     if(qIdxL>=0 && qIdxL<currentWs.questions.length){
-      currentWs.questions[qIdxL]={
+      const _linkQ={
         ...currentWs.questions[qIdxL],
         type:'link',
         text:'',
         linkLabel:linkLabel||'링크 열기',
         linkUrl
       };
+      _addScore(_linkQ);
+      currentWs.questions[qIdxL]=_linkQ;
     }
     renderQList();
     saveToFirestore(currentWs.status||'draft', true);
@@ -1182,13 +1221,16 @@ window.saveQuestion = async function(){
       const ans=[...document.querySelectorAll('[id^="opt-chk-"]')].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
       q.options=opts; q.answer=ans;
     }
-    if(qIdx >= 0 && qIdx < currentWs.questions.length)
+    if(qIdx >= 0 && qIdx < currentWs.questions.length){
+      _addScore(q);
       currentWs.questions[qIdx] = q;
+    }
   }
   renderQList();
   // 적용 즉시 Firestore 자동저장
   const autoStatus = currentWs.status||'draft';
-  saveToFirestore(autoStatus, true); // silent=true
+  saveToFirestore(autoStatus, true);
+  console.log('[saveQuestion] 끝. 현재 currentWs.questions[selectedQIdx]:', currentWs?.questions?.[selectedQIdx]);
 };
 
 // ── 문항 삭제 ──
@@ -1525,7 +1567,8 @@ async function saveToFirestore(status, silent=false){
     title: document.getElementById('ws-title').value.trim(),
     unitId: document.getElementById('ws-unit').value,
     grade: parseInt(document.getElementById('ws-grade').value)||1,
-      type: document.getElementById('ws-type').value==='vocab'?'vocab':'regular',
+      type: ['vocab','exam','regular'].includes(document.getElementById('ws-type').value)?document.getElementById('ws-type').value:'regular',
+    timeLimit: parseInt(document.getElementById('ws-time-limit')?.value)||0,
     diff: parseInt(document.getElementById('ws-diff').value)||1,
     status,
     lastModified: new Date().toISOString(),

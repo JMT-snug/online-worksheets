@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5v">
+<meta name="app-version" content="edit-v1.5w">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5v</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5w</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -273,9 +273,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
             <div class="meta-row">
               <span class="meta-label">유형</span>
-              <select class="meta-select" id="ws-type">
+              <select class="meta-select" id="ws-type" onchange="onWsTypeChange()">
                 <option value="regular">일반 학습지</option>
                 <option value="vocab">VOCA 학습지</option>
+                <option value="exam">📝 시험지</option>
               </select>
               <select class="meta-select" id="ws-diff" style="max-width:100px">
                 <option value="1">★ 기본</option>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0a">
+<meta name="app-version" content="edit-v2.0b">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v2.0a</span>
+    <span class="hdr-badge" id="edit-version">edit-v2.0b</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -875,6 +875,12 @@ function showPanel(item){
     // 원본 타입 참고 표시
     document.getElementById('q-raw-type').textContent = `저장된 유형: type="${item.type}"${item.answerType?', answerType="'+item.answerType+'"':''}`;
     document.getElementById('q-diff-sel').value = item.diff||1;
+    // 시험지 점수 로드
+    const _qsc=document.getElementById('q-score');
+    if(_qsc){
+      _qsc.value=item.score??'';
+      _qsc.style.display=currentWs?.type==='exam'?'':'none';
+    }
     document.getElementById('q-text').value = (item.text||'');
     // 링크 타입 필드 로드
     document.getElementById('q-link-label').value = item.linkLabel||'';
@@ -1059,7 +1065,11 @@ window.onGraphGridChange=function(){
 window.onWsTypeChange=function(){
   const t=document.getElementById('ws-type').value;
   document.getElementById('ws-time-limit').style.display=t==='exam'?'':'none';
-  // 시험지일 때 문항 목록에 점수 입력 표시 (questions가 있으면 사이드바 재렌더)
+  // 현재 학습지 type 즉시 반영
+  if(currentWs) currentWs.type=t;
+  // 점수 입력 필드 표시 토글
+  const _qsc=document.getElementById('q-score');
+  if(_qsc) _qsc.style.display=t==='exam'?'':'none';
   if(typeof renderSidebar==='function') renderSidebar();
 };
 

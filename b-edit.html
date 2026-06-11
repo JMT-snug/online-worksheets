@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0d">
+<meta name="app-version" content="edit-v2.0f">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v2.0d</span>
+    <span class="hdr-badge" id="edit-version">edit-v2.0f</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -706,8 +706,13 @@ function renderEditor(){
   uSel.innerHTML = units.map(u=>`<option value="${u.id}" ${u.id===currentWs.unitId?'selected':''}>${u.grade}학년 ${u.title}</option>`).join('');
 
   // 유형
-  const wType = currentWs.type==='vocab'?'vocab':'regular';
+  const wType = currentWs.type==='vocab'?'vocab':(currentWs.type==='exam'?'exam':'regular');
   document.getElementById('ws-type').value = wType;
+  // 시험지 시간 제한 + 점수 필드 표시
+  const _tl=document.getElementById('ws-time-limit');
+  if(_tl){ _tl.value=currentWs.timeLimit||0; _tl.style.display=wType==='exam'?'':'none'; }
+  const _qsc=document.getElementById('q-score');
+  if(_qsc) _qsc.style.display=wType==='exam'?'':'none';
 
   // 문항 제목
   // VOCA 타입이면 두 버튼
@@ -1216,8 +1221,10 @@ window.saveQuestion = async function(){
       const ans=[...document.querySelectorAll('[id^="opt-chk-"]')].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
       q.options=opts; q.answer=ans;
     }
-    if(qIdx >= 0 && qIdx < currentWs.questions.length)
+    if(qIdx >= 0 && qIdx < currentWs.questions.length){
+      _addScore(q);
       currentWs.questions[qIdx] = q;
+    }
   }
   renderQList();
   // 적용 즉시 Firestore 자동저장

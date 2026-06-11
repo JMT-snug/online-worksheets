@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0b">
+  <meta name="app-version" content="7.0c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0b";
+const VERSION = "7.0c";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1395,7 +1395,7 @@ function renderQuestion() {
   // 시험지: 타이머 시작 + 표시
   if(window._examMode){
     const tEl=document.getElementById('exam-timer');
-    if(tEl && window._examTimeLimit){ tEl.style.display='inline'; startExamTimer(); }
+    if(tEl){ tEl.style.display='inline'; startExamTimer(); }
   }
   qTokens=[]; qEditPart=null; qCursorIdx=0;
   // 이전 문제 feedback 완전 초기화 (정답 잠깐 표시 방지)
@@ -2590,20 +2590,34 @@ async function endExamAndGrade(){
 
 // 시험지 타이머 시작 (renderQuestion 안에서 첫 호출)
 function startExamTimer(){
-  if(!window._examMode||window._examTimer||!window._examTimeLimit) return;
+  if(!window._examMode||window._examTimer) return;
   window._examStartTime=Date.now();
-  const endTime=window._examStartTime+window._examTimeLimit*1000;
+  const hasLimit=!!window._examTimeLimit;
+  const endTime=hasLimit?window._examStartTime+window._examTimeLimit*1000:0;
   window._examTimer=setInterval(()=>{
-    const remain=Math.max(0,Math.floor((endTime-Date.now())/1000));
-    const m=Math.floor(remain/60), s=remain%60;
     const el=document.getElementById('exam-timer');
-    if(el) el.textContent=`⏱ ${m}:${String(s).padStart(2,'0')}`;
-    if(remain<=0 && !window._examEnded){
-      clearInterval(window._examTimer);
-      alert('⏰ 시험 시간이 종료되었습니다.\n자동 채점됩니다.');
-      endExamAndGrade();
+    if(!el) return;
+    if(hasLimit){
+      const remain=Math.max(0,Math.floor((endTime-Date.now())/1000));
+      const m=Math.floor(remain/60), s=remain%60;
+      el.textContent=`⏱ ${m}:${String(s).padStart(2,'0')}`;
+      el.style.color=remain<60?'#dc2626':remain<180?'#f59e0b':'#dc2626';
+      if(remain<=0 && !window._examEnded){
+        clearInterval(window._examTimer);
+        alert('⏰ 시험 시간이 종료되었습니다.\n자동 채점됩니다.');
+        endExamAndGrade();
+      }
+    } else {
+      // 무제한: 경과 시간 표시
+      const elapsed=Math.floor((Date.now()-window._examStartTime)/1000);
+      const m=Math.floor(elapsed/60), s=elapsed%60;
+      el.textContent=`⏱ ${m}:${String(s).padStart(2,'0')}`;
+      el.style.color='#15803d';
     }
   },1000);
+  // 즉시 한 번 표시
+  const el=document.getElementById('exam-timer');
+  if(el) el.textContent=hasLimit?`⏱ ${Math.floor(window._examTimeLimit/60)}:${String(window._examTimeLimit%60).padStart(2,'0')}`:'⏱ 0:00';
 }
 
 
@@ -2838,8 +2852,13 @@ async function finishQuiz(){
   const total=curWS.questions.length;
   const tries=attempts.reduce((s,a,i)=>
     curWS.questions[i]?.type==="link"?s:s+a, 0);
-  document.getElementById("r-score").textContent=total;
-  document.getElementById("r-of").textContent=`/ ${total}`;
+  if(window._examMode){
+    document.getElementById("r-score").textContent=window._examFinalScore??0;
+    document.getElementById("r-of").textContent=`/ ${window._examMaxScore??0}`;
+  } else {
+    document.getElementById("r-score").textContent=total;
+    document.getElementById("r-of").textContent=`/ ${total}`;
+  }
   const perfectFirst = tries===total;
   // 오답 횟수 = 총 시도 - 문항 수 (각 문항당 마지막 시도는 정답)
   const wrongTotal=attempts.reduce((s,a,i)=>{
@@ -2847,23 +2866,45 @@ async function finishQuiz(){
     if(!q||q.type==="link") return s;
     return s+a; // attempts는 이미 오답만 카운트
   },0);
-  document.getElementById("r-msg").textContent=
-    wrongTotal===0?"완벽해요! 🏆":
-    wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
-  document.getElementById("r-sub").textContent=
-    wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
-                   : `총 오답 ${wrongTotal}회`;
+  if(window._examMode){
+    // 시험지: 점수 기반 메시지
+    const sc=window._examFinalScore??0;
+    const mx=window._examMaxScore??0;
+    const pct=mx>0?Math.round(sc/mx*100):0;
+    document.getElementById("r-msg").textContent=
+      pct===100?"만점이에요! 🏆":pct>=80?"훌륭해요! 🎉":pct>=60?"잘했어요! 👍":"다시 도전해봐요 💪";
+    document.getElementById("r-sub").textContent=`📝 시험 점수: ${sc} / ${mx} (${pct}%)`;
+  } else {
+    document.getElementById("r-msg").textContent=
+      wrongTotal===0?"완벽해요! 🏆":
+      wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
+    document.getElementById("r-sub").textContent=
+      wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
+                     : `총 오답 ${wrongTotal}회`;
+  }
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
     const qTxt=(q.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>
-      <div class="r-body">
-        <div class="r-qnum">문제 ${i+1}&nbsp;
-          <span class="r-qtext">${q.text||""}</span>
-        </div>
-        ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
-      </div>`;
+    if(window._examMode){
+      const ec=answered[i]?.correct;
+      const escr=answered[i]?.score??0;
+      const emax=q.score??1;
+      row.innerHTML=`<span class="r-icon">${ec===true?'⭕':ec===false?'❌':'⬜'}</span>
+        <div class="r-body">
+          <div class="r-qnum">문제 ${i+1} &nbsp; ${escr}/${emax}점&nbsp;
+            <span class="r-qtext">${q.text||""}</span>
+          </div>
+        </div>`;
+    } else {
+      row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>
+        <div class="r-body">
+          <div class="r-qnum">문제 ${i+1}&nbsp;
+            <span class="r-qtext">${q.text||""}</span>
+          </div>
+          ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
+        </div>`;
+    }
     list.appendChild(row);
   });
   // 결과 목록 MathJax 렌더

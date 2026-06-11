@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0c">
+  <meta name="app-version" content="7.0d">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0c";
+const VERSION = "7.0d";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1425,7 +1425,7 @@ function renderQuestion() {
     <div class="problem-card">
       <div class="q-num">
         ${_qNum}
-        <span class="q-diff">${DIFFS[q.diff||1]}</span>
+        <span class="q-diff">${DIFFS[q.diff||1]}</span>${window._examMode&&q.score!=null?` <span style="font-size:11px;font-weight:700;color:#0891b2;background:#cffafe;padding:2px 8px;border-radius:10px;margin-left:6px">${q.score}점</span>`:""}
         ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
@@ -2890,11 +2890,13 @@ async function finishQuiz(){
       const ec=answered[i]?.correct;
       const escr=answered[i]?.score??0;
       const emax=q.score??1;
-      row.innerHTML=`<span class="r-icon">${ec===true?'⭕':ec===false?'❌':'⬜'}</span>
+      row.innerHTML=`<span class="r-icon" style="font-size:20px">${ec===true?'⭕':ec===false?'❌':'⬜'}</span>
         <div class="r-body">
-          <div class="r-qnum">문제 ${i+1} &nbsp; ${escr}/${emax}점&nbsp;
-            <span class="r-qtext">${q.text||""}</span>
+          <div class="r-qnum">
+            <span>문제 ${i+1}</span>
+            <span style="margin-left:8px;color:${ec===true?'var(--green)':'var(--red)'};font-weight:700">${escr}/${emax}점</span>
           </div>
+          <div style="font-size:13px;color:var(--ink2);margin-top:2px"><span class="r-qtext">${q.text||""}</span></div>
         </div>`;
     } else {
       row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>

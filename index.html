@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0d">
+  <meta name="app-version" content="7.0f">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0d";
+const VERSION = "7.0f";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1307,10 +1307,13 @@ let _activeWsId=null;
 async function startQuiz(ws) {
   _activeWsId=ws.id; _wsIsCompleted=false;
   curWS=ws; curQIdx=0;
-  // 시험지 모드 초기화
+  // 시험지 모드 초기화 (일반 학습지면 타이머 중지/숨김)
+  if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
+  const _tEl=document.getElementById('exam-timer');
+  if(_tEl){ _tEl.style.display='none'; _tEl.textContent=''; }
   window._examMode = ws.type==='exam';
-  window._examTimeLimit = (ws.timeLimit||0)*60; // 초 단위
-  window._examStartTime = null;  // 첫 진입 시 설정
+  window._examTimeLimit = (ws.timeLimit||0)*60;
+  window._examStartTime = null;
   window._examEnded = false;
   // 랜덤 출제: 원본 보존 후 셔플
   if(!ws._orig) ws._orig=ws.questions;
@@ -2536,8 +2539,9 @@ window.confirmExamEnd=function(){
 };
 
 async function endExamAndGrade(){
+  if(window._examEnded) return;  // 중복 호출 방지
   window._examEnded=true;
-  if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
+  _stopExamTimer();
   // 각 문제 채점
   let totalScore=0, maxScore=0;
   for(let i=0;i<curWS.questions.length;i++){
@@ -2586,6 +2590,14 @@ async function endExamAndGrade(){
   // 결과 화면 표시
   alert(`📝 시험 완료\n점수: ${totalScore} / ${maxScore}`);
   finishQuiz();
+}
+
+
+function _stopExamTimer(){
+  if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
+  const _tEl=document.getElementById('exam-timer');
+  if(_tEl){ _tEl.style.display='none'; _tEl.textContent=''; }
+  window._examMode=false;
 }
 
 // 시험지 타이머 시작 (renderQuestion 안에서 첫 호출)
@@ -3034,12 +3046,14 @@ function updateNavBtns(){
 
 document.getElementById("btn-retry").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  _stopExamTimer();
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   startQuiz(curWS);
 });
 document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  _stopExamTimer();
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
@@ -3055,6 +3069,7 @@ document.getElementById("btn-home").addEventListener("click",()=>{
 });
 document.getElementById("btn-back").addEventListener("click",async ()=>{
   document.removeEventListener("keydown", quizKeyHandler);
+  _stopExamTimer();
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="6.7a">
+  <meta name="app-version" content="7.0a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "6.7a";
+const VERSION = "7.0a";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2503,12 +2503,22 @@ async function submitExamAns(q){
   if(fb){
     fb.className='feedback-strip show fb-correct';
     const allDone=allExamAnswered();
-    fb.innerHTML=`💾 답안 저장 (수정 가능) ${allDone?'<button class="btn-next" onclick="confirmExamEnd()" style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;background:#dc2626;color:#fff;font-size:13px;font-weight:700;cursor:pointer">🏁 시험 종료</button>':`<button class="btn-next" onclick="goNextUnanswered()" style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer">다음 문제 →</button>`}`;
+    const _btnStyle='padding:5px 14px;border-radius:7px;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-left:8px';
+    const _endBtn=`<button onclick="confirmExamEnd()" style="${_btnStyle};background:#dc2626">🏁 시험 종료</button>`;
+    const _nextBtn=curQIdx<curWS.questions.length-1?`<button onclick="moveQ(1)" style="${_btnStyle};background:var(--green)">다음 문제 →</button>`:'';
+    fb.innerHTML=`💾 답안 저장됨 (수정 가능) ${_nextBtn} ${_endBtn}`;
   }
 }
 
 function allExamAnswered(){
-  return curWS.questions.every((q,i)=>answered[i]?.examAnswer!=null||answered[i]?.examAnswer===true);
+  return curWS.questions.every((q,i)=>{
+    const a=answered[i]?.examAnswer;
+    if(a===true) return true;  // link
+    if(a===null||a===undefined) return false;
+    if(typeof a==='string') return a.trim().length>0;
+    if(Array.isArray(a)) return a.length>0;
+    return true;  // graph drawing 등
+  });
 }
 
 window.confirmExamEnd=function(){

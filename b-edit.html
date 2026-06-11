@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5w">
+<meta name="app-version" content="edit-v2.0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5w</span>
+    <span class="hdr-badge" id="edit-version">edit-v2.0a</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -277,6 +277,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <option value="regular">일반 학습지</option>
                 <option value="vocab">VOCA 학습지</option>
                 <option value="exam">📝 시험지</option>
+              </select>
+              <select class="meta-select" id="ws-time-limit" style="max-width:110px;display:none" title="시험지 시간 제한">
+                <option value="0">시간 무제한</option>
+                <option value="5">5분</option><option value="10">10분</option>
+                <option value="15">15분</option><option value="20">20분</option>
+                <option value="25">25분</option><option value="30">30분</option>
+                <option value="35">35분</option><option value="40">40분</option>
+                <option value="45">45분</option>
               </select>
               <select class="meta-select" id="ws-diff" style="max-width:100px">
                 <option value="1">★ 기본</option>

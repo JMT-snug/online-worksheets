@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0a">
+  <meta name="app-version" content="7.0b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0a";
+const VERSION = "7.0b";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1937,6 +1937,10 @@ window.toggleMulti = function(i){
 window.submitMulti = function(){
   const q = curWS.questions[curQIdx];
   if(q.type!=='multi') return;
+  // 시험지 모드: 채점 안 함, 답안만 저장
+  if(window._examMode && !window._examEnded){
+    return submitExamAns(q);
+  }
   const sel = [...multiSel].sort((a,b)=>a-b);
   const ans = [...q.answer].sort((a,b)=>a-b);
   const ok = sel.length===ans.length && sel.every((v,i)=>v===ans[i]);
@@ -2378,6 +2382,10 @@ function exprEquivCheck(userExpr, correctExpr){
 function submitStep3(stepNum){
   const q=curWS.questions[curQIdx];
   if(q.type!=="step3") return;
+  // 시험지 모드: 시험지에서는 step3 사용 비권장이나 안전 처리
+  if(window._examMode && !window._examEnded){
+    return submitExamAns(q);
+  }
   const steps=getSteps(q);
   const st=getS3State(q.id);
   const i=stepNum-1;
@@ -2464,7 +2472,7 @@ window.goStep3=goStep3;
 // 시험지: 답안만 저장 (채점 X)
 async function submitExamAns(q){
   let userAns=null;
-  if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
+  if(['word','equation','word_text','word_expr'].includes(q.type)){
     if(isExprInput(q)){
       userAns=qTokens.map(t=>{
         if(t.type==='char') return t.val;

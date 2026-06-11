@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v1.5t">
+<meta name="app-version" content="edit-v1.5v">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -213,7 +213,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
   <!-- 헤더 -->
   <header class="hdr">
     <span class="hdr-title">✏️ 학습지 편집기</span>
-    <span class="hdr-badge" id="edit-version">edit-v1.5t</span>
+    <span class="hdr-badge" id="edit-version">edit-v1.5v</span>
     <div class="hdr-space"></div>
     <button class="hdr-btn" id="btn-delete-ws"
       style="background:var(--red-lt,#fee2e2);color:#b91c1c;border:1px solid #fca5a5">🗑 학습지 삭제</button>
@@ -325,7 +325,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           </div>
           <div class="field">
             <label>난이도</label>
-            <select id="q-diff-sel">
+            <input id="q-score" type="number" min="0" step="0.5" placeholder="점수" title="시험지일 때만 적용"
+                style="display:none;width:60px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;font-size:13px;margin-right:6px">
+              <select id="q-diff-sel">
               <option value="1">★ 기본</option>
               <option value="2">★★ 중급</option>
               <option value="3">★★★ 고급</option>
@@ -1044,7 +1046,17 @@ window.onGraphGridChange=function(){
   document.getElementById('g-nl-settings').style.display=isCoord?'none':'';
 };
 
+
+window.onWsTypeChange=function(){
+  const t=document.getElementById('ws-type').value;
+  document.getElementById('ws-time-limit').style.display=t==='exam'?'':'none';
+  // 시험지일 때 문항 목록에 점수 입력 표시 (questions가 있으면 사이드바 재렌더)
+  if(typeof renderSidebar==='function') renderSidebar();
+};
+
 window.saveQuestion = async function(){
+  const _qScore=parseFloat(document.getElementById('q-score')?.value);
+  const _addScore=q=>{ if(!isNaN(_qScore)&&_qScore>=0) q.score=_qScore; return q; };
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='graph'){
@@ -1065,7 +1077,7 @@ window.saveQuestion = async function(){
       qData.nMin=parseFloat(document.getElementById('g-nlmin').value)||(-10);
       qData.nMax=parseFloat(document.getElementById('g-nlmax').value)||10;
     }
-    currentWs.questions[qIdxS]=qData;
+    currentWs.questions[qIdxS]=_addScore(qData);
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
   if(type==='link'){
@@ -1525,7 +1537,8 @@ async function saveToFirestore(status, silent=false){
     title: document.getElementById('ws-title').value.trim(),
     unitId: document.getElementById('ws-unit').value,
     grade: parseInt(document.getElementById('ws-grade').value)||1,
-      type: document.getElementById('ws-type').value==='vocab'?'vocab':'regular',
+      type: ['vocab','exam','regular'].includes(document.getElementById('ws-type').value)?document.getElementById('ws-type').value:'regular',
+    timeLimit: parseInt(document.getElementById('ws-time-limit')?.value)||0,
     diff: parseInt(document.getElementById('ws-diff').value)||1,
     status,
     lastModified: new Date().toISOString(),

@@ -897,7 +897,7 @@ function showPanel(item){
     const imgUrl = item.imageUrl||'';
     document.getElementById('q-img-url').value = imgUrl;
     if(imgUrl){
-      document.getElementById('q-img-tag').src = imgUrl;
+      document.getElementById('q-img-tag').src = bustCache(imgUrl);
       document.getElementById('q-img-preview').style.display = '';
       document.getElementById('q-img-status').textContent = '저장된 이미지';
     } else {
@@ -1642,6 +1642,15 @@ document.getElementById('btn-add-unit').onclick = async () => {
 
 
 // ── 이미지 업로드 (Google Drive) ──
+
+// 캐시 무효화: Drive 이미지가 수정돼도 새로 로드되도록 ?v=timestamp 추가
+function bustCache(url){
+  if(!url) return url;
+  if(url.startsWith('data:')) return url;  // base64는 그대로
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'v=' + Date.now();
+}
+
 window.previewLocalImage = function(input){
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
@@ -1689,7 +1698,7 @@ window.pickFromDrive = async function(){
       card.onclick=()=>{
         const url=`https://drive.google.com/uc?export=view&id=${f.id}`;
         document.getElementById('q-img-url').value=url;
-        document.getElementById('q-img-tag').src=url;
+        document.getElementById('q-img-tag').src=bustCache(url);
         document.getElementById('q-img-preview').style.display='';
         document.getElementById('q-img-status').textContent=`✅ ${f.name}`;
         modal.style.display='none';
@@ -1714,7 +1723,7 @@ window.importDriveLink = function(raw){
   if(!id){ toast('Drive 파일 ID를 찾을 수 없습니다'); return; }
   const url=`https://lh3.googleusercontent.com/d/${id}`;
   document.getElementById('q-img-url').value=url;
-  document.getElementById('q-img-tag').src=url;
+  document.getElementById('q-img-tag').src=bustCache(url);
   document.getElementById('q-img-preview').style.display='';
   document.getElementById('q-img-status').textContent=`✅ ID: ${id}`;
   toast('이미지 링크 적용');
@@ -1760,7 +1769,7 @@ window.uploadImageToDrive = async function(){
     // 3. URL 저장
     const url = `https://drive.google.com/uc?export=view&id=${id}`;
     document.getElementById('q-img-url').value = url;
-    document.getElementById('q-img-tag').src = url;
+    document.getElementById('q-img-tag').src = bustCache(url);
     document.getElementById('q-img-preview').style.display = '';
     status.textContent = `✅ 업로드 완료: ${file.name}`;
     toast('이미지 업로드 완료');

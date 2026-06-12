@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0j">
+<meta name="app-version" content="edit-v2.0k">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -577,6 +577,23 @@ async function loadAll(){
     worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
 
     renderSidebar();
+    // 새로고침 후 직전 학습지/문항 복원
+    try{
+      const lastWsId=sessionStorage.getItem('edit_lastWsId');
+      const lastQIdx=sessionStorage.getItem('edit_lastQIdx');
+      if(lastWsId && worksheets.find(w=>w.id===lastWsId)){
+        await window.selectWs(lastWsId);
+        if(lastQIdx!==null && lastQIdx!==''){
+          const idx=parseInt(lastQIdx);
+          // selectQuestion에 필요한 allItems 재구성
+          const allItems = currentWs?.type==='vocab'
+            ? [...(currentWs.vocab||[]).map((v,i)=>({...v,_type:'vocab',_idx:i})),
+               ...(currentWs.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}))]
+            : (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
+          if(idx>=0 && idx<allItems.length) selectQuestion(idx, allItems);
+        }
+      }
+    }catch(e){ console.warn('[복원 실패]',e); }
     const status = units.length===0 && worksheets.length===0
       ? '⚠ 데이터 없음 — JS 마이그레이션 버튼을 눌러주세요'
       : `${units.length}개 단원, ${worksheets.length}개 학습지`;

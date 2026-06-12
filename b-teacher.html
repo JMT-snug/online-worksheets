@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8t">
+<meta name="app-version" content="3.8v">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8t";
+const VERSION = "3.8v";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -229,7 +229,7 @@ const STEP_MARK={a:'①',b:'②',c:'③',d:'④',e:'⑤',f:'⑥'};
 function fmtQid(qid){
   return (qid||'').replace(/^q(\d+)([a-f]?)$/,(_,n,s)=>'Q'+n+(s?STEP_MARK[s]:''));
 } // teacher 버전
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
 
 let UNITS = [
@@ -354,6 +354,14 @@ async function loadAll(){
     if(cSnap.exists()) classes=cSnap.data().classes||{};
   }catch(e){ classes={}; }
   buildSidebar();
+  // 새로고침 후 직전 학습지 복원
+  try{
+    const lastWsId=sessionStorage.getItem('teacher_lastWsId');
+    if(lastWsId && WORKSHEETS.find(w=>w.id===lastWsId)){
+      renderWS(lastWsId);
+      return;
+    }
+  }catch(e){}
   renderOverview();
 }
 

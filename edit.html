@@ -1138,12 +1138,14 @@ window.saveQuestion = async function(){
       if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
       return o;
     });
-    currentWs.questions[qIdxS]={
+    const _step3Q={
       id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,
       type:'step3', diff:parseInt(document.getElementById('q-diff-sel').value)||1,
       text:document.getElementById('q-text').value,
+      imageUrl:document.getElementById('q-img-url')?.value||'',
       steps,
     };
+    currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
   }
   if(type==='pool_random'){

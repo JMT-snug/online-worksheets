@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0g">
+  <meta name="app-version" content="7.0i">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0g";
+const VERSION = "7.0i";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -637,6 +637,8 @@ function showPage(id) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   window.scrollTo(0,0);
+  // 새로고침 복원용 상태 저장
+  try{ sessionStorage.setItem('lastPage', id); }catch(e){}
 }
 
 /* ── AUTH ── */
@@ -707,6 +709,25 @@ onAuthStateChanged(auth, async u => {
   await loadCurriculum();
   await loadTeacherData();
   await loadDash();
+  // 새로고침 시 직전 페이지 복원
+  try{
+    const lastPage=sessionStorage.getItem('lastPage');
+    const lastUnit=sessionStorage.getItem('lastUnit');
+    const lastQuizWsId=sessionStorage.getItem('lastQuizWsId');
+    // 학습지 풀이 중이었으면 그 학습지 복원
+    if(lastQuizWsId){
+      const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
+      if(ws){
+        if(ws.type==='vocab') startVocabQuiz(ws);
+        else startQuiz(ws);
+        return;
+      }
+    }
+    if(lastPage==='unit-page' && lastUnit){
+      const u=JSON.parse(lastUnit);
+      if(UNITS.find(x=>x.id===u.id)) showUnitPage(u);
+    }
+  }catch(e){}
 });
 
 function updateHeader(u) {
@@ -966,6 +987,7 @@ window.toggleTeacherClass=async function(wsId,clsName,btn){
 
 function showUnitPage(unit) {
   window._currentUnit = unit;
+  try{ sessionStorage.setItem('lastUnit', JSON.stringify(unit)); }catch(e){}
   const gc = GRADE_COLOR[unit.grade];
   const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};
   document.getElementById("unit-title").textContent = unit.title;
@@ -1306,6 +1328,7 @@ function _onVisibilityChange(){
 let _activeWsId=null;
 async function startQuiz(ws) {
   _activeWsId=ws.id; _wsIsCompleted=false;
+  try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   curWS=ws; curQIdx=0;
   // 시험지 모드 초기화 (일반 학습지면 타이머 중지/숨김)
   if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
@@ -3055,6 +3078,7 @@ document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopExamTimer();
   _stopProgressTimer();
+  try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
   if(curWS) wsProgress[curWS.id]={
@@ -3071,6 +3095,7 @@ document.getElementById("btn-back").addEventListener("click",async ()=>{
   document.removeEventListener("keydown", quizKeyHandler);
   _stopExamTimer();
   _stopProgressTimer();
+  try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
   // wsProgress 메모리 즉시 반영 (화면 갱신용)
@@ -3136,6 +3161,7 @@ const VQ_TARGET=50, VQ_TIME=10;
 
 function startVocabQuiz(ws){
   vqWS=ws; vqStreak=0;
+  try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   document.getElementById('vq-complete').style.display='none';
   showPage('quiz-vocab-page');
   document.getElementById('vq-title').textContent=ws.title;
@@ -3294,6 +3320,7 @@ function vqTimeout(correct){
 
 function leaveVocabQuiz(){
   clearInterval(vqTimer);
+  try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
   showPage('unit-page');
 }
 window.leaveVocabQuiz=leaveVocabQuiz;

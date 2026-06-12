@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0f">
+<meta name="app-version" content="edit-v2.0k">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -507,7 +507,7 @@ const FB = {
   messagingSenderId:"404100779359",
   appId:"1:404100779359:web:d94e5be4b4f29ae9c55bb0"
 };
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr"];
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
 
 const fbApp = initializeApp(FB);
 const auth  = getAuth(fbApp);
@@ -577,6 +577,23 @@ async function loadAll(){
     worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
 
     renderSidebar();
+    // 새로고침 후 직전 학습지/문항 복원
+    try{
+      const lastWsId=sessionStorage.getItem('edit_lastWsId');
+      const lastQIdx=sessionStorage.getItem('edit_lastQIdx');
+      if(lastWsId && worksheets.find(w=>w.id===lastWsId)){
+        await window.selectWs(lastWsId);
+        if(lastQIdx!==null && lastQIdx!==''){
+          const idx=parseInt(lastQIdx);
+          // selectQuestion에 필요한 allItems 재구성
+          const allItems = currentWs?.type==='vocab'
+            ? [...(currentWs.vocab||[]).map((v,i)=>({...v,_type:'vocab',_idx:i})),
+               ...(currentWs.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}))]
+            : (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
+          if(idx>=0 && idx<allItems.length) selectQuestion(idx, allItems);
+        }
+      }
+    }catch(e){ console.warn('[복원 실패]',e); }
     const status = units.length===0 && worksheets.length===0
       ? '⚠ 데이터 없음 — JS 마이그레이션 버튼을 눌러주세요'
       : `${units.length}개 단원, ${worksheets.length}개 학습지`;
@@ -897,7 +914,7 @@ function showPanel(item){
     const imgUrl = item.imageUrl||'';
     document.getElementById('q-img-url').value = imgUrl;
     if(imgUrl){
-      document.getElementById('q-img-tag').src = imgUrl;
+      document.getElementById('q-img-tag').src = bustCache(imgUrl);
       document.getElementById('q-img-preview').style.display = '';
       document.getElementById('q-img-status').textContent = '저장된 이미지';
     } else {
@@ -1138,12 +1155,14 @@ window.saveQuestion = async function(){
       if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
       return o;
     });
-    currentWs.questions[qIdxS]={
+    const _step3Q={
       id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,
       type:'step3', diff:parseInt(document.getElementById('q-diff-sel').value)||1,
       text:document.getElementById('q-text').value,
+      imageUrl:document.getElementById('q-img-url')?.value||'',
       steps,
     };
+    currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
   }
   if(type==='pool_random'){
@@ -1640,6 +1659,15 @@ document.getElementById('btn-add-unit').onclick = async () => {
 
 
 // ── 이미지 업로드 (Google Drive) ──
+
+// 캐시 무효화: Drive 이미지가 수정돼도 새로 로드되도록 ?v=timestamp 추가
+function bustCache(url){
+  if(!url) return url;
+  if(url.startsWith('data:')) return url;  // base64는 그대로
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + 'v=' + Date.now();
+}
+
 window.previewLocalImage = function(input){
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
@@ -1687,7 +1715,7 @@ window.pickFromDrive = async function(){
       card.onclick=()=>{
         const url=`https://drive.google.com/uc?export=view&id=${f.id}`;
         document.getElementById('q-img-url').value=url;
-        document.getElementById('q-img-tag').src=url;
+        document.getElementById('q-img-tag').src=bustCache(url);
         document.getElementById('q-img-preview').style.display='';
         document.getElementById('q-img-status').textContent=`✅ ${f.name}`;
         modal.style.display='none';
@@ -1712,7 +1740,7 @@ window.importDriveLink = function(raw){
   if(!id){ toast('Drive 파일 ID를 찾을 수 없습니다'); return; }
   const url=`https://lh3.googleusercontent.com/d/${id}`;
   document.getElementById('q-img-url').value=url;
-  document.getElementById('q-img-tag').src=url;
+  document.getElementById('q-img-tag').src=bustCache(url);
   document.getElementById('q-img-preview').style.display='';
   document.getElementById('q-img-status').textContent=`✅ ID: ${id}`;
   toast('이미지 링크 적용');
@@ -1758,7 +1786,7 @@ window.uploadImageToDrive = async function(){
     // 3. URL 저장
     const url = `https://drive.google.com/uc?export=view&id=${id}`;
     document.getElementById('q-img-url').value = url;
-    document.getElementById('q-img-tag').src = url;
+    document.getElementById('q-img-tag').src = bustCache(url);
     document.getElementById('q-img-preview').style.display = '';
     status.textContent = `✅ 업로드 완료: ${file.name}`;
     toast('이미지 업로드 완료');

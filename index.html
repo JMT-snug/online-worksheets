@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0i">
+  <meta name="app-version" content="7.0j">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0i";
+const VERSION = "7.0j";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -709,25 +709,26 @@ onAuthStateChanged(auth, async u => {
   await loadCurriculum();
   await loadTeacherData();
   await loadDash();
-  // 새로고침 시 직전 페이지 복원
-  try{
-    const lastPage=sessionStorage.getItem('lastPage');
-    const lastUnit=sessionStorage.getItem('lastUnit');
-    const lastQuizWsId=sessionStorage.getItem('lastQuizWsId');
-    // 학습지 풀이 중이었으면 그 학습지 복원
-    if(lastQuizWsId){
-      const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
-      if(ws){
-        if(ws.type==='vocab') startVocabQuiz(ws);
-        else startQuiz(ws);
-        return;
+  // 새로고침 시 직전 페이지 복원 (microtask 후 실행해 함수 정의 보장)
+  setTimeout(()=>{
+    try{
+      const lastPage=sessionStorage.getItem('lastPage');
+      const lastUnit=sessionStorage.getItem('lastUnit');
+      const lastQuizWsId=sessionStorage.getItem('lastQuizWsId');
+      if(lastQuizWsId){
+        const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
+        if(ws){
+          if(ws.type==='vocab') startVocabQuiz(ws);
+          else startQuiz(ws);
+          return;
+        }
       }
-    }
-    if(lastPage==='unit-page' && lastUnit){
-      const u=JSON.parse(lastUnit);
-      if(UNITS.find(x=>x.id===u.id)) showUnitPage(u);
-    }
-  }catch(e){}
+      if(lastPage==='unit-page' && lastUnit){
+        const u=JSON.parse(lastUnit);
+        if(UNITS.find(x=>x.id===u.id)) showUnitPage(u);
+      }
+    }catch(e){ console.warn('[페이지 복원 실패]',e); }
+  },0);
 });
 
 function updateHeader(u) {

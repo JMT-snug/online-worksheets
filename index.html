@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1d">
+  <meta name="app-version" content="7.1f">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1d";
+const VERSION = "7.1f";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3145,8 +3145,14 @@ let undoStack=[]; // 획 시작 전 스냅샷 배열
 let canvasStore={}; // key: qIdx, value: ImageData
 
 window.undoCanvas=function(){
-  if(undoStack.length===0) return;
-  ctx.putImageData(undoStack.pop(),0,0);
+  // 오른쪽 큰 캔버스 undo
+  if(undoStack.length>0){ ctx.putImageData(undoStack.pop(),0,0); }
+  // 문제 영역 캔버스 undo
+  const pCv=document.getElementById('problem-canvas');
+  if(pCv && pCv._undo && pCv._undo.length>0){
+    pCv.getContext('2d').putImageData(pCv._undo.pop(),0,0);
+    try{ _pCanvasStore[curQIdx]=pCv.getContext('2d').getImageData(0,0,pCv.width,pCv.height); }catch(e){}
+  }
 };
 function resetUndoStack(){ undoStack=[]; }
 
@@ -3189,15 +3195,26 @@ function initProblemCanvas(){
       return [cx-r.left, cy-r.top];  // CSS 좌표 그대로 (ctx.setTransform이 DPR 처리)
     };
     const start=e=>{
-      // 답입력기 위에서 클릭하면 무시 (pointer-events:auto가 가로채지만 안전장치)
       e.preventDefault();
       drawing=true;
       [lx,ly]=pos(e);
       const c=cv.getContext('2d');
-      c.strokeStyle=penColor||'#1c1917';
-      c.lineWidth=penSize||3;
+      // 획 시작 전 스냅샷 저장 (undo용)
+      try{
+        if(!cv._undo) cv._undo=[];
+        cv._undo.push(c.getImageData(0,0,cv.width,cv.height));
+        if(cv._undo.length>30) cv._undo.shift();  // 메모리 보호
+      }catch(e){}
       c.lineCap='round'; c.lineJoin='round';
-      c.globalCompositeOperation=eraser?'destination-out':'source-over';
+      if(eraser){
+        c.globalCompositeOperation='destination-out';
+        c.strokeStyle='rgba(0,0,0,1)';
+        c.lineWidth=(penSize||3)*10;
+      } else {
+        c.globalCompositeOperation='source-over';
+        c.strokeStyle=penColor||'#1c1917';
+        c.lineWidth=penSize||3;
+      }
       c.beginPath(); c.moveTo(lx,ly);
       if(!eraser){
         c.beginPath(); c.arc(lx,ly,(penSize||3)/2,0,Math.PI*2);
@@ -3656,10 +3673,23 @@ function restoreCanvasState(idx){
 }
 
 function clearCanvas(){
-  // compositeOperation 초기화 후 지우기
+  // 오른쪽 큰 캔버스 지우기
   ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
   delete canvasStore[canvasViewIdx];
+  // 문제 영역 캔버스도 함께 지우기
+  const pCv=document.getElementById('problem-canvas');
+  if(pCv){
+    const pCtx=pCv.getContext('2d');
+    // 직전 상태 저장 후 지우기 (undo로 복원 가능)
+    try{
+      if(!pCv._undo) pCv._undo=[];
+      pCv._undo.push(pCtx.getImageData(0,0,pCv.width,pCv.height));
+    }catch(e){}
+    pCtx.globalCompositeOperation='source-over';
+    pCtx.clearRect(0,0,pCv.width,pCv.height);
+    delete _pCanvasStore[curQIdx];
+  }
 }
 
 function cvPos(e){

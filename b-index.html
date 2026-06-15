@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1a">
+  <meta name="app-version" content="7.1b">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1a";
+const VERSION = "7.1b";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -226,6 +226,11 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 #draw-canvas{display:block;width:100%;cursor:crosshair;touch-action:none;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px)}
 
 /* L자 연습장 — 문제 영역 위에도 그릴 수 있음 */
+.quiz-left{display:flex;flex-direction:column;min-height:600px}
+.quiz-left > .problem-card{flex-shrink:0}
+.quiz-left > .math-input-card{margin-top:auto}
+.quiz-left > .step3-wrap{margin-top:auto}
+
 .quiz-left{position:relative}
 #problem-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px);border:1px solid var(--rule);border-radius:var(--r);z-index:0}
 .quiz-left > .problem-card{position:relative;z-index:1;pointer-events:none;background:rgba(255,255,255,0.85);backdrop-filter:blur(2px)}
@@ -3159,11 +3164,16 @@ function initProblemCanvas(){
   } else if(!panel.contains(cv)){
     panel.prepend(cv);
   }
-  // 크기 동기화
+  // 크기 동기화 (devicePixelRatio 적용 - 선명한 선)
   const rect=panel.getBoundingClientRect();
-  cv.width=rect.width||500;
-  cv.height=rect.height||600;
+  const dpr=window.devicePixelRatio||1;
+  const cssW=rect.width||500, cssH=rect.height||600;
+  cv.width=cssW*dpr;
+  cv.height=cssH*dpr;
+  cv.style.width=cssW+'px';
+  cv.style.height=cssH+'px';
   const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);  // CSS 좌표계로 그리기
   // 저장된 그림 복원
   if(_pCanvasStore[curQIdx]){
     try{ ctx.putImageData(_pCanvasStore[curQIdx],0,0); }catch(e){}
@@ -3174,10 +3184,9 @@ function initProblemCanvas(){
     let drawing=false, lx=0, ly=0;
     const pos=e=>{
       const r=cv.getBoundingClientRect();
-      const sx=cv.width/r.width, sy=cv.height/r.height;
       const cx=e.touches?e.touches[0].clientX:e.clientX;
       const cy=e.touches?e.touches[0].clientY:e.clientY;
-      return [(cx-r.left)*sx,(cy-r.top)*sy];
+      return [cx-r.left, cy-r.top];  // CSS 좌표 그대로 (ctx.setTransform이 DPR 처리)
     };
     const start=e=>{
       // 답입력기 위에서 클릭하면 무시 (pointer-events:auto가 가로채지만 안전장치)
@@ -3205,6 +3214,7 @@ function initProblemCanvas(){
     const end=()=>{
       drawing=false;
       try{ _pCanvasStore[curQIdx]=cv.getContext('2d').getImageData(0,0,cv.width,cv.height); }catch(e){}
+      // imageData는 cv.width(실제 픽셀) 기준이므로 그대로 OK
     };
     cv.addEventListener('mousedown',start);
     cv.addEventListener('mousemove',move);

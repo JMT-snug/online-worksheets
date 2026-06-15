@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.0i">
+  <meta name="app-version" content="7.1a">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.0i";
+const VERSION = "7.1a";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -224,6 +224,15 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .stroke-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);cursor:pointer}
 .divider-v{width:1px;height:20px;background:var(--rule);margin:0 2px}
 #draw-canvas{display:block;width:100%;cursor:crosshair;touch-action:none;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px)}
+
+/* L자 연습장 — 문제 영역 위에도 그릴 수 있음 */
+.quiz-left{position:relative}
+#problem-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px);border:1px solid var(--rule);border-radius:var(--r);z-index:0}
+.quiz-left > .problem-card{position:relative;z-index:1;pointer-events:none;background:rgba(255,255,255,0.85);backdrop-filter:blur(2px)}
+.quiz-left > .math-input-card,
+.quiz-left > .step3-wrap,
+.quiz-left > .canvas-card{position:relative;z-index:2;pointer-events:auto;background:var(--paper)}
+
 @keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-6px)}30%{transform:translateX(6px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}}
 .shake{animation:shake .4s ease}
 
@@ -488,7 +497,9 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <div class="q-progress-strip" id="q-progress-strip"></div>
     <div class="quiz-cols">
       <!-- 왼쪽: 문제 + 수식입력기 -->
-      <div class="quiz-left" id="quiz-left-panel"></div>
+      <div class="quiz-left" id="quiz-left-panel">
+        <canvas id="problem-canvas"></canvas>
+      </div>
       <!-- 오른쪽: 그림판 -->
       <div class="canvas-card" id="canvas-card">
         <div class="canvas-toolbar">
@@ -709,25 +720,26 @@ onAuthStateChanged(auth, async u => {
   await loadCurriculum();
   await loadTeacherData();
   await loadDash();
-  // 새로고침 시 직전 페이지 복원
-  try{
-    const lastPage=sessionStorage.getItem('lastPage');
-    const lastUnit=sessionStorage.getItem('lastUnit');
-    const lastQuizWsId=sessionStorage.getItem('lastQuizWsId');
-    // 학습지 풀이 중이었으면 그 학습지 복원
-    if(lastQuizWsId){
-      const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
-      if(ws){
-        if(ws.type==='vocab') startVocabQuiz(ws);
-        else startQuiz(ws);
-        return;
+  // 새로고침 시 직전 페이지 복원 (microtask 후 실행해 함수 정의 보장)
+  setTimeout(()=>{
+    try{
+      const lastPage=sessionStorage.getItem('lastPage');
+      const lastUnit=sessionStorage.getItem('lastUnit');
+      const lastQuizWsId=sessionStorage.getItem('lastQuizWsId');
+      if(lastQuizWsId){
+        const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
+        if(ws){
+          if(ws.type==='vocab') startVocabQuiz(ws);
+          else startQuiz(ws);
+          return;
+        }
       }
-    }
-    if(lastPage==='unit-page' && lastUnit){
-      const u=JSON.parse(lastUnit);
-      if(UNITS.find(x=>x.id===u.id)) showUnitPage(u);
-    }
-  }catch(e){}
+      if(lastPage==='unit-page' && lastUnit){
+        const u=JSON.parse(lastUnit);
+        if(UNITS.find(x=>x.id===u.id)) showUnitPage(u);
+      }
+    }catch(e){ console.warn('[페이지 복원 실패]',e); }
+  },0);
 });
 
 function updateHeader(u) {
@@ -1434,6 +1446,7 @@ function renderQuestion() {
     updateCanvasNav();
     const panel=document.getElementById("quiz-left-panel");
     if(panel) renderMath(panel);
+    initProblemCanvas();
   });
 
   console.log('[Q]', JSON.stringify({type:q.type,text:q.text?.slice(0,30),graphType:q.graphType,diff:q.diff,id:q.id}));
@@ -3131,6 +3144,78 @@ window.undoCanvas=function(){
   ctx.putImageData(undoStack.pop(),0,0);
 };
 function resetUndoStack(){ undoStack=[]; }
+
+// 문제 영역 캔버스 (L자 연습장) 관련
+let _pCanvasStore = {};  // qIdx → ImageData
+let _pCanvasIdx = 0;
+function initProblemCanvas(){
+  const panel=document.getElementById('quiz-left-panel');
+  if(!panel) return;
+  let cv=document.getElementById('problem-canvas');
+  if(!cv){
+    cv=document.createElement('canvas');
+    cv.id='problem-canvas';
+    panel.prepend(cv);
+  } else if(!panel.contains(cv)){
+    panel.prepend(cv);
+  }
+  // 크기 동기화
+  const rect=panel.getBoundingClientRect();
+  cv.width=rect.width||500;
+  cv.height=rect.height||600;
+  const ctx=cv.getContext('2d');
+  // 저장된 그림 복원
+  if(_pCanvasStore[curQIdx]){
+    try{ ctx.putImageData(_pCanvasStore[curQIdx],0,0); }catch(e){}
+  }
+  // 드로잉 이벤트 (한 번만 바인딩)
+  if(!cv._bound){
+    cv._bound=true;
+    let drawing=false, lx=0, ly=0;
+    const pos=e=>{
+      const r=cv.getBoundingClientRect();
+      const sx=cv.width/r.width, sy=cv.height/r.height;
+      const cx=e.touches?e.touches[0].clientX:e.clientX;
+      const cy=e.touches?e.touches[0].clientY:e.clientY;
+      return [(cx-r.left)*sx,(cy-r.top)*sy];
+    };
+    const start=e=>{
+      // 답입력기 위에서 클릭하면 무시 (pointer-events:auto가 가로채지만 안전장치)
+      e.preventDefault();
+      drawing=true;
+      [lx,ly]=pos(e);
+      const c=cv.getContext('2d');
+      c.strokeStyle=penColor||'#1c1917';
+      c.lineWidth=penSize||3;
+      c.lineCap='round'; c.lineJoin='round';
+      c.globalCompositeOperation=eraser?'destination-out':'source-over';
+      c.beginPath(); c.moveTo(lx,ly);
+      if(!eraser){
+        c.beginPath(); c.arc(lx,ly,(penSize||3)/2,0,Math.PI*2);
+        c.fillStyle=penColor||'#1c1917'; c.fill();
+      }
+    };
+    const move=e=>{
+      if(!drawing) return; e.preventDefault();
+      const [x,y]=pos(e);
+      const c=cv.getContext('2d');
+      c.beginPath(); c.moveTo(lx,ly); c.lineTo(x,y); c.stroke();
+      lx=x; ly=y;
+    };
+    const end=()=>{
+      drawing=false;
+      try{ _pCanvasStore[curQIdx]=cv.getContext('2d').getImageData(0,0,cv.width,cv.height); }catch(e){}
+    };
+    cv.addEventListener('mousedown',start);
+    cv.addEventListener('mousemove',move);
+    cv.addEventListener('mouseup',end);
+    cv.addEventListener('mouseleave',end);
+    cv.addEventListener('touchstart',start,{passive:false});
+    cv.addEventListener('touchmove',move,{passive:false});
+    cv.addEventListener('touchend',end);
+  }
+}
+
 function initCanvas(){
   // quiz-page가 보이는 상태에서만 호출
   const w=canvas.parentElement.clientWidth||600;

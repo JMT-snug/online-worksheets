@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1b">
+  <meta name="app-version" content="7.1c">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1b";
+const VERSION = "7.1c";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -233,7 +233,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 
 .quiz-left{position:relative}
 #problem-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px);border:1px solid var(--rule);border-radius:var(--r);z-index:0}
-.quiz-left > .problem-card{position:relative;z-index:1;pointer-events:none;background:rgba(255,255,255,0.85);backdrop-filter:blur(2px)}
+.quiz-left > .problem-card{position:relative;z-index:1;pointer-events:none;background:transparent;border:none;box-shadow:none}
 .quiz-left > .math-input-card,
 .quiz-left > .step3-wrap,
 .quiz-left > .canvas-card{position:relative;z-index:2;pointer-events:auto;background:var(--paper)}

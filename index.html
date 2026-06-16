@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1f">
+  <meta name="app-version" content="7.1h">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1f";
+const VERSION = "7.1h";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -214,7 +214,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .attempt-num{font-weight:700;color:var(--amber)}
 /* 오른쪽: 그림판 */
 .canvas-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;position:sticky;top:72px}
-.canvas-toolbar{display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:nowrap;overflow:hidden}
+.canvas-toolbar{display:flex;align-items:center;gap:3px;padding:6px 8px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:nowrap;overflow:hidden}
 .canvas-toolbar-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
 .tool-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0}
 .tool-btn.active{background:var(--acc-lt);border-color:var(--accent)}
@@ -536,8 +536,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <span class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="보라"></span>
           <span class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="핑크"></span>
           <div class="divider-v"></div>
-          <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
-          <button class="btn-back" onclick="undoCanvas()" style="font-size:12px" title="한 획 되돌리기">↩ 실행취소</button>
+          <button class="btn-back" id="btn-clear-cv" style="font-size:14px;padding:4px 8px" title="전체 지우기">🗑</button>
+          <button class="btn-back" onclick="undoCanvas()" style="font-size:14px;padding:4px 8px" title="실행취소 (한 획 되돌리기)">↩</button>
           <div class="divider-v"></div>
           <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto">
             <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>

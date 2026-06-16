@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8x">
+<meta name="app-version" content="3.8y">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,7 +18,7 @@
   --amber:#b45309;--amb-lt:#fef3c7;
   --r:10px;
   --g1:#1d4ed8;--g2:#15803d;--g3:#b91c1c;
-}
+};
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8x";
+const VERSION = "3.8y";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용

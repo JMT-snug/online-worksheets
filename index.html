@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1h">
+  <meta name="app-version" content="7.1j">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1h";
+const VERSION = "7.1j";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1361,7 +1361,13 @@ async function startQuiz(ws) {
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
-  canvasStore={};
+  // 학습지별 필기 보존: wsId별 객체 유지
+  if(!window._canvasStoreByWs) window._canvasStoreByWs={};
+  if(!window._pCanvasStoreByWs) window._pCanvasStoreByWs={};
+  if(!window._canvasStoreByWs[ws.id]) window._canvasStoreByWs[ws.id]={};
+  if(!window._pCanvasStoreByWs[ws.id]) window._pCanvasStoreByWs[ws.id]={};
+  canvasStore = window._canvasStoreByWs[ws.id];
+  _pCanvasStore = window._pCanvasStoreByWs[ws.id];
   // ── 저장된 진도 복원 ──
   _wsDataLoaded = false; // 로드 전: 저장 차단
   try{

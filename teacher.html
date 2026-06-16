@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8z">
+<meta name="app-version" content="3.8aa">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8z";
+const VERSION = "3.8aa";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -650,15 +650,15 @@ function renderStudents(){
   const list=studentList();
   let students=[...list];
   // 학급 필터
-  if(_stuClass) students=students.filter(s=>s.cls===_stuClass);
+  if(window._stuClass) students=students.filter(s=>s.cls===window._stuClass);
   // 이름/이메일 검색
-  if(_stuSearch){ const kw=_stuSearch.toLowerCase();
+  if(window._stuSearch){ const kw=window._stuSearch.toLowerCase();
     students=students.filter(s=>(s.name||"").toLowerCase().includes(kw)||(s.email||"").toLowerCase().includes(kw)); }
   // 정렬
-  if(_stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
-  else if(_stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
-  else if(_stuSort==="done") students.sort((a,b)=>b.done-a.done);
-  else if(_stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
+  if(window._stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(window._stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(window._stuSort==="done") students.sort((a,b)=>b.done-a.done);
+  else if(window._stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
 
   const totalStu=list.length;
   const filtered=students;
@@ -677,20 +677,20 @@ function renderStudents(){
   document.getElementById("content").innerHTML=`
     <div class="card">
       <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
-        <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${_stuSearch||_stuClass?` / 전체 ${totalStu}명`:''}</span></span>
+        <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${window._stuSearch||window._stuClass?` / 전체 ${totalStu}명`:''}</span></span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${_stuSearch}"
-            oninput="window._stuSearch=this.value;_stuSearch=this.value;renderStudents()"
+          <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${window._stuSearch}"
+            oninput="window._stuSearch=this.value;window._stuSearch=this.value;renderStudents()"
             style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;width:160px">
-          <select onchange="window._stuClass=this.value;_stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
-            <option value="" ${!_stuClass?'selected':''}>전체 학급</option>
-            ${allClasses.map(c=>`<option value="${c}" ${_stuClass===c?'selected':''}>${c}</option>`).join('')}
+          <select onchange="window._stuClass=this.value;window._stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="" ${!window._stuClass?'selected':''}>전체 학급</option>
+            ${allClasses.map(c=>`<option value="${c}" ${window._stuClass===c?'selected':''}>${c}</option>`).join('')}
           </select>
-          <select onchange="window._stuSort=this.value;_stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
-            <option value="class" ${_stuSort==='class'?'selected':''}>학급 순</option>
-            <option value="name"  ${_stuSort==='name'?'selected':''}>이름 순</option>
-            <option value="done"  ${_stuSort==='done'?'selected':''}>완료 많은 순</option>
-            <option value="rate"  ${_stuSort==='rate'?'selected':''}>정답률 높은 순</option>
+          <select onchange="window._stuSort=this.value;window._stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="class" ${window._stuSort==='class'?'selected':''}>학급 순</option>
+            <option value="name"  ${window._stuSort==='name'?'selected':''}>이름 순</option>
+            <option value="done"  ${window._stuSort==='done'?'selected':''}>완료 많은 순</option>
+            <option value="rate"  ${window._stuSort==='rate'?'selected':''}>정답률 높은 순</option>
           </select>
         </div>
       </div>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8v">
+<meta name="app-version" content="3.8w">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8v";
+const VERSION = "3.8w";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -317,8 +317,15 @@ async function loadCurriculum(){
       getDocs(collection(db,'curriculum'))
     ]);
     const units=uSnap.docs.map(d=>({...d.data()}));
+    const unitOrder={};
+    units.forEach((u,i)=>unitOrder[u.id]=u.order??i);
     const sheets=wSnap.docs.map(d=>({...d.data()}))
-      .sort((a,b)=>(a.order??99)-(b.order??99));
+      .sort((a,b)=>{
+        const ua=unitOrder[a.unitId]??999;
+        const ub=unitOrder[b.unitId]??999;
+        if(ua!==ub) return ua-ub;
+        return (a.order??99)-(b.order??99);
+      });
     sheets.forEach(ws=>{ if(!ws.questions) ws.questions=[]; if(!ws.vocab) ws.vocab=[];
       if(ws.questions && !ws.qCount) ws.qCount=ws.questions.filter(q=>q.type!=="link").length; });
     if(sheets.length) WORKSHEETS=sheets;   // Firestore 우선 (없으면 정적 worksheets.js 유지)

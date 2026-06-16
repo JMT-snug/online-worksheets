@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8y">
+<meta name="app-version" content="3.8z">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -18,7 +18,7 @@
   --amber:#b45309;--amb-lt:#fef3c7;
   --r:10px;
   --g1:#1d4ed8;--g2:#15803d;--g3:#b91c1c;
-};
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
@@ -217,7 +217,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8y";
+const VERSION = "3.8z";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -489,7 +489,10 @@ function perQCells(r, uid){
 }
 
 // ── 학생 목록 ──
-let _stuSort="class", _stuClass="", _stuSearch="";
+window._stuSort="class"; window._stuClass=""; window._stuSearch="";
+// 호환: 함수 내부에서 _stuSort로 참조 시 window._stuSort 가리키도록 전역 변수
+var _stuSort=window._stuSort, _stuClass=window._stuClass, _stuSearch=window._stuSearch;
+window.renderStudents=renderStudents;
 function studentList(){
   return Object.entries(allData).map(([uid,wsMap])=>{
     const recs=Object.values(wsMap);
@@ -677,13 +680,13 @@ function renderStudents(){
         <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${_stuSearch||_stuClass?` / 전체 ${totalStu}명`:''}</span></span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${_stuSearch}"
-            oninput="_stuSearch=this.value;renderStudents()"
+            oninput="window._stuSearch=this.value;_stuSearch=this.value;renderStudents()"
             style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;width:160px">
-          <select onchange="_stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+          <select onchange="window._stuClass=this.value;_stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
             <option value="" ${!_stuClass?'selected':''}>전체 학급</option>
             ${allClasses.map(c=>`<option value="${c}" ${_stuClass===c?'selected':''}>${c}</option>`).join('')}
           </select>
-          <select onchange="_stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+          <select onchange="window._stuSort=this.value;_stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
             <option value="class" ${_stuSort==='class'?'selected':''}>학급 순</option>
             <option value="name"  ${_stuSort==='name'?'selected':''}>이름 순</option>
             <option value="done"  ${_stuSort==='done'?'selected':''}>완료 많은 순</option>

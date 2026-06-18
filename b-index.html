@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1c">
+  <meta name="app-version" content="7.1l">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1c";
+const VERSION = "7.1l";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -214,7 +214,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .attempt-num{font-weight:700;color:var(--amber)}
 /* 오른쪽: 그림판 */
 .canvas-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;position:sticky;top:72px}
-.canvas-toolbar{display:flex;align-items:center;gap:4px;padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:nowrap;overflow:hidden}
+.canvas-toolbar{display:flex;align-items:center;gap:3px;padding:6px 8px;border-bottom:1px solid var(--rule);background:var(--cream);flex-wrap:nowrap;overflow:hidden}
 .canvas-toolbar-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
 .tool-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0}
 .tool-btn.active{background:var(--acc-lt);border-color:var(--accent)}
@@ -232,7 +232,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .quiz-left > .step3-wrap{margin-top:auto}
 
 .quiz-left{position:relative}
-#problem-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;background:#fffef9;background-image:repeating-linear-gradient(transparent,transparent 27px,#e5e0d5 27px,#e5e0d5 28px);border:1px solid var(--rule);border-radius:var(--r);z-index:0}
+#problem-canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair;background:#fffef9;border:1px solid var(--rule);border-radius:var(--r);z-index:0}
 .quiz-left > .problem-card{position:relative;z-index:1;pointer-events:none;background:transparent;border:none;box-shadow:none}
 .quiz-left > .math-input-card,
 .quiz-left > .step3-wrap,
@@ -536,8 +536,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <span class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="보라"></span>
           <span class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="핑크"></span>
           <div class="divider-v"></div>
-          <button class="btn-back" id="btn-clear-cv" style="font-size:12px">지우기</button>
-          <button class="btn-back" onclick="undoCanvas()" style="font-size:12px" title="한 획 되돌리기">↩ 실행취소</button>
+          <button class="btn-back" id="btn-clear-cv" style="font-size:14px;padding:4px 8px" title="전체 지우기">🗑</button>
+          <button class="btn-back" onclick="undoCanvas()" style="font-size:14px;padding:4px 8px" title="실행취소 (한 획 되돌리기)">↩</button>
           <div class="divider-v"></div>
           <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto">
             <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
@@ -1305,9 +1305,9 @@ async function saveWorksheet(isComplete=false){
       }
     });
     const _totalQ=curWS.questions.filter(q=>q.type!=="link").length;
-    const _ansQ=answered.filter(Boolean).length;
+    const _ansQ=curWS.questions.reduce((s,q,i)=>q.type!=="link"&&answered[i]?s+1:s,0);
     const _wrongTotal=Object.values(perQ).reduce((s,v)=>s+(v.attempts||0),0);
-    const _correctRate=_totalQ?Math.round(_ansQ/_totalQ*100):0;
+    const _correctRate=_totalQ?Math.min(100,Math.round(_ansQ/_totalQ*100)):0;
     const data={
       studentEmail: user.email,
       studentName:  user.displayName||"",
@@ -1361,7 +1361,13 @@ async function startQuiz(ws) {
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
-  canvasStore={};
+  // 학습지별 필기 보존: wsId별 객체 유지
+  if(!window._canvasStoreByWs) window._canvasStoreByWs={};
+  if(!window._pCanvasStoreByWs) window._pCanvasStoreByWs={};
+  if(!window._canvasStoreByWs[ws.id]) window._canvasStoreByWs[ws.id]={};
+  if(!window._pCanvasStoreByWs[ws.id]) window._pCanvasStoreByWs[ws.id]={};
+  canvasStore = window._canvasStoreByWs[ws.id];
+  _pCanvasStore = window._pCanvasStoreByWs[ws.id];
   // ── 저장된 진도 복원 ──
   _wsDataLoaded = false; // 로드 전: 저장 차단
   try{
@@ -1954,6 +1960,7 @@ function renderMultiQ(q, panel){
         <span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">동류항</span>
       </div>
       <div class="q-text" style="margin-top:4px;line-height:1.8">${mathStyle(q.text)}</div>
+      ${imgHtmlM}
     </div>
     <div class="math-input-card">
       <div class="ans-hint"><strong>해당하는 것을 모두 선택하세요</strong></div>
@@ -3145,8 +3152,14 @@ let undoStack=[]; // 획 시작 전 스냅샷 배열
 let canvasStore={}; // key: qIdx, value: ImageData
 
 window.undoCanvas=function(){
-  if(undoStack.length===0) return;
-  ctx.putImageData(undoStack.pop(),0,0);
+  // 오른쪽 큰 캔버스 undo
+  if(undoStack.length>0){ ctx.putImageData(undoStack.pop(),0,0); }
+  // 문제 영역 캔버스 undo
+  const pCv=document.getElementById('problem-canvas');
+  if(pCv && pCv._undo && pCv._undo.length>0){
+    pCv.getContext('2d').putImageData(pCv._undo.pop(),0,0);
+    try{ _pCanvasStore[curQIdx]=pCv.getContext('2d').getImageData(0,0,pCv.width,pCv.height); }catch(e){}
+  }
 };
 function resetUndoStack(){ undoStack=[]; }
 
@@ -3172,7 +3185,7 @@ function initProblemCanvas(){
   cv.height=cssH*dpr;
   cv.style.width=cssW+'px';
   cv.style.height=cssH+'px';
-  const ctx=cv.getContext('2d');
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
   ctx.setTransform(dpr,0,0,dpr,0,0);  // CSS 좌표계로 그리기
   // 저장된 그림 복원
   if(_pCanvasStore[curQIdx]){
@@ -3189,15 +3202,26 @@ function initProblemCanvas(){
       return [cx-r.left, cy-r.top];  // CSS 좌표 그대로 (ctx.setTransform이 DPR 처리)
     };
     const start=e=>{
-      // 답입력기 위에서 클릭하면 무시 (pointer-events:auto가 가로채지만 안전장치)
       e.preventDefault();
       drawing=true;
       [lx,ly]=pos(e);
       const c=cv.getContext('2d');
-      c.strokeStyle=penColor||'#1c1917';
-      c.lineWidth=penSize||3;
+      // 획 시작 전 스냅샷 저장 (undo용)
+      try{
+        if(!cv._undo) cv._undo=[];
+        cv._undo.push(c.getImageData(0,0,cv.width,cv.height));
+        if(cv._undo.length>30) cv._undo.shift();  // 메모리 보호
+      }catch(e){}
       c.lineCap='round'; c.lineJoin='round';
-      c.globalCompositeOperation=eraser?'destination-out':'source-over';
+      if(eraser){
+        c.globalCompositeOperation='destination-out';
+        c.strokeStyle='rgba(0,0,0,1)';
+        c.lineWidth=(penSize||3)*10;
+      } else {
+        c.globalCompositeOperation='source-over';
+        c.strokeStyle=penColor||'#1c1917';
+        c.lineWidth=penSize||3;
+      }
       c.beginPath(); c.moveTo(lx,ly);
       if(!eraser){
         c.beginPath(); c.arc(lx,ly,(penSize||3)/2,0,Math.PI*2);
@@ -3656,10 +3680,23 @@ function restoreCanvasState(idx){
 }
 
 function clearCanvas(){
-  // compositeOperation 초기화 후 지우기
+  // 오른쪽 큰 캔버스 지우기
   ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
   delete canvasStore[canvasViewIdx];
+  // 문제 영역 캔버스도 함께 지우기
+  const pCv=document.getElementById('problem-canvas');
+  if(pCv){
+    const pCtx=pCv.getContext('2d');
+    // 직전 상태 저장 후 지우기 (undo로 복원 가능)
+    try{
+      if(!pCv._undo) pCv._undo=[];
+      pCv._undo.push(pCtx.getImageData(0,0,pCv.width,pCv.height));
+    }catch(e){}
+    pCtx.globalCompositeOperation='source-over';
+    pCtx.clearRect(0,0,pCv.width,pCv.height);
+    delete _pCanvasStore[curQIdx];
+  }
 }
 
 function cvPos(e){

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0m">
+<meta name="app-version" content="edit-v2.0n">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -1160,13 +1160,13 @@ window.saveQuestion = async function(){
       imageUrl:document.getElementById('q-img-url').value.trim(),
       graphType:gt};
     if(gt==='coordinate'){
-      qData.xMin=parseFloat(document.getElementById('g-xmin').value)||(-5);
-      qData.xMax=parseFloat(document.getElementById('g-xmax').value)||5;
-      qData.yMin=parseFloat(document.getElementById('g-ymin').value)||(-5);
-      qData.yMax=parseFloat(document.getElementById('g-ymax').value)||5;
+      qData.xMin=(()=>{const v=parseFloat(document.getElementById('g-xmin').value);return isNaN(v)?-5:v;})();
+      qData.xMax=(()=>{const v=parseFloat(document.getElementById('g-xmax').value);return isNaN(v)?5:v;})();
+      qData.yMin=(()=>{const v=parseFloat(document.getElementById('g-ymin').value);return isNaN(v)?-5:v;})();
+      qData.yMax=(()=>{const v=parseFloat(document.getElementById('g-ymax').value);return isNaN(v)?5:v;})();
     } else {
-      qData.nMin=parseFloat(document.getElementById('g-nlmin').value)||(-10);
-      qData.nMax=parseFloat(document.getElementById('g-nlmax').value)||10;
+      qData.nMin=(()=>{const v=parseFloat(document.getElementById('g-nlmin').value);return isNaN(v)?-10:v;})();
+      qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();
     }
     currentWs.questions[qIdxS]=_addScore(qData);
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;

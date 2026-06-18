@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0n">
+<meta name="app-version" content="edit-v2.0o">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -1628,6 +1628,7 @@ window.migrateWsIds=async function(){
 
 async function saveToFirestore(status, silent=false){
   if(!currentWs){ toast('학습지를 선택하세요'); return; }
+  if(status===undefined||status===null) status=currentWs.status||'draft';
   const wsId = document.getElementById('ws-id').value.trim() || currentWs.id;
   const saveData = {
     ...currentWs,

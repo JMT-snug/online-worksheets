@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0l">
+<meta name="app-version" content="edit-v2.0m">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -739,9 +739,10 @@ function renderEditor(){
   if(wType==='vocab'){
     addArea.innerHTML=`
       <button class="btn-add-q" onclick="addVocabItem()" style="background:#1d4ed8">＋ 용어 추가</button>
-      <button class="btn-add-q" onclick="addQuestionItem()" style="background:#15803d">＋ 연습 문항 추가</button>`;
+      <button class="btn-add-q" onclick="addQuestionItem()" style="background:#15803d">＋ 연습 문항 추가</button>
+      <button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d" title="복사한 문항 붙여넣기">📥 붙여넣기</button>`;
   } else {
-    addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>';
+    addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button><button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d;margin-left:6px" title="복사한 문항 붙여넣기">📥 붙여넣기</button>';
     document.getElementById('btn-add-q').onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
   }
   const extrasCount = (currentWs.extras||[]).filter(e=>e.type&&!['vocab'].includes(e.type)).length;

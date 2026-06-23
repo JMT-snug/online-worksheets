@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1p">
+  <meta name="app-version" content="7.1r">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1p";
+const VERSION = "7.1r";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1605,7 +1605,7 @@ function latexEsc(s){
 }
 
 function tokensToLatex(){
-  const CURSOR='{\\color{blue}|}';
+  const CURSOR='|';
   let parts=[];
   qTokens.forEach((t,i)=>{
     // 커서: qCursorIdx 위치에 (edit 모드 아닐 때)
@@ -1640,7 +1640,14 @@ function qRender(){
   const el=document.getElementById("ans-display"); if(!el)return;
   const latex=tokensToLatex();
   el.innerHTML='\\(\\displaystyle '+latex+'\\)';
-  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
+  if(window.MathJax?.typesetPromise){
+    // 직전 렌더 완료 대기 후 새로 렌더 (race condition 방지)
+    if(!window._mjQueue) window._mjQueue=Promise.resolve();
+    window._mjQueue=window._mjQueue.then(()=>{
+      if(MathJax.typesetClear) try{ MathJax.typesetClear([el]); }catch(e){}
+      return MathJax.typesetPromise([el]).catch(()=>{});
+    });
+  }
 }
 function escH(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 

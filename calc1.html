@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>계산 연습 · 실수 분석 — 중1</title>
+<title> 수학 점수 탐정단</title>
 
 <!-- ───────────────────────── Pretendard ───────────────────────── -->
 <link rel="stylesheet" as="style" crossorigin
@@ -195,6 +195,31 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 .empty{text-align:center; color:var(--ink-soft); padding:26px 10px; font-size:14px}
 .empty b{color:var(--ok)}
 
+/* teacher dashboard */
+.dash-top{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:18px}
+.dash-title{font-size:20px; font-weight:800; letter-spacing:-.02em; margin:0}
+.dash-sub{font-size:13px; color:var(--ink-soft); margin:4px 0 0}
+.kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-bottom:6px}
+.kpi{background:var(--paper); border:1px solid var(--line); border-radius:11px; padding:13px 14px; text-align:center}
+.kpi b{display:block; font-size:23px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.kpi span{font-size:11.5px; color:var(--ink-faint); font-weight:600}
+.dash-listhead{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:24px 0 6px; flex-wrap:wrap}
+.sortseg{display:flex; gap:4px; background:var(--paper); border:1px solid var(--line); padding:3px; border-radius:10px}
+.sortseg button{padding:6px 10px; border-radius:7px; font-size:12px; font-weight:700; color:var(--ink-faint)}
+.sortseg button[aria-selected="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.srow{display:flex; align-items:center; gap:11px; padding:13px 4px; border-bottom:1px solid var(--line); cursor:pointer; user-select:none}
+.srow:hover{background:var(--paper)}
+.srow .smain{flex:1; min-width:0}
+.srow .sname{font-size:14.5px; font-weight:700; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.srow .sname em{font-style:normal; color:var(--ink-faint); font-weight:600; font-size:13px}
+.srow .smeta{font-size:12.5px; color:var(--ink-soft); margin-top:2px}
+.srow .stop{flex:none; font-size:11.5px; font-weight:700; color:var(--gold-ink); background:var(--gold-soft); padding:3px 9px; border-radius:999px; max-width:40%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.srow .chev{flex:none; color:var(--ink-faint); transition:transform .15s; font-size:12px}
+.srow[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.sdetail{padding:6px 4px 18px; border-bottom:1px solid var(--line); animation:rise .2s ease}
+.sdetail .sec-t{margin:14px 0 2px}
+.sd-acc{display:block; font-size:13px; color:var(--ink-soft); margin:2px 0 2px}
+
 .hidden{display:none !important}
 .spin{width:18px;height:18px;border:2.5px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:sp .7s linear infinite; display:inline-block; vertical-align:-3px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -206,9 +231,10 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><b>계산 연습 · 실수 분석</b><span class="ver">v1.0</span></div>
+    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.1</span></div>
     <div id="whoami" class="who hidden">
       <span id="who-name"></span>
+      <button class="linkbtn hidden" id="dash-btn">대시보드</button>
       <button class="linkbtn" id="logout-btn">로그아웃</button>
     </div>
   </div>
@@ -216,8 +242,8 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
   <!-- ───────────── 로그인 ───────────── -->
   <section id="screen-login" class="card pad hero">
     <span class="mark">중1 · 유리수 · 다항식 · 1차방정식</span>
-    <h1>틀리는 데는 이유가 있어요.<br>그 이유를 찾아드려요.</h1>
-    <p>작은 수로 된 문제를 풀고, 자주 하는 계산 실수가 어디서 나오는지 바로 확인하세요.</p>
+    <h1>내 수학점수가 사라졌다<br> 사라진 수학 점수를 찾아라!</h1>
+    <p>간단한 계산 문제를 풀면서, 자주 하는 실수 유형을 확인하세요.</p>
     <button class="gbtn" id="google-btn">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.2 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 13.3 4.6 4.6 13.3 4.6 24S13.3 43.4 24 43.4 43.4 34.7 43.4 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.2 18.9 12.6 24 12.6c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 16.3 4.6 9.7 9 6.3 14.7z"/><path fill="#4CAF50" d="M24 43.4c5.1 0 9.6-1.9 13.1-5l-6.2-5.1C28.9 34.9 26.6 35.7 24 35.7c-5.2 0-9.6-3.5-11.2-8.3l-6.5 5C9.6 38.9 16.2 43.4 24 43.4z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.4l6.2 5.1c-.4.4 6.6-4.8 6.6-14.5 0-1.2-.1-2.3-.4-3.5z"/></svg>
       <span>Google 계정으로 로그인</span>
@@ -288,6 +314,33 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
       <div id="sum-body"></div>
 
       <button class="primary" id="again-btn" style="margin-top:24px">다시 풀기</button>
+    </div>
+  </section>
+
+  <!-- ───────────── 교사 대시보드 ───────────── -->
+  <section id="screen-teacher" class="hidden">
+    <div class="card pad">
+      <div class="dash-top">
+        <div>
+          <h2 class="dash-title">교사 대시보드</h2>
+          <p class="dash-sub" id="dash-meta">불러오는 중…</p>
+        </div>
+        <button class="linkbtn" id="dash-refresh">새로고침</button>
+      </div>
+
+      <div id="dash-overview"></div>
+
+      <div class="dash-listhead">
+        <p class="sec-t" style="margin:0">학생별 기록</p>
+        <div class="sortseg" id="dash-sort">
+          <button data-s="low" aria-selected="true">정답률 낮은 순</button>
+          <button data-s="active">활동 많은 순</button>
+          <button data-s="name">이름순</button>
+        </div>
+      </div>
+      <div id="dash-students"></div>
+
+      <button class="ghost" id="dash-practice" style="margin-top:22px">직접 풀어보기</button>
     </div>
   </section>
 
@@ -455,7 +508,7 @@ function qTokensToExpr(){
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp }
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ╔══════════════════════════════════════════════════════════╗
@@ -465,19 +518,14 @@ import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp 
    ║     · GitHub Pages 도메인을 '승인된 도메인'에 추가         ║
    ║     · Firestore 데이터베이스 생성                         ║
    ╚══════════════════════════════════════════════════════════╝ */
-// Import the functions you need from the SDKs you need
-
 const firebaseConfig = {
-  apiKey: "AIzaSyCggfSLpDt1h_rFb-gFFustkKNjjNEcQ9s",
-  authDomain: "analyzing-miss.firebaseapp.com",
-  projectId: "analyzing-miss",
-  storageBucket: "analyzing-miss.firebasestorage.app",
-  messagingSenderId: "52141324127",
-  appId: "1:52141324127:web:e37aedd6ac594ec581e8ea"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 
 const CONFIG_READY = !/YOUR_/.test(JSON.stringify(firebaseConfig));
 let auth=null, db=null;
@@ -675,12 +723,16 @@ function makeFirebaseStore(user){
 
 /* ────────────────────── 앱 상태 / 화면 전환 ────────────────────── */
 const $=id=>document.getElementById(id);
-const screens=['screen-login','screen-setup','screen-quiz','screen-summary'];
+const screens=['screen-login','screen-setup','screen-quiz','screen-summary','screen-teacher'];
 function show(id){ screens.forEach(s=>$(s).classList.toggle('hidden', s!==id)); }
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 function mjx(el){ if(window.MathJax?.typesetPromise){ window._mjQueue=(window._mjQueue||Promise.resolve()).then(()=>MathJax.typesetPromise([el]).catch(()=>{})); } }
 
-let store=null, session=null;
+let store=null, session=null, currentUser=null;
+/* UI 라우팅용. 실제 데이터 접근 권한은 Firestore 보안 규칙이 강제합니다.
+   여기 목록은 규칙의 isTeacher() 이메일과 동일하게 유지하세요. */
+const TEACHER_EMAILS=['rapidwing@snu-g.ms.kr'];
+const isTeacherEmail=e=>TEACHER_EMAILS.includes((e||'').toLowerCase());
 
 /* ────────────────────── 로그인 화면 ────────────────────── */
 const note=$('config-note');
@@ -706,13 +758,21 @@ $('logout-btn').addEventListener('click', async ()=>{ if(auth) await signOut(aut
 if(CONFIG_READY){
   onAuthStateChanged(auth, user=>{
     if(user){
+      currentUser=user;
       store=makeFirebaseStore(user);
       $('who-name').textContent=(user.displayName||user.email||'').split(' ')[0]+' 님';
       $('whoami').classList.remove('hidden');
-      enterSetup();
+      if(isTeacherEmail(user.email)){
+        $('dash-btn').classList.remove('hidden');
+        enterTeacher();
+      }else{
+        $('dash-btn').classList.add('hidden');
+        enterSetup();
+      }
     }
   });
 }
+$('dash-btn').addEventListener('click', ()=>enterTeacher());
 
 /* ────────────────────── 설정 화면 ────────────────────── */
 function enterSetup(){ show('screen-setup'); }
@@ -721,6 +781,7 @@ $('area-pick').addEventListener('click', e=>{
   b.setAttribute('aria-pressed', b.getAttribute('aria-pressed')==='true'?'false':'true');
   const any=[...document.querySelectorAll('.chk')].some(c=>c.getAttribute('aria-pressed')==='true');
   $('start-btn').disabled=!any;
+  b.blur();
 });
 $('cnt-range').addEventListener('input', e=>{ $('cnt-val').textContent=e.target.value; });
 
@@ -753,7 +814,8 @@ function renderKeypad(answerType){
   }));
 }
 $('keypad').addEventListener('click', e=>{
-  const k=e.target.closest('button')?.dataset.k; if(!k) return;
+  const btn=e.target.closest('button'); const k=btn?.dataset.k; if(!k) return;
+  btn.blur();
   if(k==='OK'){ submitAnswer(); return; }
   if(k==='C'){ qClear(); return; }
   if(k==='±'){ window.qNeg(); return; }
@@ -766,9 +828,27 @@ window.syncOk=function(){ const ok=$('ok-btn'); if(ok) ok.disabled = qTokens.len
 
 /* 물리 키보드 지원 */
 document.addEventListener('keydown', e=>{
+  const k=e.key;
+
+  // ── 엔터: 화면/상태에 따른 기본 동작 (피드백이 잠겨 있어도 동작) ──
+  if(k==='Enter'){
+    // 포커스가 버튼에 있으면 브라우저 기본 클릭에 맡겨 중복 실행 방지
+    if(document.activeElement?.tagName==='BUTTON') return;
+    e.preventDefault();
+    if(!$('screen-summary').classList.contains('hidden')){ $('again-btn').click(); return; }
+    if(!$('screen-setup').classList.contains('hidden')){ const b=$('start-btn'); if(!b.disabled) b.click(); return; }
+    if(!$('screen-quiz').classList.contains('hidden')){
+      const fb=$('feedback');
+      const next=fb.querySelector('.nextb'); if(next){ next.click(); return; }  // 다음 문제 / 결과 보기
+      const retry=fb.querySelector('.retry'); if(retry){ retry.click(); return; } // 다시 풀기
+      submitAnswer();                                                            // 채점 전 → 확인
+    }
+    return;
+  }
+
+  // ── 나머지 입력 키: 문제 풀이 중 + 채점 전에만 ──
   if($('screen-quiz').classList.contains('hidden')) return;
   if($('feedback').dataset.locked==='1') return;
-  const k=e.key;
   if(/^[0-9]$/.test(k)) qInput(k);
   else if(k==='.') qInput('.');
   else if(k==='x'||k==='X') qInput('x');
@@ -779,7 +859,6 @@ document.addEventListener('keydown', e=>{
   else if(k==='Backspace'){ qInput('⌫'); e.preventDefault(); }
   else if(k==='ArrowLeft') qInput('←');
   else if(k==='ArrowRight') qInput('→');
-  else if(k==='Enter'){ submitAnswer(); e.preventDefault(); }
 });
 
 /* ────────────────────── 문제 출제 ────────────────────── */
@@ -921,8 +1000,8 @@ function selectTab(which){
   else { $('sum-correct').textContent=session.correct; $('sum-total').textContent=session.total; }
   renderSummary(data, which);
 }
-$('tab-round').addEventListener('click',()=>selectTab('round'));
-$('tab-cum').addEventListener('click',()=>selectTab('cum'));
+$('tab-round').addEventListener('click',e=>{selectTab('round'); e.currentTarget.blur();});
+$('tab-cum').addEventListener('click',e=>{selectTab('cum'); e.currentTarget.blur();});
 
 function renderSummary(data, which){
   const body=$('sum-body'); body.innerHTML='';
@@ -968,6 +1047,124 @@ function renderSummary(data, which){
 }
 
 $('again-btn').addEventListener('click', ()=>{ enterSetup(); });
+
+/* ────────────────────── 교사 대시보드 ────────────────────── */
+let teacherCache=null, sortMode='low';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct=(c,a)=>a?Math.round(c/a*100):0;
+
+function enterTeacher(){ show('screen-teacher'); loadTeacherData(); }
+$('dash-refresh').addEventListener('click', ()=>loadTeacherData());
+$('dash-practice').addEventListener('click', ()=>enterSetup());
+$('dash-sort').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  sortMode=b.dataset.s;
+  [...$('dash-sort').children].forEach(c=>c.setAttribute('aria-selected', c===b));
+  renderStudents();
+});
+
+function normStudent(d){
+  const c=emptyCum();
+  if(d.totals){ c.totals.answered=+d.totals.answered||0; c.totals.correct=+d.totals.correct||0; }
+  if(d.areas){ for(const k of ['rational','poly','eq']){ if(d.areas[k]){ c.areas[k].answered=+d.areas[k].answered||0; c.areas[k].correct=+d.areas[k].correct||0; } } }
+  if(d.mistakes){ for(const id in d.mistakes){ if(MISTAKES[id]) c.mistakes[id]=+d.mistakes[id]||0; } }
+  return c;
+}
+
+async function loadTeacherData(){
+  const meta=$('dash-meta');
+  if(!db){ meta.textContent='Firebase 설정이 필요해요.'; return; }
+  meta.innerHTML='<span class="spin"></span> 학생 기록 불러오는 중…';
+  $('dash-students').innerHTML=''; $('dash-overview').innerHTML='';
+  try{
+    const snap=await getDocs(collection(db,'users'));
+    const students=[];
+    snap.forEach(docu=>{
+      const d=docu.data()||{};
+      if(isTeacherEmail(d.email)) return;          // 교사 본인 계정 제외
+      const cum=normStudent(d);
+      if(cum.totals.answered===0) return;          // 활동 없는 계정 제외
+      students.push({ uid:docu.id, name:d.displayName||'(이름 없음)',
+        id:(d.email||'').split('@')[0]||'—', cum });
+    });
+    teacherCache=students;
+    renderOverview(students);
+    renderStudents();
+    meta.textContent=`학생 ${students.length}명 · ${new Date().toLocaleString('ko-KR',{hour:'2-digit',minute:'2-digit'})} 기준`;
+  }catch(e){
+    console.error(e);
+    meta.textContent='불러오기에 실패했어요. 교사 계정으로 로그인했는지, Firestore 규칙이 게시됐는지 확인해 주세요.';
+  }
+}
+
+function aggregate(students){ const agg=emptyCum(); students.forEach(s=>mergeCum(agg,s.cum)); return agg; }
+function topMistake(mistakes){
+  const ms=Object.entries(mistakes||{}).filter(([id])=>MISTAKES[id]).sort((a,b)=>b[1]-a[1]);
+  return ms.length?{label:MISTAKES[ms[0][0]].label, count:ms[0][1]}:null;
+}
+function areaRowsHTML(data){
+  let h='';
+  ['rational','poly','eq'].forEach(a=>{
+    const s=data.areas[a]; if(!s||s.answered===0) return;
+    const p=pct(s.correct,s.answered);
+    h+=`<div class="arow"><span class="nm">${AREA_LABEL[a]}</span>
+      <span class="track"><i style="width:${p}%"></i></span>
+      <span class="pct">${p}% · ${s.correct}/${s.answered}</span></div>`;
+  });
+  return h;
+}
+function mistakeListHTML(mistakes, limit){
+  const ms=Object.entries(mistakes||{}).filter(([id])=>MISTAKES[id]).sort((a,b)=>b[1]-a[1]).slice(0,limit||5);
+  if(ms.length===0) return '<div class="empty">기록된 실수가 없어요. <b>좋아요!</b></div>';
+  let h='<div class="mlist">';
+  ms.forEach(([id,c],i)=>{ const m=MISTAKES[id];
+    h+=`<div class="mitem"><span class="rk">${i+1}</span>
+      <span class="body"><b>${m.label}</b><span class="rx">${m.rx}</span></span>
+      <span class="cnt">${c}회</span></div>`; });
+  return h+'</div>';
+}
+function renderOverview(students){
+  const wrap=$('dash-overview');
+  if(students.length===0){ wrap.innerHTML='<div class="empty">아직 기록을 제출한 학생이 없어요.</div>'; return; }
+  const agg=aggregate(students);
+  wrap.innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><b>${students.length}</b><span>학생</span></div>
+      <div class="kpi"><b>${agg.totals.answered}</b><span>푼 문제</span></div>
+      <div class="kpi"><b>${pct(agg.totals.correct,agg.totals.answered)}%</b><span>반 평균 정답률</span></div>
+    </div>
+    <p class="sec-t">영역별 정답률 (반 전체)</p>${areaRowsHTML(agg)}
+    <p class="sec-t">반 전체 자주 하는 실수</p>${mistakeListHTML(agg.mistakes,5)}`;
+}
+function renderStudents(){
+  const wrap=$('dash-students'); wrap.innerHTML='';
+  if(!teacherCache||teacherCache.length===0){ wrap.innerHTML='<div class="empty">표시할 학생이 없어요.</div>'; return; }
+  const list=[...teacherCache];
+  if(sortMode==='low') list.sort((a,b)=>pct(a.cum.totals.correct,a.cum.totals.answered)-pct(b.cum.totals.correct,b.cum.totals.answered));
+  else if(sortMode==='active') list.sort((a,b)=>b.cum.totals.answered-a.cum.totals.answered);
+  else list.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+
+  list.forEach(s=>{
+    const p=pct(s.cum.totals.correct, s.cum.totals.answered);
+    const tm=topMistake(s.cum.mistakes);
+    const row=document.createElement('div'); row.className='srow'; row.setAttribute('aria-expanded','false');
+    row.innerHTML=`<div class="smain">
+        <span class="sname">${esc(s.name)} <em>(${esc(s.id)})</em></span>
+        <span class="smeta">${s.cum.totals.answered}문제 · 정답률 ${p}%</span>
+      </div>
+      ${tm?`<span class="stop">${esc(tm.label)} ${tm.count}회</span>`:''}
+      <span class="chev">▾</span>`;
+    const detail=document.createElement('div'); detail.className='sdetail hidden';
+    detail.innerHTML=`<p class="sec-t">영역별 정답률</p>${areaRowsHTML(s.cum)||'<span class="sd-acc">아직 영역 기록이 없어요.</span>'}
+      <p class="sec-t">자주 한 실수</p>${mistakeListHTML(s.cum.mistakes,5)}`;
+    row.addEventListener('click', ()=>{
+      const open=row.getAttribute('aria-expanded')==='true';
+      row.setAttribute('aria-expanded', open?'false':'true');
+      detail.classList.toggle('hidden', open);
+    });
+    wrap.appendChild(row); wrap.appendChild(detail);
+  });
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>계산 연습 · 실수 분석 — 중1</title>
+
+<!-- ───────────────────────── Pretendard ───────────────────────── -->
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+
+<!-- ───────────────────────── MathJax ───────────────────────── -->
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(','\\)']] },
+    svg: { fontCache: 'global' },
+    startup: { typeset: false }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<style>
+:root{
+  --ink:#16233b; --ink-soft:#52607a; --ink-faint:#8a93a6;
+  --paper:#fbfaf5; --surface:#ffffff; --line:#e8e4d8; --line-strong:#d8d2c2;
+  --gold:#bd923a; --gold-soft:#f6edd6; --gold-ink:#7c5e1f;
+  --ok:#2f8f6b; --ok-soft:#e4f3ec;
+  --miss:#c1503c; --miss-soft:#fbe7e2;
+  --r:14px; --shadow:0 1px 2px rgba(22,35,59,.06), 0 8px 24px rgba(22,35,59,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:"Pretendard Variable",Pretendard,system-ui,sans-serif;
+  background:var(--paper); color:var(--ink);
+  -webkit-text-size-adjust:100%; line-height:1.5;
+  min-height:100dvh;
+}
+button{font-family:inherit; cursor:pointer; border:none; background:none; color:inherit}
+button:focus-visible, [tabindex]:focus-visible{outline:2.5px solid var(--gold); outline-offset:2px; border-radius:8px}
+
+.wrap{max-width:560px; margin:0 auto; padding:18px 16px 40px; min-height:100dvh; display:flex; flex-direction:column}
+
+/* header */
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:18px}
+.brand{display:flex; align-items:baseline; gap:9px}
+.brand b{font-size:17px; font-weight:800; letter-spacing:-.02em}
+.brand .ver{font-size:11px; color:var(--ink-faint); font-weight:600}
+.who{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-soft)}
+.who img{width:26px;height:26px;border-radius:50%;border:1px solid var(--line)}
+.linkbtn{font-size:12.5px; color:var(--ink-faint); font-weight:600; padding:6px 8px; border-radius:8px}
+.linkbtn:hover{color:var(--ink); background:var(--surface)}
+
+/* card */
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow)}
+.pad{padding:22px}
+
+/* hero / login */
+.hero h1{font-size:25px; line-height:1.25; letter-spacing:-.03em; margin:2px 0 8px; font-weight:800}
+.hero p{margin:0 0 22px; color:var(--ink-soft); font-size:14.5px}
+.hero .mark{
+  display:inline-block; font-size:12px; font-weight:700; letter-spacing:.02em;
+  color:var(--gold-ink); background:var(--gold-soft); padding:5px 11px; border-radius:999px; margin-bottom:14px;
+}
+.gbtn{
+  width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:14px; border:1px solid var(--line-strong); border-radius:12px; background:var(--surface);
+  font-weight:700; font-size:15px; transition:.12s;
+}
+.gbtn:hover:not(:disabled){border-color:var(--ink-soft); transform:translateY(-1px)}
+.gbtn:disabled{opacity:.5; cursor:not-allowed}
+.guest{ width:100%; padding:12px; margin-top:10px; color:var(--ink-soft); font-weight:600; font-size:14px; border-radius:12px}
+.guest:hover{background:var(--paper)}
+.note{font-size:12.5px; color:var(--ink-faint); margin-top:16px; line-height:1.55}
+.note code{background:var(--paper); border:1px solid var(--line); padding:1px 5px; border-radius:5px; font-size:11.5px}
+
+/* setup */
+.label{font-size:12.5px; font-weight:700; color:var(--ink-faint); letter-spacing:.02em; margin:0 0 10px}
+.areas{display:flex; flex-direction:column; gap:9px}
+.chk{
+  display:flex; align-items:center; gap:13px; padding:14px 16px; border:1.5px solid var(--line);
+  border-radius:12px; transition:.12s; user-select:none;
+}
+.chk:hover{border-color:var(--line-strong)}
+.chk[aria-pressed="true"]{border-color:var(--ink); background:#fcfcfb}
+.chk .box{width:22px;height:22px;border-radius:7px;border:2px solid var(--line-strong); flex:none; display:grid; place-items:center; transition:.12s}
+.chk[aria-pressed="true"] .box{background:var(--ink); border-color:var(--ink)}
+.chk .box svg{width:13px;height:13px; opacity:0; transform:scale(.6); transition:.12s}
+.chk[aria-pressed="true"] .box svg{opacity:1; transform:scale(1)}
+.chk .txt b{display:block; font-size:15px; font-weight:700}
+.chk .txt span{font-size:12.5px; color:var(--ink-faint)}
+
+.count{display:flex; align-items:center; justify-content:space-between; margin-top:6px}
+.count .big{font-size:30px; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.count .big span{font-size:15px; color:var(--ink-faint); font-weight:700; margin-left:3px}
+input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:26px}
+.ticks{display:flex; justify-content:space-between; font-size:10.5px; color:var(--ink-faint); margin-top:-4px}
+
+.primary{
+  width:100%; padding:15px; border-radius:12px; background:var(--ink); color:#fff;
+  font-weight:800; font-size:16px; letter-spacing:-.01em; transition:.12s; margin-top:4px;
+}
+.primary:hover:not(:disabled){background:#0f1b30; transform:translateY(-1px)}
+.primary:disabled{opacity:.45; cursor:not-allowed}
+.ghost{width:100%; padding:13px; border-radius:12px; border:1.5px solid var(--line-strong); font-weight:700; font-size:15px; background:var(--surface)}
+.ghost:hover{border-color:var(--ink-soft)}
+
+/* quiz */
+.progress{display:flex; align-items:center; gap:12px; margin-bottom:16px}
+.pbar{flex:1; height:7px; background:var(--line); border-radius:99px; overflow:hidden}
+.pbar i{display:block; height:100%; background:var(--gold); border-radius:99px; transition:width .35s ease}
+.pnum{font-size:13px; font-weight:700; color:var(--ink-soft); font-variant-numeric:tabular-nums}
+.areatag{display:inline-block; font-size:11.5px; font-weight:700; color:var(--ink-soft); background:var(--paper); border:1px solid var(--line); padding:4px 10px; border-radius:999px; margin-bottom:14px}
+
+.qbox{ text-align:center; padding:26px 14px 22px; }
+.q-prompt{ font-size:26px; min-height:40px; color:var(--ink) }
+.q-prompt svg{vertical-align:middle}
+
+.ans-line{display:flex; align-items:center; justify-content:center; gap:10px; margin-top:18px}
+.ans-pre{font-size:22px; font-weight:700; color:var(--ink-soft)}
+.ans-display{
+  min-width:130px; min-height:50px; padding:8px 16px; border-bottom:2.5px solid var(--ink);
+  font-size:24px; display:flex; align-items:center; justify-content:center;
+}
+.ans-display svg{vertical-align:middle}
+.caret-empty{color:var(--ink-faint); font-size:15px; font-weight:500}
+
+/* keypad */
+.kbd{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:22px}
+.kbd button{
+  padding:0; height:54px; border-radius:11px; border:1px solid var(--line);
+  background:var(--surface); font-size:19px; font-weight:700; color:var(--ink); transition:.08s;
+  display:grid; place-items:center;
+}
+.kbd button:hover{background:var(--paper)}
+.kbd button:active{transform:scale(.96)}
+.kbd button.fn{background:var(--paper); color:var(--ink-soft); font-size:16px; font-weight:600}
+.kbd button.wide{grid-column:span 2}
+.kbd button.ok{grid-column:span 4; height:52px; background:var(--ink); color:#fff; font-size:17px; font-weight:800; border-color:var(--ink)}
+.kbd button.ok:hover{background:#0f1b30}
+.kbd button.ok:disabled{opacity:.4}
+
+/* feedback */
+.fb{margin-top:18px; border-radius:13px; padding:16px 18px; border:1.5px solid; animation:rise .25s ease}
+@keyframes rise{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+.fb .h{display:flex; align-items:center; gap:9px; font-weight:800; font-size:15px}
+.fb .h .ic{width:24px;height:24px;border-radius:50%; display:grid; place-items:center; flex:none}
+.fb .h .ic svg{width:14px;height:14px}
+.fb p{margin:9px 0 0; font-size:14px; line-height:1.6}
+.fb .mathfix{margin-top:8px; font-size:18px; color:var(--ink); background:#fff; border:1px dashed var(--line-strong); border-radius:9px; padding:8px 12px; display:inline-block}
+
+.fb.ok{border-color:#bfe3d3; background:var(--ok-soft)}
+.fb.ok .ic{background:var(--ok); color:#fff}
+.fb.ok .h{color:var(--ok)}
+.fb.caught{border-color:var(--gold); background:var(--gold-soft)}
+.fb.caught .ic{background:var(--gold); color:#fff}
+.fb.caught .h{color:var(--gold-ink)}
+.fb.caught .tag{font-size:12px; font-weight:700; color:var(--gold-ink); background:#fff; border:1px solid var(--gold); padding:3px 9px; border-radius:999px; margin-left:auto}
+.fb.miss{border-color:#eecabf; background:var(--miss-soft)}
+.fb.miss .ic{background:var(--miss); color:#fff}
+.fb.miss .h{color:var(--miss)}
+
+.fb-actions{display:flex; gap:9px; margin-top:14px}
+.fb-actions button{flex:1; padding:11px; border-radius:10px; font-weight:700; font-size:14px}
+.retry{border:1.5px solid var(--ink); color:var(--ink); background:#fff}
+.retry:hover{background:var(--paper)}
+.nextb{background:var(--ink); color:#fff}
+.nextb:hover{background:#0f1b30}
+
+/* summary */
+.sumhead{text-align:center; margin-bottom:18px}
+.sumhead .score{font-size:46px; font-weight:800; letter-spacing:-.03em; font-variant-numeric:tabular-nums}
+.sumhead .score b{color:var(--ok)}
+.sumhead .sub{color:var(--ink-soft); font-size:14px; margin-top:2px}
+
+.tabs{display:flex; gap:6px; background:var(--paper); border:1px solid var(--line); padding:5px; border-radius:12px; margin-bottom:16px}
+.tabs button{flex:1; padding:10px; border-radius:9px; font-weight:700; font-size:13.5px; color:var(--ink-soft)}
+.tabs button[aria-selected="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.05)}
+
+.arow{display:flex; align-items:center; gap:12px; padding:13px 2px; border-bottom:1px solid var(--line)}
+.arow:last-child{border-bottom:none}
+.arow .nm{font-size:14px; font-weight:700; width:128px; flex:none}
+.arow .track{flex:1; height:8px; background:var(--line); border-radius:99px; overflow:hidden}
+.arow .track i{display:block; height:100%; background:var(--ok); border-radius:99px}
+.arow .pct{font-size:13px; font-weight:700; width:64px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-soft)}
+
+.sec-t{font-size:12.5px; font-weight:700; color:var(--ink-faint); letter-spacing:.02em; margin:24px 0 4px}
+.mlist{display:flex; flex-direction:column}
+.mitem{display:flex; gap:13px; padding:14px 2px; border-bottom:1px solid var(--line); align-items:flex-start}
+.mitem:last-child{border-bottom:none}
+.mitem .rk{width:26px;height:26px;border-radius:8px;background:var(--gold-soft); color:var(--gold-ink); font-weight:800; font-size:13px; display:grid; place-items:center; flex:none}
+.mitem .body b{font-size:14.5px; font-weight:700; display:block}
+.mitem .body .rx{font-size:13px; color:var(--ink-soft); margin-top:3px}
+.mitem .cnt{margin-left:auto; flex:none; font-size:12px; font-weight:700; color:var(--gold-ink); background:var(--gold-soft); padding:3px 10px; border-radius:999px; white-space:nowrap}
+.empty{text-align:center; color:var(--ink-soft); padding:26px 10px; font-size:14px}
+.empty b{color:var(--ok)}
+
+.hidden{display:none !important}
+.spin{width:18px;height:18px;border:2.5px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:sp .7s linear infinite; display:inline-block; vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 18px; border-radius:99px; font-size:13.5px; font-weight:600; box-shadow:var(--shadow); z-index:50}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand"><b>계산 연습 · 실수 분석</b><span class="ver">v1.0</span></div>
+    <div id="whoami" class="who hidden">
+      <span id="who-name"></span>
+      <button class="linkbtn" id="logout-btn">로그아웃</button>
+    </div>
+  </div>
+
+  <!-- ───────────── 로그인 ───────────── -->
+  <section id="screen-login" class="card pad hero">
+    <span class="mark">중1 · 유리수 · 다항식 · 1차방정식</span>
+    <h1>틀리는 데는 이유가 있어요.<br>그 이유를 찾아드려요.</h1>
+    <p>작은 수로 된 문제를 풀고, 자주 하는 계산 실수가 어디서 나오는지 바로 확인하세요.</p>
+    <button class="gbtn" id="google-btn">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.2 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 13.3 4.6 4.6 13.3 4.6 24S13.3 43.4 24 43.4 43.4 34.7 43.4 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.2 18.9 12.6 24 12.6c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 16.3 4.6 9.7 9 6.3 14.7z"/><path fill="#4CAF50" d="M24 43.4c5.1 0 9.6-1.9 13.1-5l-6.2-5.1C28.9 34.9 26.6 35.7 24 35.7c-5.2 0-9.6-3.5-11.2-8.3l-6.5 5C9.6 38.9 16.2 43.4 24 43.4z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.4l6.2 5.1c-.4.4 6.6-4.8 6.6-14.5 0-1.2-.1-2.3-.4-3.5z"/></svg>
+      <span>Google 계정으로 로그인</span>
+    </button>
+    <button class="guest" id="guest-btn">로그인 없이 체험하기 (기록은 저장되지 않아요)</button>
+    <p class="note" id="config-note"></p>
+  </section>
+
+  <!-- ───────────── 설정 ───────────── -->
+  <section id="screen-setup" class="card pad hidden">
+    <p class="label">연습할 영역</p>
+    <div class="areas" id="area-pick">
+      <button class="chk" data-area="rational" aria-pressed="true">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="txt"><b>유리수의 계산</b><span>부호·괄호·통분에서 잘 틀려요</span></span>
+      </button>
+      <button class="chk" data-area="poly" aria-pressed="true">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="txt"><b>다항식의 계산</b><span>동류항·분배에서 잘 틀려요</span></span>
+      </button>
+      <button class="chk" data-area="eq" aria-pressed="true">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="txt"><b>1차 방정식 풀기</b><span>이항·나눗셈 부호에서 잘 틀려요</span></span>
+      </button>
+    </div>
+
+    <p class="label" style="margin-top:24px">문항 수</p>
+    <div class="count"><div class="big"><span id="cnt-val">10</span><span>문제</span></div></div>
+    <input type="range" id="cnt-range" min="5" max="50" step="5" value="10">
+    <div class="ticks"><span>5</span><span>15</span><span>25</span><span>35</span><span>50</span></div>
+
+    <button class="primary" id="start-btn" style="margin-top:22px">연습 시작</button>
+  </section>
+
+  <!-- ───────────── 문제 풀이 ───────────── -->
+  <section id="screen-quiz" class="hidden" style="flex:1; display:flex; flex-direction:column">
+    <div class="progress">
+      <span class="pnum" id="q-count">1 / 10</span>
+      <span class="pbar"><i id="q-bar" style="width:0%"></i></span>
+    </div>
+    <div class="card pad" style="flex:1">
+      <span class="areatag" id="q-area">유리수의 계산</span>
+      <div class="qbox">
+        <div class="q-prompt" id="q-prompt"></div>
+        <div class="ans-line">
+          <span class="ans-pre" id="ans-pre"></span>
+          <div class="ans-display" id="ans-display"><span class="caret-empty">여기에 답</span></div>
+        </div>
+      </div>
+      <div class="kbd" id="keypad"></div>
+      <div id="feedback"></div>
+    </div>
+  </section>
+
+  <!-- ───────────── 결과 ───────────── -->
+  <section id="screen-summary" class="hidden">
+    <div class="card pad">
+      <div class="sumhead">
+        <div class="score"><b id="sum-correct">0</b> / <span id="sum-total">0</span></div>
+        <div class="sub" id="sum-sub">이번 라운드 정답</div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button id="tab-round" role="tab" aria-selected="true">이번 라운드</button>
+        <button id="tab-cum" role="tab" aria-selected="false">전체 누적</button>
+      </div>
+
+      <div id="sum-body"></div>
+
+      <button class="primary" id="again-btn" style="margin-top:24px">다시 풀기</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     1) 수식 입력기 (기존 토큰 엔진 — index v7.1 계열, 전역 스코프)
+     ════════════════════════════════════════════════════════════════ -->
+<script>
+let qTokens=[], qEditPart=null, qCursorIdx=0;
+
+function latexEsc(s){ return s.replace(/−/g,'-').replace(/×/g,'\\times ').replace(/÷/g,'\\div '); }
+
+function tokensToLatex(){
+  const C='|'; let p=[];
+  qTokens.forEach((t,i)=>{
+    if(!qEditPart && i===qCursorIdx) p.push(C);
+    if(t.type==='char'){ p.push(latexEsc(t.val)); }
+    else if(t.type==='frac'){
+      const ep=qEditPart?.idx===i?qEditPart:null;
+      const nc=ep?.part==='num'?(ep.cursor??t.num.length):null;
+      const dc=ep?.part==='den'?(ep.cursor??t.den.length):null;
+      const n=nc!=null?(latexEsc(t.num.slice(0,nc))+C+latexEsc(t.num.slice(nc))):(t.num?latexEsc(t.num):'');
+      const d=dc!=null?(latexEsc(t.den.slice(0,dc))+C+latexEsc(t.den.slice(dc))):(t.den?latexEsc(t.den):'');
+      p.push('\\dfrac{'+(n||'\\phantom{0}')+'}{'+(d||'\\phantom{0}')+'}');
+    } else if(t.type==='exp'){
+      const ep=qEditPart?.idx===i?qEditPart:null;
+      const ec=ep?(ep.cursor??t.expo.length):null;
+      const e=ec!=null?(latexEsc(t.expo.slice(0,ec))+C+latexEsc(t.expo.slice(ec))):(t.expo?latexEsc(t.expo):'');
+      p.push((t.base?latexEsc(t.base):'')+'^{'+(e||'\\phantom{0}')+'}');
+    }
+  });
+  if(!qEditPart && qCursorIdx>=qTokens.length) p.push(C);
+  return p.join('');
+}
+
+function qRender(){
+  const el=document.getElementById('ans-display'); if(!el) return;
+  if(qTokens.length===0){ el.innerHTML='<span class="caret-empty">여기에 답</span>'; return; }
+  el.innerHTML='\\('+'\\displaystyle '+tokensToLatex()+'\\)';
+  if(window.MathJax?.typesetPromise){
+    if(!window._mjQueue) window._mjQueue=Promise.resolve();
+    window._mjQueue=window._mjQueue.then(()=>{
+      if(MathJax.typesetClear) try{ MathJax.typesetClear([el]); }catch(e){}
+      return MathJax.typesetPromise([el]).catch(()=>{});
+    });
+  }
+  if(window.syncOk) window.syncOk();
+}
+
+function qInput(v){
+  if(v==='←'){
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      const key=qEditPart.part==='num'?'num':qEditPart.part==='den'?'den':'expo';
+      const cur=qEditPart.cursor??t[key].length;
+      if(cur>0){ qEditPart.cursor=cur-1; }
+      else if(t?.type==='frac'&&qEditPart.part==='den'){ qEditPart.part='num'; qEditPart.cursor=t.num.length; }
+      else { qCursorIdx=qEditPart.idx; qEditPart=null; }
+    } else if(qCursorIdx>0){
+      qCursorIdx--; const t=qTokens[qCursorIdx];
+      if(t?.type==='frac') qEditPart={idx:qCursorIdx,part:'den',cursor:t.den.length};
+      else if(t?.type==='exp') qEditPart={idx:qCursorIdx,part:'expo',cursor:t.expo.length};
+    }
+    qRender(); return;
+  }
+  if(v==='→'){
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      const key=qEditPart.part==='num'?'num':qEditPart.part==='den'?'den':'expo';
+      const cur=qEditPart.cursor??t[key].length;
+      if(cur<t[key].length){ qEditPart.cursor=cur+1; }
+      else if(t?.type==='frac'&&qEditPart.part==='num'){ qEditPart.part='den'; qEditPart.cursor=0; }
+      else { qCursorIdx=qEditPart.idx+1; qEditPart=null; }
+    } else if(qCursorIdx<qTokens.length){
+      const t=qTokens[qCursorIdx];
+      if(t?.type==='frac') qEditPart={idx:qCursorIdx,part:'num',cursor:0};
+      else if(t?.type==='exp') qEditPart={idx:qCursorIdx,part:'expo',cursor:0};
+      else qCursorIdx++;
+    }
+    qRender(); return;
+  }
+  if(v==='⌫'){
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      if(t){
+        const key=qEditPart.part==='num'?'num':qEditPart.part==='den'?'den':'expo';
+        const cur=qEditPart.cursor??t[key].length;
+        if(cur>0){ t[key]=t[key].slice(0,cur-1)+t[key].slice(cur); qEditPart.cursor=cur-1; }
+      }
+    } else if(qCursorIdx>0){ qTokens.splice(qCursorIdx-1,1); qCursorIdx--; }
+  } else if(v==='FRAC'||v==='/'){
+    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==='num'){t.num+=v;} qRender(); return; }
+    let num='';
+    if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==='char'&&/[0-9.]/.test(qTokens[qCursorIdx-1].val)){
+      num=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
+    }
+    qTokens.splice(qCursorIdx,0,{type:'frac',num,den:''});
+    qEditPart={idx:qCursorIdx,part:'den',cursor:0};
+  } else if(v==='EXP'){
+    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t) t.expo+=''; qRender(); return; }
+    let base='', removeFrom=-1, removeCount=0;
+    const prev=qTokens[qCursorIdx-1];
+    if(prev?.type==='char'&&/[\dx.]/.test(prev.val)){
+      let j=qCursorIdx-1, bc=[];
+      while(j>=0&&qTokens[j]?.type==='char'&&/[\dx.]/.test(qTokens[j].val)){ bc.unshift(qTokens[j].val); j--; }
+      base=bc.join(''); removeFrom=j+1; removeCount=bc.length;
+    } else if(prev?.type==='char'&&prev.val===')'){
+      let d=0,k=qCursorIdx-1;
+      while(k>=0){ const tv=qTokens[k]; if(tv?.type==='char'){ if(tv.val===')')d++; else if(tv.val==='('){d--; if(d===0)break;} } k--; }
+      base=qTokens.slice(k,qCursorIdx).map(t=>t.val||'').join(''); removeFrom=k; removeCount=qCursorIdx-k;
+    } else if(prev?.type==='char'){ base=prev.val; removeFrom=qCursorIdx-1; removeCount=1; }
+    if(removeCount>0){ qTokens.splice(removeFrom,removeCount); qCursorIdx-=removeCount; }
+    qTokens.splice(qCursorIdx,0,{type:'exp',base,expo:''});
+    qEditPart={idx:qCursorIdx,part:'expo',cursor:0};
+  } else {
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      if(t){
+        const key=qEditPart.part==='num'?'num':qEditPart.part==='den'?'den':'expo';
+        if(t[key]!==undefined){ const cur=qEditPart.cursor??t[key].length; t[key]=t[key].slice(0,cur)+v+t[key].slice(cur); qEditPart.cursor=cur+1; }
+      }
+    } else { qTokens.splice(qCursorIdx,0,{type:'char',val:v}); qCursorIdx++; }
+  }
+  qRender();
+}
+
+function qClear(){ qTokens=[]; qEditPart=null; qCursorIdx=0; qRender(); }
+window.qNeg=function(){
+  if(qTokens.length && qTokens[qTokens.length-1].type==='char'){
+    const last=qTokens[qTokens.length-1];
+    if(/^[0-9.]+$/.test(last.val)){ last.val='-'+last.val; qRender(); return; }
+    if(/^-[0-9.]+$/.test(last.val)){ last.val=last.val.slice(1); qRender(); return; }
+  }
+  qInput('−');
+};
+
+/* 토큰 → 수치 (유리수·방정식 정답 비교용) */
+function qTokensToNum(){
+  let s=qTokens.map(t=>{
+    if(t.type==='char') return t.val;
+    if(t.type==='frac') return `(${t.num||0})/(${t.den||1})`;
+    if(t.type==='exp')  return `Math.pow(${t.base||0},${t.expo||1})`;
+    return '';
+  }).join('');
+  s=s.replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/');
+  try{ return Function('"use strict";return ('+s+')')(); }catch(e){ return NaN; }
+}
+
+/* 토큰 → 식 문자열 (다항식 정답 비교용) */
+function qTokensToExpr(){
+  return qTokens.map(t=>{
+    if(t.type==='char') return t.val;
+    if(t.type==='exp')  return (t.base||'')+'^'+(t.expo||'1');
+    if(t.type==='frac') return '('+(t.num||'0')+'/'+(t.den||'1')+')';
+    return '';
+  }).join('');
+}
+</script>
+
+<!-- ════════════════════════════════════════════════════════════════
+     2) 실수 카탈로그 · 문제 생성기 · 채점 · Firebase · 화면 흐름
+     ════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ╔══════════════════════════════════════════════════════════╗
+   ║  ① 여기에 본인 학교 Firebase 설정을 넣으세요.              ║
+   ║     Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹) → SDK 구성   ║
+   ║     · Authentication에서 Google 로그인 사용 설정           ║
+   ║     · GitHub Pages 도메인을 '승인된 도메인'에 추가         ║
+   ║     · Firestore 데이터베이스 생성                         ║
+   ╚══════════════════════════════════════════════════════════╝ */
+// Import the functions you need from the SDKs you need
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCggfSLpDt1h_rFb-gFFustkKNjjNEcQ9s",
+  authDomain: "analyzing-miss.firebaseapp.com",
+  projectId: "analyzing-miss",
+  storageBucket: "analyzing-miss.firebasestorage.app",
+  messagingSenderId: "52141324127",
+  appId: "1:52141324127:web:e37aedd6ac594ec581e8ea"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+const CONFIG_READY = !/YOUR_/.test(JSON.stringify(firebaseConfig));
+let auth=null, db=null;
+if(CONFIG_READY){
+  const app=initializeApp(firebaseConfig);
+  auth=getAuth(app); db=getFirestore(app);
+}
+
+/* ────────────────────── 실수 카탈로그 ──────────────────────
+   id → { area, label(실수 이름), rx(처방·힌트) }                */
+const MISTAKES = {
+  // 유리수
+  R_SUB_SIGN:   {area:'rational', label:'뺄셈에서 부호를 안 바꿈',   rx:'−(−■) 는 +■ 예요. 빼기와 음수가 만나면 더하기가 됩니다.'},
+  R_NEG_ADD:    {area:'rational', label:'같은 부호 덧셈을 뺄셈처럼 함', rx:'부호가 같으면 절댓값을 "더하고", 그 공통 부호를 붙여요.'},
+  R_EXP_SIGN:   {area:'rational', label:'거듭제곱의 부호 처리',       rx:'(−2)² 는 (−2)×(−2)=4, −2² 는 −(2×2)=−4. 괄호가 부호를 가둬요.'},
+  R_MULDIV_SIGN:{area:'rational', label:'곱·나눗셈 부호 규칙',        rx:'음수의 개수가 짝수면 +, 홀수면 −.'},
+  R_ORDER:      {area:'rational', label:'연산 순서를 안 지킴',       rx:'×, ÷ 를 +, − 보다 먼저 계산해요.'},
+  R_DIST_SIGN:  {area:'rational', label:'괄호 앞 음수 분배 실수',     rx:'−(a−b) 는 괄호 안 모든 항의 부호를 바꿔서 −a+b.'},
+  R_FRAC_ADD:   {area:'rational', label:'분수를 통분 안 하고 더함',   rx:'분모를 통분한 뒤 "분자만" 더해요. 분모끼리 더하면 안 돼요.'},
+  // 다항식
+  P_UNLIKE:     {area:'poly', label:'동류항이 아닌 항을 합침',       rx:'x항과 상수항은 합칠 수 없어요. 따로 둬요.'},
+  P_VAR_MULT:   {area:'poly', label:'계수를 더하며 문자까지 곱함',   rx:'2x+3x 는 계수만 더해 5x. x² 가 되면 안 돼요.'},
+  P_DIST_PARTIAL:{area:'poly', label:'분배를 일부만 함',            rx:'a(x+b) 는 괄호 안 "모든" 항에 a를 곱해요 → ax+ab.'},
+  P_MINUS_DIST: {area:'poly', label:'괄호 앞 − 를 둘째 항에 안 미침', rx:'−(2x−1) 의 −는 둘째 항 부호까지 바꿔요 → −2x+1.'},
+  P_MULT_SIGN:  {area:'poly', label:'곱셈에서 부호 실수',           rx:'−3×(−2)=+6. 음수×음수는 양수예요.'},
+  // 방정식
+  E_TRANSPOSE_SIGN:{area:'eq', label:'이항할 때 부호를 안 바꿈',     rx:'항을 반대편으로 옮기면 부호가 반대가 돼요.'},
+  E_NO_DIVIDE:  {area:'eq', label:'계수로 안 나눔',                 rx:'3x=12 는 양변을 3으로 나눠 x=4.'},
+  E_NEG_DIVIDE: {area:'eq', label:'음수 계수 나눗셈 부호',          rx:'−2x=6 → −2로 나누면 x=−3. 부호가 바뀌어요.'},
+  E_DIST:       {area:'eq', label:'괄호를 먼저 전개 안 함',         rx:'2(x−1)=6 은 먼저 2x−2=6 으로 전개해요.'},
+  E_CONST_SIGN: {area:'eq', label:'상수 이항 부호 실수',           rx:'2x−3=5 → −3을 옮기면 +3 → 2x=8.'},
+};
+const AREA_LABEL = {rational:'유리수의 계산', poly:'다항식의 계산', eq:'1차 방정식 풀기'};
+
+/* ────────────────────── 보조 ────────────────────── */
+const ri=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const same=(x,y)=>Math.abs(x-y)<1e-9;
+const sameExpr=(a,b)=>a&&b&&a.x2===b.x2&&a.x1===b.x1&&a.x0===b.x0;
+function sgn(n){ return n<0?('−'+(-n)):(''+n); }            // 표시용(단독)
+function add(n){ return n<0?('−'+(-n)):('+'+n); }           // 표시용(뒤에 붙임)
+
+/* ────────────────────── 문제 생성기 ──────────────────────
+   반환: {area, latex, answerType:'num'|'expr', pre, correct, traps:[{id,value,...}]}
+   traps.value = 숫자(num) 또는 {x2,x1,x0}(expr)                                  */
+function genRational(){
+  const T = pick(['sub','negadd','exp','order','dist','mul','frac']);
+  if(T==='sub'){ const a=ri(2,9), b=ri(2,9);
+    return {area:'rational',answerType:'num',latex:`${a}-(-${b})=`,correct:a+b,
+      traps:[{id:'R_SUB_SIGN',value:a-b}]}; }
+  if(T==='negadd'){ let a=ri(2,9),b=ri(2,8); if(a===b)b++; 
+    return {area:'rational',answerType:'num',latex:`(-${a})+(-${b})=`,correct:-(a+b),
+      traps:[{id:'R_NEG_ADD',value:-Math.abs(a-b)}]}; }
+  if(T==='exp'){ const a=ri(2,7);
+    if(Math.random()<0.5) return {area:'rational',answerType:'num',latex:`(-${a})^{2}=`,correct:a*a,
+      traps:[{id:'R_EXP_SIGN',value:-(a*a)}]};
+    return {area:'rational',answerType:'num',latex:`-${a}^{2}=`,correct:-(a*a),
+      traps:[{id:'R_EXP_SIGN',value:a*a}]}; }
+  if(T==='order'){ const a=ri(2,9),b=ri(2,6),c=ri(2,6);
+    return {area:'rational',answerType:'num',latex:`${a}+${b}\\times ${c}=`,correct:a+b*c,
+      traps:[{id:'R_ORDER',value:(a+b)*c}]}; }
+  if(T==='dist'){ let a=ri(2,9),b=ri(2,9); if(a===b)b++;
+    return {area:'rational',answerType:'num',latex:`-(${a}-${b})=`,correct:b-a,
+      traps:[{id:'R_DIST_SIGN',value:-(a+b)}]}; }
+  if(T==='mul'){ const a=ri(2,9),b=ri(2,9);
+    return {area:'rational',answerType:'num',latex:`(-${a})\\times(-${b})=`,correct:a*b,
+      traps:[{id:'R_MULDIV_SIGN',value:-(a*b)}]}; }
+  // frac : 1/a + 1/b
+  let a=ri(2,6),b=ri(2,7); if(a===b)b++;
+  return {area:'rational',answerType:'num',latex:`\\dfrac{1}{${a}}+\\dfrac{1}{${b}}=`,correct:(a+b)/(a*b),
+    traps:[{id:'R_FRAC_ADD',value:2/(a+b)}], hintFrac:true};
+}
+
+function genPoly(){
+  const T = pick(['combine','likex','dist','minus','negdist']);
+  const E=(x2,x1,x0)=>({x2,x1,x0});
+  if(T==='combine'){ const a=ri(2,5),b=1,c=ri(2,8);
+    return {area:'poly',answerType:'expr',latex:`${a}x+${c}+x=`,correct:E(0,a+b,c),
+      traps:[{id:'P_UNLIKE',value:E(0,a+b+c,0)}]}; }
+  if(T==='likex'){ const a=ri(2,6),b=ri(2,6);
+    return {area:'poly',answerType:'expr',latex:`${a}x+${b}x=`,correct:E(0,a+b,0),
+      traps:[{id:'P_VAR_MULT',value:E(a+b,0,0)}]}; }
+  if(T==='dist'){ const a=ri(2,5),b=ri(2,6);
+    return {area:'poly',answerType:'expr',latex:`${a}(x+${b})=`,correct:E(0,a,a*b),
+      traps:[{id:'P_DIST_PARTIAL',value:E(0,a,b)}]}; }
+  if(T==='minus'){ let c=ri(3,7),d=ri(2,5); if(c===d)d--; const e=ri(2,6);
+    return {area:'poly',answerType:'expr',latex:`${c}x-(${d}x-${e})=`,correct:E(0,c-d,e),
+      traps:[{id:'P_MINUS_DIST',value:E(0,c-d,-e)}]}; }
+  // negdist : -a(x-b)
+  const a=ri(2,5),b=ri(2,6);
+  return {area:'poly',answerType:'expr',latex:`-${a}(x-${b})=`,correct:E(0,-a,a*b),
+    traps:[{id:'P_MULT_SIGN',value:E(0,-a,-a*b)}]};
+}
+
+function genEq(){
+  const T = pick(['add','coef','negcoef','paren','const']);
+  if(T==='add'){ const x=ri(1,9), a=ri(2,9), b=x+a;
+    return {area:'eq',answerType:'num',pre:'x =',latex:`x+${a}=${b}`,correct:x,
+      traps:[{id:'E_TRANSPOSE_SIGN',value:b+a}]}; }
+  if(T==='coef'){ const a=ri(2,6),k=ri(2,9),b=a*k;
+    return {area:'eq',answerType:'num',pre:'x =',latex:`${a}x=${b}`,correct:k,
+      traps:[{id:'E_NO_DIVIDE',value:b}]}; }
+  if(T==='negcoef'){ const a=ri(2,6),k=ri(2,9),b=a*k;
+    return {area:'eq',answerType:'num',pre:'x =',latex:`-${a}x=${b}`,correct:-k,
+      traps:[{id:'E_NEG_DIVIDE',value:k}]}; }
+  if(T==='paren'){ const a=ri(2,4),c=ri(2,6),m=ri(2,5),b=a*m;
+    return {area:'eq',answerType:'num',pre:'x =',latex:`${a}(x-${c})=${b}`,correct:c+m,
+      traps:[{id:'E_DIST',value:(b+c)/a}]}; }
+  // const : a x - c = b ,  c=a*j ,  b=a*(k-j)
+  const a=ri(2,4), k=ri(3,6), j=ri(1,k-1), c=a*j, b=a*(k-j);
+  return {area:'eq',answerType:'num',pre:'x =',latex:`${a}x-${c}=${b}`,correct:k,
+    traps:[{id:'E_CONST_SIGN',value:k-2*j}]};
+}
+const GENS={rational:genRational, poly:genPoly, eq:genEq};
+
+/* trap 값이 정답과 같으면 제거(오인 방지) */
+function buildQuestion(area){
+  const q=GENS[area]();
+  q.traps=(q.traps||[]).filter(t=>{
+    return q.answerType==='expr' ? !sameExpr(t.value,q.correct) : !same(t.value,q.correct);
+  });
+  return q;
+}
+
+/* ────────────────────── 다항식 답 파서 (ax²+bx+c) ────────────────────── */
+function parseLinear(raw){
+  let s=String(raw).replace(/−/g,'-').replace(/×/g,'*').replace(/\s/g,'');
+  if(s==='') return null;
+  if(/[^0-9x+\-^.]/.test(s)) return null;          // 허용 문자 외 → 정리된 식 아님
+  if(!/^[+-]/.test(s)) s='+'+s;
+  const terms=s.match(/[+-][^+-]+/g);
+  if(!terms) return null;
+  let x2=0,x1=0,x0=0;
+  for(const t of terms){
+    const sign=t[0]==='-'?-1:1; const body=t.slice(1);
+    if(body.indexOf('x')>=0){
+      const [cf,rest]=body.split('x');
+      let coef= cf===''?1 : (cf==='.'?NaN:parseFloat(cf));
+      if(isNaN(coef)) return null;
+      let exp;
+      if(rest===''||rest===undefined) exp=1;
+      else if(rest[0]==='^') exp=parseInt(rest.slice(1),10);
+      else exp=parseInt(rest,10);
+      if(isNaN(exp)) return null;
+      if(exp===2) x2+=sign*coef; else if(exp===1) x1+=sign*coef; else x0+=sign*coef;
+    } else {
+      const n=parseFloat(body); if(isNaN(n)) return null; x0+=sign*n;
+    }
+  }
+  const R=v=>Math.abs(v-Math.round(v))<1e-9?Math.round(v):v;
+  return {x2:R(x2),x1:R(x1),x0:R(x0)};
+}
+
+/* 학생 답 → 비교 가능한 값 (없거나 못 읽으면 null) */
+function readAnswer(q){
+  if(qTokens.length===0) return null;
+  if(q.answerType==='expr'){ return parseLinear(qTokensToExpr()); }
+  const v=qTokensToNum(); return (typeof v==='number'&&isFinite(v))?v:null;
+}
+
+/* ────────────────────── 저장소 (Firebase / 게스트 공통 인터페이스) ────────────────────── */
+const emptyCum=()=>({totals:{answered:0,correct:0},
+  areas:{rational:{answered:0,correct:0},poly:{answered:0,correct:0},eq:{answered:0,correct:0}},
+  mistakes:{}});
+function mergeCum(base,d){
+  base.totals.answered+=d.totals.answered; base.totals.correct+=d.totals.correct;
+  for(const k in d.areas){ base.areas[k].answered+=d.areas[k].answered; base.areas[k].correct+=d.areas[k].correct; }
+  for(const id in d.mistakes){ base.mistakes[id]=(base.mistakes[id]||0)+d.mistakes[id]; }
+  return base;
+}
+function makeGuestStore(){
+  let cum=emptyCum();
+  return {
+    label:'guest',
+    async loadCumulative(){ return cum; },
+    async commitRound(delta){ mergeCum(cum,delta); }
+  };
+}
+function makeFirebaseStore(user){
+  const ref=doc(db,'users',user.uid);
+  return {
+    label:'firebase',
+    async loadCumulative(){
+      try{ const s=await getDoc(ref); return s.exists()?{...emptyCum(),...s.data()}:emptyCum(); }
+      catch(e){ console.error(e); return emptyCum(); }
+    },
+    async commitRound(delta){
+      const cur=await this.loadCumulative(); mergeCum(cur,delta);
+      cur.displayName=user.displayName||''; cur.email=user.email||''; cur.updatedAt=serverTimestamp();
+      await setDoc(ref,cur,{merge:true});
+      try{ await addDoc(collection(db,'users',user.uid,'rounds'),{at:serverTimestamp(),...delta}); }catch(e){}
+    }
+  };
+}
+
+/* ────────────────────── 앱 상태 / 화면 전환 ────────────────────── */
+const $=id=>document.getElementById(id);
+const screens=['screen-login','screen-setup','screen-quiz','screen-summary'];
+function show(id){ screens.forEach(s=>$(s).classList.toggle('hidden', s!==id)); }
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+function mjx(el){ if(window.MathJax?.typesetPromise){ window._mjQueue=(window._mjQueue||Promise.resolve()).then(()=>MathJax.typesetPromise([el]).catch(()=>{})); } }
+
+let store=null, session=null;
+
+/* ────────────────────── 로그인 화면 ────────────────────── */
+const note=$('config-note');
+if(!CONFIG_READY){
+  $('google-btn').disabled=true;
+  note.innerHTML='Google 로그인은 <code>firebaseConfig</code> 를 채운 뒤 작동해요. 지금은 <b>체험하기</b>로 모든 기능을 테스트할 수 있어요(기록 저장만 안 됨).';
+}else{
+  note.innerHTML='로그인하면 푼 기록이 계정에 누적돼 <b>전체 누적</b> 분석을 볼 수 있어요.';
+}
+
+$('google-btn').addEventListener('click', async ()=>{
+  if(!CONFIG_READY) return;
+  try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch(e){ toast('로그인을 취소했거나 실패했어요.'); console.error(e); }
+});
+$('guest-btn').addEventListener('click', ()=>{
+  store=makeGuestStore();
+  $('whoami').classList.add('hidden');
+  enterSetup();
+});
+$('logout-btn').addEventListener('click', async ()=>{ if(auth) await signOut(auth); location.reload(); });
+
+if(CONFIG_READY){
+  onAuthStateChanged(auth, user=>{
+    if(user){
+      store=makeFirebaseStore(user);
+      $('who-name').textContent=(user.displayName||user.email||'').split(' ')[0]+' 님';
+      $('whoami').classList.remove('hidden');
+      enterSetup();
+    }
+  });
+}
+
+/* ────────────────────── 설정 화면 ────────────────────── */
+function enterSetup(){ show('screen-setup'); }
+$('area-pick').addEventListener('click', e=>{
+  const b=e.target.closest('.chk'); if(!b) return;
+  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed')==='true'?'false':'true');
+  const any=[...document.querySelectorAll('.chk')].some(c=>c.getAttribute('aria-pressed')==='true');
+  $('start-btn').disabled=!any;
+});
+$('cnt-range').addEventListener('input', e=>{ $('cnt-val').textContent=e.target.value; });
+
+$('start-btn').addEventListener('click', ()=>{
+  const areas=[...document.querySelectorAll('.chk')].filter(c=>c.getAttribute('aria-pressed')==='true').map(c=>c.dataset.area);
+  if(areas.length===0) return;
+  const total=+$('cnt-range').value;
+  session={ areas, total, idx:0, correct:0, tries:0,
+    delta:emptyCum(), log:[] };
+  show('screen-quiz');
+  buildKeypadFor(); 
+  nextQuestion();
+});
+
+/* ────────────────────── 키패드 ────────────────────── */
+const KP_NUM=[['7','8','9','⌫'],['4','5','6','←'],['1','2','3','→'],['0','.','±','C'],['FRAC','EXP','','OK2']];
+const KP_EXP=[['7','8','9','⌫'],['4','5','6','←'],['1','2','3','→'],['x','+','−','C'],['0','±','EXP','FRAC'],['OK']];
+function buildKeypadFor(){ /* per-question 갱신 */ }
+function renderKeypad(answerType){
+  const rows = answerType==='expr'?KP_EXP:KP_NUM;
+  const kp=$('keypad'); kp.innerHTML='';
+  rows.forEach(r=>r.forEach(k=>{
+    if(k===''){ const sp=document.createElement('div'); kp.appendChild(sp); return; }
+    const btn=document.createElement('button');
+    if(k==='OK'){ btn.className='ok'; btn.textContent='확인'; btn.dataset.k='OK'; btn.id='ok-btn'; }
+    else if(k==='OK2'){ btn.className='ok wide'; btn.textContent='확인'; btn.dataset.k='OK'; btn.id='ok-btn'; }
+    else if(['⌫','←','→','C','±','FRAC','EXP'].includes(k)){ btn.className='fn'; btn.textContent=k==='FRAC'?'a/b':k==='EXP'?'x²':k; btn.dataset.k=k; }
+    else { btn.textContent=k; btn.dataset.k=k; }
+    kp.appendChild(btn);
+  }));
+}
+$('keypad').addEventListener('click', e=>{
+  const k=e.target.closest('button')?.dataset.k; if(!k) return;
+  if(k==='OK'){ submitAnswer(); return; }
+  if(k==='C'){ qClear(); return; }
+  if(k==='±'){ window.qNeg(); return; }
+  if(k==='FRAC'){ qInput('FRAC'); return; }
+  if(k==='EXP'){ qInput('EXP'); return; }
+  if(k==='⌫'||k==='←'||k==='→'){ qInput(k); return; }
+  qInput(k);
+});
+window.syncOk=function(){ const ok=$('ok-btn'); if(ok) ok.disabled = qTokens.length===0; };
+
+/* 물리 키보드 지원 */
+document.addEventListener('keydown', e=>{
+  if($('screen-quiz').classList.contains('hidden')) return;
+  if($('feedback').dataset.locked==='1') return;
+  const k=e.key;
+  if(/^[0-9]$/.test(k)) qInput(k);
+  else if(k==='.') qInput('.');
+  else if(k==='x'||k==='X') qInput('x');
+  else if(k==='+') qInput('+');
+  else if(k==='-') window.qNeg();
+  else if(k==='/') qInput('FRAC');
+  else if(k==='^') qInput('EXP');
+  else if(k==='Backspace'){ qInput('⌫'); e.preventDefault(); }
+  else if(k==='ArrowLeft') qInput('←');
+  else if(k==='ArrowRight') qInput('→');
+  else if(k==='Enter'){ submitAnswer(); e.preventDefault(); }
+});
+
+/* ────────────────────── 문제 출제 ────────────────────── */
+let curQ=null;
+function nextQuestion(){
+  session.tries=0;
+  $('feedback').innerHTML=''; $('feedback').dataset.locked='';
+  const area=pick(session.areas);
+  curQ=buildQuestion(area);
+  qClear();
+  renderKeypad(curQ.answerType);
+  window.syncOk();
+  $('q-area').textContent=AREA_LABEL[area];
+  $('ans-pre').textContent=curQ.pre||'';
+  const n=session.idx+1;
+  $('q-count').textContent=`${n} / ${session.total}`;
+  $('q-bar').style.width=(session.idx/session.total*100)+'%';
+  const pr=$('q-prompt'); pr.innerHTML='\\('+'\\displaystyle '+curQ.latex+'\\)'; mjx(pr);
+}
+
+/* ────────────────────── 채점 ────────────────────── */
+function matchTrap(q, val){
+  for(const t of q.traps){
+    if(q.answerType==='expr'){ if(sameExpr(t.value,val)) return t; }
+    else { if(same(t.value,val)) return t; }
+  }
+  return null;
+}
+function correctLatex(q){
+  if(q.answerType!=='expr'){
+    if(q.hintFrac){ /* 분수 정답 보기 좋게 */ }
+    return String(q.correct);
+  }
+  const c=q.correct; let s='';
+  if(c.x1!==0) s+=(c.x1===1?'x':c.x1===-1?'-x':c.x1+'x');
+  if(c.x0!==0) s+=(s? add(c.x0).replace('−','-') : (''+c.x0));
+  return s||'0';
+}
+
+function submitAnswer(){
+  if($('feedback').dataset.locked==='1') return;
+  const val=readAnswer(curQ);
+  if(val===null){ toast('답을 입력해 주세요.'); return; }
+
+  const ok = curQ.answerType==='expr' ? sameExpr(val,curQ.correct) : same(val,curQ.correct);
+  const fb=$('feedback');
+
+  if(ok){
+    lockAndRecord(true, null);
+    fb.innerHTML = card('ok','맞았어요','정확해요. 다음 문제로 넘어가요.', null, false);
+    fb.dataset.locked='1';
+    attachNext(false);
+    return;
+  }
+
+  // 오답
+  const trap=matchTrap(curQ, val);
+  session.tries++;
+  if(session.tries===1){
+    // 첫 오답: 힌트 + 재시도 1회
+    if(trap){
+      const m=MISTAKES[trap.id];
+      fb.innerHTML = card('caught', m.label, m.rx, null, true, '자주 하는 실수');
+    }else{
+      fb.innerHTML = card('miss','다시 한 번','계산 과정을 천천히 되짚어 볼까요? 한 번 더 풀어봐요.', null, true);
+    }
+    fb.dataset.locked='1';
+    // 재시도 버튼
+    const wrap=document.createElement('div'); wrap.className='fb-actions';
+    const r=document.createElement('button'); r.className='retry'; r.textContent='다시 풀기';
+    r.onclick=()=>{ fb.innerHTML=''; fb.dataset.locked=''; qClear(); window.syncOk(); };
+    wrap.appendChild(r); fb.appendChild(wrap);
+  }else{
+    // 두 번째 오답: 정답 공개 + 기록
+    lockAndRecord(false, trap?trap.id:null);
+    const m = trap?MISTAKES[trap.id]:null;
+    fb.innerHTML = card(trap?'caught':'miss', trap?m.label:'정답을 확인해요',
+      (trap?m.rx+' ':'')+'정답은 아래와 같아요.', correctLatex(curQ), false, trap?'자주 하는 실수':null);
+    fb.dataset.locked='1';
+    attachNext(true);
+  }
+}
+
+function lockAndRecord(isCorrect, mistakeId){
+  const a=curQ.area;
+  session.delta.totals.answered++; session.delta.areas[a].answered++;
+  if(isCorrect){ session.delta.totals.correct++; session.delta.areas[a].correct++; session.correct++; }
+  if(mistakeId){ session.delta.mistakes[mistakeId]=(session.delta.mistakes[mistakeId]||0)+1; }
+  session.log.push({area:a, correct:isCorrect, mistakeId});
+}
+
+function attachNext(hadMath){
+  const fb=$('feedback');
+  const wrap=document.createElement('div'); wrap.className='fb-actions';
+  const n=document.createElement('button'); n.className='nextb';
+  const last = session.idx+1>=session.total;
+  n.textContent = last?'결과 보기':'다음 문제';
+  n.onclick=()=>{ session.idx++; if(session.idx>=session.total) finishRound(); else nextQuestion(); };
+  wrap.appendChild(n); fb.appendChild(wrap);
+  if(hadMath) mjx(fb);
+}
+
+function card(kind,title,body,fixLatex,_retry,tag){
+  const ic = kind==='ok'
+    ? '<path d="M5 12l5 5L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    : kind==='caught'
+    ? '<path d="M12 8v5M12 16.5v.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>'
+    : '<path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>';
+  const tagHtml = tag?`<span class="tag">${tag}</span>`:'';
+  const fix = fixLatex!=null ? `<div class="mathfix">\\(${curQ.pre?'x = ':''}${fixLatex}\\)</div>`:'';
+  return `<div class="fb ${kind}">
+    <div class="h"><span class="ic"><svg viewBox="0 0 24 24">${ic}</svg></span>${title}${tagHtml}</div>
+    <p>${body}</p>${fix}</div>`;
+}
+
+/* ────────────────────── 결과 화면 ────────────────────── */
+async function finishRound(){
+  $('q-bar').style.width='100%';
+  show('screen-summary');
+  $('sum-correct').textContent=session.correct;
+  $('sum-total').textContent=session.total;
+  // 저장
+  let cum=emptyCum();
+  if(store){
+    try{ await store.commitRound(session.delta); cum=await store.loadCumulative(); }
+    catch(e){ console.error(e); toast('저장 중 문제가 있었어요.'); }
+  }
+  session._cum=cum;
+  selectTab('round');
+}
+function selectTab(which){
+  $('tab-round').setAttribute('aria-selected', which==='round');
+  $('tab-cum').setAttribute('aria-selected', which==='cum');
+  const data = which==='round'
+    ? {totals:session.delta.totals, areas:session.delta.areas, mistakes:session.delta.mistakes}
+    : session._cum;
+  $('sum-sub').textContent = which==='round'?'이번 라운드 정답':'전체 누적 정답';
+  if(which==='cum'){ $('sum-correct').textContent=data.totals.correct; $('sum-total').textContent=data.totals.answered; }
+  else { $('sum-correct').textContent=session.correct; $('sum-total').textContent=session.total; }
+  renderSummary(data, which);
+}
+$('tab-round').addEventListener('click',()=>selectTab('round'));
+$('tab-cum').addEventListener('click',()=>selectTab('cum'));
+
+function renderSummary(data, which){
+  const body=$('sum-body'); body.innerHTML='';
+
+  // 영역별 정답률
+  const areaWrap=document.createElement('div');
+  const order=['rational','poly','eq'];
+  let anyArea=false;
+  order.forEach(a=>{
+    const s=data.areas[a]; if(!s||s.answered===0) return; anyArea=true;
+    const pct=Math.round(s.correct/s.answered*100);
+    const row=document.createElement('div'); row.className='arow';
+    row.innerHTML=`<span class="nm">${AREA_LABEL[a]}</span>
+      <span class="track"><i style="width:${pct}%"></i></span>
+      <span class="pct">${pct}% · ${s.correct}/${s.answered}</span>`;
+    areaWrap.appendChild(row);
+  });
+  if(anyArea){ const t=document.createElement('p'); t.className='sec-t'; t.textContent='영역별 정답률'; body.appendChild(t); body.appendChild(areaWrap); }
+
+  // 자주 한 실수 랭킹
+  const ms=Object.entries(data.mistakes||{}).sort((a,b)=>b[1]-a[1]);
+  const t2=document.createElement('p'); t2.className='sec-t';
+  t2.textContent = which==='round'?'이번에 잡힌 실수':'자주 하는 실수 (누적)';
+  body.appendChild(t2);
+
+  if(ms.length===0){
+    const e=document.createElement('div'); e.className='empty';
+    e.innerHTML = which==='round'
+      ? '특정한 실수 패턴 없이 풀었어요. <b>좋아요!</b>'
+      : '아직 분석할 누적 실수가 없어요. <b>깔끔하네요!</b>';
+    body.appendChild(e); return;
+  }
+  const list=document.createElement('div'); list.className='mlist';
+  ms.slice(0,5).forEach(([id,c],i)=>{
+    const m=MISTAKES[id]; if(!m) return;
+    const it=document.createElement('div'); it.className='mitem';
+    it.innerHTML=`<span class="rk">${i+1}</span>
+      <span class="body"><b>${m.label}</b><span class="rx">${m.rx}</span></span>
+      <span class="cnt">${c}회</span>`;
+    list.appendChild(it);
+  });
+  body.appendChild(list);
+}
+
+$('again-btn').addEventListener('click', ()=>{ enterSetup(); });
+</script>
+</body>
+</html>

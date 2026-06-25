@@ -738,8 +738,6 @@ const isTeacherEmail=e=>TEACHER_EMAILS.includes((e||'').toLowerCase());
 const note=$('config-note');
 if(!CONFIG_READY){
   $('google-btn').disabled=true;
-  note.innerHTML='Google 로그인은 <code>firebaseConfig</code> 를 채운 뒤 작동해요. 지금은 <b>체험하기</b>로 모든 기능을 테스트할 수 있어요(기록 저장만 안 됨).';
-}else{
   note.innerHTML='로그인하면 푼 기록이 계정에 누적돼 <b>전체 누적</b> 분석을 볼 수 있어요.';
 }
 

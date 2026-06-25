@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1r">
+  <meta name="app-version" content="7.1t">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1r";
+const VERSION = "7.1t";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -642,6 +642,7 @@ const db      = initializeFirestore(fbApp,{localCache:persistentLocalCache()});
 const storage = getStorage(fbApp);
 
 let user = null, wsProgress = {}, curWS = null;
+window._dbg=()=>({curWS,curQIdx,answered,attempts,wrongAnswers,_wsDataLoaded});
 let _wsDataLoaded = false; // Firestore 데이터 로드 완료 전 저장 방지
 let teacherClasses = [];   // 학급 목록 [{key, name}]
 let teacherProgress = {};  // wsId → {className: bool}
@@ -3061,7 +3062,8 @@ window.qClear=qClear;
 function isExprInput(q){
   if(!q||q.type!=="word") return false;
   if(q.answerType==="expr") return true;
-  if(q.answerType==="text"){
+  // answerType이 명시되어 있지 않을 때만 자동 판정 (한글 없으면 expr)
+  if(q.answerType==null){
     return !/[가-힣]/.test((q.answer||"")+(q.answerAlt||[]).join(""));
   }
   return false;

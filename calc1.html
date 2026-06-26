@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title> 수학 점수 탐정단</title>
+<title>수학 점수 탐정단</title>
 
 <!-- ───────────────────────── Pretendard ───────────────────────── -->
 <link rel="stylesheet" as="style" crossorigin
@@ -231,7 +231,7 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.1</span></div>
+    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.3</span></div>
     <div id="whoami" class="who hidden">
       <span id="who-name"></span>
       <button class="linkbtn hidden" id="dash-btn">대시보드</button>
@@ -242,15 +242,13 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
   <!-- ───────────── 로그인 ───────────── -->
   <section id="screen-login" class="card pad hero">
     <span class="mark">중1 · 유리수 · 다항식 · 1차방정식</span>
-    <h1>내 수학점수가 사라졌다<br> 사라진 수학 점수를 찾아라!</h1>
-    <p>간단한 계산 문제를 풀면서, 자주 하는 실수 유형을 확인하세요.</p>
+    <h1>내 수학 점수가 사라졌다<br>사라진 점수를 찾아라!</h1>
+    <p>간단한 계산 문제를 풀면서, 자주 하는 실수 유형을 추적해 점수를 되찾으세요.</p>
     <button class="gbtn" id="google-btn">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.2 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 13.3 4.6 4.6 13.3 4.6 24S13.3 43.4 24 43.4 43.4 34.7 43.4 24c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.2 18.9 12.6 24 12.6c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.5 6.5 29 4.6 24 4.6 16.3 4.6 9.7 9 6.3 14.7z"/><path fill="#4CAF50" d="M24 43.4c5.1 0 9.6-1.9 13.1-5l-6.2-5.1C28.9 34.9 26.6 35.7 24 35.7c-5.2 0-9.6-3.5-11.2-8.3l-6.5 5C9.6 38.9 16.2 43.4 24 43.4z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.4l6.2 5.1c-.4.4 6.6-4.8 6.6-14.5 0-1.2-.1-2.3-.4-3.5z"/></svg>
       <span>Google 계정으로 로그인</span>
     </button>
-    <button class="guest" id="guest-btn">로그인 없이 체험하기 (기록은 저장되지 않아요)</button>
-    <p class="note" id="config-note"></p>
-  </section>
+    </section>
 
   <!-- ───────────── 설정 ───────────── -->
   <section id="screen-setup" class="card pad hidden">
@@ -303,7 +301,7 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
     <div class="card pad">
       <div class="sumhead">
         <div class="score"><b id="sum-correct">0</b> / <span id="sum-total">0</span></div>
-        <div class="sub" id="sum-sub">이번 라운드 정답</div>
+        <div class="sub" id="sum-sub">이번 사건 해결</div>
       </div>
 
       <div class="tabs" role="tablist">
@@ -313,7 +311,7 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 
       <div id="sum-body"></div>
 
-      <button class="primary" id="again-btn" style="margin-top:24px">다시 풀기</button>
+      <button class="primary" id="again-btn" style="margin-top:24px">새 사건 맡기</button>
     </div>
   </section>
 
@@ -519,12 +517,12 @@ import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, serverT
    ║     · Firestore 데이터베이스 생성                         ║
    ╚══════════════════════════════════════════════════════════╝ */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCggfSLpDt1h_rFb-gFFustkKNjjNEcQ9s",
+  authDomain: "analyzing-miss.firebaseapp.com",
+  projectId: "analyzing-miss",
+  storageBucket: "analyzing-miss.firebasestorage.app",
+  messagingSenderId: "52141324127",
+  appId: "1:52141324127:web:e37aedd6ac594ec581e8ea"
 };
 
 const CONFIG_READY = !/YOUR_/.test(JSON.stringify(firebaseConfig));
@@ -735,21 +733,10 @@ const TEACHER_EMAILS=['rapidwing@snu-g.ms.kr'];
 const isTeacherEmail=e=>TEACHER_EMAILS.includes((e||'').toLowerCase());
 
 /* ────────────────────── 로그인 화면 ────────────────────── */
-const note=$('config-note');
-if(!CONFIG_READY){
-  $('google-btn').disabled=true;
-  note.innerHTML='로그인하면 푼 기록이 계정에 누적돼 <b>전체 누적</b> 분석을 볼 수 있어요.';
-}
-
 $('google-btn').addEventListener('click', async ()=>{
   if(!CONFIG_READY) return;
   try{ await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch(e){ toast('로그인을 취소했거나 실패했어요.'); console.error(e); }
-});
-$('guest-btn').addEventListener('click', ()=>{
-  store=makeGuestStore();
-  $('whoami').classList.add('hidden');
-  enterSetup();
 });
 $('logout-btn').addEventListener('click', async ()=>{ if(auth) await signOut(auth); location.reload(); });
 
@@ -906,7 +893,7 @@ function submitAnswer(){
 
   if(ok){
     lockAndRecord(true, null);
-    fb.innerHTML = card('ok','맞았어요','정확해요. 다음 문제로 넘어가요.', null, false);
+    fb.innerHTML = card('ok','사건 해결!','점수를 되찾았어요. 다음 단서로 넘어가요.', null, false);
     fb.dataset.locked='1';
     attachNext(false);
     return;
@@ -919,22 +906,22 @@ function submitAnswer(){
     // 첫 오답: 힌트 + 재시도 1회
     if(trap){
       const m=MISTAKES[trap.id];
-      fb.innerHTML = card('caught', m.label, m.rx, null, true, '자주 하는 실수');
+      fb.innerHTML = card('caught', m.label, m.rx, null, true, '지명수배 실수');
     }else{
-      fb.innerHTML = card('miss','다시 한 번','계산 과정을 천천히 되짚어 볼까요? 한 번 더 풀어봐요.', null, true);
+      fb.innerHTML = card('miss','단서가 더 필요해요','현장을 천천히 다시 살펴볼까요? 한 번 더 수사해 봐요.', null, true);
     }
     fb.dataset.locked='1';
     // 재시도 버튼
     const wrap=document.createElement('div'); wrap.className='fb-actions';
-    const r=document.createElement('button'); r.className='retry'; r.textContent='다시 풀기';
+    const r=document.createElement('button'); r.className='retry'; r.textContent='재수사';
     r.onclick=()=>{ fb.innerHTML=''; fb.dataset.locked=''; qClear(); window.syncOk(); };
     wrap.appendChild(r); fb.appendChild(wrap);
   }else{
     // 두 번째 오답: 정답 공개 + 기록
     lockAndRecord(false, trap?trap.id:null);
     const m = trap?MISTAKES[trap.id]:null;
-    fb.innerHTML = card(trap?'caught':'miss', trap?m.label:'정답을 확인해요',
-      (trap?m.rx+' ':'')+'정답은 아래와 같아요.', correctLatex(curQ), false, trap?'자주 하는 실수':null);
+    fb.innerHTML = card(trap?'caught':'miss', trap?m.label:'정답 공개',
+      (trap?m.rx+' ':'')+'진짜 정답은 이거예요.', correctLatex(curQ), false, trap?'지명수배 실수':null);
     fb.dataset.locked='1';
     attachNext(true);
   }
@@ -993,7 +980,7 @@ function selectTab(which){
   const data = which==='round'
     ? {totals:session.delta.totals, areas:session.delta.areas, mistakes:session.delta.mistakes}
     : session._cum;
-  $('sum-sub').textContent = which==='round'?'이번 라운드 정답':'전체 누적 정답';
+  $('sum-sub').textContent = which==='round'?'이번 사건 해결':'지금까지 해결';
   if(which==='cum'){ $('sum-correct').textContent=data.totals.correct; $('sum-total').textContent=data.totals.answered; }
   else { $('sum-correct').textContent=session.correct; $('sum-total').textContent=session.total; }
   renderSummary(data, which);
@@ -1022,14 +1009,14 @@ function renderSummary(data, which){
   // 자주 한 실수 랭킹
   const ms=Object.entries(data.mistakes||{}).sort((a,b)=>b[1]-a[1]);
   const t2=document.createElement('p'); t2.className='sec-t';
-  t2.textContent = which==='round'?'이번에 잡힌 실수':'자주 하는 실수 (누적)';
+  t2.textContent = which==='round'?'이번에 검거한 범인':'단골 범인 (누적)';
   body.appendChild(t2);
 
   if(ms.length===0){
     const e=document.createElement('div'); e.className='empty';
     e.innerHTML = which==='round'
-      ? '특정한 실수 패턴 없이 풀었어요. <b>좋아요!</b>'
-      : '아직 분석할 누적 실수가 없어요. <b>깔끔하네요!</b>';
+      ? '잡힌 범인이 없어요. <b>완벽 수사!</b>'
+      : '아직 잡힌 범인이 없어요. <b>깔끔하네요!</b>';
     body.appendChild(e); return;
   }
   const list=document.createElement('div'); list.className='mlist';
@@ -1132,7 +1119,7 @@ function renderOverview(students){
       <div class="kpi"><b>${pct(agg.totals.correct,agg.totals.answered)}%</b><span>반 평균 정답률</span></div>
     </div>
     <p class="sec-t">영역별 정답률 (반 전체)</p>${areaRowsHTML(agg)}
-    <p class="sec-t">반 전체 자주 하는 실수</p>${mistakeListHTML(agg.mistakes,5)}`;
+    <p class="sec-t">우리 반 지명수배 실수</p>${mistakeListHTML(agg.mistakes,5)}`;
 }
 function renderStudents(){
   const wrap=$('dash-students'); wrap.innerHTML='';
@@ -1154,7 +1141,7 @@ function renderStudents(){
       <span class="chev">▾</span>`;
     const detail=document.createElement('div'); detail.className='sdetail hidden';
     detail.innerHTML=`<p class="sec-t">영역별 정답률</p>${areaRowsHTML(s.cum)||'<span class="sd-acc">아직 영역 기록이 없어요.</span>'}
-      <p class="sec-t">자주 한 실수</p>${mistakeListHTML(s.cum.mistakes,5)}`;
+      <p class="sec-t">단골 범인</p>${mistakeListHTML(s.cum.mistakes,5)}`;
     row.addEventListener('click', ()=>{
       const open=row.getAttribute('aria-expanded')==='true';
       row.setAttribute('aria-expanded', open?'false':'true');

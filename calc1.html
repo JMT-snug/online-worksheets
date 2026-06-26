@@ -231,7 +231,7 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.3</span></div>
+    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.5</span></div>
     <div id="whoami" class="who hidden">
       <span id="who-name"></span>
       <button class="linkbtn hidden" id="dash-btn">대시보드</button>
@@ -543,18 +543,27 @@ const MISTAKES = {
   R_ORDER:      {area:'rational', label:'연산 순서를 안 지킴',       rx:'×, ÷ 를 +, − 보다 먼저 계산해요.'},
   R_DIST_SIGN:  {area:'rational', label:'괄호 앞 음수 분배 실수',     rx:'−(a−b) 는 괄호 안 모든 항의 부호를 바꿔서 −a+b.'},
   R_FRAC_ADD:   {area:'rational', label:'분수를 통분 안 하고 더함',   rx:'분모를 통분한 뒤 "분자만" 더해요. 분모끼리 더하면 안 돼요.'},
+  R_SIGN_DROP:  {area:'rational', label:'결과의 음수 부호를 빠뜨림',   rx:'(음수)+(음수)는 음수예요. 합의 부호를 빠뜨리지 마세요.'},
+  R_EXP_AS_MULT:{area:'rational', label:'거듭제곱을 ×2 로 계산',       rx:'a² 은 a×a 예요. a×2 가 아니에요.'},
+  R_PAREN_DROP: {area:'rational', label:'괄호를 그냥 떼어냄',         rx:'−(a−b) 의 − 는 괄호 안 부호를 모두 바꿔요. 그냥 떼면 안 돼요.'},
   // 다항식
   P_UNLIKE:     {area:'poly', label:'동류항이 아닌 항을 합침',       rx:'x항과 상수항은 합칠 수 없어요. 따로 둬요.'},
   P_VAR_MULT:   {area:'poly', label:'계수를 더하며 문자까지 곱함',   rx:'2x+3x 는 계수만 더해 5x. x² 가 되면 안 돼요.'},
   P_DIST_PARTIAL:{area:'poly', label:'분배를 일부만 함',            rx:'a(x+b) 는 괄호 안 "모든" 항에 a를 곱해요 → ax+ab.'},
   P_MINUS_DIST: {area:'poly', label:'괄호 앞 − 를 둘째 항에 안 미침', rx:'−(2x−1) 의 −는 둘째 항 부호까지 바꿔요 → −2x+1.'},
   P_MULT_SIGN:  {area:'poly', label:'곱셈에서 부호 실수',           rx:'−3×(−2)=+6. 음수×음수는 양수예요.'},
+  P_MISS_TERM:  {area:'poly', label:'항을 하나 빠뜨림',            rx:'식의 모든 항을 빠짐없이 챙기세요. 외톨이 항을 놓치기 쉬워요.'},
+  P_COEF_MULT:  {area:'poly', label:'계수를 더하지 않고 곱함',       rx:'2x+3x 는 계수를 "더해" 5x. 곱해서 6x 가 아니에요.'},
+  P_DIST_X:     {area:'poly', label:'x 항에 곱하기를 빠뜨림',        rx:'괄호 앞 수는 상수뿐 아니라 x 항에도 곱해야 해요.'},
   // 방정식
   E_TRANSPOSE_SIGN:{area:'eq', label:'이항할 때 부호를 안 바꿈',     rx:'항을 반대편으로 옮기면 부호가 반대가 돼요.'},
   E_NO_DIVIDE:  {area:'eq', label:'계수로 안 나눔',                 rx:'3x=12 는 양변을 3으로 나눠 x=4.'},
   E_NEG_DIVIDE: {area:'eq', label:'음수 계수 나눗셈 부호',          rx:'−2x=6 → −2로 나누면 x=−3. 부호가 바뀌어요.'},
   E_DIST:       {area:'eq', label:'괄호를 먼저 전개 안 함',         rx:'2(x−1)=6 은 먼저 2x−2=6 으로 전개해요.'},
   E_CONST_SIGN: {area:'eq', label:'상수 이항 부호 실수',           rx:'2x−3=5 → −3을 옮기면 +3 → 2x=8.'},
+  E_NO_MOVE:    {area:'eq', label:'상수를 안 옮기고 계산',          rx:'상수항을 먼저 반대편으로 옮긴 뒤 계수로 나눠요.'},
+  E_DIV_AS_SUB: {area:'eq', label:'나눗셈을 뺄셈으로 처리',         rx:'3x=12 는 12−3 이 아니라 12÷3. 계수로 나눠요.'},
+  E_EXPAND_SIGN:{area:'eq', label:'괄호 전개에서 부호 실수',        rx:'a(x−c)=ax−ac. 옮길 때 −ac 는 +ac 가 돼요.'},
 };
 const AREA_LABEL = {rational:'유리수의 계산', poly:'다항식의 계산', eq:'1차 방정식 풀기'};
 
@@ -574,20 +583,20 @@ function genRational(){
   if(T==='sub'){ const a=ri(2,9), b=ri(2,9);
     return {area:'rational',answerType:'num',latex:`${a}-(-${b})=`,correct:a+b,
       traps:[{id:'R_SUB_SIGN',value:a-b}]}; }
-  if(T==='negadd'){ let a=ri(2,9),b=ri(2,8); if(a===b)b++; 
+  if(T==='negadd'){ let a=ri(2,9),b=ri(2,8); if(a===b)b++;
     return {area:'rational',answerType:'num',latex:`(-${a})+(-${b})=`,correct:-(a+b),
-      traps:[{id:'R_NEG_ADD',value:-Math.abs(a-b)}]}; }
+      traps:[{id:'R_NEG_ADD',value:-Math.abs(a-b)},{id:'R_SIGN_DROP',value:a+b}]}; }
   if(T==='exp'){ const a=ri(2,7);
     if(Math.random()<0.5) return {area:'rational',answerType:'num',latex:`(-${a})^{2}=`,correct:a*a,
-      traps:[{id:'R_EXP_SIGN',value:-(a*a)}]};
+      traps:[{id:'R_EXP_SIGN',value:-(a*a)},{id:'R_EXP_AS_MULT',value:2*a}]};
     return {area:'rational',answerType:'num',latex:`-${a}^{2}=`,correct:-(a*a),
-      traps:[{id:'R_EXP_SIGN',value:a*a}]}; }
+      traps:[{id:'R_EXP_SIGN',value:a*a},{id:'R_EXP_AS_MULT',value:-2*a}]}; }
   if(T==='order'){ const a=ri(2,9),b=ri(2,6),c=ri(2,6);
     return {area:'rational',answerType:'num',latex:`${a}+${b}\\times ${c}=`,correct:a+b*c,
       traps:[{id:'R_ORDER',value:(a+b)*c}]}; }
   if(T==='dist'){ let a=ri(2,9),b=ri(2,9); if(a===b)b++;
     return {area:'rational',answerType:'num',latex:`-(${a}-${b})=`,correct:b-a,
-      traps:[{id:'R_DIST_SIGN',value:-(a+b)}]}; }
+      traps:[{id:'R_DIST_SIGN',value:-(a+b)},{id:'R_PAREN_DROP',value:a-b}]}; }
   if(T==='mul'){ const a=ri(2,9),b=ri(2,9);
     return {area:'rational',answerType:'num',latex:`(-${a})\\times(-${b})=`,correct:a*b,
       traps:[{id:'R_MULDIV_SIGN',value:-(a*b)}]}; }
@@ -602,49 +611,54 @@ function genPoly(){
   const E=(x2,x1,x0)=>({x2,x1,x0});
   if(T==='combine'){ const a=ri(2,5),b=1,c=ri(2,8);
     return {area:'poly',answerType:'expr',latex:`${a}x+${c}+x=`,correct:E(0,a+b,c),
-      traps:[{id:'P_UNLIKE',value:E(0,a+b+c,0)}]}; }
+      traps:[{id:'P_UNLIKE',value:E(0,a+b+c,0)},{id:'P_MISS_TERM',value:E(0,a,c)}]}; }
   if(T==='likex'){ const a=ri(2,6),b=ri(2,6);
     return {area:'poly',answerType:'expr',latex:`${a}x+${b}x=`,correct:E(0,a+b,0),
-      traps:[{id:'P_VAR_MULT',value:E(a+b,0,0)}]}; }
+      traps:[{id:'P_VAR_MULT',value:E(a+b,0,0)},{id:'P_COEF_MULT',value:E(0,a*b,0)}]}; }
   if(T==='dist'){ const a=ri(2,5),b=ri(2,6);
     return {area:'poly',answerType:'expr',latex:`${a}(x+${b})=`,correct:E(0,a,a*b),
-      traps:[{id:'P_DIST_PARTIAL',value:E(0,a,b)}]}; }
+      traps:[{id:'P_DIST_PARTIAL',value:E(0,a,b)},{id:'P_DIST_X',value:E(0,1,a*b)}]}; }
   if(T==='minus'){ let c=ri(3,7),d=ri(2,5); if(c===d)d--; const e=ri(2,6);
     return {area:'poly',answerType:'expr',latex:`${c}x-(${d}x-${e})=`,correct:E(0,c-d,e),
-      traps:[{id:'P_MINUS_DIST',value:E(0,c-d,-e)}]}; }
+      traps:[{id:'P_MINUS_DIST',value:E(0,c-d,-e)},{id:'P_MINUS_DIST',value:E(0,c+d,e)}]}; }
   // negdist : -a(x-b)
   const a=ri(2,5),b=ri(2,6);
   return {area:'poly',answerType:'expr',latex:`-${a}(x-${b})=`,correct:E(0,-a,a*b),
-    traps:[{id:'P_MULT_SIGN',value:E(0,-a,-a*b)}]};
+    traps:[{id:'P_MULT_SIGN',value:E(0,-a,-a*b)},{id:'P_DIST_PARTIAL',value:E(0,-a,-b)}]};
 }
 
 function genEq(){
   const T = pick(['add','coef','negcoef','paren','const']);
   if(T==='add'){ const x=ri(1,9), a=ri(2,9), b=x+a;
     return {area:'eq',answerType:'num',pre:'x =',latex:`x+${a}=${b}`,correct:x,
-      traps:[{id:'E_TRANSPOSE_SIGN',value:b+a}]}; }
+      traps:[{id:'E_TRANSPOSE_SIGN',value:b+a},{id:'E_NO_MOVE',value:b}]}; }
   if(T==='coef'){ const a=ri(2,6),k=ri(2,9),b=a*k;
     return {area:'eq',answerType:'num',pre:'x =',latex:`${a}x=${b}`,correct:k,
-      traps:[{id:'E_NO_DIVIDE',value:b}]}; }
+      traps:[{id:'E_NO_DIVIDE',value:b},{id:'E_DIV_AS_SUB',value:b-a}]}; }
   if(T==='negcoef'){ const a=ri(2,6),k=ri(2,9),b=a*k;
     return {area:'eq',answerType:'num',pre:'x =',latex:`-${a}x=${b}`,correct:-k,
-      traps:[{id:'E_NEG_DIVIDE',value:k}]}; }
+      traps:[{id:'E_NEG_DIVIDE',value:k},{id:'E_NO_DIVIDE',value:b}]}; }
   if(T==='paren'){ const a=ri(2,4),c=ri(2,6),m=ri(2,5),b=a*m;
     return {area:'eq',answerType:'num',pre:'x =',latex:`${a}(x-${c})=${b}`,correct:c+m,
-      traps:[{id:'E_DIST',value:(b+c)/a}]}; }
+      traps:[{id:'E_DIST',value:(b+c)/a},{id:'E_EXPAND_SIGN',value:m-c}]}; }
   // const : a x - c = b ,  c=a*j ,  b=a*(k-j)
   const a=ri(2,4), k=ri(3,6), j=ri(1,k-1), c=a*j, b=a*(k-j);
   return {area:'eq',answerType:'num',pre:'x =',latex:`${a}x-${c}=${b}`,correct:k,
-    traps:[{id:'E_CONST_SIGN',value:k-2*j}]};
+    traps:[{id:'E_CONST_SIGN',value:k-2*j},{id:'E_NO_MOVE',value:k-j}]};
 }
 const GENS={rational:genRational, poly:genPoly, eq:genEq};
 
-/* trap 값이 정답과 같으면 제거(오인 방지) */
+/* trap: 정답과 같거나 값이 서로 겹치는 것은 제거 (오인 방지, 먼저 나온 것 우선) */
 function buildQuestion(area){
   const q=GENS[area]();
-  q.traps=(q.traps||[]).filter(t=>{
-    return q.answerType==='expr' ? !sameExpr(t.value,q.correct) : !same(t.value,q.correct);
+  const eq=(x,y)=> q.answerType==='expr' ? sameExpr(x,y) : same(x,y);
+  const out=[];
+  (q.traps||[]).forEach(t=>{
+    if(eq(t.value,q.correct)) return;
+    if(out.some(o=>eq(o.value,t.value))) return;
+    out.push(t);
   });
+  q.traps=out;
   return q;
 }
 
@@ -892,7 +906,7 @@ function submitAnswer(){
   const fb=$('feedback');
 
   if(ok){
-    lockAndRecord(true, null);
+    finalize(true);
     fb.innerHTML = card('ok','사건 해결!','점수를 되찾았어요. 다음 단서로 넘어가요.', null, false);
     fb.dataset.locked='1';
     attachNext(false);
@@ -900,10 +914,13 @@ function submitAnswer(){
   }
 
   // 오답
+  const MAX=5;
   const trap=matchTrap(curQ, val);
   session.tries++;
-  if(session.tries===1){
-    // 첫 오답: 힌트 + 재시도 1회
+  if(trap){ session.delta.mistakes[trap.id]=(session.delta.mistakes[trap.id]||0)+1; } // 매 오답마다 누적(같은 실수 반복도 중복 집계)
+
+  if(session.tries<MAX){
+    // 1~4번째 오답: 힌트 + 재수사
     if(trap){
       const m=MISTAKES[trap.id];
       fb.innerHTML = card('caught', m.label, m.rx, null, true, '지명수배 실수');
@@ -911,14 +928,17 @@ function submitAnswer(){
       fb.innerHTML = card('miss','단서가 더 필요해요','현장을 천천히 다시 살펴볼까요? 한 번 더 수사해 봐요.', null, true);
     }
     fb.dataset.locked='1';
-    // 재시도 버튼
+    const noteEl=document.createElement('div');
+    noteEl.style.cssText='font-size:12px;color:var(--ink-faint);text-align:center;margin-top:12px';
+    noteEl.textContent=`${session.tries}/${MAX} 시도 · ${MAX}번 틀리면 정답을 공개해요`;
+    fb.appendChild(noteEl);
     const wrap=document.createElement('div'); wrap.className='fb-actions';
     const r=document.createElement('button'); r.className='retry'; r.textContent='재수사';
     r.onclick=()=>{ fb.innerHTML=''; fb.dataset.locked=''; qClear(); window.syncOk(); };
     wrap.appendChild(r); fb.appendChild(wrap);
   }else{
-    // 두 번째 오답: 정답 공개 + 기록
-    lockAndRecord(false, trap?trap.id:null);
+    // 5번째 오답: 정답 공개
+    finalize(false);
     const m = trap?MISTAKES[trap.id]:null;
     fb.innerHTML = card(trap?'caught':'miss', trap?m.label:'정답 공개',
       (trap?m.rx+' ':'')+'진짜 정답은 이거예요.', correctLatex(curQ), false, trap?'지명수배 실수':null);
@@ -927,12 +947,12 @@ function submitAnswer(){
   }
 }
 
-function lockAndRecord(isCorrect, mistakeId){
+/* 문제 1개당 채점(정답 수)은 한 번만 확정 */
+function finalize(isCorrect){
   const a=curQ.area;
   session.delta.totals.answered++; session.delta.areas[a].answered++;
   if(isCorrect){ session.delta.totals.correct++; session.delta.areas[a].correct++; session.correct++; }
-  if(mistakeId){ session.delta.mistakes[mistakeId]=(session.delta.mistakes[mistakeId]||0)+1; }
-  session.log.push({area:a, correct:isCorrect, mistakeId});
+  session.log.push({area:a, correct:isCorrect});
 }
 
 function attachNext(hadMath){

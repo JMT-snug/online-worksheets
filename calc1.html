@@ -231,7 +231,7 @@ input[type=range]{width:100%; margin-top:14px; accent-color:var(--ink); height:2
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.5</span></div>
+    <div class="brand"><b>수학 점수 탐정단</b><span class="ver">v1.6</span></div>
     <div id="whoami" class="who hidden">
       <span id="who-name"></span>
       <button class="linkbtn hidden" id="dash-btn">대시보드</button>
@@ -506,7 +506,7 @@ function qTokensToExpr(){
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, serverTimestamp }
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, increment, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ╔══════════════════════════════════════════════════════════╗
@@ -713,21 +713,39 @@ function makeGuestStore(){
   return {
     label:'guest',
     async loadCumulative(){ return cum; },
-    async commitRound(delta){ mergeCum(cum,delta); }
+    commitProblem(d){                       // 문제 1개분 즉시 반영
+      cum.totals.answered++; if(d.correct) cum.totals.correct++;
+      cum.areas[d.area].answered++; if(d.correct) cum.areas[d.area].correct++;
+      for(const id in (d.mistakes||{})) cum.mistakes[id]=(cum.mistakes[id]||0)+d.mistakes[id];
+      return Promise.resolve();
+    },
+    flush(){ return Promise.resolve(); },
+    async addRoundRecord(){}
   };
 }
 function makeFirebaseStore(user){
   const ref=doc(db,'users',user.uid);
+  let pending=Promise.resolve();            // 쓰기 순서 보장 + finishRound에서 대기
   return {
     label:'firebase',
     async loadCumulative(){
       try{ const s=await getDoc(ref); return s.exists()?{...emptyCum(),...s.data()}:emptyCum(); }
       catch(e){ console.error(e); return emptyCum(); }
     },
-    async commitRound(delta){
-      const cur=await this.loadCumulative(); mergeCum(cur,delta);
-      cur.displayName=user.displayName||''; cur.email=user.email||''; cur.updatedAt=serverTimestamp();
-      await setDoc(ref,cur,{merge:true});
+    commitProblem(d){                       // 문제 확정 시 그 1문제분을 원자적으로 누적(increment)
+      const upd={
+        totals:{ answered:increment(1), correct:increment(d.correct?1:0) },
+        areas:{ [d.area]:{ answered:increment(1), correct:increment(d.correct?1:0) } },
+        displayName:user.displayName||'', email:user.email||'', updatedAt:serverTimestamp()
+      };
+      if(d.mistakes && Object.keys(d.mistakes).length){
+        upd.mistakes={}; for(const id in d.mistakes) upd.mistakes[id]=increment(d.mistakes[id]);
+      }
+      pending = pending.then(()=>setDoc(ref,upd,{merge:true})).catch(e=>console.error('commitProblem',e));
+      return pending;
+    },
+    flush(){ return pending; },
+    async addRoundRecord(delta){
       try{ await addDoc(collection(db,'users',user.uid,'rounds'),{at:serverTimestamp(),...delta}); }catch(e){}
     }
   };
@@ -863,7 +881,7 @@ document.addEventListener('keydown', e=>{
 /* ────────────────────── 문제 출제 ────────────────────── */
 let curQ=null;
 function nextQuestion(){
-  session.tries=0;
+  session.tries=0; session.qMistakes={};
   $('feedback').innerHTML=''; $('feedback').dataset.locked='';
   const area=pick(session.areas);
   curQ=buildQuestion(area);
@@ -917,7 +935,10 @@ function submitAnswer(){
   const MAX=5;
   const trap=matchTrap(curQ, val);
   session.tries++;
-  if(trap){ session.delta.mistakes[trap.id]=(session.delta.mistakes[trap.id]||0)+1; } // 매 오답마다 누적(같은 실수 반복도 중복 집계)
+  if(trap){                                 // 매 오답마다 누적(같은 실수 반복도 중복 집계)
+    session.delta.mistakes[trap.id]=(session.delta.mistakes[trap.id]||0)+1;   // 라운드 요약용
+    session.qMistakes[trap.id]=(session.qMistakes[trap.id]||0)+1;             // 이 문제 즉시 저장용
+  }
 
   if(session.tries<MAX){
     // 1~4번째 오답: 힌트 + 재수사
@@ -947,12 +968,14 @@ function submitAnswer(){
   }
 }
 
-/* 문제 1개당 채점(정답 수)은 한 번만 확정 */
+/* 문제 1개당 채점(정답 수)은 한 번만 확정 + 즉시 저장 */
 function finalize(isCorrect){
   const a=curQ.area;
   session.delta.totals.answered++; session.delta.areas[a].answered++;
   if(isCorrect){ session.delta.totals.correct++; session.delta.areas[a].correct++; session.correct++; }
   session.log.push({area:a, correct:isCorrect});
+  // 이 문제 결과를 바로 저장 (라운드를 끝까지 안 풀어도 남음)
+  if(store) store.commitProblem({area:a, correct:isCorrect, mistakes:session.qMistakes});
 }
 
 function attachNext(hadMath){
@@ -985,10 +1008,14 @@ async function finishRound(){
   show('screen-summary');
   $('sum-correct').textContent=session.correct;
   $('sum-total').textContent=session.total;
-  // 저장
+  // 각 문제는 이미 즉시 저장됨 → 대기 후 라운드 기록만 추가하고 누적을 다시 읽어옴
   let cum=emptyCum();
   if(store){
-    try{ await store.commitRound(session.delta); cum=await store.loadCumulative(); }
+    try{
+      await store.flush();
+      if(store.addRoundRecord) await store.addRoundRecord(session.delta);
+      cum=await store.loadCumulative();
+    }
     catch(e){ console.error(e); toast('저장 중 문제가 있었어요.'); }
   }
   session._cum=cum;

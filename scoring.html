@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0b">
+<meta name="app-version" content="scoring-v1.0c">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -77,8 +77,8 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .btn-nav:disabled{opacity:.3;cursor:not-allowed}
 
 .ans-preview{position:relative;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff}
-.ans-preview canvas,.ans-preview img{display:block;width:100%;height:auto}
-.ans-preview .stu-canvas{position:absolute;top:0;left:0;width:100%;height:auto}
+.ans-preview canvas,.ans-preview img{display:block}
+.ans-preview #stu-drawing,.ans-preview #teacher-drawing,.ans-preview #teacher-canvas{position:absolute;top:0;left:0}
 .ans-preview .no-drawing{padding:60px 20px;text-align:center;color:var(--ink3);font-size:14px;background:var(--cream)}
 
 /* GRADING ACTIONS */
@@ -489,7 +489,8 @@ function showStudent(idx){
 
   // 교사 캔버스
   const tCv = document.getElementById('teacher-canvas');
-  tCv.width = W; tCv.height = H; tCv.style.height = H+'px';
+  tCv.width = W; tCv.height = H;
+  tCv.style.width = W+'px'; tCv.style.height = H+'px';
   const tCtx = tCv.getContext('2d');
   tCtx.clearRect(0,0,W,H);
   if(stu.data.teacherDrawing){

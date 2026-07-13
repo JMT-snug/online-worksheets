@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="app-version" content="scoring-v1.0a">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>그래프 수동 채점 · 수학 학습지+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+:root {
+  --cream:#faf8f3; --paper:#fff; --rule:#e8e4d9;
+  --ink:#1c1917; --ink2:#44403c; --ink3:#a8a29e;
+  --accent:#1d4ed8; --acc-lt:#eff6ff;
+  --green:#15803d; --grn-lt:#dcfce7;
+  --red:#b91c1c; --red-lt:#fee2e2;
+  --amber:#b45309; --amb-lt:#fef3c7;
+  --r:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
+
+/* HEADER */
+header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;display:flex;align-items:center;padding:0 20px;gap:12px}
+.logo{font-weight:900;font-size:16px;color:#fff;letter-spacing:-.5px;flex:1}
+.logo em{color:#60a5fa;font-style:normal}
+.hdr-btn{padding:5px 12px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.hdr-btn:hover{background:rgba(255,255,255,.18)}
+#hdr-user{display:none;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.65)}
+
+/* PAGE */
+.page{display:none}
+.page.active{display:block}
+#login-page.active{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 48px);padding:40px 20px}
+
+/* LOGIN */
+.login-wrap{width:100%;max-width:380px;background:var(--paper);border:1px solid var(--rule);border-radius:20px;padding:44px 36px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.07)}
+.login-mark{width:64px;height:64px;border-radius:16px;background:var(--acc-lt);border:2px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px}
+.login-wrap h1{font-size:22px;font-weight:900;margin-bottom:6px}
+.login-wrap p{color:var(--ink3);font-size:13px;margin-bottom:28px;line-height:1.6}
+.btn-goog{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;border:1.5px solid var(--rule);border-radius:10px;background:var(--paper);font-family:inherit;font-size:14px;font-weight:500;cursor:pointer}
+.btn-goog:hover{border-color:var(--accent);background:var(--acc-lt)}
+.btn-goog svg{width:18px;height:18px}
+
+/* MAIN LAYOUT */
+.main{max-width:1400px;margin:0 auto;padding:16px 20px 40px}
+
+/* SELECTOR BAR */
+.selector-bar{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.sel-label{font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+.sel-input{padding:6px 12px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:inherit;background:var(--paper);cursor:pointer;min-width:180px}
+.sel-input:focus{outline:none;border-color:var(--accent)}
+
+/* GRADING VIEW */
+.grade-cols{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:start}
+@media(max-width:900px){.grade-cols{grid-template-columns:1fr}}
+
+.grade-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:20px}
+.grade-card h3{font-size:13px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+
+/* QUESTION SIDE */
+.q-text-box{font-size:15px;line-height:1.7;margin-bottom:14px;padding:12px;background:var(--cream);border-radius:8px;min-height:80px}
+.graph-preview{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff;position:relative}
+.graph-preview canvas{display:block;width:100%}
+
+/* STUDENT ANSWER SIDE */
+.stu-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px}
+.stu-name-box{flex:1;text-align:center;padding:8px;background:var(--cream);border-radius:8px}
+.stu-name-box .name{font-weight:700;font-size:15px}
+.stu-name-box .email{font-size:11px;color:var(--ink3)}
+.stu-name-box .progress{font-size:11px;color:var(--accent);font-weight:700;margin-top:2px}
+.btn-nav{padding:8px 16px;border-radius:8px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;font-size:16px;font-family:inherit;font-weight:700;color:var(--ink2);min-width:44px}
+.btn-nav:hover{background:var(--cream);border-color:var(--accent);color:var(--accent)}
+.btn-nav:disabled{opacity:.3;cursor:not-allowed}
+
+.ans-preview{position:relative;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff}
+.ans-preview canvas,.ans-preview img{display:block;width:100%;height:auto}
+.ans-preview .stu-canvas{position:absolute;top:0;left:0;width:100%;height:auto}
+.ans-preview .no-drawing{padding:60px 20px;text-align:center;color:var(--ink3);font-size:14px;background:var(--cream)}
+
+/* GRADING ACTIONS */
+.grade-actions{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.judge-row{display:flex;gap:8px}
+.judge-btn{flex:1;padding:12px;border:2px solid var(--rule);border-radius:8px;background:var(--paper);cursor:pointer;font-size:15px;font-weight:700;font-family:inherit;color:var(--ink2)}
+.judge-btn:hover{border-color:var(--accent)}
+.judge-btn.active-ok{border-color:var(--green);background:var(--grn-lt);color:var(--green)}
+.judge-btn.active-ng{border-color:var(--red);background:var(--red-lt);color:var(--red)}
+.judge-btn.active-skip{border-color:var(--ink3);background:var(--cream);color:var(--ink3)}
+
+.feedback-box{width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px}
+.feedback-box:focus{outline:none;border-color:var(--accent)}
+
+.btn-save{padding:10px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1}
+.btn-save:hover{opacity:.9}
+.btn-save:disabled{opacity:.5;cursor:not-allowed}
+
+/* STATS BAR */
+.stats-bar{display:flex;gap:16px;justify-content:center;margin-top:16px;font-size:13px}
+.stat-item{display:flex;align-items:center;gap:6px}
+.stat-item .num{font-weight:700}
+.stat-ok{color:var(--green)}
+.stat-ng{color:var(--red)}
+.stat-pending{color:var(--amber)}
+
+/* EMPTY STATES */
+.empty-state{text-align:center;padding:60px 20px;color:var(--ink3);font-size:14px}
+
+/* TOAST */
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;z-index:200;pointer-events:none}
+.toast.show{opacity:1}
+
+/* TEACHER DRAWING CONTROLS */
+.td-controls{display:flex;gap:6px;padding:6px;background:var(--cream);border-bottom:1px solid var(--rule);flex-wrap:wrap;align-items:center}
+.td-btn{padding:4px 10px;font-size:12px;border-radius:6px;border:1px solid var(--rule);background:var(--paper);cursor:pointer;font-family:inherit}
+.td-btn.active{background:var(--acc-lt);border-color:var(--accent);color:var(--accent);font-weight:700}
+.td-color{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.td-color.active{border-color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">그래프 수동 채점<em>+</em></div>
+  <div id="hdr-user">
+    <span id="hdr-name"></span>
+    <a href="teacher.html" class="hdr-btn">← 관리자</a>
+    <a href="index.html" class="hdr-btn">학습지</a>
+    <button class="hdr-btn" id="btn-logout">로그아웃</button>
+  </div>
+</header>
+
+<!-- LOGIN -->
+<div id="login-page" class="page active">
+  <div class="login-wrap">
+    <div class="login-mark">✍️</div>
+    <h1>그래프 수동 채점</h1>
+    <p>교사 계정으로 로그인 후<br>그래프 문항을 채점합니다.</p>
+    <button class="btn-goog" id="btn-login">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google 계정으로 로그인
+    </button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main-page" class="page">
+  <div class="main">
+    <!-- 학습지/문항 선택 -->
+    <div class="selector-bar">
+      <span class="sel-label">학습지</span>
+      <select class="sel-input" id="sel-ws" onchange="onWsChange()"></select>
+      <span class="sel-label">문항</span>
+      <select class="sel-input" id="sel-q" onchange="onQChange()"></select>
+      <div style="flex:1"></div>
+      <div id="stats-bar" class="stats-bar" style="margin-top:0"></div>
+    </div>
+
+    <!-- 채점 화면 -->
+    <div id="grade-view">
+      <div class="grade-cols">
+        <!-- 왼쪽: 문제 -->
+        <div class="grade-card">
+          <h3>📝 문제</h3>
+          <div class="q-text-box" id="q-text"></div>
+          <div class="graph-preview">
+            <canvas id="ref-grid"></canvas>
+          </div>
+        </div>
+
+        <!-- 오른쪽: 학생 답안 -->
+        <div class="grade-card">
+          <div class="stu-nav">
+            <button class="btn-nav" id="btn-prev-stu" onclick="prevStudent()">◀</button>
+            <div class="stu-name-box">
+              <div class="name" id="stu-name">-</div>
+              <div class="email" id="stu-email">-</div>
+              <div class="progress" id="stu-progress">-</div>
+            </div>
+            <button class="btn-nav" id="btn-next-stu" onclick="nextStudent()">▶</button>
+          </div>
+
+          <div class="ans-preview" id="ans-preview">
+            <div class="td-controls" id="td-controls" style="display:none">
+              <button class="td-btn active" id="td-pen">✏️ 펜</button>
+              <button class="td-btn" id="td-erase">지우개</button>
+              <span class="td-color active" data-color="#dc2626" style="background:#dc2626"></span>
+              <span class="td-color" data-color="#2563eb" style="background:#2563eb"></span>
+              <span class="td-color" data-color="#15803d" style="background:#15803d"></span>
+              <span class="td-color" data-color="#1c1917" style="background:#1c1917"></span>
+              <button class="td-btn" onclick="clearTeacherDrawing()">전체 지우기</button>
+              <button class="td-btn" onclick="undoTeacherDrawing()">↩ 실행취소</button>
+            </div>
+            <canvas id="grid-canvas"></canvas>
+            <img id="stu-drawing" style="position:absolute;top:0;left:0;width:100%">
+            <img id="teacher-drawing" style="position:absolute;top:0;left:0;width:100%;pointer-events:none">
+            <canvas id="teacher-canvas" style="position:absolute;top:0;left:0;width:100%;touch-action:none;cursor:crosshair"></canvas>
+          </div>
+
+          <div class="grade-actions">
+            <div class="judge-row">
+              <button class="judge-btn" id="btn-ok" onclick="setJudgment(true)">⭕ 정답</button>
+              <button class="judge-btn" id="btn-ng" onclick="setJudgment(false)">❌ 오답</button>
+              <button class="judge-btn" id="btn-skip" onclick="setJudgment(null)">보류</button>
+            </div>
+            <textarea class="feedback-box" id="feedback" placeholder="선생님 피드백 (선택사항)"></textarea>
+            <div style="display:flex;gap:8px">
+              <button class="btn-save" onclick="saveAndNext()">💾 저장하고 다음</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="empty-view" class="empty-state" style="display:none">
+      <h3 style="font-size:18px;margin-bottom:8px">📊 학습지와 그래프 문항을 선택하세요</h3>
+      <p>그래프 문항이 있는 학습지만 표시됩니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, getDocs, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const FB = {
+  apiKey:"AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:"online-worksheets.firebaseapp.com",
+  projectId:"online-worksheets",
+  storageBucket:"online-worksheets.firebasestorage.app",
+  messagingSenderId:"404110714320",
+  appId:"1:404110714320:web:cb79c555a383801f3205d5"
+};
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+
+const fbApp = initializeApp(FB);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+// ── 상태 ──
+let currentUser = null;
+let WORKSHEETS = [];
+let UNITS = [];
+let allRecords = {};  // { [wsId]: { [studentEmail]: recordData } }
+let curWsId = null, curQid = null;
+let students = [];  // 현재 문항 채점 대상 학생 배열
+let curStuIdx = 0;
+
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+document.getElementById("btn-login").addEventListener("click", async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch(e) { alert("로그인 오류: "+e.message); }
+});
+document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async u => {
+  if(!u){ showPage("login-page"); return; }
+  if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 계정만 접근 가능합니다"); await signOut(auth); return; }
+  currentUser = u;
+  document.getElementById("hdr-user").style.display = "flex";
+  document.getElementById("hdr-name").textContent = u.displayName || u.email;
+  showPage("main-page");
+  await loadCurriculum();
+  await loadAllRecords();
+  buildWsSelector();
+});
+
+async function loadCurriculum(){
+  try{
+    const [uSnap, wSnap] = await Promise.all([
+      getDocs(query(collection(db,'units'), orderBy('order'))),
+      getDocs(collection(db,'curriculum'))
+    ]);
+    UNITS = uSnap.docs.map(d=>({...d.data()}));
+    const unitOrder = {};
+    UNITS.forEach((u,i)=>unitOrder[u.id] = u.order ?? i);
+    WORKSHEETS = wSnap.docs.map(d=>({...d.data()}))
+      .sort((a,b) => {
+        const ua = unitOrder[a.unitId] ?? 999;
+        const ub = unitOrder[b.unitId] ?? 999;
+        if(ua !== ub) return ua - ub;
+        return (a.order ?? 99) - (b.order ?? 99);
+      });
+    // 그래프 문항이 있는 학습지만 필터
+    WORKSHEETS = WORKSHEETS.filter(ws => (ws.questions||[]).some(q => q.type === 'graph'));
+    console.log("[커리큘럼] 그래프 학습지", WORKSHEETS.length, "개");
+  }catch(e){ console.error(e); }
+}
+
+async function loadAllRecords(){
+  try{
+    const snap = await getDocs(collectionGroup(db, 'worksheets'));
+    allRecords = {};
+    snap.forEach(d => {
+      const parts = d.ref.path.split('/');
+      const email = parts[1];
+      const wsId = parts[3];
+      if(!allRecords[wsId]) allRecords[wsId] = {};
+      allRecords[wsId][email] = d.data();
+    });
+    console.log("[기록] 로드 완료");
+  }catch(e){ console.error(e); }
+}
+
+function buildWsSelector(){
+  const sel = document.getElementById('sel-ws');
+  sel.innerHTML = '<option value="">-- 학습지 선택 --</option>' +
+    WORKSHEETS.map(ws => {
+      const unit = UNITS.find(u=>u.id===ws.unitId);
+      const label = (unit ? unit.title + " · " : "") + ws.title;
+      return `<option value="${ws.id}">${label}</option>`;
+    }).join('');
+}
+
+window.onWsChange = function(){
+  curWsId = document.getElementById('sel-ws').value;
+  const ws = WORKSHEETS.find(w=>w.id===curWsId);
+  const qSel = document.getElementById('sel-q');
+  if(!ws){ qSel.innerHTML=''; document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
+  const graphQs = ws.questions.filter(q => q.type === 'graph');
+  qSel.innerHTML = '<option value="">-- 문항 선택 --</option>' +
+    graphQs.map((q,i) => {
+      const label = `${q.id} · ${(q.text||'(제목없음)').slice(0,40)}`;
+      return `<option value="${q.id}">${label}</option>`;
+    }).join('');
+  document.getElementById('grade-view').style.display='none';
+  document.getElementById('empty-view').style.display='';
+};
+
+window.onQChange = function(){
+  curQid = document.getElementById('sel-q').value;
+  if(!curQid){ document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
+  loadQuestion();
+};
+
+function loadQuestion(){
+  const ws = WORKSHEETS.find(w=>w.id===curWsId);
+  const q = ws.questions.find(x=>x.id===curQid);
+  if(!q) return;
+
+  // 학생 답안 있는 학생만 필터
+  const recs = allRecords[curWsId] || {};
+  students = Object.entries(recs)
+    .filter(([email, r]) => r.perQuestion?.[curQid]?.drawing)
+    .map(([email, r]) => ({
+      email,
+      name: r.studentName || email.split('@')[0],
+      data: r.perQuestion[curQid]
+    }))
+    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+
+  curStuIdx = 0;
+  document.getElementById('grade-view').style.display='';
+  document.getElementById('empty-view').style.display='none';
+
+  // 문제 텍스트
+  const qTextEl = document.getElementById('q-text');
+  qTextEl.innerHTML = q.text || '(문제 텍스트 없음)';
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([qTextEl]).catch(()=>{});
+
+  // 참조 격자
+  drawRefGrid(q);
+
+  if(students.length === 0){
+    document.getElementById('stu-name').textContent = '(응답한 학생 없음)';
+    document.getElementById('stu-email').textContent = '';
+    document.getElementById('stu-progress').textContent = '0 / 0';
+    document.getElementById('ans-preview').style.display='none';
+  } else {
+    document.getElementById('ans-preview').style.display='';
+    showStudent(0);
+  }
+  renderStats();
+}
+
+function drawRefGrid(q){
+  const cv = document.getElementById('ref-grid');
+  const wrap = cv.parentElement;
+  const W = wrap.clientWidth || 400;
+  const isNL = q.graphType === 'numberline';
+  const H = isNL ? 100 : Math.min(W * 0.85, 400);
+  cv.width = W; cv.height = H; cv.style.width = W+'px'; cv.style.height = H+'px';
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  if(isNL){ drawNumberLine(ctx,W,H,q.nMin??-10,q.nMax??10); }
+  else { drawCoordPlane(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5); }
+}
+
+function drawCoordPlane(ctx,W,H,xMin,xMax,yMin,yMax){
+  const PAD=32;
+  const cW=W-PAD*2, cH=H-PAD*2;
+  const xRange=xMax-xMin, yRange=yMax-yMin;
+  const toX=v=>PAD+((v-xMin)/xRange)*cW;
+  const toY=v=>PAD+((yMax-v)/yRange)*cH;
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=0.5;
+  for(let x=Math.ceil(xMin);x<=xMax;x++){ ctx.beginPath(); ctx.moveTo(toX(x),PAD); ctx.lineTo(toX(x),H-PAD); ctx.stroke(); }
+  for(let y=Math.ceil(yMin);y<=yMax;y++){ ctx.beginPath(); ctx.moveTo(PAD,toY(y)); ctx.lineTo(W-PAD,toY(y)); ctx.stroke(); }
+  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(PAD,toY(0)); ctx.lineTo(W-PAD,toY(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0),H-PAD); ctx.stroke();
+  ctx.fillStyle='#374151';
+  const arw=6;
+  ctx.beginPath(); ctx.moveTo(W-PAD,toY(0)); ctx.lineTo(W-PAD-arw,toY(0)-arw/2); ctx.lineTo(W-PAD-arw,toY(0)+arw/2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(toX(0),PAD); ctx.lineTo(toX(0)-arw/2,PAD+arw); ctx.lineTo(toX(0)+arw/2,PAD+arw); ctx.fill();
+  ctx.font='10px sans-serif'; ctx.fillStyle='#6b7280'; ctx.textAlign='center';
+  for(let x=Math.ceil(xMin);x<=xMax;x++){
+    if(x===0) continue;
+    ctx.beginPath(); ctx.moveTo(toX(x),toY(0)-4); ctx.lineTo(toX(x),toY(0)+4); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(x,toX(x),toY(0)+14);
+  }
+  ctx.textAlign='right';
+  for(let y=Math.ceil(yMin);y<=yMax;y++){
+    if(y===0) continue;
+    ctx.beginPath(); ctx.moveTo(toX(0)-4,toY(y)); ctx.lineTo(toX(0)+4,toY(y)); ctx.strokeStyle='#374151'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillText(y,toX(0)-6,toY(y)+4);
+  }
+  ctx.fillStyle='#374151'; ctx.textAlign='right';
+  ctx.fillText('O',toX(0)-4,toY(0)+14);
+  ctx.fillStyle='#374151'; ctx.font='12px sans-serif';
+  ctx.textAlign='left'; ctx.fillText('x',W-PAD+4,toY(0)+4);
+  ctx.textAlign='center'; ctx.fillText('y',toX(0),PAD-6);
+}
+
+function drawNumberLine(ctx,W,H,nMin,nMax){
+  const PAD=32; const MID=H/2;
+  const range=nMax-nMin;
+  const toX=v=>PAD+((v-nMin)/range)*(W-PAD*2);
+  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(W-PAD,MID); ctx.stroke();
+  ctx.fillStyle='#374151';
+  ctx.beginPath(); ctx.moveTo(W-PAD,MID); ctx.lineTo(W-PAD-8,MID-4); ctx.lineTo(W-PAD-8,MID+4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(PAD,MID); ctx.lineTo(PAD+8,MID-4); ctx.lineTo(PAD+8,MID+4); ctx.fill();
+  ctx.font='11px sans-serif'; ctx.fillStyle='#374151'; ctx.textAlign='center';
+  for(let n=Math.ceil(nMin);n<=nMax;n++){
+    const x=toX(n);
+    const nearLeft=x<PAD+10, nearRight=x>W-PAD-10;
+    if(!nearLeft && !nearRight){
+      ctx.beginPath(); ctx.moveTo(x,MID-6); ctx.lineTo(x,MID+6); ctx.strokeStyle='#374151'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+    ctx.fillText(n,x,MID+18);
+    if(n===0){ctx.beginPath();ctx.arc(x,MID,3,0,Math.PI*2);ctx.fill();}
+  }
+}
+
+function showStudent(idx){
+  if(idx < 0 || idx >= students.length) return;
+  curStuIdx = idx;
+  const stu = students[idx];
+  document.getElementById('stu-name').textContent = stu.name;
+  document.getElementById('stu-email').textContent = stu.email;
+  document.getElementById('stu-progress').textContent = `${idx+1} / ${students.length}`;
+  document.getElementById('btn-prev-stu').disabled = idx === 0;
+  document.getElementById('btn-next-stu').disabled = idx === students.length - 1;
+
+  // 캔버스 크기 (문제 격자와 동일)
+  const ws = WORKSHEETS.find(w=>w.id===curWsId);
+  const q = ws.questions.find(x=>x.id===curQid);
+  const gridCv = document.getElementById('grid-canvas');
+  const wrap = document.getElementById('ans-preview');
+  const W = wrap.clientWidth || 400;
+  const isNL = q.graphType === 'numberline';
+  const H = isNL ? 100 : Math.min(W * 0.85, 400);
+  gridCv.width = W; gridCv.height = H; gridCv.style.width = W+'px'; gridCv.style.height = H+'px';
+  const gCtx = gridCv.getContext('2d');
+  gCtx.fillStyle='#fff'; gCtx.fillRect(0,0,W,H);
+  if(isNL){ drawNumberLine(gCtx,W,H,q.nMin??-10,q.nMax??10); }
+  else { drawCoordPlane(gCtx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5); }
+
+  // 학생 답안 이미지
+  const drawImg = document.getElementById('stu-drawing');
+  drawImg.src = stu.data.drawing || '';
+  drawImg.style.height = H+'px';
+
+  // 교사 주석
+  const tdImg = document.getElementById('teacher-drawing');
+  tdImg.src = stu.data.teacherDrawing || '';
+  tdImg.style.height = H+'px';
+
+  // 교사 캔버스
+  const tCv = document.getElementById('teacher-canvas');
+  tCv.width = W; tCv.height = H; tCv.style.height = H+'px';
+  const tCtx = tCv.getContext('2d');
+  tCtx.clearRect(0,0,W,H);
+  if(stu.data.teacherDrawing){
+    const img = new Image();
+    img.onload = ()=>tCtx.drawImage(img,0,0,W,H);
+    img.src = stu.data.teacherDrawing;
+  }
+  initTeacherCanvas(tCv);
+  document.getElementById('td-controls').style.display='flex';
+
+  // 판정 버튼 상태
+  updateJudgeButtons(stu.data.correct);
+  document.getElementById('feedback').value = stu.data.feedback || '';
+}
+
+let _tdColor = '#dc2626', _tdEraser = false, _tdUndo = [];
+function initTeacherCanvas(cv){
+  _tdUndo = [];
+  let drawing = false, lx=0, ly=0;
+  const pos = e => {
+    const r = cv.getBoundingClientRect();
+    const sx = cv.width/r.width, sy = cv.height/r.height;
+    const cx = e.touches?e.touches[0].clientX:e.clientX;
+    const cy = e.touches?e.touches[0].clientY:e.clientY;
+    return [(cx-r.left)*sx,(cy-r.top)*sy];
+  };
+  const start = e => {
+    e.preventDefault();
+    try{ _tdUndo.push(cv.getContext('2d').getImageData(0,0,cv.width,cv.height)); if(_tdUndo.length>30) _tdUndo.shift(); }catch(e){}
+    drawing = true; [lx,ly] = pos(e);
+    const c = cv.getContext('2d');
+    c.lineCap='round'; c.lineJoin='round';
+    if(_tdEraser){ c.globalCompositeOperation='destination-out'; c.lineWidth=20; }
+    else { c.globalCompositeOperation='source-over'; c.strokeStyle=_tdColor; c.lineWidth=3; }
+    c.beginPath(); c.moveTo(lx,ly);
+  };
+  const move = e => {
+    if(!drawing) return; e.preventDefault();
+    const [x,y] = pos(e);
+    const c = cv.getContext('2d');
+    c.lineTo(x,y); c.stroke(); c.beginPath(); c.moveTo(x,y);
+    lx=x; ly=y;
+  };
+  const end = () => { drawing = false; };
+  cv.onmousedown = start; cv.onmousemove = move; cv.onmouseup = end; cv.onmouseleave = end;
+  cv.ontouchstart = e=>{start(e);}; cv.ontouchmove = e=>{move(e);}; cv.ontouchend = end;
+}
+
+// 도구 버튼
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('td-pen').onclick = ()=>{
+    _tdEraser=false;
+    document.getElementById('td-pen').classList.add('active');
+    document.getElementById('td-erase').classList.remove('active');
+  };
+  document.getElementById('td-erase').onclick = ()=>{
+    _tdEraser=true;
+    document.getElementById('td-erase').classList.add('active');
+    document.getElementById('td-pen').classList.remove('active');
+  };
+  document.querySelectorAll('.td-color').forEach(el=>{
+    el.onclick = ()=>{
+      _tdColor = el.dataset.color;
+      document.querySelectorAll('.td-color').forEach(x=>x.classList.remove('active'));
+      el.classList.add('active');
+    };
+  });
+});
+
+window.clearTeacherDrawing = function(){
+  const cv = document.getElementById('teacher-canvas');
+  if(!cv) return;
+  try{ _tdUndo.push(cv.getContext('2d').getImageData(0,0,cv.width,cv.height)); }catch(e){}
+  cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+};
+window.undoTeacherDrawing = function(){
+  const cv = document.getElementById('teacher-canvas');
+  if(!cv || !_tdUndo.length) return;
+  cv.getContext('2d').putImageData(_tdUndo.pop(),0,0);
+};
+
+let _curJudgment = null;
+window.setJudgment = function(v){
+  _curJudgment = v;
+  updateJudgeButtons(v);
+};
+
+function updateJudgeButtons(v){
+  _curJudgment = v;
+  const ok = document.getElementById('btn-ok');
+  const ng = document.getElementById('btn-ng');
+  const skip = document.getElementById('btn-skip');
+  ok.classList.remove('active-ok');
+  ng.classList.remove('active-ng');
+  skip.classList.remove('active-skip');
+  if(v === true) ok.classList.add('active-ok');
+  else if(v === false) ng.classList.add('active-ng');
+  else if(v === null) skip.classList.add('active-skip');
+}
+
+window.saveAndNext = async function(){
+  const stu = students[curStuIdx];
+  if(!stu) return;
+  const feedback = document.getElementById('feedback').value.trim();
+  const tCv = document.getElementById('teacher-canvas');
+  // 교사 캔버스가 비어있지 않으면 그림 저장
+  let teacherDrawing = null;
+  try{
+    const imgData = tCv.getContext('2d').getImageData(0,0,tCv.width,tCv.height);
+    const hasContent = imgData.data.some((v,i)=>i%4===3 && v>0);
+    if(hasContent) teacherDrawing = tCv.toDataURL('image/png');
+  }catch(e){}
+
+  try{
+    await setDoc(doc(db, 'records', stu.email, 'worksheets', curWsId), {
+      perQuestion: {
+        [curQid]: {
+          correct: _curJudgment,
+          feedback: feedback || null,
+          teacherDrawing: teacherDrawing || stu.data.teacherDrawing || null,
+        }
+      }
+    }, {merge:true});
+    // 메모리 업데이트
+    stu.data.correct = _curJudgment;
+    stu.data.feedback = feedback;
+    if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
+    toast('✅ 저장됨');
+    renderStats();
+    // 다음 학생
+    if(curStuIdx < students.length - 1){
+      showStudent(curStuIdx + 1);
+    } else {
+      toast('🎉 마지막 학생입니다');
+    }
+  }catch(e){ toast('저장 실패: '+e.message); }
+};
+
+window.prevStudent = ()=>showStudent(curStuIdx - 1);
+window.nextStudent = ()=>showStudent(curStuIdx + 1);
+
+function renderStats(){
+  if(!students.length){ document.getElementById('stats-bar').innerHTML = ''; return; }
+  let ok=0, ng=0, pending=0;
+  students.forEach(s => {
+    if(s.data.correct === true) ok++;
+    else if(s.data.correct === false) ng++;
+    else pending++;
+  });
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-item stat-ok"><span class="num">${ok}</span> ⭕</div>
+    <div class="stat-item stat-ng"><span class="num">${ng}</span> ❌</div>
+    <div class="stat-item stat-pending"><span class="num">${pending}</span> 미채점</div>
+    <div class="stat-item"><span class="num">${students.length}</span> 전체</div>
+  `;
+}
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 2000);
+}
+
+// 키보드 단축키
+document.addEventListener('keydown', e=>{
+  if(!currentUser || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'SELECT') return;
+  if(e.key === 'ArrowLeft') { e.preventDefault(); prevStudent(); }
+  else if(e.key === 'ArrowRight') { e.preventDefault(); nextStudent(); }
+  else if(e.key === '1' || e.key === 'o') setJudgment(true);
+  else if(e.key === '2' || e.key === 'x') setJudgment(false);
+  else if(e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveAndNext(); }
+});
+
+</script>
+</body>
+</html>

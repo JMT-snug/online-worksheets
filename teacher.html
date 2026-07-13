@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8aa">
+<meta name="app-version" content="3.8ac">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -159,6 +159,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
     <span id="t-name"></span>
     <a href="index.html" class="hdr-btn hdr-btn-green">🏠 학생 화면</a>
     <a href="edit.html" class="hdr-btn" style="background:#7c3aed;color:#fff">✏️ 학습지 편집</a>
+    <a href="scoring.html" class="hdr-btn" style="background:#dc2626;color:#fff">✍️ 그래프 채점</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
@@ -217,7 +218,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8aa";
+const VERSION = "3.8ac";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1189,21 +1190,33 @@ function renderWS(wsId){
     </tr></thead><tbody id="ws-tbody"></tbody></table>
   </div>`;
   const qStats={};
+  const wrongCnt={};  // qid → {답: 빈도}
   recs.forEach(r=>{ if(!r.perQuestion) return;
     Object.entries(r.perQuestion).forEach(([qid,v])=>{
       if(!qStats[qid]) qStats[qid]={total:0,totalTries:0};
       qStats[qid].total++; qStats[qid].totalTries+=v.attempts||1;
+      // 빈출 오답 집계
+      if(Array.isArray(v.wrongInputs)){
+        if(!wrongCnt[qid]) wrongCnt[qid]={};
+        v.wrongInputs.forEach(w=>{
+          const key=String(w||'(빈칸)').slice(0,40);
+          wrongCnt[qid][key]=(wrongCnt[qid][key]||0)+1;
+        });
+      }
     });
   });
   if(Object.keys(qStats).length){
     h+=`<div class="card"><div class="card-hdr"><span class="card-title">📊 문항별 난이도</span></div>
-    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th></tr></thead><tbody>`;
+    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th><th>빈출 오답 (TOP 3)</th></tr></thead><tbody>`;
     Object.entries(qStats).sort().forEach(([qid,s])=>{
       const avg=(s.totalTries/s.total).toFixed(1);
       const diff=avg<=1.2?"🟢 쉬움":avg<=2.0?"🟡 보통":"🔴 어려움";
+      const top3=Object.entries(wrongCnt[qid]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      const wrongHtml=top3.length?top3.map(([ans,cnt])=>`<span style="display:inline-block;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;font-family:monospace">${ans} <b>${cnt}</b></span>`).join(''):'<span style="color:var(--ink3);font-size:11px">-</span>';
       h+=`<tr><td>${qid}</td><td>${s.total}명</td>
         <td><span class="tries-badge ${avg<=1.2?'tries-1':avg<=2?'tries-2':'tries-many'}">${avg}회</span></td>
-        <td>${diff}</td></tr>`;
+        <td>${diff}</td>
+        <td>${wrongHtml}</td></tr>`;
     });
     h+=`</tbody></table></div>`;
   }

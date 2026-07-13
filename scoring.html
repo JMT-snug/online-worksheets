@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0a">
+<meta name="app-version" content="scoring-v1.0b">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -182,17 +182,17 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
             <button class="btn-nav" id="btn-next-stu" onclick="nextStudent()">▶</button>
           </div>
 
+          <div class="td-controls" id="td-controls" style="display:none;border-radius:8px 8px 0 0;border:1px solid var(--rule);border-bottom:none">
+            <button class="td-btn active" id="td-pen">✏️ 펜</button>
+            <button class="td-btn" id="td-erase">지우개</button>
+            <span class="td-color active" data-color="#dc2626" style="background:#dc2626"></span>
+            <span class="td-color" data-color="#2563eb" style="background:#2563eb"></span>
+            <span class="td-color" data-color="#15803d" style="background:#15803d"></span>
+            <span class="td-color" data-color="#1c1917" style="background:#1c1917"></span>
+            <button class="td-btn" onclick="clearTeacherDrawing()">전체 지우기</button>
+            <button class="td-btn" onclick="undoTeacherDrawing()">↩ 실행취소</button>
+          </div>
           <div class="ans-preview" id="ans-preview">
-            <div class="td-controls" id="td-controls" style="display:none">
-              <button class="td-btn active" id="td-pen">✏️ 펜</button>
-              <button class="td-btn" id="td-erase">지우개</button>
-              <span class="td-color active" data-color="#dc2626" style="background:#dc2626"></span>
-              <span class="td-color" data-color="#2563eb" style="background:#2563eb"></span>
-              <span class="td-color" data-color="#15803d" style="background:#15803d"></span>
-              <span class="td-color" data-color="#1c1917" style="background:#1c1917"></span>
-              <button class="td-btn" onclick="clearTeacherDrawing()">전체 지우기</button>
-              <button class="td-btn" onclick="undoTeacherDrawing()">↩ 실행취소</button>
-            </div>
             <canvas id="grid-canvas"></canvas>
             <img id="stu-drawing" style="position:absolute;top:0;left:0;width:100%">
             <img id="teacher-drawing" style="position:absolute;top:0;left:0;width:100%;pointer-events:none">

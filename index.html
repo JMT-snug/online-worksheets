@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1w">
+  <meta name="app-version" content="7.1x">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1w";
+const VERSION = "7.1x";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -34,6 +34,16 @@ window.MathJax = {
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:15px;line-height:1.65;-webkit-tap-highlight-color:transparent}
+
+
+/* ── 통일 헤더 (grid 3열) ── */
+header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.hdr-left{display:flex;gap:6px;align-items:center;justify-self:start;flex-wrap:nowrap}
+.hdr-center{display:flex;gap:8px;align-items:center;justify-self:center;white-space:nowrap}
+.hdr-right{display:flex !important;gap:6px;align-items:center;justify-self:end;flex-wrap:nowrap}
+.hdr-nav{display:inline-flex;gap:4px}
+.hdr-nav .hdr-btn{padding:5px 10px;font-size:12px}
+.hdr-sep{width:1px;height:20px;background:currentColor;opacity:.15;margin:0 4px}
 
 /* HEADER */
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
@@ -430,13 +440,22 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 <body>
 
 <header>
-  <div class="logo">수학 학습지<em>+</em><span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;margin-left:6px;font-family:monospace;align-self:flex-end;padding-bottom:2px"></span></div>
-  <div id="hdr-user">
+  <div class="hdr-left">
+    <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
+  </div>
+  <div class="hdr-center">
+    <div class="logo" style="margin:0">수학 학습지<em>+</em></div>
+    <span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;font-family:monospace"></span>
+  </div>
+  <div class="hdr-right" id="hdr-user">
+    <div class="hdr-nav">
+      <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
+      <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
+      <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
+    </div>
+    <div class="hdr-sep"></div>
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
-    <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집기</a>
-    <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
-    <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>

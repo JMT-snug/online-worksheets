@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0e">
+<meta name="app-version" content="scoring-v1.0f">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -232,10 +232,8 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
               <button class="judge-btn" id="btn-ng" onclick="setJudgment(false)">❌ 오답</button>
               <button class="judge-btn" id="btn-skip" onclick="setJudgment(null)">보류</button>
             </div>
-            <textarea class="feedback-box" id="feedback" placeholder="선생님 피드백 (선택사항)"></textarea>
-            <div style="display:flex;gap:8px">
-              <button class="btn-save" onclick="saveAndNext()">💾 저장하고 다음</button>
-            </div>
+            <textarea class="feedback-box" id="feedback" placeholder="선생님 피드백 (선택사항)" onblur="saveCurrent()"></textarea>
+
           </div>
         </div>
       </div>
@@ -700,10 +698,62 @@ window.undoTeacherDrawing = function(){
 };
 
 let _curJudgment = null;
-window.setJudgment = function(v){
+window.setJudgment = async function(v){
   _curJudgment = v;
   updateJudgeButtons(v);
+  // 판정 클릭 시 자동 저장 + 다음 학생
+  await saveCurrent();
 };
+
+window.saveCurrent = async function(){
+  const stu = students[curStuIdx];
+  if(!stu) return;
+  const feedback = document.getElementById('feedback').value.trim();
+  const tCv = document.getElementById('teacher-canvas');
+  let teacherDrawing = null;
+  try{
+    const imgData = tCv.getContext('2d').getImageData(0,0,tCv.width,tCv.height);
+    const hasContent = imgData.data.some((v,i)=>i%4===3 && v>0);
+    if(hasContent) teacherDrawing = tCv.toDataURL('image/png');
+  }catch(e){}
+  try{
+    await setDoc(doc(db, 'records', stu.email, 'worksheets', curWsId), {
+      perQuestion: {
+        [curQid]: {
+          correct: _curJudgment,
+          feedback: feedback || null,
+          teacherDrawing: teacherDrawing || stu.data.teacherDrawing || null,
+        }
+      }
+    }, {merge:true});
+    stu.data.correct = _curJudgment;
+    stu.data.feedback = feedback;
+    if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
+    toast('✅ 저장');
+    // 필터 재적용
+    const prevIdx = curStuIdx;
+    students = allStudents.filter(s => {
+      if(curCls && s.cls !== curCls) return false;
+      if(curStatus === 'pending' && s.data.correct !== null && s.data.correct !== undefined) return false;
+      if(curStatus === 'ng' && s.data.correct !== false) return false;
+      if(curStatus === 'ok' && s.data.correct !== true) return false;
+      return true;
+    });
+    renderStats();
+    if(students.length === 0){
+      document.getElementById('stu-name').textContent = '(필터에 해당하는 학생 없음)';
+      document.getElementById('stu-email').textContent = '';
+      document.getElementById('stu-progress').textContent = '0 / 0';
+      document.getElementById('ans-preview').style.display='none';
+      document.getElementById('td-controls').style.display='none';
+      toast('🎉 모두 채점 완료');
+    } else if(prevIdx < students.length){
+      showStudent(prevIdx);
+    } else {
+      showStudent(students.length - 1);
+    }
+  }catch(e){ toast('저장 실패: '+e.message); }
+}
 
 function updateJudgeButtons(v){
   _curJudgment = v;
@@ -718,60 +768,7 @@ function updateJudgeButtons(v){
   else if(v === null) skip.classList.add('active-skip');
 }
 
-window.saveAndNext = async function(){
-  const stu = students[curStuIdx];
-  if(!stu) return;
-  const feedback = document.getElementById('feedback').value.trim();
-  const tCv = document.getElementById('teacher-canvas');
-  // 교사 캔버스가 비어있지 않으면 그림 저장
-  let teacherDrawing = null;
-  try{
-    const imgData = tCv.getContext('2d').getImageData(0,0,tCv.width,tCv.height);
-    const hasContent = imgData.data.some((v,i)=>i%4===3 && v>0);
-    if(hasContent) teacherDrawing = tCv.toDataURL('image/png');
-  }catch(e){}
 
-  try{
-    await setDoc(doc(db, 'records', stu.email, 'worksheets', curWsId), {
-      perQuestion: {
-        [curQid]: {
-          correct: _curJudgment,
-          feedback: feedback || null,
-          teacherDrawing: teacherDrawing || stu.data.teacherDrawing || null,
-        }
-      }
-    }, {merge:true});
-    // 메모리 업데이트
-    stu.data.correct = _curJudgment;
-    stu.data.feedback = feedback;
-    if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
-    toast('✅ 저장됨');
-    // 필터가 미채점/오답만이면 판정 후 그 학생은 필터에서 빠질 수 있음
-    // 필터 재적용
-    const prevIdx = curStuIdx;
-    students = allStudents.filter(s => {
-      if(curCls && s.cls !== curCls) return false;
-      if(curStatus === 'pending' && s.data.correct !== null && s.data.correct !== undefined) return false;
-      if(curStatus === 'ng' && s.data.correct !== false) return false;
-      if(curStatus === 'ok' && s.data.correct !== true) return false;
-      return true;
-    });
-    renderStats();
-    // 다음 학생 표시
-    if(students.length === 0){
-      document.getElementById('stu-name').textContent = '(필터에 해당하는 학생 없음)';
-      document.getElementById('stu-email').textContent = '';
-      document.getElementById('stu-progress').textContent = '0 / 0';
-      document.getElementById('ans-preview').style.display='none';
-      document.getElementById('td-controls').style.display='none';
-      toast('🎉 모두 채점 완료');
-    } else if(prevIdx < students.length){
-      showStudent(prevIdx);
-    } else {
-      showStudent(students.length - 1);
-    }
-  }catch(e){ toast('저장 실패: '+e.message); }
-};
 
 window.prevStudent = ()=>showStudent(curStuIdx - 1);
 window.nextStudent = ()=>showStudent(curStuIdx + 1);
@@ -806,7 +803,7 @@ document.addEventListener('keydown', e=>{
   else if(e.key === 'ArrowRight') { e.preventDefault(); nextStudent(); }
   else if(e.key === '1' || e.key === 'o') setJudgment(true);
   else if(e.key === '2' || e.key === 'x') setJudgment(false);
-  else if(e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveAndNext(); }
+  
 });
 
 </script>

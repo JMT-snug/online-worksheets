@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1x">
+  <meta name="app-version" content="7.1y">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1x";
+const VERSION = "7.1y";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -777,6 +777,7 @@ function updateHeader(u) {
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   const isT = TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
+  document.getElementById("hdr-scoring-link").style.display = isT ? "inline-flex" : "none";
   document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
   document.getElementById("hdr-sync-progress").style.display= isT ? "inline-flex" : "none";
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0c">
+<meta name="app-version" content="scoring-v1.0d">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -123,7 +123,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 <body>
 
 <header>
-  <div class="logo">그래프 수동 채점<em>+</em></div>
+  <div class="logo">그래프 수동 채점<em>+</em> <span id="scoring-version" style="font-size:11px;color:rgba(255,255,255,.5);font-weight:400;margin-left:4px"></span></div>
   <div id="hdr-user">
     <span id="hdr-name"></span>
     <a href="teacher.html" class="hdr-btn">← 관리자</a>
@@ -154,6 +154,15 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
       <select class="sel-input" id="sel-ws" onchange="onWsChange()"></select>
       <span class="sel-label">문항</span>
       <select class="sel-input" id="sel-q" onchange="onQChange()"></select>
+      <span class="sel-label">반</span>
+      <select class="sel-input" id="sel-cls" onchange="onFilterChange()" style="min-width:120px"></select>
+      <span class="sel-label">상태</span>
+      <select class="sel-input" id="sel-status" onchange="onFilterChange()" style="min-width:140px">
+        <option value="all">전체</option>
+        <option value="pending">미채점만</option>
+        <option value="ng">오답만</option>
+        <option value="ok">정답만</option>
+      </select>
       <div style="flex:1"></div>
       <div id="stats-bar" class="stats-bar" style="margin-top:0"></div>
     </div>
@@ -250,8 +259,11 @@ let WORKSHEETS = [];
 let UNITS = [];
 let allRecords = {};  // { [wsId]: { [studentEmail]: recordData } }
 let curWsId = null, curQid = null;
-let students = [];  // 현재 문항 채점 대상 학생 배열
+let allStudents = [];  // 필터 전 전체 학생
+let students = [];  // 필터 후 채점 대상
 let curStuIdx = 0;
+let curCls = "", curStatus = "all";
+let classMap = {};  // email → 반 정보
 
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -274,6 +286,7 @@ onAuthStateChanged(auth, async u => {
   await loadCurriculum();
   await loadAllRecords();
   buildWsSelector();
+  restoreState();
 });
 
 async function loadCurriculum(){
@@ -310,6 +323,20 @@ async function loadAllRecords(){
       allRecords[wsId][email] = d.data();
     });
     console.log("[기록] 로드 완료");
+    // 반 정보 로드 (teacher_data)
+    try{
+      const clsSnap = await getDocs(collection(db, 'teacher_data'));
+      classMap = {};
+      clsSnap.forEach(d => {
+        const data = d.data();
+        if(data.classes){
+          Object.entries(data.classes).forEach(([cls, emails]) => {
+            (emails||[]).forEach(email => { classMap[email] = cls; });
+          });
+        }
+      });
+      console.log("[반 정보] 로드 완료", Object.keys(classMap).length, "명");
+    }catch(e){ console.warn("[반 정보 로드 실패]", e.message); }
   }catch(e){ console.error(e); }
 }
 
@@ -323,8 +350,80 @@ function buildWsSelector(){
     }).join('');
 }
 
+
+function buildClsSelector(){
+  const clsList = [...new Set(allStudents.map(s=>s.cls).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const sel = document.getElementById('sel-cls');
+  const cur = sel.value || curCls;
+  sel.innerHTML = '<option value="">전체 반</option>' +
+    clsList.map(c=>`<option value="${c}"${cur===c?' selected':''}>${c}</option>`).join('');
+  if(cur && clsList.includes(cur)){ sel.value = cur; curCls = cur; }
+  else curCls = "";
+}
+
+function applyFilter(){
+  curCls = document.getElementById('sel-cls').value;
+  curStatus = document.getElementById('sel-status').value;
+  students = allStudents.filter(s => {
+    if(curCls && s.cls !== curCls) return false;
+    if(curStatus === 'pending' && s.data.correct !== null && s.data.correct !== undefined) return false;
+    if(curStatus === 'ng' && s.data.correct !== false) return false;
+    if(curStatus === 'ok' && s.data.correct !== true) return false;
+    return true;
+  });
+  curStuIdx = 0;
+  saveState();
+  if(students.length === 0){
+    document.getElementById('stu-name').textContent = '(필터에 해당하는 학생 없음)';
+    document.getElementById('stu-email').textContent = '';
+    document.getElementById('stu-progress').textContent = '0 / 0';
+    document.getElementById('ans-preview').style.display='none';
+    document.getElementById('td-controls').style.display='none';
+  } else {
+    document.getElementById('ans-preview').style.display='';
+    showStudent(0);
+  }
+  renderStats();
+}
+
+window.onFilterChange = function(){
+  applyFilter();
+};
+
+// 상태 저장/복원 (sessionStorage)
+function saveState(){
+  try{
+    sessionStorage.setItem('scoring_state', JSON.stringify({
+      wsId: curWsId, qid: curQid, cls: curCls, status: curStatus
+    }));
+  }catch(e){}
+}
+
+function restoreState(){
+  try{
+    const raw = sessionStorage.getItem('scoring_state');
+    if(!raw) return false;
+    const s = JSON.parse(raw);
+    if(s.wsId && WORKSHEETS.find(w=>w.id===s.wsId)){
+      document.getElementById('sel-ws').value = s.wsId;
+      onWsChange();
+      if(s.qid){
+        setTimeout(()=>{
+          document.getElementById('sel-q').value = s.qid;
+          if(s.cls) document.getElementById('sel-cls').value = s.cls;
+          if(s.status) document.getElementById('sel-status').value = s.status;
+          onQChange();
+        }, 100);
+      }
+      return true;
+    }
+  }catch(e){ console.warn('[상태 복원 실패]', e); }
+  return false;
+}
+
 window.onWsChange = function(){
   curWsId = document.getElementById('sel-ws').value;
+  saveState();
   const ws = WORKSHEETS.find(w=>w.id===curWsId);
   const qSel = document.getElementById('sel-q');
   if(!ws){ qSel.innerHTML=''; document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
@@ -340,6 +439,7 @@ window.onWsChange = function(){
 
 window.onQChange = function(){
   curQid = document.getElementById('sel-q').value;
+  saveState();
   if(!curQid){ document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
   loadQuestion();
 };
@@ -349,16 +449,22 @@ function loadQuestion(){
   const q = ws.questions.find(x=>x.id===curQid);
   if(!q) return;
 
-  // 학생 답안 있는 학생만 필터
+  // 학생 답안 있는 학생만
   const recs = allRecords[curWsId] || {};
-  students = Object.entries(recs)
+  allStudents = Object.entries(recs)
     .filter(([email, r]) => r.perQuestion?.[curQid]?.drawing)
     .map(([email, r]) => ({
       email,
       name: r.studentName || email.split('@')[0],
+      cls: classMap[email] || "",
       data: r.perQuestion[curQid]
     }))
-    .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+    .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
+
+  // 반 목록 채우기
+  buildClsSelector();
+  // 필터 적용
+  applyFilter();
 
   curStuIdx = 0;
   document.getElementById('grade-view').style.display='';
@@ -541,6 +647,9 @@ function initTeacherCanvas(cv){
 
 // 도구 버튼
 document.addEventListener('DOMContentLoaded', ()=>{
+  const vMeta = document.querySelector('meta[name="app-version"]');
+  if(vMeta) document.getElementById('scoring-version').textContent = vMeta.content;
+
   document.getElementById('td-pen').onclick = ()=>{
     _tdEraser=false;
     document.getElementById('td-pen').classList.add('active');
@@ -619,12 +728,29 @@ window.saveAndNext = async function(){
     stu.data.feedback = feedback;
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
     toast('✅ 저장됨');
+    // 필터가 미채점/오답만이면 판정 후 그 학생은 필터에서 빠질 수 있음
+    // 필터 재적용
+    const prevIdx = curStuIdx;
+    students = allStudents.filter(s => {
+      if(curCls && s.cls !== curCls) return false;
+      if(curStatus === 'pending' && s.data.correct !== null && s.data.correct !== undefined) return false;
+      if(curStatus === 'ng' && s.data.correct !== false) return false;
+      if(curStatus === 'ok' && s.data.correct !== true) return false;
+      return true;
+    });
     renderStats();
-    // 다음 학생
-    if(curStuIdx < students.length - 1){
-      showStudent(curStuIdx + 1);
+    // 다음 학생 표시
+    if(students.length === 0){
+      document.getElementById('stu-name').textContent = '(필터에 해당하는 학생 없음)';
+      document.getElementById('stu-email').textContent = '';
+      document.getElementById('stu-progress').textContent = '0 / 0';
+      document.getElementById('ans-preview').style.display='none';
+      document.getElementById('td-controls').style.display='none';
+      toast('🎉 모두 채점 완료');
+    } else if(prevIdx < students.length){
+      showStudent(prevIdx);
     } else {
-      toast('🎉 마지막 학생입니다');
+      showStudent(students.length - 1);
     }
   }catch(e){ toast('저장 실패: '+e.message); }
 };

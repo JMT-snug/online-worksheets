@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8af">
+<meta name="app-version" content="3.8ag">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8af";
+const VERSION = "3.8ag";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -749,10 +749,10 @@ function renderStudentDetail(uid){
   const recs=Object.values(wsMap);
   const any=recs.find(r=>r.studentName)||recs[0]||{};
   const name=any.studentName||"-", email=any.studentEmail||"-", cls=findClass(email)||"-";
-  // 진도율(완료 학습지): 일반 학습지(반영 ON)만 집계
-  const progIds=Object.keys(wsMap).filter(countsForProgressWs);
-  const done=progIds.filter(id=>isRecDone(wsMap[id])).length;
-  const progTotal=progIds.length;
+  // 진도율: 목록 화면과 동일 기준(반별 분모) 사용 — studentList 1회 계산 후 재사용
+  const _slist=studentList();
+  const me=_slist.find(s=>s.uid===uid)||{done:0,total:0,pct:null};
+  const done=me.done, progTotal=me.total, progPct=me.pct;
   const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
   const totalTries=recs.reduce((s,r)=>s+getAttempts(r),0);
@@ -782,7 +782,7 @@ function renderStudentDetail(uid){
   }).join("");
 
   // ── 다른 학생으로 바로 이동 (목록과 동일 정렬: 학급→이름) ──
-  let navList=studentList().sort((a,b)=>
+  let navList=[..._slist].sort((a,b)=>
     (""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
   // 목록에서 학급 필터가 걸려 있고 현재 학생이 그 학급이면, 같은 학급 안에서만 이동
   if(window._stuClass){
@@ -809,7 +809,7 @@ function renderStudentDetail(uid){
         </div>
       </div>
       <div class="summary-row" style="margin-bottom:16px">
-        <div class="sum-card"><div class="sum-label">완료 학습지</div><div class="sum-num">${done}<span style="font-size:14px;color:var(--ink3)">/${progTotal}</span></div><div style="font-size:11px;color:var(--ink3)">일반 학습지 기준</div></div>
+        <div class="sum-card"><div class="sum-label">진도율</div><div class="sum-num" style="color:${progPct!=null?rateColor(progPct):'var(--ink3)'}">${progPct!=null?progPct+'%':'-'}<span style="font-size:14px;color:var(--ink3)"> (${done}/${progTotal})</span></div><div style="font-size:11px;color:var(--ink3)">반 시작 학습지 기준</div></div>
         <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
         <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
       </div>

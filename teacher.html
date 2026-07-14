@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ah">
+<meta name="app-version" content="3.8ai">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ah";
+const VERSION = "3.8ai";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -546,6 +546,40 @@ function studentList(){
   });
   return entries;
 }
+
+/* 진단: 특정 학급의 진도율 분모 상세 출력
+   콘솔에서 progDebug('4반') 처럼 실행 (인자 없으면 전체 학급) */
+window.progDebug = function(filter){
+  const byCls={};
+  Object.entries(allData).forEach(([uid,wsMap])=>{
+    const recs=Object.values(wsMap);
+    const email=(recs.find(r=>r.studentEmail)||{}).studentEmail||'';
+    const cls=findClass(email)||'-';
+    const name=(recs.find(r=>r.studentName)||{}).studentName||email||uid;
+    (byCls[cls]=byCls[cls]||[]).push({name,wsMap});
+  });
+  Object.entries(byCls).forEach(([cls,studs])=>{
+    if(filter && !cls.includes(filter)) return;
+    const starters={};  // wsId -> [학생이름]
+    studs.forEach(s=>Object.keys(s.wsMap).forEach(id=>{ (starters[id]=starters[id]||[]).push(s.name); }));
+    const rows=Object.entries(starters).map(([id,names])=>{
+      const ws=WORKSHEETS.find(w=>w.id===id)||{};
+      return {
+        wsId:id,
+        제목:ws.title||'(삭제/커리큘럼없음)',
+        type:ws.type||'(없음)',
+        vocab배열:Array.isArray(ws.vocab)?ws.vocab.length:0,
+        진도반영:ws.includeInProgress===false?'OFF':'ON',
+        카운트:countsForProgressWs(id)?'✅ 분모포함':'— 제외',
+        시작학생:names.join(',')
+      };
+    }).sort((a,b)=>(a.카운트<b.카운트?1:a.카운트>b.카운트?-1:0));
+    const denom=rows.filter(r=>r.카운트==='✅ 분모포함').length;
+    console.log(`\n===== ${cls} : 진도율 분모 ${denom}개 (해당 반이 시작한 학습지 총 ${rows.length}개) =====`);
+    console.table(rows);
+  });
+  return '진단 완료 — 위 표에서 카운트=✅ 인 항목이 분모. 예상보다 많으면 그 학습지의 type/진도반영 확인.';
+};
 
 function renderClassMatrix(){
   selView="classmatrix";

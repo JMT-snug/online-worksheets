@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1y">
+  <meta name="app-version" content="7.1z">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1y";
+const VERSION = "7.1z";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -821,20 +821,21 @@ const CAT_COLOR = {
   "자료와 가능성":{bar:"#9d174d", text:"#9d174d"},
 };
 
+/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (VOCA·시험지 제외) */
+const countsForProgress = ws =>
+  ws.type!=="vocab" && ws.type!=="exam" && ws.includeInProgress!==false;
+
 /* 단원의 진도 요약 계산 */
 function unitProgress(unit) {
-  // vocab 포함 전체 학습지 (hasSheets 판단)
+  // vocab 포함 전체 학습지 (hasSheets/표시용 개수 판단)
   const allSheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id &&
     (ws.type==="vocab" || (ws.questions?.length??0)>0));
-  if(!allSheets.length) return {total:0, done:0, hasSheets:false};
-  // 진도: 일반은 completedAt, vocab은 passCount≥1 기준
-  const total = allSheets.length;
-  const done = allSheets.filter(ws=>
-    ws.type==="vocab"
-      ? (wsProgress[ws.id]?.passCount||0)>=1
-      : !!wsProgress[ws.id]?.completedAt
-  ).length;
-  return {total, done, hasSheets:true};
+  const hasSheets = allSheets.length>0;
+  // 진도율은 일반 학습지(진도율 반영 ON)만 집계
+  const progSheets = allSheets.filter(countsForProgress);
+  const total = progSheets.length;
+  const done = progSheets.filter(ws=>!!wsProgress[ws.id]?.completedAt).length;
+  return {total, done, hasSheets, allCount: allSheets.length};
 }
 
 /* 단원 셀 아이템 생성 */
@@ -847,12 +848,12 @@ function makeUnitItem(unit) {
   item.style.borderLeftColor = prog.hasSheets ? gc : "var(--rule)";
 
   let badge = "";
-  if(prog.hasSheets) {
+  if(prog.total>0) {
     badge = `<span class="unit-ws-badge">${prog.done}/${prog.total}</span>`;
   }
 
   let statusHtml = "";
-  if(prog.hasSheets) {
+  if(prog.total>0) {
     if(prog.done===prog.total) statusHtml=`<span class="ws-status s-done">완료</span>`;
     else if(prog.done>0)      statusHtml=`<span class="ws-status s-partial">${prog.done}/${prog.total}</span>`;
   }
@@ -861,7 +862,7 @@ function makeUnitItem(unit) {
     ${badge}
     ${statusHtml}
     <div class="ws-item-title">${unit.title}</div>
-    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.total}개` : "준비 중"}</div>`;
+    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.allCount}개` : "준비 중"}</div>`;
 
   if(prog.hasSheets) {
     item.addEventListener("click", ()=>showUnitPage(unit));
@@ -947,6 +948,9 @@ window.syncAutoProgress = async function(){
       (c.students||[]).forEach(e=>{ classByEmail[e.toLowerCase()]=name; });
     }
 
+    // 진도율 대상 학습지(일반+반영 ON)만 집계 대상
+    const progWsIds = new Set(WORKSHEETS.filter(countsForProgress).map(w=>w.id));
+
     // 모든 학생의 worksheets 컬렉션 그룹 조회 (완료된 것만)
     const snap = await getDocs(collectionGroup(db,'worksheets'));
     const wsClassDone={};   // wsId → {className: count}
@@ -960,6 +964,7 @@ window.syncAutoProgress = async function(){
       const _done=data.isComplete||data.completedAt||data.passed||(data.totalCount>0&&data.answeredCount>=data.totalCount);
       if(!_done) return;
       if(!cls||!wsId) return;
+      if(!progWsIds.has(wsId)) return;  // VOCA·시험지·진도율 미반영 제외
       if(!wsClassDone[wsId]) wsClassDone[wsId]={};
       wsClassDone[wsId][cls]=(wsClassDone[wsId][cls]||0)+1;
     });
@@ -1094,25 +1099,37 @@ function showUnitPage(unit) {
         if(!isNowDraft) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
         row.appendChild(lockBtn);
 
-        if(teacherClasses.length){
-          teacherClasses.forEach(({key,name})=>{
-            const btn=document.createElement('button');
-            const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
-            const isManual=progress[name]===true;
-            const isChecked=isManual||isAuto;
-            btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
-            btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
-            btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
-            btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
-            row.appendChild(btn);
-          });
+        // 학급별 진도 체크는 진도율 대상(일반+반영 ON)만 노출
+        if(countsForProgress(ws)){
+          if(teacherClasses.length){
+            teacherClasses.forEach(({key,name})=>{
+              const btn=document.createElement('button');
+              const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
+              const isManual=progress[name]===true;
+              const isChecked=isManual||isAuto;
+              btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
+              btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
+              btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
+              btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
+              row.appendChild(btn);
+            });
+          } else {
+            const loadingSpan=document.createElement('span');
+            loadingSpan.style.cssText='font-size:11px;color:var(--ink3)';
+            loadingSpan.textContent='⏳ 학급 정보 로드 중…';
+            row.appendChild(loadingSpan);
+          }
+          const note=document.createElement('div');
+          note.className='teacher-ws-note';
+          note.textContent=checkedCount?`${checkedCount}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
+          row.appendChild(note);
         } else {
-          row.innerHTML='<span style="font-size:11px;color:var(--ink3)">⏳ 학급 정보 로드 중…</span>';
+          const skipSpan=document.createElement('span');
+          skipSpan.style.cssText='font-size:11px;color:var(--ink3)';
+          skipSpan.textContent = ws.type==='vocab' ? 'VOCA · 진도율 미포함'
+            : ws.type==='exam' ? '시험지 · 진도율 미포함' : '진도율 미반영';
+          row.appendChild(skipSpan);
         }
-        const note=document.createElement('div');
-        note.className='teacher-ws-note';
-        note.textContent=checkedCount?`${checkedCount}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
-        row.appendChild(note);
         card.appendChild(row);
       }
       if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="vocab" ? startVocabQuiz(ws) : startQuiz(ws));

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ad">
+<meta name="app-version" content="3.8ae">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ad";
+const VERSION = "3.8ae";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -511,13 +511,23 @@ window._stuSort="class"; window._stuClass=""; window._stuSearch="";
 // 호환: 함수 내부에서 _stuSort로 참조 시 window._stuSort 가리키도록 전역 변수
 var _stuSort=window._stuSort, _stuClass=window._stuClass, _stuSearch=window._stuSearch;
 window.renderStudents=renderStudents;
+/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (index/edit와 동일 규칙)
+   커리큘럼에 없는(삭제된) 학습지는 진도율 집계 제외 */
+function countsForProgressWs(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  if(!ws) return false;
+  return ws.type!=="vocab" && ws.type!=="exam" && ws.includeInProgress!==false;
+}
+
 function studentList(){
   return Object.entries(allData).map(([uid,wsMap])=>{
     const recs=Object.values(wsMap);
     const any=recs.find(r=>r.studentName)||recs[0]||{};
     const email=any.studentEmail||"-";
-    const total=recs.length;
-    const done=recs.filter(isRecDone).length;
+    // 진도율(완료 학습지): 일반 학습지(반영 ON)만 집계
+    const progIds=Object.keys(wsMap).filter(countsForProgressWs);
+    const total=progIds.length;
+    const done=progIds.filter(id=>isRecDone(wsMap[id])).length;
     const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
     const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
     return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",total,done,avg};
@@ -727,7 +737,10 @@ function renderStudentDetail(uid){
   const recs=Object.values(wsMap);
   const any=recs.find(r=>r.studentName)||recs[0]||{};
   const name=any.studentName||"-", email=any.studentEmail||"-", cls=findClass(email)||"-";
-  const done=recs.filter(isRecDone).length;
+  // 진도율(완료 학습지): 일반 학습지(반영 ON)만 집계
+  const progIds=Object.keys(wsMap).filter(countsForProgressWs);
+  const done=progIds.filter(id=>isRecDone(wsMap[id])).length;
+  const progTotal=progIds.length;
   const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
   const totalTries=recs.reduce((s,r)=>s+getAttempts(r),0);
@@ -756,14 +769,35 @@ function renderStudentDetail(uid){
     </tr>`;
   }).join("");
 
+  // ── 다른 학생으로 바로 이동 (목록과 동일 정렬: 학급→이름) ──
+  let navList=studentList().sort((a,b)=>
+    (""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
+  // 목록에서 학급 필터가 걸려 있고 현재 학생이 그 학급이면, 같은 학급 안에서만 이동
+  if(window._stuClass){
+    const f=navList.filter(s=>s.cls===window._stuClass);
+    if(f.some(s=>s.uid===uid)) navList=f;
+  }
+  const navIdx=navList.findIndex(s=>s.uid===uid);
+  const prevUid=navIdx>0?navList[navIdx-1].uid:null;
+  const nextUid=(navIdx>=0&&navIdx<navList.length-1)?navList[navIdx+1].uid:null;
+  const stuOptions=navList.map(s=>
+    `<option value="${s.uid}" ${s.uid===uid?'selected':''}>${s.cls&&s.cls!=='-'?s.cls+' · ':''}${s.name}</option>`).join("");
+
   document.getElementById("content").innerHTML=`
     <div class="card">
-      <div class="card-hdr">
+      <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
         <span class="card-title">👤 ${name} <span style="color:var(--ink3);font-weight:400">· ${cls} · ${email}</span></span>
-        <button class="btn" onclick="navigate('students')">← 학생 목록</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="navigate('students')">← 목록</button>
+          <button class="btn" ${prevUid?`onclick="navigate('stu:${prevUid}')"`:'disabled style="opacity:.4;cursor:not-allowed"'} title="이전 학생">◀ 이전</button>
+          <select onchange="if(this.value)navigate('stu:'+this.value)" title="학생 선택"
+            style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;max-width:220px;font-family:inherit;cursor:pointer">${stuOptions}</select>
+          <button class="btn" ${nextUid?`onclick="navigate('stu:${nextUid}')"`:'disabled style="opacity:.4;cursor:not-allowed"'} title="다음 학생">다음 ▶</button>
+          <span style="font-size:12px;color:var(--ink3)">${navIdx>=0?navIdx+1:'-'} / ${navList.length}</span>
+        </div>
       </div>
       <div class="summary-row" style="margin-bottom:16px">
-        <div class="sum-card"><div class="sum-label">완료 학습지</div><div class="sum-num">${done}<span style="font-size:14px;color:var(--ink3)">/${recs.length}</span></div></div>
+        <div class="sum-card"><div class="sum-label">완료 학습지</div><div class="sum-num">${done}<span style="font-size:14px;color:var(--ink3)">/${progTotal}</span></div><div style="font-size:11px;color:var(--ink3)">일반 학습지 기준</div></div>
         <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
         <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
       </div>

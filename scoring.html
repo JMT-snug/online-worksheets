@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0g">
+<meta name="app-version" content="scoring-v1.0h">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -351,8 +351,11 @@ async function loadAllRecords(){
       clsSnap.forEach(d => {
         const data = d.data();
         if(data.classes){
-          Object.entries(data.classes).forEach(([cls, emails]) => {
-            (emails||[]).forEach(email => { classMap[email] = cls; });
+          // 실제 구조: classes[key] = {year, grade, classNum, students:[이메일]}
+          Object.entries(data.classes).forEach(([key, c]) => {
+            if(!c || typeof c !== 'object') return;
+            const name = `${c.year}/${c.grade}학년 ${c.classNum}반`;
+            (c.students||[]).forEach(email => { classMap[String(email).toLowerCase()] = name; });
           });
         }
       });
@@ -492,7 +495,7 @@ function loadQuestion(){
     .map(([email, r]) => ({
       email,
       name: r.studentName || email.split('@')[0],
-      cls: classMap[email] || "",
+      cls: classMap[String(email).toLowerCase()] || "",
       data: r.perQuestion[curQid]
     }))
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));

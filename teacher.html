@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ae">
+<meta name="app-version" content="3.8af">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ae";
+const VERSION = "3.8af";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -520,18 +520,28 @@ function countsForProgressWs(wsId){
 }
 
 function studentList(){
-  return Object.entries(allData).map(([uid,wsMap])=>{
+  const entries=Object.entries(allData).map(([uid,wsMap])=>{
     const recs=Object.values(wsMap);
     const any=recs.find(r=>r.studentName)||recs[0]||{};
     const email=any.studentEmail||"-";
-    // 진도율(완료 학습지): 일반 학습지(반영 ON)만 집계
-    const progIds=Object.keys(wsMap).filter(countsForProgressWs);
-    const total=progIds.length;
-    const done=progIds.filter(id=>isRecDone(wsMap[id])).length;
+    // 이 학생이 시작한 진도율 대상 학습지(기록이 있으면 시작으로 간주)
+    const startedIds=Object.keys(wsMap).filter(countsForProgressWs);
+    const done=startedIds.filter(id=>isRecDone(wsMap[id])).length;
     const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
     const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
-    return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",total,done,avg};
+    return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",startedIds,done,avg};
   });
+  // 진도율 분모: 같은 반 학생이 1명이라도 시작한 진도율 대상 학습지 수
+  const classStarted={};  // 반 → Set(wsId)
+  entries.forEach(s=>{
+    if(!classStarted[s.cls]) classStarted[s.cls]=new Set();
+    s.startedIds.forEach(id=>classStarted[s.cls].add(id));
+  });
+  entries.forEach(s=>{
+    s.total=classStarted[s.cls]?.size||0;
+    s.pct=s.total?Math.round(s.done/s.total*100):null;  // 진도율% = 완료/전체
+  });
+  return entries;
 }
 
 function renderClassMatrix(){
@@ -685,7 +695,7 @@ function renderStudents(){
   // 정렬
   if(window._stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
   else if(window._stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
-  else if(window._stuSort==="done") students.sort((a,b)=>b.done-a.done);
+  else if(window._stuSort==="done") students.sort((a,b)=>(b.pct??-1)-(a.pct??-1));
   else if(window._stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
 
   const totalStu=list.length;
@@ -697,8 +707,10 @@ function renderStudents(){
       <td><strong>${s.name}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${s.email}</td>
       <td style="font-size:12px">${s.cls}</td>
-      <td style="text-align:center"><span class="tries-badge ${s.done>0?'tries-1':'tries-many'}">${s.done}개</span></td>
-      <td>${s.avg!=null?rateBar(s.avg):'<span style="color:var(--ink3)">-</span>'}</td>
+      <td style="text-align:center">${s.pct!=null
+          ? `<span style="font-weight:700;color:${rateColor(s.pct)}">${s.pct}%</span> <span style="font-size:11px;color:var(--ink3)">(${s.done}/${s.total})</span>`
+          : '<span style="color:var(--ink3)">-</span>'}</td>
+      <td style="text-align:center">${s.avg!=null?`<span style="font-weight:600;color:${rateColor(s.avg)}">${s.avg}%</span>`:'<span style="color:var(--ink3)">-</span>'}</td>
       <td style="text-align:center;color:var(--accent);font-size:12px;font-weight:600">상세 →</td>
     </tr>`).join("");
 
@@ -717,13 +729,13 @@ function renderStudents(){
           <select onchange="window._stuSort=this.value;window._stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
             <option value="class" ${window._stuSort==='class'?'selected':''}>학급 순</option>
             <option value="name"  ${window._stuSort==='name'?'selected':''}>이름 순</option>
-            <option value="done"  ${window._stuSort==='done'?'selected':''}>완료 많은 순</option>
+            <option value="done"  ${window._stuSort==='done'?'selected':''}>진도율 높은 순</option>
             <option value="rate"  ${window._stuSort==='rate'?'selected':''}>정답률 높은 순</option>
           </select>
         </div>
       </div>
       <table class="data-table">
-        <thead><tr><th>이름</th><th>이메일</th><th>학급</th><th style="text-align:center">완료 학습지</th><th>평균 정답률</th><th></th></tr></thead>
+        <thead><tr><th>이름</th><th>이메일</th><th>학급</th><th style="text-align:center">진도율</th><th style="text-align:center">평균 정답률</th><th></th></tr></thead>
         <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:30px">학생 데이터가 없습니다</td></tr>'}</tbody>
       </table>
     </div>`;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ag">
+<meta name="app-version" content="3.8ah">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ag";
+const VERSION = "3.8ah";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -516,7 +516,10 @@ window.renderStudents=renderStudents;
 function countsForProgressWs(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   if(!ws) return false;
-  return ws.type!=="vocab" && ws.type!=="exam" && ws.includeInProgress!==false;
+  if(ws.type==="vocab" || ws.type==="exam") return false;
+  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
+  return true;
 }
 
 function studentList(){

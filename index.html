@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1z">
+  <meta name="app-version" content="7.2">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1z";
+const VERSION = "7.2";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -822,8 +822,13 @@ const CAT_COLOR = {
 };
 
 /* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (VOCA·시험지 제외) */
-const countsForProgress = ws =>
-  ws.type!=="vocab" && ws.type!=="exam" && ws.includeInProgress!==false;
+const countsForProgress = ws => {
+  if(!ws) return false;
+  if(ws.type==="vocab" || ws.type==="exam") return false;
+  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
+  return true;
+};
 
 /* 단원의 진도 요약 계산 */
 function unitProgress(unit) {

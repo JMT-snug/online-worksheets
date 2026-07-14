@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0f">
+<meta name="app-version" content="scoring-v1.0g">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -88,7 +88,11 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 
 .ans-preview{position:relative;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff}
 .ans-preview canvas,.ans-preview img{display:block}
+.ans-preview #grid-canvas{position:relative;z-index:1}
 .ans-preview #stu-drawing,.ans-preview #teacher-drawing,.ans-preview #teacher-canvas{position:absolute;top:0;left:0}
+.ans-preview #stu-drawing{z-index:2}
+.ans-preview #teacher-drawing{z-index:3;pointer-events:none}
+.ans-preview #teacher-canvas{z-index:4}
 .ans-preview .no-drawing{padding:60px 20px;text-align:center;color:var(--ink3);font-size:14px;background:var(--cream)}
 
 /* GRADING ACTIONS */
@@ -182,6 +186,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
         <option value="ok">정답만</option>
       </select>
       <div style="flex:1"></div>
+      <button class="sel-input" id="btn-refresh" style="cursor:pointer;min-width:auto;font-weight:600" onclick="refreshRecords(this)" title="학생이 수정한 답안을 최신 상태로 다시 불러옵니다">🔄 새로고침</button>
       <div id="stats-bar" class="stats-bar" style="margin-top:0"></div>
     </div>
 
@@ -404,6 +409,21 @@ function applyFilter(){
 
 window.onFilterChange = function(){
   applyFilter();
+};
+
+// 학생이 수정한 답안을 최신으로 다시 로드 (scoring은 로그인 시 1회만 읽으므로)
+window.refreshRecords = async function(btn){
+  const prevIdx = curStuIdx;
+  if(btn){ btn.disabled=true; btn.textContent='🔄 불러오는 중...'; }
+  try{
+    await loadAllRecords();
+    if(curQid){
+      loadQuestion();
+      if(students.length) showStudent(Math.min(prevIdx, students.length-1));
+    }
+    toast('🔄 최신 답안으로 갱신됨');
+  }catch(e){ toast('새로고침 실패: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔄 새로고침'; } }
 };
 
 // 상태 저장/복원 (sessionStorage)
@@ -635,19 +655,20 @@ function initTeacherCanvas(cv){
   const pos = e => {
     const r = cv.getBoundingClientRect();
     const sx = cv.width/r.width, sy = cv.height/r.height;
-    const cx = e.touches?e.touches[0].clientX:e.clientX;
-    const cy = e.touches?e.touches[0].clientY:e.clientY;
-    return [(cx-r.left)*sx,(cy-r.top)*sy];
+    return [(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
   };
   const start = e => {
+    // 마우스는 왼쪽 버튼만
+    if(e.pointerType==='mouse' && e.button!==0) return;
     e.preventDefault();
-    try{ _tdUndo.push(cv.getContext('2d').getImageData(0,0,cv.width,cv.height)); if(_tdUndo.length>30) _tdUndo.shift(); }catch(e){}
+    try{ _tdUndo.push(cv.getContext('2d').getImageData(0,0,cv.width,cv.height)); if(_tdUndo.length>30) _tdUndo.shift(); }catch(_){}
     drawing = true; [lx,ly] = pos(e);
     const c = cv.getContext('2d');
     c.lineCap='round'; c.lineJoin='round';
     if(_tdEraser){ c.globalCompositeOperation='destination-out'; c.lineWidth=20; }
     else { c.globalCompositeOperation='source-over'; c.strokeStyle=_tdColor; c.lineWidth=3; }
     c.beginPath(); c.moveTo(lx,ly);
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
   };
   const move = e => {
     if(!drawing) return; e.preventDefault();
@@ -656,9 +677,12 @@ function initTeacherCanvas(cv){
     c.lineTo(x,y); c.stroke(); c.beginPath(); c.moveTo(x,y);
     lx=x; ly=y;
   };
-  const end = () => { drawing = false; };
-  cv.onmousedown = start; cv.onmousemove = move; cv.onmouseup = end; cv.onmouseleave = end;
-  cv.ontouchstart = e=>{start(e);}; cv.ontouchmove = e=>{move(e);}; cv.ontouchend = end;
+  const end = e => { drawing = false; try{ cv.releasePointerCapture(e.pointerId); }catch(_){} };
+  // Pointer Events: 마우스·터치·펜(Apple Pencil 등) 통합 처리
+  cv.onpointerdown = start;
+  cv.onpointermove = move;
+  cv.onpointerup = end;
+  cv.onpointercancel = end;
 }
 
 // 도구 버튼

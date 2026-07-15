@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0h">
+<meta name="app-version" content="scoring-v1.0i">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -257,7 +257,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, getDocs, query, orderBy }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, collectionGroup, getDocs, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -744,15 +744,23 @@ window.saveCurrent = async function(){
     if(hasContent) teacherDrawing = tCv.toDataURL('image/png');
   }catch(e){}
   try{
-    await setDoc(doc(db, 'records', stu.email, 'worksheets', curWsId), {
-      perQuestion: {
-        [curQid]: {
-          correct: _curJudgment,
-          feedback: feedback || null,
-          teacherDrawing: teacherDrawing || stu.data.teacherDrawing || null,
-        }
-      }
-    }, {merge:true});
+    // teacher와 동일한 방식(updateDoc + 점 표기법)으로 저장 — setDoc merge는 규칙상 거부되던 문제 해결
+    const ref = doc(db, 'records', stu.email, 'worksheets', curWsId);
+    const upd = {
+      [`perQuestion.${curQid}.correct`]: (_curJudgment===undefined ? null : _curJudgment),
+      [`perQuestion.${curQid}.feedback`]: feedback || null,
+    };
+    if(teacherDrawing) upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
+    try{
+      await updateDoc(ref, upd);
+    }catch(errUpd){
+      // 문서가 없을 때만 setDoc으로 생성(merge)
+      await setDoc(ref, { perQuestion: { [curQid]: {
+        correct: (_curJudgment===undefined ? null : _curJudgment),
+        feedback: feedback || null,
+        ...(teacherDrawing ? {teacherDrawing} : {}),
+      } } }, {merge:true});
+    }
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;

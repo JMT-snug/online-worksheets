@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.2">
+  <meta name="app-version" content="7.3">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.2";
+const VERSION = "7.3";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -238,6 +238,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 /* L자 연습장 — 문제 영역 위에도 그릴 수 있음 */
 .quiz-left{display:flex;flex-direction:column;min-height:600px}
 .quiz-left > .problem-card{flex-shrink:0}
+.quiz-left > .problem-card.mq{min-height:280px}  /* 선택형: 문제/필기 영역 고정 확보 */
 .quiz-left > .math-input-card{margin-top:auto}
 .quiz-left > .step3-wrap{margin-top:auto}
 
@@ -335,7 +336,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 /* ── multi 타입: 동류항 선택 ── */
 .multi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
 .multi-grid.cols4{grid-template-columns:repeat(4,1fr)}
+.multi-grid.cols3{grid-template-columns:repeat(3,1fr)}
 .multi-grid.cols2{grid-template-columns:repeat(2,1fr)}
+.multi-grid.cols1{grid-template-columns:1fr}
+.multi-grid.cols1 .multi-opt{text-align:left;justify-content:flex-start;padding:10px 14px}
 .multi-opt{background:var(--paper);border:1.5px solid var(--rule);border-radius:8px;
   padding:8px 4px;font-size:14px;font-family:'Courier New',monospace;
   color:var(--ink);cursor:pointer;text-align:center;
@@ -1165,6 +1169,16 @@ function renderOption(opt){
   t = t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   return lbl + `\\(${t}\\)`;
+}
+/* 선택지 보이는 글자수 추정 (LaTeX/HTML 제거) — 2x2 vs 1열 판단용 */
+function optVisibleLen(opt){
+  if(!opt) return 0;
+  return String(opt)
+    .replace(/<[^>]*>/g,'')          // HTML 태그
+    .replace(/\\\(|\\\)/g,'')        // \( \)
+    .replace(/\\[a-zA-Z]+/g,' ')     // \frac 등 명령
+    .replace(/[{}$^_]/g,'')          // LaTeX 기호
+    .trim().length;
 }
 /* 인접 LaTeX 블록 병합: \(A\)X\(B\) → \(AXB\) (X에 한글 없을 때) */
 
@@ -2005,7 +2019,7 @@ function renderMultiQ(q, panel){
     ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
     : '';
   panel.innerHTML=`
-    <div class="problem-card">
+    <div class="problem-card mq">
       <div class="q-num">
         문제 ${curQIdx+1} / ${curWS.questions.length}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
@@ -2016,7 +2030,13 @@ function renderMultiQ(q, panel){
     </div>
     <div class="math-input-card">
       <div class="ans-hint"><strong>해당하는 것을 모두 선택하세요</strong></div>
-      <div class="multi-grid ${q.options.length===4?'cols2':q.options.length===3?'cols3':''}" id="multi-grid">
+      <div class="multi-grid ${(()=>{
+          const maxLen=Math.max(0,...q.options.map(optVisibleLen));
+          if(maxLen>10) return 'cols1';                 // 선택지가 길면 1열(4x1)
+          if(q.options.length===4) return 'cols2';       // 짧으면 2x2
+          if(q.options.length===3) return 'cols3';
+          return '';                                     // 5개 이상 짧으면 기본 5열
+        })()}" id="multi-grid">
         ${q.options.map((opt,i)=>
           `<button class="multi-opt" id="mopt-${i}"
             onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${renderOption(opt)}</button>`

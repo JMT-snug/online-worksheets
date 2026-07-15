@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.1v">
+  <meta name="app-version" content="7.4">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.1v";
+const VERSION = "7.4";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -34,6 +34,35 @@ window.MathJax = {
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:15px;line-height:1.65;-webkit-tap-highlight-color:transparent}
+
+
+/* ── 통일 헤더 (grid 3열) ── */
+header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.hdr-left{display:flex;gap:6px;align-items:center;justify-self:start;flex-wrap:nowrap}
+.hdr-center{display:flex;gap:8px;align-items:center;justify-self:center;white-space:nowrap}
+.hdr-right{display:flex !important;gap:6px;align-items:center;justify-self:end;flex-wrap:nowrap}
+.hdr-nav{display:inline-flex;gap:4px}
+.hdr-nav .hdr-btn{padding:5px 10px;font-size:12px}
+.hdr-sep{width:1px;height:20px;background:currentColor;opacity:.15;margin:0 4px}
+
+/* ── 그래프 채점 알림 종 ── */
+.hdr-bell-wrap{position:relative;display:inline-flex;align-items:center}
+.hdr-bell-btn{position:relative;font-size:15px;padding:4px 9px}
+.bell-count{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--ink)}
+.bell-panel{display:none;position:absolute;top:calc(100% + 8px);right:0;width:300px;max-height:70vh;overflow-y:auto;background:var(--paper);border:1px solid var(--rule);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:300;color:var(--ink);text-align:left;padding:6px}
+.bell-panel.show{display:block}
+.bell-head{font-size:12px;font-weight:800;color:var(--ink2);padding:8px 10px 6px}
+.bell-empty{font-size:13px;color:var(--ink3);padding:22px 12px;text-align:center}
+.bell-item{padding:9px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid var(--rule)}
+.bell-item:last-of-type{border-bottom:none}
+.bell-item:hover{background:var(--acc-lt)}
+.bell-item-top{font-size:13px;color:var(--ink);font-weight:600}
+.bell-item-mark{font-size:12px;color:var(--ink2);margin-top:2px}
+.bell-fb{font-size:12px;color:var(--ink2);margin-top:3px;background:var(--acc-lt);border-radius:6px;padding:4px 7px;white-space:normal;word-break:break-word}
+.bell-clear{text-align:center;font-size:12px;color:var(--accent);font-weight:700;padding:9px;cursor:pointer;border-top:1px solid var(--rule);margin-top:2px}
+.bell-clear:hover{background:var(--acc-lt);border-radius:0 0 8px 8px}
+.notif-dot-in{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:middle;animation:notifPulse 1.6s infinite}
+@keyframes notifPulse{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* HEADER */
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
@@ -228,6 +257,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 /* L자 연습장 — 문제 영역 위에도 그릴 수 있음 */
 .quiz-left{display:flex;flex-direction:column;min-height:600px}
 .quiz-left > .problem-card{flex-shrink:0}
+.quiz-left > .problem-card.mq{min-height:280px}  /* 선택형: 문제/필기 영역 고정 확보 */
 .quiz-left > .math-input-card{margin-top:auto}
 .quiz-left > .step3-wrap{margin-top:auto}
 
@@ -325,7 +355,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 /* ── multi 타입: 동류항 선택 ── */
 .multi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
 .multi-grid.cols4{grid-template-columns:repeat(4,1fr)}
+.multi-grid.cols3{grid-template-columns:repeat(3,1fr)}
 .multi-grid.cols2{grid-template-columns:repeat(2,1fr)}
+.multi-grid.cols1{grid-template-columns:1fr}
+.multi-grid.cols1 .multi-opt{text-align:left;justify-content:flex-start;padding:10px 14px}
 .multi-opt{background:var(--paper);border:1.5px solid var(--rule);border-radius:8px;
   padding:8px 4px;font-size:14px;font-family:'Courier New',monospace;
   color:var(--ink);cursor:pointer;text-align:center;
@@ -430,13 +463,26 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 <body>
 
 <header>
-  <div class="logo">수학 학습지<em>+</em><span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;margin-left:6px;font-family:monospace;align-self:flex-end;padding-bottom:2px"></span></div>
-  <div id="hdr-user">
+  <div class="hdr-left">
+    <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
+  </div>
+  <div class="hdr-center">
+    <div class="logo" style="margin:0">수학 학습지<em>+</em></div>
+    <span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;font-family:monospace"></span>
+  </div>
+  <div class="hdr-right" id="hdr-user">
+    <div class="hdr-nav">
+      <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
+      <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
+      <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
+    </div>
+    <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
+      <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
+      <div class="bell-panel" id="hdr-bell-panel"></div>
+    </div>
+    <div class="hdr-sep"></div>
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
-    <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집기</a>
-    <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
-    <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
@@ -758,6 +804,7 @@ function updateHeader(u) {
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   const isT = TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
+  document.getElementById("hdr-scoring-link").style.display = isT ? "inline-flex" : "none";
   document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
   document.getElementById("hdr-sync-progress").style.display= isT ? "inline-flex" : "none";
 }
@@ -788,6 +835,7 @@ async function loadDash() {
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
+  refreshGradeNotif();
   renderCards();
 }
 
@@ -801,20 +849,26 @@ const CAT_COLOR = {
   "자료와 가능성":{bar:"#9d174d", text:"#9d174d"},
 };
 
+/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (VOCA·시험지 제외) */
+const countsForProgress = ws => {
+  if(!ws) return false;
+  if(ws.type==="vocab" || ws.type==="exam") return false;
+  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
+  return true;
+};
+
 /* 단원의 진도 요약 계산 */
 function unitProgress(unit) {
-  // vocab 포함 전체 학습지 (hasSheets 판단)
+  // vocab 포함 전체 학습지 (hasSheets/표시용 개수 판단)
   const allSheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id &&
     (ws.type==="vocab" || (ws.questions?.length??0)>0));
-  if(!allSheets.length) return {total:0, done:0, hasSheets:false};
-  // 진도: 일반은 completedAt, vocab은 passCount≥1 기준
-  const total = allSheets.length;
-  const done = allSheets.filter(ws=>
-    ws.type==="vocab"
-      ? (wsProgress[ws.id]?.passCount||0)>=1
-      : !!wsProgress[ws.id]?.completedAt
-  ).length;
-  return {total, done, hasSheets:true};
+  const hasSheets = allSheets.length>0;
+  // 진도율은 일반 학습지(진도율 반영 ON)만 집계
+  const progSheets = allSheets.filter(countsForProgress);
+  const total = progSheets.length;
+  const done = progSheets.filter(ws=>!!wsProgress[ws.id]?.completedAt).length;
+  return {total, done, hasSheets, allCount: allSheets.length};
 }
 
 /* 단원 셀 아이템 생성 */
@@ -827,21 +881,22 @@ function makeUnitItem(unit) {
   item.style.borderLeftColor = prog.hasSheets ? gc : "var(--rule)";
 
   let badge = "";
-  if(prog.hasSheets) {
+  if(prog.total>0) {
     badge = `<span class="unit-ws-badge">${prog.done}/${prog.total}</span>`;
   }
 
   let statusHtml = "";
-  if(prog.hasSheets) {
+  if(prog.total>0) {
     if(prog.done===prog.total) statusHtml=`<span class="ws-status s-done">완료</span>`;
     else if(prog.done>0)      statusHtml=`<span class="ws-status s-partial">${prog.done}/${prog.total}</span>`;
   }
 
+  const hasNew = !!(window._newGradeWs && WORKSHEETS.some(w=>w.unitId===unit.id && window._newGradeWs.has(w.id)));
   item.innerHTML = `
     ${badge}
     ${statusHtml}
-    <div class="ws-item-title">${unit.title}</div>
-    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.total}개` : "준비 중"}</div>`;
+    <div class="ws-item-title">${hasNew?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${unit.title}</div>
+    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.allCount}개` : "준비 중"}</div>`;
 
   if(prog.hasSheets) {
     item.addEventListener("click", ()=>showUnitPage(unit));
@@ -882,6 +937,115 @@ function renderCards() {
     tbody.appendChild(tr);
   });
 }
+
+/* ══════════ 그래프 채점 알림 (v7.4) ══════════
+   - 로그인 시 이미 로드된 wsProgress.perQuestion 데이터만 사용 → Firestore 추가 비용 0
+   - '본 것' 여부는 localStorage에 시그니처(정답여부+피드백해시+교사필기유무)로 저장
+   - 그래프 문제(q.type==='graph')가 새로 채점/수정되면 종 배지·카드 점으로 알림 */
+function _escHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function _fbHash(s){let h=0;s=String(s||'');for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return h;}
+function _gradeSig(pq){
+  if(!pq) return null;
+  const graded=(pq.correct===true||pq.correct===false);
+  if(!graded && !pq.feedback && !pq.teacherDrawing) return null; // 아직 채점 안 됨
+  return (pq.correct===true?'o':pq.correct===false?'x':'-')+'|'+_fbHash(pq.feedback)+'|'+(pq.teacherDrawing?'d':'-');
+}
+function _gradeSeenKey(){return 'gradeSeen::'+((user&&user.email)||'');}
+function _loadGradeSeen(){try{return JSON.parse(localStorage.getItem(_gradeSeenKey())||'null');}catch(e){return null;}}
+function _saveGradeSeen(m){try{localStorage.setItem(_gradeSeenKey(),JSON.stringify(m));}catch(e){}}
+
+/* 현재 채점된 그래프 문제 수집 */
+function _collectGradedGraphs(){
+  const out=[];
+  for(const ws of WORKSHEETS){
+    const prog=wsProgress[ws.id];
+    if(!prog||!prog.perQuestion) continue;
+    let realN=0;
+    ws.questions.forEach(q=>{
+      if(q.type!=='link') realN++;
+      if(q.type!=='graph') return;
+      const sig=_gradeSig(prog.perQuestion[q.id]);
+      if(!sig) return;
+      out.push({key:ws.id+'::'+q.id, wsId:ws.id, qId:q.id, ws, qNum:realN, pq:prog.perQuestion[q.id], sig});
+    });
+  }
+  return out;
+}
+/* 안 본 새 채점 목록 */
+function computeNewGrades(){
+  const graded=_collectGradedGraphs();
+  const seen=_loadGradeSeen();
+  if(seen===null){ // 최초 실행: 기존 채점은 모두 '본 것'으로 시드 (과거 알림 폭탄 방지)
+    const base={}; graded.forEach(g=>base[g.key]=g.sig);
+    _saveGradeSeen(base);
+    return [];
+  }
+  return graded.filter(g=>seen[g.key]!==g.sig);
+}
+/* 본 것으로 표시 (wsId 지정 시 해당 학습지만) */
+function markGradesSeen(wsId){
+  const graded=_collectGradedGraphs();
+  const seen=_loadGradeSeen()||{};
+  graded.forEach(g=>{ if(!wsId||g.wsId===wsId) seen[g.key]=g.sig; });
+  _saveGradeSeen(seen);
+}
+/* 알림 상태 재계산 + 종 렌더 */
+function refreshGradeNotif(){
+  window._newGrades=computeNewGrades();
+  window._newGradeWs=new Set(window._newGrades.map(g=>g.wsId));
+  renderGradeBell();
+}
+function renderGradeBell(){
+  const wrap=document.getElementById('hdr-bell-wrap');
+  const cnt=document.getElementById('hdr-bell-count');
+  const panel=document.getElementById('hdr-bell-panel');
+  if(!wrap||!cnt||!panel) return;
+  if(!user){ wrap.style.display='none'; return; }
+  wrap.style.display='inline-flex';
+  const list=window._newGrades||[];
+  if(list.length){ cnt.style.display='inline-block'; cnt.textContent=list.length>99?'99+':list.length; }
+  else { cnt.style.display='none'; cnt.textContent=''; }
+  if(!list.length){ panel.innerHTML='<div class="bell-empty">🔔 새 채점 알림이 없어요</div>'; return; }
+  panel.innerHTML='<div class="bell-head">✍️ 그래프 채점 알림</div>'+
+    list.map((g,i)=>{
+      const mark=g.pq.correct===true?'⭕ 정답':g.pq.correct===false?'❌ 오답':'📝 확인 요망';
+      const fb=g.pq.feedback?`<div class="bell-fb">💬 ${_escHtml(g.pq.feedback)}</div>`:'';
+      return `<div class="bell-item" data-i="${i}">
+        <div class="bell-item-top"><b>${_escHtml(g.ws.title)}</b> · ${g.qNum}번 그래프</div>
+        <div class="bell-item-mark">${mark}</div>${fb}</div>`;
+    }).join('')+
+    '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';
+  panel.querySelectorAll('.bell-item').forEach(el=>{
+    el.addEventListener('click',()=>openGradeNotif((window._newGrades||[])[+el.dataset.i]));
+  });
+  const cl=panel.querySelector('#bell-clear');
+  if(cl) cl.addEventListener('click',()=>{
+    markGradesSeen(null); refreshGradeNotif();
+    if(document.getElementById('dash-page').classList.contains('active')) renderCards();
+    if(document.getElementById('unit-page').classList.contains('active')&&window._currentUnit) showUnitPage(window._currentUnit);
+    panel.classList.remove('show');
+  });
+}
+async function openGradeNotif(g){
+  if(!g) return;
+  const panel=document.getElementById('hdr-bell-panel'); if(panel) panel.classList.remove('show');
+  const ws=WORKSHEETS.find(w=>w.id===g.wsId);
+  if(!ws){ alert('학습지를 찾을 수 없습니다.'); return; }
+  markGradesSeen(g.wsId);
+  await startQuiz(ws);
+  const idx=curWS.questions.findIndex(q=>q.id===g.qId);
+  if(idx>=0 && idx!==curQIdx) goToQ(idx);
+  refreshGradeNotif();
+}
+window.openGradeNotif=openGradeNotif;
+/* 종 버튼 토글 + 바깥 클릭 시 닫기 */
+(function initGradeBell(){
+  const bell=document.getElementById('hdr-bell');
+  const panel=document.getElementById('hdr-bell-panel');
+  if(!bell||!panel) return;
+  bell.addEventListener('click',(e)=>{ e.stopPropagation(); panel.classList.toggle('show'); });
+  document.addEventListener('click',(e)=>{ if(!panel.contains(e.target)&&e.target!==bell) panel.classList.remove('show'); });
+})();
 
 /* ── UNIT PAGE ── */
 window.toggleWsLock=async function(wsId, btn){
@@ -927,6 +1091,9 @@ window.syncAutoProgress = async function(){
       (c.students||[]).forEach(e=>{ classByEmail[e.toLowerCase()]=name; });
     }
 
+    // 진도율 대상 학습지(일반+반영 ON)만 집계 대상
+    const progWsIds = new Set(WORKSHEETS.filter(countsForProgress).map(w=>w.id));
+
     // 모든 학생의 worksheets 컬렉션 그룹 조회 (완료된 것만)
     const snap = await getDocs(collectionGroup(db,'worksheets'));
     const wsClassDone={};   // wsId → {className: count}
@@ -940,6 +1107,7 @@ window.syncAutoProgress = async function(){
       const _done=data.isComplete||data.completedAt||data.passed||(data.totalCount>0&&data.answeredCount>=data.totalCount);
       if(!_done) return;
       if(!cls||!wsId) return;
+      if(!progWsIds.has(wsId)) return;  // VOCA·시험지·진도율 미반영 제외
       if(!wsClassDone[wsId]) wsClassDone[wsId]={};
       wsClassDone[wsId][cls]=(wsClassDone[wsId][cls]||0)+1;
     });
@@ -1016,6 +1184,7 @@ function showUnitPage(unit) {
   const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id);
   const grid = document.getElementById("ws-list-grid");
   grid.innerHTML = "";
+  refreshGradeNotif();
 
   if(!sheets.length) {
     grid.innerHTML=`<div style="color:var(--ink3);font-size:14px;padding:20px 0">등록된 학습지가 없습니다.</div>`;
@@ -1046,7 +1215,7 @@ function showUnitPage(unit) {
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
-          <div class="wslc-title">${ws.title}</div>
+          <div class="wslc-title">${(window._newGradeWs&&window._newGradeWs.has(ws.id))?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${ws.title}</div>
           <div class="wslc-meta">${ws.type==="vocab"
               ? ((wsProgress[ws.id]?.passCount||0)>=1
                   ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
@@ -1074,25 +1243,37 @@ function showUnitPage(unit) {
         if(!isNowDraft) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
         row.appendChild(lockBtn);
 
-        if(teacherClasses.length){
-          teacherClasses.forEach(({key,name})=>{
-            const btn=document.createElement('button');
-            const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
-            const isManual=progress[name]===true;
-            const isChecked=isManual||isAuto;
-            btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
-            btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
-            btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
-            btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
-            row.appendChild(btn);
-          });
+        // 학급별 진도 체크는 진도율 대상(일반+반영 ON)만 노출
+        if(countsForProgress(ws)){
+          if(teacherClasses.length){
+            teacherClasses.forEach(({key,name})=>{
+              const btn=document.createElement('button');
+              const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
+              const isManual=progress[name]===true;
+              const isChecked=isManual||isAuto;
+              btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
+              btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
+              btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
+              btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
+              row.appendChild(btn);
+            });
+          } else {
+            const loadingSpan=document.createElement('span');
+            loadingSpan.style.cssText='font-size:11px;color:var(--ink3)';
+            loadingSpan.textContent='⏳ 학급 정보 로드 중…';
+            row.appendChild(loadingSpan);
+          }
+          const note=document.createElement('div');
+          note.className='teacher-ws-note';
+          note.textContent=checkedCount?`${checkedCount}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
+          row.appendChild(note);
         } else {
-          row.innerHTML='<span style="font-size:11px;color:var(--ink3)">⏳ 학급 정보 로드 중…</span>';
+          const skipSpan=document.createElement('span');
+          skipSpan.style.cssText='font-size:11px;color:var(--ink3)';
+          skipSpan.textContent = ws.type==='vocab' ? 'VOCA · 진도율 미포함'
+            : ws.type==='exam' ? '시험지 · 진도율 미포함' : '진도율 미반영';
+          row.appendChild(skipSpan);
         }
-        const note=document.createElement('div');
-        note.className='teacher-ws-note';
-        note.textContent=checkedCount?`${checkedCount}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
-        row.appendChild(note);
         card.appendChild(row);
       }
       if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="vocab" ? startVocabQuiz(ws) : startQuiz(ws));
@@ -1123,6 +1304,16 @@ function renderOption(opt){
   t = t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   return lbl + `\\(${t}\\)`;
+}
+/* 선택지 보이는 글자수 추정 (LaTeX/HTML 제거) — 2x2 vs 1열 판단용 */
+function optVisibleLen(opt){
+  if(!opt) return 0;
+  return String(opt)
+    .replace(/<[^>]*>/g,'')          // HTML 태그
+    .replace(/\\\(|\\\)/g,'')        // \( \)
+    .replace(/\\[a-zA-Z]+/g,' ')     // \frac 등 명령
+    .replace(/[{}$^_]/g,'')          // LaTeX 기호
+    .trim().length;
 }
 /* 인접 LaTeX 블록 병합: \(A\)X\(B\) → \(AXB\) (X에 한글 없을 때) */
 
@@ -1408,6 +1599,8 @@ async function startQuiz(ws) {
   _startProgressTimer();
   document.addEventListener("visibilitychange", _onVisibilityChange);
   window.addEventListener("pagehide", saveWorksheet);
+  // 그래프 채점 알림: 학습지를 열면 해당 학습지의 채점을 '본 것'으로 처리
+  try{ markGradesSeen(ws.id); refreshGradeNotif(); }catch(e){}
   }
 
 function buildStrip() {
@@ -1963,7 +2156,7 @@ function renderMultiQ(q, panel){
     ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
     : '';
   panel.innerHTML=`
-    <div class="problem-card">
+    <div class="problem-card mq">
       <div class="q-num">
         문제 ${curQIdx+1} / ${curWS.questions.length}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>
@@ -1974,7 +2167,13 @@ function renderMultiQ(q, panel){
     </div>
     <div class="math-input-card">
       <div class="ans-hint"><strong>해당하는 것을 모두 선택하세요</strong></div>
-      <div class="multi-grid ${q.options.length===4?'cols2':q.options.length===3?'cols3':''}" id="multi-grid">
+      <div class="multi-grid ${(()=>{
+          const maxLen=Math.max(0,...q.options.map(optVisibleLen));
+          if(maxLen>10) return 'cols1';                 // 선택지가 길면 1열(4x1)
+          if(q.options.length===4) return 'cols2';       // 짧으면 2x2
+          if(q.options.length===3) return 'cols3';
+          return '';                                     // 5개 이상 짧으면 기본 5열
+        })()}" id="multi-grid">
         ${q.options.map((opt,i)=>
           `<button class="multi-opt" id="mopt-${i}"
             onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${renderOption(opt)}</button>`
@@ -2295,6 +2494,7 @@ function renderStep3Q(q, panel){
         <span style="font-size:10px;font-weight:600;color:var(--green);margin-left:6px">${steps.length}단계 풀이</span>
       </div>
       <div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>
+      ${q.imageUrl?`<img src="${q.imageUrl.replace(/drive\.google\.com\/uc\?export=view&id=([\w-]+)/,'lh3.googleusercontent.com/d/$1')}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`:''}
     </div>
     <div class="step3-wrap">
       <div class="step3-tabs">${tabs}</div>
@@ -2815,7 +3015,7 @@ async function submitQAns(){
       userAns=(input?.value||"").trim().replace(/\s+/g," ");
       const correct=[q.answer,...(q.answerAlt||[])];
       // 유니코드 마이너스·쉼표 주변 공백 정규화 후 비교
-      const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",").replace(/\s+/g," ").trim().toLowerCase();
+      const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",").replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
       const userNorm=normW(userAns);
       const correctNorms=correct.map(normW);
       console.log('[text 채점] 사용자:', JSON.stringify(userAns), '→', JSON.stringify(userNorm));

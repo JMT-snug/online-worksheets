@@ -663,7 +663,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, orderBy, updateDoc}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL, listAll, deleteObject }
+import { getStorage, ref, uploadString, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
@@ -676,6 +676,9 @@ const FB = {
 };
 const ALLOWED_DOMAINS = [];
 const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+// Storage 버킷이 프로젝트에 없음 (Spark 요금제 — 신규 버킷 생성 불가). 오답 이미지 업로드는
+// 처음부터 실패해 왔으므로 비활성화. Blaze 전환 후 버킷 생성 시 true로 변경.
+const STORAGE_ENABLED = false;
 
 
 /* ── UNITS: 단원 정의 ── */
@@ -1132,10 +1135,10 @@ window.toggleClassLock=async function(wsId, clsName){
 
 /* ── 교사 풀이 기록 일괄 삭제 (1회성 정리 도구) ──
    사용법: 교사 계정으로 로그인 후 콘솔에서 purgeTeacherRecords() 실행
-   삭제 대상: 모든 교사 계정의 records/results 풀이 기록 + 오답 이미지(Storage) */
+   삭제 대상: 모든 교사 계정의 records/results 풀이 기록
+   (오답 이미지는 Storage 버킷 미생성으로 애초에 저장된 적 없음 → 대상 아님) */
 window.purgeTeacherRecords = async function(){
   if(!isTeacherAcct()){ alert('교사 전용 기능'); return; }
-  // 1) Firestore 풀이 기록 수집 (두 교사 계정 모두)
   const targets=[];
   for(const email of TEACHER_EMAILS){
     for(const col of ['records','results']){
@@ -1145,20 +1148,11 @@ window.purgeTeacherRecords = async function(){
       }catch(e){ console.warn('[purge] 목록 조회 실패:',col,email,e.message); }
     }
   }
-  // 2) Storage 오답 이미지 수집 (교사 uid = teacher_data 문서 ID)
-  let files=[];
-  let uids=[user.uid];
-  try{ uids=[...new Set([user.uid, ...(await getDocs(collection(db,'teacher_data'))).docs.map(d=>d.id)])]; }catch(e){}
-  for(const uid of uids){
-    try{ files.push(...(await listAll(ref(storage,`wrongAnswers/${uid}`))).items); }
-    catch(e){ console.warn('[purge] Storage 목록 실패:',uid,e.message); }
-  }
-  if(!targets.length && !files.length){ alert('삭제할 교사 풀이 기록이 없습니다.'); return; }
-  console.log('[purge] 삭제 대상:', targets.map(t=>t.label), files.map(f=>f.fullPath));
-  if(!confirm(`교사 풀이 기록을 삭제합니다.\n\n· Firestore 기록 ${targets.length}건\n· 오답 이미지 ${files.length}개\n\n(콘솔에서 상세 목록 확인 가능)\n삭제 후 되돌릴 수 없습니다. 진행할까요?`)) return;
+  if(!targets.length){ alert('삭제할 교사 풀이 기록이 없습니다.'); return; }
+  console.log('[purge] 삭제 대상:', targets.map(t=>t.label));
+  if(!confirm(`교사 풀이 기록 ${targets.length}건을 삭제합니다.\n(콘솔에서 상세 목록 확인 가능)\n삭제 후 되돌릴 수 없습니다. 진행할까요?`)) return;
   let ok=0, fail=0;
   for(const t of targets){ try{ await deleteDoc(t.ref); ok++; }catch(e){ fail++; console.warn('[purge] 삭제 실패:',t.label,e.message); } }
-  for(const f of files){ try{ await deleteObject(f); ok++; }catch(e){ fail++; console.warn('[purge] 삭제 실패:',f.fullPath,e.message); } }
   alert(`✅ 삭제 완료: ${ok}건${fail?` (실패 ${fail}건 — 콘솔 확인)`:''}`);
 };
 
@@ -3189,8 +3183,8 @@ async function submitQAns(){
       wrongAnswers[curQIdx].inputs.push(_ans);
       saveWorksheet();
     }}
-    // 캔버스 이미지 Storage 업로드 (교사 미리보기는 업로드 안 함)
-    try { if(!isTeacherAcct()) {
+    // 캔버스 이미지 Storage 업로드 (버킷 미생성으로 비활성화 · 교사 미리보기는 업로드 안 함)
+    try { if(STORAGE_ENABLED && !isTeacherAcct()) {
       const canvas=document.getElementById("draw-canvas");
       const imgData=canvas.toDataURL("image/png");
       // 파일명: uid-이름-wsId-qId-시도번호.png

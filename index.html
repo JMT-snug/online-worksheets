@@ -663,7 +663,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, orderBy, updateDoc}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL }
+import { getStorage, ref, uploadString, getDownloadURL, listAll, deleteObject }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
@@ -1073,6 +1073,9 @@ window.openGradeNotif=openGradeNotif;
 })();
 
 /* ── UNIT PAGE ── */
+/* 교사 계정 여부 (미리보기 풀이는 records에 저장하지 않음) */
+function isTeacherAcct(){ return !!(user && TEACHER_EMAILS.includes(user.email)); }
+
 /* 반별 잠금 판정: locked 상태면 allowedEmails(해제된 반들의 학생 합집합)에 있어야 접근 가능 */
 function wsBlockedFor(ws, email){
   if(!ws) return false;
@@ -1126,6 +1129,38 @@ window.toggleClassLock=async function(wsId, clsName){
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
+
+/* ── 교사 풀이 기록 일괄 삭제 (1회성 정리 도구) ──
+   사용법: 교사 계정으로 로그인 후 콘솔에서 purgeTeacherRecords() 실행
+   삭제 대상: 모든 교사 계정의 records/results 풀이 기록 + 오답 이미지(Storage) */
+window.purgeTeacherRecords = async function(){
+  if(!isTeacherAcct()){ alert('교사 전용 기능'); return; }
+  // 1) Firestore 풀이 기록 수집 (두 교사 계정 모두)
+  const targets=[];
+  for(const email of TEACHER_EMAILS){
+    for(const col of ['records','results']){
+      try{
+        const snap=await getDocs(collection(db,col,email,'worksheets'));
+        snap.docs.forEach(d=>targets.push({ref:doc(db,col,email,'worksheets',d.id),label:`${col}/${email}/${d.id}`}));
+      }catch(e){ console.warn('[purge] 목록 조회 실패:',col,email,e.message); }
+    }
+  }
+  // 2) Storage 오답 이미지 수집 (교사 uid = teacher_data 문서 ID)
+  let files=[];
+  let uids=[user.uid];
+  try{ uids=[...new Set([user.uid, ...(await getDocs(collection(db,'teacher_data'))).docs.map(d=>d.id)])]; }catch(e){}
+  for(const uid of uids){
+    try{ files.push(...(await listAll(ref(storage,`wrongAnswers/${uid}`))).items); }
+    catch(e){ console.warn('[purge] Storage 목록 실패:',uid,e.message); }
+  }
+  if(!targets.length && !files.length){ alert('삭제할 교사 풀이 기록이 없습니다.'); return; }
+  console.log('[purge] 삭제 대상:', targets.map(t=>t.label), files.map(f=>f.fullPath));
+  if(!confirm(`교사 풀이 기록을 삭제합니다.\n\n· Firestore 기록 ${targets.length}건\n· 오답 이미지 ${files.length}개\n\n(콘솔에서 상세 목록 확인 가능)\n삭제 후 되돌릴 수 없습니다. 진행할까요?`)) return;
+  let ok=0, fail=0;
+  for(const t of targets){ try{ await deleteDoc(t.ref); ok++; }catch(e){ fail++; console.warn('[purge] 삭제 실패:',t.label,e.message); } }
+  for(const f of files){ try{ await deleteObject(f); ok++; }catch(e){ fail++; console.warn('[purge] 삭제 실패:',f.fullPath,e.message); } }
+  alert(`✅ 삭제 완료: ${ok}건${fail?` (실패 ${fail}건 — 콘솔 확인)`:''}`);
+};
 
 window.syncAutoProgress = async function(){
   const btn=document.getElementById('hdr-sync-progress');
@@ -1509,6 +1544,7 @@ let _progressTimer=null, _wsIsCompleted=false;
 
 async function saveWorksheet(isComplete=false){
   if(!curWS||!user) return;
+  if(isTeacherAcct()){ console.log('[교사 미리보기] 채점 결과 저장 안 함'); return; }
   if(!_wsDataLoaded) { console.log('[저장 차단] 데이터 로드 전'); return; }  // 로드 전 저장 차단
   if(_wsIsCompleted && !isComplete) return; // 이미 완료된 학습지에 false 저장 차단
   if(isComplete) _wsIsCompleted=true;
@@ -2803,8 +2839,8 @@ async function submitExamAns(q){
   }
   // 답안 저장 (수정 가능하도록)
   answered[curQIdx]={examAnswer:userAns,_isExam:true};
-  // perQuestion에 저장
-  if(curWS && user){
+  // perQuestion에 저장 (교사 미리보기는 저장 안 함)
+  if(curWS && user && !isTeacherAcct()){
     setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
       studentEmail:user.email, studentName:user.displayName||'',
       worksheetId:curWS.id, worksheetTitle:curWS.title,
@@ -2875,8 +2911,8 @@ async function endExamAndGrade(){
     answered[i]={...answered[i],correct:ok,score:ok?score:0};
     if(ok) totalScore+=score;
   }
-  // Firestore 저장
-  if(curWS && user){
+  // Firestore 저장 (교사 미리보기는 저장 안 함)
+  if(curWS && user && !isTeacherAcct()){
     const perQ={};
     curWS.questions.forEach((q,i)=>{
       perQ[q.id]={
@@ -2961,7 +2997,7 @@ async function submitQAns(){
     updateStrip();
     // 완료된 학습지도 drawing 저장 가능하도록 updateDoc 직접 사용
     const _qId=curWS.questions[curQIdx]?.id;
-    if(_qId && user && curWS){
+    if(_qId && user && curWS && !isTeacherAcct()){
       const _ans=answered[curQIdx];
       const _drawing=typeof _ans==='object'?_ans.drawing||null:null;
       if(_drawing){
@@ -3153,8 +3189,8 @@ async function submitQAns(){
       wrongAnswers[curQIdx].inputs.push(_ans);
       saveWorksheet();
     }}
-    // 캔버스 이미지 Storage 업로드
-    try {
+    // 캔버스 이미지 Storage 업로드 (교사 미리보기는 업로드 안 함)
+    try { if(!isTeacherAcct()) {
       const canvas=document.getElementById("draw-canvas");
       const imgData=canvas.toDataURL("image/png");
       // 파일명: uid-이름-wsId-qId-시도번호.png
@@ -3164,7 +3200,7 @@ async function submitQAns(){
       await uploadString(storageRef, imgData, "data_url");
       const url=await getDownloadURL(storageRef);
       wrongAnswers[curQIdx].imagePath=url; // 최신 오답 이미지로 덮어씀
-    } catch(e){ console.warn("이미지 저장 실패:",e.message); }
+    } } catch(e){ console.warn("이미지 저장 실패:",e.message); }
 
     fb.className="feedback-strip show fb-wrong";
     fb.innerHTML="❌ 틀렸어요. 다시 풀어보세요!";
@@ -3697,7 +3733,7 @@ function vqAnswer(selected, correct){
           answeredCount:VQ_TARGET, totalCount:VQ_TARGET, totalAttempts:0,
           lastUpdated:_vqTs,
         };
-        await setDoc(doc(db,"records",user.email,"worksheets",vqWS.id), _vqData);
+        if(!isTeacherAcct()) await setDoc(doc(db,"records",user.email,"worksheets",vqWS.id), _vqData);
         wsProgress[vqWS.id]={..._vqData};
       }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
       const pc=document.getElementById('vq-pass-count');

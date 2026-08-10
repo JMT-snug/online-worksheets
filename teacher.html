@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ai">
+<meta name="app-version" content="3.8aj">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ai";
+const VERSION = "3.8aj";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1387,6 +1387,42 @@ function renderClasses(){
 async function saveClasses(){
   try{ await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true}); }
   catch(e){ console.error("학급 저장 오류:",e); }
+  syncAllowedEmails(); // 반별 잠금 학습지의 allowedEmails 재계산 (백그라운드, 실패해도 무방)
+}
+
+/* 학급 명단 변경 시: 잠금 학습지의 해제 반 명단(allowedEmails)을 최신 명단으로 재계산
+   (잠금 해제 시점의 스냅샷이 낡는 문제 방지 — 전학생 추가/삭제 반영) */
+async function syncAllowedEmails(){
+  try{
+    // 모든 교사의 학급 병합 (반 이름 → 학생 이메일 Set)
+    let docsData=[];
+    try{
+      const allSnap=await getDocs(collection(db,"teacher_data"));
+      docsData=allSnap.docs.map(d=>d.data());
+    }catch(eAll){ docsData=[{classes}]; }
+    const roster={};
+    for(const data of docsData){
+      for(const c of Object.values(data.classes||{})){
+        const name=`${c.year}/${c.grade}학년 ${c.classNum}반`;
+        if(!roster[name]) roster[name]=new Set();
+        (c.students||[]).forEach(e=>roster[name].add(String(e).toLowerCase()));
+      }
+    }
+    // 잠금 상태 + 해제 반이 있는 학습지만 재계산
+    const wSnap=await getDocs(collection(db,'curriculum'));
+    for(const d of wSnap.docs){
+      const ws=d.data();
+      if(ws.status!=='locked') continue;
+      const unlocked=Object.keys(ws.unlockedClasses||{}).filter(n=>ws.unlockedClasses[n]);
+      if(!unlocked.length) continue;
+      const newAllowed=[...new Set(unlocked.flatMap(n=>[...(roster[n]||[])]))].sort();
+      const oldAllowed=[...(ws.allowedEmails||[])].map(e=>String(e).toLowerCase()).sort();
+      if(JSON.stringify(newAllowed)!==JSON.stringify(oldAllowed)){
+        await updateDoc(doc(db,'curriculum',d.id),{allowedEmails:newAllowed});
+        console.log('[syncAllowedEmails]',d.id,oldAllowed.length,'→',newAllowed.length,'명');
+      }
+    }
+  }catch(e){ console.warn('[syncAllowedEmails 실패]',e); }
 }
 
 window.addClass=async function(){

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.3">
+  <meta name="app-version" content="7.4">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.3";
+const VERSION = "7.5";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -44,6 +44,25 @@ header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:ce
 .hdr-nav{display:inline-flex;gap:4px}
 .hdr-nav .hdr-btn{padding:5px 10px;font-size:12px}
 .hdr-sep{width:1px;height:20px;background:currentColor;opacity:.15;margin:0 4px}
+
+/* ── 그래프 채점 알림 종 ── */
+.hdr-bell-wrap{position:relative;display:inline-flex;align-items:center}
+.hdr-bell-btn{position:relative;font-size:15px;padding:4px 9px}
+.bell-count{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--ink)}
+.bell-panel{display:none;position:absolute;top:calc(100% + 8px);right:0;width:300px;max-height:70vh;overflow-y:auto;background:var(--paper);border:1px solid var(--rule);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:300;color:var(--ink);text-align:left;padding:6px}
+.bell-panel.show{display:block}
+.bell-head{font-size:12px;font-weight:800;color:var(--ink2);padding:8px 10px 6px}
+.bell-empty{font-size:13px;color:var(--ink3);padding:22px 12px;text-align:center}
+.bell-item{padding:9px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid var(--rule)}
+.bell-item:last-of-type{border-bottom:none}
+.bell-item:hover{background:var(--acc-lt)}
+.bell-item-top{font-size:13px;color:var(--ink);font-weight:600}
+.bell-item-mark{font-size:12px;color:var(--ink2);margin-top:2px}
+.bell-fb{font-size:12px;color:var(--ink2);margin-top:3px;background:var(--acc-lt);border-radius:6px;padding:4px 7px;white-space:normal;word-break:break-word}
+.bell-clear{text-align:center;font-size:12px;color:var(--accent);font-weight:700;padding:9px;cursor:pointer;border-top:1px solid var(--rule);margin-top:2px}
+.bell-clear:hover{background:var(--acc-lt);border-radius:0 0 8px 8px}
+.notif-dot-in{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:middle;animation:notifPulse 1.6s infinite}
+@keyframes notifPulse{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* HEADER */
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
@@ -395,10 +414,12 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .wslc-meta{font-size:12px;color:var(--ink3)}
 .wslc-icon{grid-column:1;grid-row:1/3;align-self:center;font-size:22px;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .teacher-cls-row{display:flex;flex-wrap:wrap;gap:4px;padding-top:6px;grid-column:2/5;grid-row:2;align-items:center}
-.cls-tog.auto{background:#fef3c7!important;color:#b45309!important;border-color:#fbbf24!important}
 .cls-tog{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
-.cls-tog.checked{background:var(--accent);color:#fff}
 .cls-tog:hover{opacity:.8}
+/* 3단계: 잠금(주황) / 해제·미완료(초록 외곽선) / 완료(초록 채움) */
+.cls-tog.cls-locked{background:#fef3c7;color:#b45309;border-color:#f59e0b}
+.cls-tog.cls-open{background:transparent;color:#15803d;border-color:#15803d}
+.cls-tog.cls-done{background:#15803d;color:#fff;border-color:#15803d}
 .teacher-ws-note{font-size:11px;color:var(--ink3);margin-left:auto;white-space:nowrap}
 .wslc-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrapgrid-column:3;grid-row:1;align-self:center;white-space:nowrap}
 /* 단원 셀 배지 (학습지 수) */
@@ -456,6 +477,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
       <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
       <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
+    </div>
+    <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
+      <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
+      <div class="bell-panel" id="hdr-bell-panel"></div>
     </div>
     <div class="hdr-sep"></div>
     <img id="hdr-avatar" alt="">
@@ -668,7 +693,8 @@ const storage = getStorage(fbApp);
 let user = null, wsProgress = {}, curWS = null;
 window._dbg=()=>({curWS,curQIdx,answered,attempts,wrongAnswers,_wsDataLoaded});
 let _wsDataLoaded = false; // Firestore 데이터 로드 완료 전 저장 방지
-let teacherClasses = [];   // 학급 목록 [{key, name}]
+let teacherClasses = [];   // 학급 목록 [{key, name, students:[]}] (모든 교사 문서 병합)
+let classStudents = {};    // className → [학생 이메일(소문자)]
 let teacherProgress = {};  // wsId → {className: bool}
 let curQIdx = 0, attempts = [], answered = [];
 let wrongAnswers = []; // per question: array of wrong inputs
@@ -707,20 +733,42 @@ let UNITS = [], WORKSHEETS = [];
 async function loadTeacherData(){
   if(!user || !TEACHER_EMAILS.includes(user.email)) return;
   try{
-    const cSnap=await getDoc(doc(db,"teacher_data",user.uid));
-    if(cSnap.exists()){
-      const data=cSnap.data();
-      // 학급 목록
-      const clsObj=data.classes||{};
-      teacherClasses=Object.entries(clsObj)
-        .map(([k,c])=>({key:k,name:`${c.year}/${c.grade}학년 ${c.classNum}반`}))
-        .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-      // 진도 체크 데이터 (teacher_data/{uid}.teacherProgress 필드)
-      teacherProgress=data.teacherProgress||{};
-      window.teacherAutoProgress=data.teacherAutoProgress||{};
-    } else {
-      console.warn('[teacherData] teacher_data/'+user.uid+' 문서 없음');
+    // 모든 교사 문서 병합 (반별 잠금은 두 교사의 학급을 모두 알아야 함)
+    let docsData=[];
+    try{
+      const allSnap=await getDocs(collection(db,"teacher_data"));
+      docsData=allSnap.docs.map(d=>d.data());
+    }catch(eAll){
+      // 규칙상 컬렉션 읽기 불가 시 본인 문서만 폴백
+      const cSnap=await getDoc(doc(db,"teacher_data",user.uid));
+      if(cSnap.exists()) docsData=[cSnap.data()];
     }
+    if(!docsData.length){ console.warn('[teacherData] teacher_data 문서 없음'); return; }
+
+    const byName={};           // name → {key,name,students:Set}
+    teacherProgress={};
+    window.teacherAutoProgress={};
+    for(const data of docsData){
+      for(const [k,c] of Object.entries(data.classes||{})){
+        const name=`${c.year}/${c.grade}학년 ${c.classNum}반`;
+        if(!byName[name]) byName[name]={key:k,name,students:new Set()};
+        (c.students||[]).forEach(e=>byName[name].students.add(String(e).toLowerCase()));
+      }
+      // 진도 체크 데이터 병합 (둘 중 하나라도 완료면 완료)
+      for(const [wsId,m] of Object.entries(data.teacherProgress||{})){
+        if(!teacherProgress[wsId]) teacherProgress[wsId]={};
+        for(const [cn,v] of Object.entries(m||{})) teacherProgress[wsId][cn]=teacherProgress[wsId][cn]||!!v;
+      }
+      for(const [wsId,m] of Object.entries(data.teacherAutoProgress||{})){
+        if(!window.teacherAutoProgress[wsId]) window.teacherAutoProgress[wsId]={};
+        for(const [cn,v] of Object.entries(m||{})) window.teacherAutoProgress[wsId][cn]=window.teacherAutoProgress[wsId][cn]||!!v;
+      }
+    }
+    teacherClasses=Object.values(byName)
+      .map(c=>({key:c.key,name:c.name,students:[...c.students]}))
+      .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+    classStudents={};
+    teacherClasses.forEach(c=>{ classStudents[c.name]=c.students; });
   }catch(e){console.error('[loadTeacherData 오류]',e);}
 }
 
@@ -812,6 +860,7 @@ async function loadDash() {
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
+  refreshGradeNotif();
   renderCards();
 }
 
@@ -867,10 +916,11 @@ function makeUnitItem(unit) {
     else if(prog.done>0)      statusHtml=`<span class="ws-status s-partial">${prog.done}/${prog.total}</span>`;
   }
 
+  const hasNew = !!(window._newGradeWs && WORKSHEETS.some(w=>w.unitId===unit.id && window._newGradeWs.has(w.id)));
   item.innerHTML = `
     ${badge}
     ${statusHtml}
-    <div class="ws-item-title">${unit.title}</div>
+    <div class="ws-item-title">${hasNew?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${unit.title}</div>
     <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.allCount}개` : "준비 중"}</div>`;
 
   if(prog.hasSheets) {
@@ -913,25 +963,166 @@ function renderCards() {
   });
 }
 
+/* ══════════ 그래프 채점 알림 (v7.4) ══════════
+   - 로그인 시 이미 로드된 wsProgress.perQuestion 데이터만 사용 → Firestore 추가 비용 0
+   - '본 것' 여부는 localStorage에 시그니처(정답여부+피드백해시+교사필기유무)로 저장
+   - 그래프 문제(q.type==='graph')가 새로 채점/수정되면 종 배지·카드 점으로 알림 */
+function _escHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function _fbHash(s){let h=0;s=String(s||'');for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return h;}
+function _gradeSig(pq){
+  if(!pq) return null;
+  const graded=(pq.correct===true||pq.correct===false);
+  if(!graded && !pq.feedback && !pq.teacherDrawing) return null; // 아직 채점 안 됨
+  return (pq.correct===true?'o':pq.correct===false?'x':'-')+'|'+_fbHash(pq.feedback)+'|'+(pq.teacherDrawing?'d':'-');
+}
+function _gradeSeenKey(){return 'gradeSeen::'+((user&&user.email)||'');}
+function _loadGradeSeen(){try{return JSON.parse(localStorage.getItem(_gradeSeenKey())||'null');}catch(e){return null;}}
+function _saveGradeSeen(m){try{localStorage.setItem(_gradeSeenKey(),JSON.stringify(m));}catch(e){}}
+
+/* 현재 채점된 그래프 문제 수집 */
+function _collectGradedGraphs(){
+  const out=[];
+  for(const ws of WORKSHEETS){
+    const prog=wsProgress[ws.id];
+    if(!prog||!prog.perQuestion) continue;
+    let realN=0;
+    ws.questions.forEach(q=>{
+      if(q.type!=='link') realN++;
+      if(q.type!=='graph') return;
+      const sig=_gradeSig(prog.perQuestion[q.id]);
+      if(!sig) return;
+      out.push({key:ws.id+'::'+q.id, wsId:ws.id, qId:q.id, ws, qNum:realN, pq:prog.perQuestion[q.id], sig});
+    });
+  }
+  return out;
+}
+/* 안 본 새 채점 목록 */
+function computeNewGrades(){
+  const graded=_collectGradedGraphs();
+  const seen=_loadGradeSeen();
+  if(seen===null){ // 최초 실행: 기존 채점은 모두 '본 것'으로 시드 (과거 알림 폭탄 방지)
+    const base={}; graded.forEach(g=>base[g.key]=g.sig);
+    _saveGradeSeen(base);
+    return [];
+  }
+  return graded.filter(g=>seen[g.key]!==g.sig);
+}
+/* 본 것으로 표시 (wsId 지정 시 해당 학습지만) */
+function markGradesSeen(wsId){
+  const graded=_collectGradedGraphs();
+  const seen=_loadGradeSeen()||{};
+  graded.forEach(g=>{ if(!wsId||g.wsId===wsId) seen[g.key]=g.sig; });
+  _saveGradeSeen(seen);
+}
+/* 알림 상태 재계산 + 종 렌더 */
+function refreshGradeNotif(){
+  window._newGrades=computeNewGrades();
+  window._newGradeWs=new Set(window._newGrades.map(g=>g.wsId));
+  renderGradeBell();
+}
+function renderGradeBell(){
+  const wrap=document.getElementById('hdr-bell-wrap');
+  const cnt=document.getElementById('hdr-bell-count');
+  const panel=document.getElementById('hdr-bell-panel');
+  if(!wrap||!cnt||!panel) return;
+  if(!user){ wrap.style.display='none'; return; }
+  wrap.style.display='inline-flex';
+  const list=window._newGrades||[];
+  if(list.length){ cnt.style.display='inline-block'; cnt.textContent=list.length>99?'99+':list.length; }
+  else { cnt.style.display='none'; cnt.textContent=''; }
+  if(!list.length){ panel.innerHTML='<div class="bell-empty">🔔 새 채점 알림이 없어요</div>'; return; }
+  panel.innerHTML='<div class="bell-head">✍️ 그래프 채점 알림</div>'+
+    list.map((g,i)=>{
+      const mark=g.pq.correct===true?'⭕ 정답':g.pq.correct===false?'❌ 오답':'📝 확인 요망';
+      const fb=g.pq.feedback?`<div class="bell-fb">💬 ${_escHtml(g.pq.feedback)}</div>`:'';
+      return `<div class="bell-item" data-i="${i}">
+        <div class="bell-item-top"><b>${_escHtml(g.ws.title)}</b> · ${g.qNum}번 그래프</div>
+        <div class="bell-item-mark">${mark}</div>${fb}</div>`;
+    }).join('')+
+    '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';
+  panel.querySelectorAll('.bell-item').forEach(el=>{
+    el.addEventListener('click',()=>openGradeNotif((window._newGrades||[])[+el.dataset.i]));
+  });
+  const cl=panel.querySelector('#bell-clear');
+  if(cl) cl.addEventListener('click',()=>{
+    markGradesSeen(null); refreshGradeNotif();
+    if(document.getElementById('dash-page').classList.contains('active')) renderCards();
+    if(document.getElementById('unit-page').classList.contains('active')&&window._currentUnit) showUnitPage(window._currentUnit);
+    panel.classList.remove('show');
+  });
+}
+async function openGradeNotif(g){
+  if(!g) return;
+  const panel=document.getElementById('hdr-bell-panel'); if(panel) panel.classList.remove('show');
+  const ws=WORKSHEETS.find(w=>w.id===g.wsId);
+  if(!ws){ alert('학습지를 찾을 수 없습니다.'); return; }
+  markGradesSeen(g.wsId);
+  await startQuiz(ws);
+  const idx=curWS.questions.findIndex(q=>q.id===g.qId);
+  if(idx>=0 && idx!==curQIdx) goToQ(idx);
+  refreshGradeNotif();
+}
+window.openGradeNotif=openGradeNotif;
+/* 종 버튼 토글 + 바깥 클릭 시 닫기 */
+(function initGradeBell(){
+  const bell=document.getElementById('hdr-bell');
+  const panel=document.getElementById('hdr-bell-panel');
+  if(!bell||!panel) return;
+  bell.addEventListener('click',(e)=>{ e.stopPropagation(); panel.classList.toggle('show'); });
+  document.addEventListener('click',(e)=>{ if(!panel.contains(e.target)&&e.target!==bell) panel.classList.remove('show'); });
+})();
+
 /* ── UNIT PAGE ── */
+/* 반별 잠금 판정: locked 상태면 allowedEmails(해제된 반들의 학생 합집합)에 있어야 접근 가능 */
+function wsBlockedFor(ws, email){
+  if(!ws) return false;
+  if(email && TEACHER_EMAILS.includes(email)) return false; // 교사는 항상 접근
+  if(ws.status==='draft') return true;
+  if(ws.status!=='locked') return false;
+  const allowed=(ws.allowedEmails||[]).map(e=>String(e).toLowerCase());
+  return !allowed.includes(String(email||'').toLowerCase());
+}
+
+/* 해제된 반 목록으로 allowedEmails 재계산 */
+function calcAllowedEmails(unlockedClasses){
+  const set=new Set();
+  Object.keys(unlockedClasses||{}).filter(n=>unlockedClasses[n]).forEach(n=>{
+    (classStudents[n]||[]).forEach(e=>set.add(e));
+  });
+  return [...set];
+}
+
+/* 전체 잠금/해제 토글 (per-class 정보는 초기화) */
 window.toggleWsLock=async function(wsId, btn){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const newStatus = ws.status==='published' ? 'locked' : 'published';
   try{
-    await setDoc(doc(db,'curriculum',wsId),{status:newStatus},{merge:true});
-    ws.status=newStatus;
-    const isNowLocked=(newStatus==='locked');
-    btn.textContent=isNowLocked?'🔒 잠금됨':'🔓 잠금 해제';
-    btn.title=isNowLocked?'클릭하면 학생에게 공개':'클릭하면 학생 접근 차단';
-    btn.style.background=isNowLocked?'#fef3c7':'#f0fdf4';
-    btn.style.color=isNowLocked?'#b45309':'#15803d';
-    // 배지도 갱신
-    const card=btn.closest('.ws-list-card');
-    const badge=card?.querySelector('.wslc-badge');
-    if(badge){
-      if(isNowLocked){ badge.style.background='#fef3c7';badge.style.color='#b45309';badge.textContent='🔒 수정 중'; }
-      else { badge.style.background='';badge.style.color='';badge.textContent=''; }
-    }
+    await updateDoc(doc(db,'curriculum',wsId),{status:newStatus,unlockedClasses:{},allowedEmails:[]});
+    ws.status=newStatus; ws.unlockedClasses={}; ws.allowedEmails=[];
+    if(window._currentUnit) showUnitPage(window._currentUnit); // 버튼/배지 일괄 갱신
+  }catch(e){ alert('저장 실패: '+e.message); }
+};
+
+/* 반별 잠금 토글 (학급 버튼 클릭) */
+window.toggleClassLock=async function(wsId, clsName){
+  const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
+  if(ws.status==='draft'){ alert('준비 중(draft) 학습지는 edit에서 발행 후 잠금을 설정하세요.'); return; }
+  let newStatus=ws.status, newUnlocked;
+  if(ws.status==='locked'){
+    newUnlocked={...(ws.unlockedClasses||{})};
+    if(newUnlocked[clsName]) delete newUnlocked[clsName];  // 해제 → 잠금
+    else newUnlocked[clsName]=true;                        // 잠금 → 해제
+  }else{
+    // 전체 공개 상태에서 클릭 → 해당 반만 잠금 (나머지 반은 해제 상태로 전환)
+    newStatus='locked';
+    newUnlocked={};
+    teacherClasses.forEach(c=>{ if(c.name!==clsName) newUnlocked[c.name]=true; });
+  }
+  const newAllowed=calcAllowedEmails(newUnlocked);
+  try{
+    await updateDoc(doc(db,'curriculum',wsId),{status:newStatus,unlockedClasses:newUnlocked,allowedEmails:newAllowed});
+    ws.status=newStatus; ws.unlockedClasses=newUnlocked; ws.allowedEmails=newAllowed;
+    if(window._currentUnit) showUnitPage(window._currentUnit);
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
@@ -999,7 +1190,12 @@ window.syncAutoProgress = async function(){
     }
     console.log('[sync] newAutoProg:', newAutoProg);
     await setDoc(doc(db,'teacher_data',user.uid),{teacherAutoProgress:newAutoProg},{merge:true});
-    window.teacherAutoProgress=newAutoProg;
+    // 로컬 상태는 병합 갱신 (다른 교사 문서에서 온 완료 데이터 유지, 본인 학급만 갱신)
+    const _merged=window.teacherAutoProgress||{};
+    const _myClasses=new Set(Object.keys(classTotal));
+    for(const wsMap of Object.values(_merged)){ for(const cn of Object.keys(wsMap)){ if(_myClasses.has(cn)) delete wsMap[cn]; } }
+    for(const [wsId,m] of Object.entries(newAutoProg)){ _merged[wsId]={...(_merged[wsId]||{}),...m}; }
+    window.teacherAutoProgress=_merged;
 
     // 화면 갱신 - 현재 표시 중인 학습지 카드 다시 그리기
     const totalAuto=Object.values(newAutoProg).reduce((s,o)=>s+Object.keys(o).length,0);
@@ -1016,28 +1212,6 @@ window.syncAutoProgress = async function(){
   }
 };
 
-window.toggleTeacherClass=async function(wsId,clsName,btn){
-  if(!teacherProgress[wsId]) teacherProgress[wsId]={};
-  const newVal=!teacherProgress[wsId][clsName];
-  teacherProgress[wsId][clsName]=newVal;
-  btn.classList.toggle('checked',newVal);
-  // note 텍스트 갱신
-  const card=btn.closest('.ws-list-card');
-  if(card){
-    const note=card.querySelector('.teacher-ws-note');
-    if(note){
-      const manual=Object.values(teacherProgress[wsId]||{}).filter(Boolean).length;
-      const auto=Object.values(window.teacherAutoProgress?.[wsId]||{}).filter(Boolean).length;
-      const total=Math.max(manual,auto);
-      note.textContent=total?`${total}/${teacherClasses.length}개 학급 진도 완료${auto&&!manual?' (자동)':''}`:'학급 진도 체크';
-    }
-  }
-  try{
-    await setDoc(doc(db,'teacher_data',user.uid),
-      {teacherProgress:{[wsId]:teacherProgress[wsId]}},{merge:true});
-  }catch(e){console.error('[toggleTeacherClass]',e);}
-};
-
 function showUnitPage(unit) {
   window._currentUnit = unit;
   try{ sessionStorage.setItem('lastUnit', JSON.stringify(unit)); }catch(e){}
@@ -1050,6 +1224,7 @@ function showUnitPage(unit) {
   const sheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id);
   const grid = document.getElementById("ws-list-grid");
   grid.innerHTML = "";
+  refreshGradeNotif();
 
   if(!sheets.length) {
     grid.innerHTML=`<div style="color:var(--ink3);font-size:14px;padding:20px 0">등록된 학습지가 없습니다.</div>`;
@@ -1063,11 +1238,13 @@ function showUnitPage(unit) {
       const isDraft  = ws.status === "draft";
       const isLocked = ws.status === "locked";
       const isTeacher = user && TEACHER_EMAILS.includes(user.email);
-      const isBlocked = (isDraft || isLocked) && !isTeacher; // 교사는 미리보기 접속 허용
+      const isBlocked = wsBlockedFor(ws, user?.email); // 반별 잠금: 해제된 반 학생은 통과, 교사는 항상 통과
 
       let badgeHtml = "";
       const tPrev = isTeacher ? ' · 교사 미리보기' : '';
-      if(isLocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 수정 중${tPrev}</span>`;
+      const unlockedCnt = isLocked ? Object.values(ws.unlockedClasses||{}).filter(Boolean).length : 0;
+      if(isLocked && isBlocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금</span>`;
+      else if(isLocked && isTeacher) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금${unlockedCnt?` · ${unlockedCnt}반 해제`:''}${tPrev}</span>`;
       else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중${tPrev}</span>`;
       else if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
       else if(inProg)  badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
@@ -1080,7 +1257,7 @@ function showUnitPage(unit) {
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
-          <div class="wslc-title">${ws.title}</div>
+          <div class="wslc-title">${(window._newGradeWs&&window._newGradeWs.has(ws.id))?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${ws.title}</div>
           <div class="wslc-meta">${ws.type==="vocab"
               ? ((wsProgress[ws.id]?.passCount||0)>=1
                   ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
@@ -1092,52 +1269,50 @@ function showUnitPage(unit) {
         </div>
         ${badgeHtml}`;
 
-      // 교사 진도 체크 UI
+      // 교사 UI: 전체 잠금 버튼 + 학급별 잠금/진도 3단계 버튼
       if(isTeacher){
         const progress=teacherProgress[ws.id]||{};
-        const checkedCount=Object.values(progress).filter(Boolean).length;
         const row=document.createElement('div');
         row.className='teacher-cls-row';
-        // 잠금 토글 버튼
+        // 전체 잠금 토글 버튼
         const lockBtn=document.createElement('button');
         const isNowLocked=(ws.status==='locked');
         const isNowDraft=(ws.status==='draft');
-        lockBtn.textContent=isNowLocked?'🔒 잠금됨':(isNowDraft?'📝 준비 중':'🔓 잠금 해제');
-        lockBtn.title=isNowLocked?'클릭하면 학생에게 공개':(isNowDraft?'edit에서 변경하세요':'클릭하면 학생 접근 차단');
+        lockBtn.textContent=isNowLocked?'🔒 전체 잠금':(isNowDraft?'📝 준비 중':'🔓 전체 공개');
+        lockBtn.title=isNowLocked?'클릭하면 전체 공개 (반별 해제도 초기화)':(isNowDraft?'edit에서 변경하세요':'클릭하면 전체 잠금');
         lockBtn.style.cssText=`padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid;cursor:${isNowDraft?'default':'pointer'};font-family:inherit;background:${isNowLocked?'#fef3c7':isNowDraft?'#f1f5f9':'#f0fdf4'};color:${isNowLocked?'#b45309':isNowDraft?'#64748b':'#15803d'};border-color:${isNowLocked?'#b45309':isNowDraft?'#94a3b8':'#15803d'}`;
         if(!isNowDraft) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
         row.appendChild(lockBtn);
 
-        // 학급별 진도 체크는 진도율 대상(일반+반영 ON)만 노출
-        if(countsForProgress(ws)){
-          if(teacherClasses.length){
-            teacherClasses.forEach(({key,name})=>{
-              const btn=document.createElement('button');
-              const isAuto=window.teacherAutoProgress?.[ws.id]?.[name]===true;
-              const isManual=progress[name]===true;
-              const isChecked=isManual||isAuto;
-              btn.className='cls-tog'+(isChecked?' checked':'')+(isAuto&&!isManual?' auto':'');
-              btn.textContent=name.replace(/\d+\//,'').replace('학년 ','학년\n');
-              btn.title=`${name}: ${isManual?'진도 완료 ✅':isAuto?'자동 완료 (2/3↑) 🟡':'미완료'}`;
-              btn.onclick=(e)=>{ e.stopPropagation(); window.toggleTeacherClass(ws.id,name,btn); };
-              row.appendChild(btn);
-            });
-          } else {
-            const loadingSpan=document.createElement('span');
-            loadingSpan.style.cssText='font-size:11px;color:var(--ink3)';
-            loadingSpan.textContent='⏳ 학급 정보 로드 중…';
-            row.appendChild(loadingSpan);
-          }
+        // 학급별 버튼: 모든 학습지 유형에 표시 (시험지/VOCA도 반별 잠금 대상)
+        if(teacherClasses.length){
+          const showDone=countsForProgress(ws); // 완료 상태는 진도율 대상 학습지만
+          let lockedCnt=0, doneCnt=0;
+          teacherClasses.forEach(({name})=>{
+            const clsLocked = isNowDraft || (isNowLocked && !(ws.unlockedClasses||{})[name]);
+            const isDone = showDone && !clsLocked &&
+              (progress[name]===true || window.teacherAutoProgress?.[ws.id]?.[name]===true);
+            if(clsLocked) lockedCnt++;
+            if(isDone) doneCnt++;
+            const btn=document.createElement('button');
+            btn.className='cls-tog'+(clsLocked?' cls-locked':isDone?' cls-done':' cls-open');
+            btn.textContent=(clsLocked?'🔒 ':isDone?'✅ ':'')+name.replace(/\d+\//,'').replace('학년 ','학년\n');
+            btn.title=`${name}: ${clsLocked?'잠금 — 클릭하면 해제':isDone?'해제 · 진도 완료 — 클릭하면 잠금':'해제 · 진행 중 — 클릭하면 잠금'}`;
+            if(!isNowDraft) btn.onclick=(e)=>{ e.stopPropagation(); window.toggleClassLock(ws.id,name); };
+            row.appendChild(btn);
+          });
           const note=document.createElement('div');
           note.className='teacher-ws-note';
-          note.textContent=checkedCount?`${checkedCount}/${teacherClasses.length}개 학급 진도 완료`:'학급 진도 체크';
+          const parts=[];
+          if(lockedCnt) parts.push(`🔒 ${lockedCnt}반 잠금`);
+          if(doneCnt) parts.push(`✅ ${doneCnt}반 완료`);
+          note.textContent=parts.length?parts.join(' · '):'학급별 잠금/진도 (클릭=잠금 토글)';
           row.appendChild(note);
         } else {
-          const skipSpan=document.createElement('span');
-          skipSpan.style.cssText='font-size:11px;color:var(--ink3)';
-          skipSpan.textContent = ws.type==='vocab' ? 'VOCA · 진도율 미포함'
-            : ws.type==='exam' ? '시험지 · 진도율 미포함' : '진도율 미반영';
-          row.appendChild(skipSpan);
+          const loadingSpan=document.createElement('span');
+          loadingSpan.style.cssText='font-size:11px;color:var(--ink3)';
+          loadingSpan.textContent='⏳ 학급 정보 로드 중…';
+          row.appendChild(loadingSpan);
         }
         card.appendChild(row);
       }
@@ -1403,6 +1578,10 @@ function _onVisibilityChange(){
 
 let _activeWsId=null;
 async function startQuiz(ws) {
+  if(wsBlockedFor(ws, user?.email)){ // 새로고침 복원·알림 바로가기 경로 포함 차단
+    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
+    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
+  }
   _activeWsId=ws.id; _wsIsCompleted=false;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   curWS=ws; curQIdx=0;
@@ -1464,6 +1643,8 @@ async function startQuiz(ws) {
   _startProgressTimer();
   document.addEventListener("visibilitychange", _onVisibilityChange);
   window.addEventListener("pagehide", saveWorksheet);
+  // 그래프 채점 알림: 학습지를 열면 해당 학습지의 채점을 '본 것'으로 처리
+  try{ markGradesSeen(ws.id); refreshGradeNotif(); }catch(e){}
   }
 
 function buildStrip() {
@@ -3374,6 +3555,10 @@ let vqWS=null, vqStreak=0, vqTimer=null, vqTimeLeft=0;
 const VQ_TARGET=50, VQ_TIME=10;
 
 function startVocabQuiz(ws){
+  if(wsBlockedFor(ws, user?.email)){
+    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
+    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
+  }
   vqWS=ws; vqStreak=0;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   document.getElementById('vq-complete').style.display='none';
@@ -3847,7 +4032,7 @@ document.querySelectorAll(".color-swatch").forEach(sw=>{
     document.getElementById("tool-eraser").classList.remove("active"); setCtx();
   });
 });
-document.getElementById("stroke-size").addEventListener("input",e=>{
+document.getElementById("stroke-size")?.addEventListener("input",e=>{
   penSize=parseInt(e.target.value); setCtx();
 });
 window.addEventListener("resize",()=>{

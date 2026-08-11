@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="7.5">
+  <meta name="app-version" content="7.6">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "7.5";
+const VERSION = "7.6";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2956,7 +2956,9 @@ async function endExamAndGrade(){
       perQuestion:perQ,
     },{merge:true});
   }
-  // 결과 화면 표시
+  // 결과 화면 표시 (finishQuiz가 시험 점수를 표시하도록 전역에 저장)
+  window._examFinalScore=totalScore;
+  window._examMaxScore=maxScore;
   alert(`📝 시험 완료\n점수: ${totalScore} / ${maxScore}`);
   finishQuiz();
 }
@@ -3251,7 +3253,9 @@ async function finishQuiz(){
   const total=curWS.questions.length;
   const tries=attempts.reduce((s,a,i)=>
     curWS.questions[i]?.type==="link"?s:s+a, 0);
-  if(window._examMode){
+  // 시험 종료 시 _stopExamTimer가 _examMode를 끄므로 _examEnded도 함께 확인
+  const _exView=window._examMode||window._examEnded;
+  if(_exView){
     document.getElementById("r-score").textContent=window._examFinalScore??0;
     document.getElementById("r-of").textContent=`/ ${window._examMaxScore??0}`;
   } else {
@@ -3265,7 +3269,7 @@ async function finishQuiz(){
     if(!q||q.type==="link") return s;
     return s+a; // attempts는 이미 오답만 카운트
   },0);
-  if(window._examMode){
+  if(_exView){
     // 시험지: 점수 기반 메시지
     const sc=window._examFinalScore??0;
     const mx=window._examMaxScore??0;
@@ -3285,7 +3289,7 @@ async function finishQuiz(){
   curWS.questions.forEach((q,i)=>{
     const row=document.createElement("div"); row.className="result-row";
     const qTxt=(q.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    if(window._examMode){
+    if(_exView){
       const ec=answered[i]?.correct;
       const escr=answered[i]?.score??0;
       const emax=q.score??1;

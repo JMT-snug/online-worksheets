@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v2.0r">
+<meta name="app-version" content="edit-v3.0">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -89,6 +89,11 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .btn-add-q:hover{background:#1e40af}
 
 .q-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:.15s;position:relative}
+/* 파트 구분선 */
+.part-divider{display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;padding:6px 12px;background:#e0e7ff;border:1px solid #c7d2fe;border-radius:8px}
+.part-divider .pd-name{font-size:12px;font-weight:800;color:#4338ca}
+.part-divider .pd-actions button{border:none;background:transparent;cursor:pointer;font-size:12px;padding:2px 5px;border-radius:5px}
+.part-divider .pd-actions button:hover{background:#c7d2fe}
 .q-card:hover{border-color:var(--accent)}
 .q-card.selected{border-color:var(--accent);background:var(--acc-lt)}
 .q-card.drag-over{border:2px dashed var(--accent);background:var(--acc-lt)}
@@ -810,6 +815,17 @@ function renderQList(){
   }
 
   combinedItems.forEach((item, i) => {
+    // 파트 구분선 (일반/시험지 학습지의 questions 항목에만)
+    if(!isVocab && item._type==='q' && item.partStart && item.partStart.id){
+      const dv=document.createElement('div');
+      dv.className='part-divider';
+      dv.innerHTML=`<span class="pd-name">🧩 ${item.partStart.name||'파트'}</span>
+        <span class="pd-actions">
+          <button title="파트 이름 수정" onclick="event.stopPropagation();renamePart(${item._idx})">✏️</button>
+          <button title="파트 구분 삭제" onclick="event.stopPropagation();removePartStart(${item._idx})">✕</button>
+        </span>`;
+      list.appendChild(dv);
+    }
     const card = document.createElement('div');
     card.className = 'q-card' + (selectedQIdx===i?' selected':'');
     card.draggable = true;
@@ -836,6 +852,7 @@ function renderQList(){
         <div class="q-text-preview">${preview}</div>
       </div>
       <div class="q-actions">
+        ${(!isVocab && !isVocabItem && !isExtraItem && !item.partStart) ? `<button class="q-btn" onclick="event.stopPropagation();addPartStart(${item._idx})" title="이 문항부터 새 파트 시작">🧩</button>` : ''}
         ${isExtraItem ? '' : `<button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>`}
       </div>`;
 
@@ -861,6 +878,31 @@ function renderQList(){
     list.appendChild(card);
   });
 }
+
+// ── 파트 구분 마커 (partStart) ──
+// 문항에 partStart:{id,name}을 찍으면 그 문항부터 새 파트 시작.
+// index.html이 이 마커로 파트를 인식하고 파트별 반 잠금(partUnlocked/partAllowed)을 적용.
+window.addPartStart=function(qIdx){
+  const q=currentWs.questions[qIdx]; if(!q) return;
+  const name=prompt('파트 이름을 입력하세요 (예: 복습, 학습목표, 연습문제)');
+  if(!name||!name.trim()) return;
+  q.partStart={id:'p'+Date.now(), name:name.trim()};
+  renderQList();
+  toast('🧩 파트 구분 추가됨 — 저장해야 반영됩니다');
+};
+window.renamePart=function(qIdx){
+  const ps=currentWs.questions[qIdx]?.partStart; if(!ps) return;
+  const name=prompt('파트 이름 수정', ps.name||'');
+  if(!name||!name.trim()) return;
+  ps.name=name.trim(); renderQList();
+};
+window.removePartStart=function(qIdx){
+  const q=currentWs.questions[qIdx]; if(!q?.partStart) return;
+  if(!confirm(`"${q.partStart.name}" 파트 구분을 삭제할까요?\n(문항은 그대로 유지되고 앞 파트에 합쳐집니다)`)) return;
+  delete q.partStart;
+  renderQList();
+  toast('파트 구분 삭제됨 — 저장해야 반영됩니다');
+};
 
 // ── 문항 이동 (드래그앤드롭) ──
 function moveItem(from, to, isVocab, allItems){
@@ -1204,6 +1246,7 @@ window.saveQuestion = async function(){
       qData.nMin=(()=>{const v=parseFloat(document.getElementById('g-nlmin').value);return isNaN(v)?-10:v;})();
       qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();
     }
+    if(currentWs.questions[qIdxS]?.partStart) qData.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     currentWs.questions[qIdxS]=_addScore(qData);
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
@@ -1247,6 +1290,7 @@ window.saveQuestion = async function(){
       imageUrl:document.getElementById('q-img-url')?.value||'',
       steps,
     };
+    if(currentWs.questions[qIdxS]?.partStart) _step3Q.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
   }
@@ -1255,6 +1299,7 @@ window.saveQuestion = async function(){
     if(poolWrong.length<3){ toast('오답 풀을 최소 3개 추가하세요'); return; }
     const isVocab2=currentWs.type==='vocab';
     const qIdx2=isVocab2?selectedQIdx-currentWs.vocab.length:selectedQIdx;
+    const _psPool=currentWs.questions[qIdx2]?.partStart; // 파트 마커 보존
     currentWs.questions[qIdx2]={
       id:currentWs.questions[qIdx2]?.id||`q${Date.now()}`,
       type:'pool_random',
@@ -1264,6 +1309,7 @@ window.saveQuestion = async function(){
       wrong_pool:[...poolWrong],
       diff:parseInt(document.getElementById('q-diff-sel').value)||1,
     };
+    if(_psPool) currentWs.questions[qIdx2].partStart=_psPool;
     renderQList();
     saveToFirestore(currentWs.status||'draft',true);
     return;
@@ -1288,6 +1334,7 @@ window.saveQuestion = async function(){
     // <br> 태그를 줄바꿈으로 통일 (중복 빈 줄 방지), 백슬래시는 그대로
     const text = raw.replace(/<br\s*\/?>\n?/gi, '\n');
     let q = { id: currentWs.questions[qIdx]?.id||`q${Date.now()}`, diff };
+    if(currentWs.questions[qIdx]?.partStart) q.partStart=currentWs.questions[qIdx].partStart; // 파트 마커 보존
 
     if(type==='word_text'){
       q.type='word'; q.answerType='text';
@@ -1343,7 +1390,14 @@ window.deleteItemAt = function(idx){
   const isVocab = currentWs.type==='vocab';
   const vocabCount = isVocab ? currentWs.vocab.length : 0;
   if(isVocab && idx < vocabCount) currentWs.vocab.splice(idx,1);
-  else currentWs.questions.splice(isVocab ? idx-vocabCount : idx, 1);
+  else {
+    const qIdx = isVocab ? idx-vocabCount : idx;
+    // 파트 시작 문항 삭제 시: 마커를 다음 문항으로 이동 (파트 실종 방지)
+    const ps = currentWs.questions[qIdx]?.partStart;
+    currentWs.questions.splice(qIdx, 1);
+    const nextQ = currentWs.questions[qIdx];
+    if(ps && nextQ && !nextQ.partStart) nextQ.partStart = ps;
+  }
   selectedQIdx = null;
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';

@@ -1246,6 +1246,7 @@ window.saveQuestion = async function(){
       qData.nMin=(()=>{const v=parseFloat(document.getElementById('g-nlmin').value);return isNaN(v)?-10:v;})();
       qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();
     }
+    if(currentWs.questions[qIdxS]?.partStart) qData.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     currentWs.questions[qIdxS]=_addScore(qData);
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
@@ -1289,6 +1290,7 @@ window.saveQuestion = async function(){
       imageUrl:document.getElementById('q-img-url')?.value||'',
       steps,
     };
+    if(currentWs.questions[qIdxS]?.partStart) _step3Q.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
   }
@@ -1297,6 +1299,7 @@ window.saveQuestion = async function(){
     if(poolWrong.length<3){ toast('오답 풀을 최소 3개 추가하세요'); return; }
     const isVocab2=currentWs.type==='vocab';
     const qIdx2=isVocab2?selectedQIdx-currentWs.vocab.length:selectedQIdx;
+    const _psPool=currentWs.questions[qIdx2]?.partStart; // 파트 마커 보존
     currentWs.questions[qIdx2]={
       id:currentWs.questions[qIdx2]?.id||`q${Date.now()}`,
       type:'pool_random',
@@ -1306,6 +1309,7 @@ window.saveQuestion = async function(){
       wrong_pool:[...poolWrong],
       diff:parseInt(document.getElementById('q-diff-sel').value)||1,
     };
+    if(_psPool) currentWs.questions[qIdx2].partStart=_psPool;
     renderQList();
     saveToFirestore(currentWs.status||'draft',true);
     return;
@@ -1330,6 +1334,7 @@ window.saveQuestion = async function(){
     // <br> 태그를 줄바꿈으로 통일 (중복 빈 줄 방지), 백슬래시는 그대로
     const text = raw.replace(/<br\s*\/?>\n?/gi, '\n');
     let q = { id: currentWs.questions[qIdx]?.id||`q${Date.now()}`, diff };
+    if(currentWs.questions[qIdx]?.partStart) q.partStart=currentWs.questions[qIdx].partStart; // 파트 마커 보존
 
     if(type==='word_text'){
       q.type='word'; q.answerType='text';
@@ -1385,7 +1390,14 @@ window.deleteItemAt = function(idx){
   const isVocab = currentWs.type==='vocab';
   const vocabCount = isVocab ? currentWs.vocab.length : 0;
   if(isVocab && idx < vocabCount) currentWs.vocab.splice(idx,1);
-  else currentWs.questions.splice(isVocab ? idx-vocabCount : idx, 1);
+  else {
+    const qIdx = isVocab ? idx-vocabCount : idx;
+    // 파트 시작 문항 삭제 시: 마커를 다음 문항으로 이동 (파트 실종 방지)
+    const ps = currentWs.questions[qIdx]?.partStart;
+    currentWs.questions.splice(qIdx, 1);
+    const nextQ = currentWs.questions[qIdx];
+    if(ps && nextQ && !nextQ.partStart) nextQ.partStart = ps;
+  }
   selectedQIdx = null;
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.0">
+  <meta name="app-version" content="8.1">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "8.0";
+const VERSION = "8.1";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -427,13 +427,18 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .cls-tog.cls-locked.fill-2{background:linear-gradient(90deg,#fca5a5 0 66.6%,transparent 66.6%)}
 .cls-tog.cls-locked.fill-3{background:#fca5a5}
 /* ── 파트 잠금 ── */
-.q-part-chip{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#e0e7ff;color:#4338ca;white-space:nowrap;align-self:center}
-.q-part-chip.locked{background:#f1f5f9;color:#94a3b8}
+.q-progress-strip.has-parts{display:grid;gap:3px}
+.strip2-part{padding:3px 6px;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:20px}
+.strip2-part.open{background:#e0e7ff;color:#4338ca}
+.strip2-part.locked{background:#f1f5f9;color:#94a3b8}
+.strip2-part.none{background:transparent}
+.strip2-part.clickable{cursor:pointer}
+.strip2-part.clickable:hover{filter:brightness(.95)}
+#part-pop{position:fixed;z-index:10000;background:var(--paper);border:1px solid var(--rule);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.2);padding:12px;min-width:210px;max-width:280px}
 .q-dot.part-locked{opacity:.3;pointer-events:none;filter:grayscale(1)}
 #q-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:#1e293b;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:all .25s;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 #q-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .part-matrix{width:100%;display:flex;flex-direction:column;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--rule)}
-#teacher-part-bar .part-matrix{margin:0 0 14px;padding:8px 12px;background:#eef2ff;border:1px dashed #c7d2fe;border-radius:10px}
 .part-matrix-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .part-matrix-name{font-size:11px;font-weight:700;color:#4338ca;min-width:64px}
 .cls-tog.cls-mini{padding:2px 7px;font-size:10px;border-radius:9px}
@@ -566,7 +571,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       </div>
     </div>
     <div class="q-progress-strip" id="q-progress-strip"></div>
-    <div id="teacher-part-bar" style="display:none"></div>
     <div class="quiz-cols">
       <!-- 왼쪽: 문제 + 수식입력기 -->
       <div class="quiz-left" id="quiz-left-panel">
@@ -1159,7 +1163,7 @@ function qToast(msg){
 
 /* 파트 잠금 실시간 감시: 학습지를 여는 동안 curriculum 문서 구독 */
 let _wsUnsub=null;
-function stopWsWatch(){ if(_wsUnsub){ try{_wsUnsub();}catch(e){} _wsUnsub=null; } }
+function stopWsWatch(){ if(_wsUnsub){ try{_wsUnsub();}catch(e){} _wsUnsub=null; } try{closePartPop();}catch(e){} }
 function watchWs(ws){
   stopWsWatch();
   if(!getParts(ws)) return; // 파트 있는 학습지만 감시
@@ -1178,7 +1182,7 @@ function watchWs(ws){
       const parts=getParts(ws)||[];
       const newlyOpen=parts.filter(p=>!beforeOpen.has(p.id)&&partOpenFor(ws,p.id,user?.email));
       const newlyLocked=parts.filter(p=>beforeOpen.has(p.id)&&!partOpenFor(ws,p.id,user?.email));
-      updateStrip(); renderTeacherPartBar();
+      updateStrip(); refreshPartPop();
       if(newlyOpen.length) qToast('🔓 "'+newlyOpen.map(p=>p.name).join(', ')+'" 파트가 열렸어요!');
       else if(newlyLocked.length) qToast('🔒 "'+newlyLocked.map(p=>p.name).join(', ')+'" 파트가 잠겼어요');
       // 현재 문항이 잠겼으면 열린 문항으로 이동
@@ -1262,9 +1266,9 @@ window.togglePartLock=async function(wsId, partId, clsName){
     });
     ws.partUnlocked={...(ws.partUnlocked||{}),[partId]:cur};
     ws.partAllowed={...(ws.partAllowed||{}),[partId]:emails};
-    // 화면 맥락에 맞게 갱신: 퀴즈 화면이면 파트 바만, 목록이면 카드 재렌더
+    // 화면 맥락에 맞게 갱신: 퀴즈 화면이면 스트립+팝오버, 목록이면 카드 재렌더
     if(document.getElementById('quiz-page')?.classList.contains('active') && curWS?.id===wsId){
-      renderTeacherPartBar(); updateStrip();
+      updateStrip(); refreshPartPop();
     } else if(window._currentUnit) showUnitPage(window._currentUnit);
   }catch(e){ alert('저장 실패: '+e.message); }
 };
@@ -1847,7 +1851,7 @@ async function startQuiz(ws) {
   document.getElementById("quiz-ws-title").textContent=ws.title;
   // 링크 제외 문항 수 캐싱
   curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
-  buildStrip(); renderQuestion(); renderTeacherPartBar();
+  buildStrip(); renderQuestion();
   requestAnimationFrame(()=>{ initCanvas(); });
   document.addEventListener("keydown", quizKeyHandler);
   // 진도 자동 저장 시작
@@ -1860,60 +1864,128 @@ async function startQuiz(ws) {
   watchWs(ws);
   }
 
-/* 교사용 파트×반 잠금 바 (퀴즈 화면 상단) — 수업 중 여기서 파트를 순차 해제 */
-function renderTeacherPartBar(){
-  const bar=document.getElementById('teacher-part-bar');
-  if(!bar) return;
-  const parts=curWS?getParts(curWS):null;
-  if(!parts || !isTeacherAcct() || !teacherClasses.length){ bar.style.display='none'; bar.innerHTML=''; return; }
-  bar.style.display='block';
-  bar.innerHTML='';
-  const wrap=document.createElement('div');
-  wrap.className='part-matrix';
+/* ── 파트 셀 라벨/상태 (스트립 윗줄) ── */
+function partCellLabel(p){
+  if(isTeacherAcct()){
+    const total=teacherClasses.length;
+    const openCls=curWS.status==='locked'
+      ? Object.values((curWS.partUnlocked||{})[p.id]||{}).filter(Boolean).length
+      : total;
+    const anyOpen=curWS.status!=='locked'||openCls>0;
+    return {cls:'strip2-part '+(anyOpen?'open':'locked')+' clickable',
+            label:`🧩 ${p.name}${total?` · ${openCls}/${total}반`:''}`,
+            title:'클릭: 반별 파트 잠금/해제'};
+  }
+  const open=partOpenFor(curWS,p.id,user?.email);
+  return {cls:'strip2-part '+(open?'open':'locked'),
+          label:(open?'🔓':'🔒')+' '+p.name,
+          title:open?'열린 파트':'잠긴 파트'};
+}
+
+/* ── 교사용 파트 팝오버: 파트 셀 클릭 → 반별 해제 ── */
+function closePartPop(){
+  const pop=document.getElementById('part-pop');
+  if(pop) pop.remove();
+  window._partPopId=null;
+  document.removeEventListener('click',_partPopOutside);
+}
+function _partPopOutside(e){
+  const pop=document.getElementById('part-pop');
+  if(pop&&!pop.contains(e.target)) closePartPop();
+}
+function renderPartPopContent(pop,p){
+  pop.innerHTML='';
+  const title=document.createElement('div');
+  title.style.cssText='font-size:12px;font-weight:800;color:#4338ca;margin-bottom:8px';
+  title.textContent=`🧩 ${p.name} — 반별 잠금`;
+  pop.appendChild(title);
   if(curWS.status!=='locked'){
     const note=document.createElement('div');
-    note.style.cssText='font-size:11px;color:var(--ink3)';
-    note.textContent='🧩 파트 잠금은 반별 잠금 모드에서 작동합니다 (현재 전체 공개 — 모든 파트 열림). 목록에서 반 버튼으로 잠금을 시작하세요.';
-    wrap.appendChild(note);
-  } else {
-    parts.forEach(p=>{
-      const r=document.createElement('div');
-      r.className='part-matrix-row';
-      const nm=document.createElement('span');
-      nm.className='part-matrix-name'; nm.textContent='🧩 '+p.name;
-      r.appendChild(nm);
-      teacherClasses.forEach(({name})=>{
-        const clsOpen=!!((curWS.unlockedClasses||{})[name]);   // 학습지 자체가 열린 반만 의미 있음
-        const on=!!((curWS.partUnlocked||{})[p.id]||{})[name];
-        const b=document.createElement('button');
-        b.className='cls-tog cls-mini '+(on?'cls-open fill-3':'cls-locked fill-0');
-        if(!clsOpen) b.style.opacity='.35';
-        b.textContent=(on?'🔓 ':'🔒 ')+name.replace(/\d+\//,'').replace('학년 ','학년\n');
-        b.title=`${p.name} · ${name}: ${on?'열림 — 클릭하면 잠금':'잠김 — 클릭하면 해제'}${clsOpen?'':' (⚠️ 이 반은 학습지 자체가 잠겨 있음)'}`;
-        b.onclick=(e)=>{ e.stopPropagation(); window.togglePartLock(curWS.id,p.id,name); };
-        r.appendChild(b);
-      });
-      wrap.appendChild(r);
-    });
+    note.style.cssText='font-size:11px;color:var(--ink3);line-height:1.5';
+    note.textContent='현재 전체 공개 상태라 모든 파트가 열려 있습니다. 학습지 목록에서 반별 잠금을 시작하면 파트 잠금이 작동합니다.';
+    pop.appendChild(note); return;
   }
-  bar.appendChild(wrap);
+  if(!teacherClasses.length){
+    const note=document.createElement('div');
+    note.style.cssText='font-size:11px;color:var(--ink3)';
+    note.textContent='⏳ 학급 정보 로드 중…';
+    pop.appendChild(note); return;
+  }
+  teacherClasses.forEach(({name})=>{
+    const clsOpen=!!((curWS.unlockedClasses||{})[name]);
+    const on=!!((curWS.partUnlocked||{})[p.id]||{})[name];
+    const b=document.createElement('button');
+    b.className='cls-tog '+(on?'cls-open fill-3':'cls-locked fill-0');
+    b.style.cssText='display:block;width:100%;text-align:left;margin-bottom:4px'+(clsOpen?'':';opacity:.4');
+    b.textContent=(on?'🔓 ':'🔒 ')+name+(clsOpen?'':' · 학습지 잠김');
+    b.title=on?'클릭하면 잠금':'클릭하면 해제';
+    b.onclick=(e)=>{ e.stopPropagation(); window.togglePartLock(curWS.id,p.id,name); };
+    pop.appendChild(b);
+  });
+}
+function openPartPop(partId,anchor){
+  if(window._partPopId===partId){ closePartPop(); return; } // 같은 셀 재클릭 = 닫기
+  closePartPop();
+  const p=(getParts(curWS)||[]).find(x=>x.id===partId); if(!p) return;
+  const pop=document.createElement('div');
+  pop.id='part-pop';
+  window._partPopId=partId;
+  renderPartPopContent(pop,p);
+  document.body.appendChild(pop);
+  const r=anchor.getBoundingClientRect();
+  pop.style.top=(r.bottom+6)+'px';
+  pop.style.left='0px';
+  requestAnimationFrame(()=>{
+    const w=pop.offsetWidth;
+    let left=r.left+r.width/2-w/2;
+    left=Math.max(8,Math.min(left,window.innerWidth-w-8));
+    pop.style.left=left+'px';
+  });
+  setTimeout(()=>document.addEventListener('click',_partPopOutside),0);
+}
+/* 파트 상태 변경 후 열린 팝오버 내용 갱신 */
+function refreshPartPop(){
+  if(!window._partPopId) return;
+  const pop=document.getElementById('part-pop'); if(!pop) return;
+  const p=(getParts(curWS)||[]).find(x=>x.id===window._partPopId);
+  if(p) renderPartPopContent(pop,p); else closePartPop();
 }
 
 function buildStrip() {
   const s=document.getElementById("q-progress-strip"); s.innerHTML="";
   const parts=getParts(curWS)||[];
+  const n=curWS.questions.length;
+  const hasParts=parts.length>0;
+  s.classList.toggle('has-parts',hasParts);
+  if(hasParts){
+    s.style.display='grid';
+    s.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  }else{
+    s.style.display='flex';
+    s.style.gridTemplateColumns='';
+  }
+  // 1행: 파트 셀 (해당 파트의 문항 수만큼 셀 병합)
+  if(hasParts){
+    if(parts[0].from>0){ // 첫 마커 이전 문항 = 파트 없음(항상 열림)
+      const c=document.createElement('div');
+      c.className='strip2-part none';
+      c.style.gridColumn=`1 / ${parts[0].from+1}`;
+      s.appendChild(c);
+    }
+    parts.forEach((p,pi)=>{
+      const to=(parts[pi+1]?.from??n);
+      const c=document.createElement('div');
+      const meta=partCellLabel(p);
+      c.className=meta.cls; c.textContent=meta.label; c.title=meta.title;
+      c.id='qpart-'+p.id;
+      c.style.gridColumn=`${p.from+1} / ${to+1}`;
+      if(isTeacherAcct()) c.onclick=(e)=>{ e.stopPropagation(); openPartPop(p.id,c); };
+      s.appendChild(c);
+    });
+  }
+  // 2행: 문항 번호 점
   let realN=0;
   curWS.questions.forEach((q,i)=>{
-    // 파트 시작 지점에 파트명 칩 삽입
-    const marker=parts.find(p=>p.from===i);
-    if(marker){
-      const open=partOpenFor(curWS,marker.id,user?.email);
-      const chip=document.createElement('div');
-      chip.className='q-part-chip'+(open?'':' locked');
-      chip.id='qpart-'+marker.id;
-      chip.textContent=(open?'🔓':'🔒')+' '+marker.name;
-      s.appendChild(chip);
-    }
     const isLinkQ=q.type==="link";
     if(!isLinkQ) realN++;
     const plocked=qLockedFor(curWS,i,user?.email);
@@ -1943,12 +2015,13 @@ function updateStrip() {
       +(plocked?" part-locked":"");
     if(plocked) d.title='🔒 잠긴 파트';
   });
-  // 파트 칩 잠금 상태 갱신
+  // 파트 셀 상태 갱신 (윗줄)
   (getParts(curWS)||[]).forEach(p=>{
     const c=document.getElementById('qpart-'+p.id); if(!c) return;
-    const open=partOpenFor(curWS,p.id,user?.email);
-    c.className='q-part-chip'+(open?'':' locked');
-    c.textContent=(open?'🔓':'🔒')+' '+p.name;
+    const meta=partCellLabel(p);
+    const col=c.style.gridColumn;
+    c.className=meta.cls; c.textContent=meta.label; c.title=meta.title;
+    c.style.gridColumn=col;
   });
   updateNavBtns();
 }

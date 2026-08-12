@@ -1412,8 +1412,9 @@ async function syncAllowedEmails(){
     const calc=m=>[...new Set(Object.keys(m||{}).filter(n=>m[n]).flatMap(n=>[...(roster[n]||[])]))].sort();
     const norm=a=>[...(a||[])].map(e=>String(e).toLowerCase()).sort();
     const wSnap=await getDocs(collection(db,'curriculum'));
+    let checked=0, changedCnt=0;
     for(const d of wSnap.docs){
-      const ws=d.data();
+      const ws=d.data(); checked++;
       const updates={};
       // 학습지 전체 잠금의 해제 반 명단
       if(ws.status==='locked' && Object.values(ws.unlockedClasses||{}).some(Boolean)){
@@ -1427,10 +1428,12 @@ async function syncAllowedEmails(){
         if(JSON.stringify(newArr)!==JSON.stringify(norm((ws.partAllowed||{})[pid]))) updates['partAllowed.'+pid]=newArr;
       }
       if(Object.keys(updates).length){
+        changedCnt++;
         await updateDoc(doc(db,'curriculum',d.id),updates);
         console.log('[syncAllowedEmails]',d.id,Object.keys(updates));
       }
     }
+    console.log(`[syncAllowedEmails] 검사 완료: 학습지 ${checked}개 확인, ${changedCnt}개 갱신`);
   }catch(e){ console.warn('[syncAllowedEmails 실패]',e); }
 }
 

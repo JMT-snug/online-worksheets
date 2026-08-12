@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8aj">
+<meta name="app-version" content="3.8ak">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8aj";
+const VERSION = "3.8ak";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1408,20 +1408,32 @@ async function syncAllowedEmails(){
         (c.students||[]).forEach(e=>roster[name].add(String(e).toLowerCase()));
       }
     }
-    // 잠금 상태 + 해제 반이 있는 학습지만 재계산
+    // 반별 잠금(allowedEmails) + 파트별 잠금(partAllowed) 재계산
+    const calc=m=>[...new Set(Object.keys(m||{}).filter(n=>m[n]).flatMap(n=>[...(roster[n]||[])]))].sort();
+    const norm=a=>[...(a||[])].map(e=>String(e).toLowerCase()).sort();
     const wSnap=await getDocs(collection(db,'curriculum'));
+    let checked=0, changedCnt=0;
     for(const d of wSnap.docs){
-      const ws=d.data();
-      if(ws.status!=='locked') continue;
-      const unlocked=Object.keys(ws.unlockedClasses||{}).filter(n=>ws.unlockedClasses[n]);
-      if(!unlocked.length) continue;
-      const newAllowed=[...new Set(unlocked.flatMap(n=>[...(roster[n]||[])]))].sort();
-      const oldAllowed=[...(ws.allowedEmails||[])].map(e=>String(e).toLowerCase()).sort();
-      if(JSON.stringify(newAllowed)!==JSON.stringify(oldAllowed)){
-        await updateDoc(doc(db,'curriculum',d.id),{allowedEmails:newAllowed});
-        console.log('[syncAllowedEmails]',d.id,oldAllowed.length,'→',newAllowed.length,'명');
+      const ws=d.data(); checked++;
+      const updates={};
+      // 학습지 전체 잠금의 해제 반 명단
+      if(ws.status==='locked' && Object.values(ws.unlockedClasses||{}).some(Boolean)){
+        const newAllowed=calc(ws.unlockedClasses);
+        if(JSON.stringify(newAllowed)!==JSON.stringify(norm(ws.allowedEmails))) updates.allowedEmails=newAllowed;
+      }
+      // 파트별 잠금의 해제 반 명단
+      for(const [pid,clsMap] of Object.entries(ws.partUnlocked||{})){
+        if(!Object.values(clsMap||{}).some(Boolean)) continue;
+        const newArr=calc(clsMap);
+        if(JSON.stringify(newArr)!==JSON.stringify(norm((ws.partAllowed||{})[pid]))) updates['partAllowed.'+pid]=newArr;
+      }
+      if(Object.keys(updates).length){
+        changedCnt++;
+        await updateDoc(doc(db,'curriculum',d.id),updates);
+        console.log('[syncAllowedEmails]',d.id,Object.keys(updates));
       }
     }
+    console.log(`[syncAllowedEmails] 검사 완료: 학습지 ${checked}개 확인, ${changedCnt}개 갱신`);
   }catch(e){ console.warn('[syncAllowedEmails 실패]',e); }
 }
 

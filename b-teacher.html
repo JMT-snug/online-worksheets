@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8v">
+<meta name="app-version" content="3.8ak">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -21,6 +21,16 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6}
+
+/* ── 통일 헤더 (grid 3열) ── */
+header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.hdr-left{display:flex;gap:6px;align-items:center;justify-self:start;flex-wrap:nowrap}
+.hdr-center{display:flex;gap:8px;align-items:center;justify-self:center;white-space:nowrap}
+.hdr-right{display:flex !important;gap:6px;align-items:center;justify-self:end;flex-wrap:nowrap}
+.hdr-nav{display:inline-flex;gap:4px}
+.hdr-nav .hdr-btn{padding:5px 10px;font-size:12px}
+.hdr-sep{width:1px;height:20px;background:currentColor;opacity:.15;margin:0 4px}
+
 header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px}
 .logo{font-weight:900;font-size:18px;color:#fff;letter-spacing:-.5px;flex:1}
 .logo em{color:#60a5fa;font-style:normal}
@@ -153,12 +163,20 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <div class="logo">수학 학습지<em>+</em> <small>교사 관리</small><span id="t-ver" style="font-size:10px;font-weight:400;color:rgba(255,255,255,.3);margin-left:6px;font-family:monospace"></span></div>
+  <div class="hdr-left"></div>
+  <div class="hdr-center">
+    <div class="logo" style="margin:0">수학 학습지<em>+</em> <small>교사 관리</small></div>
+    <span id="t-ver" style="font-size:10px;font-weight:400;color:rgba(255,255,255,.3);font-family:monospace"></span>
+  </div>
   <div class="hdr-right">
+    <div class="hdr-nav">
+      <a href="index.html" class="hdr-btn">학습지</a>
+      <a href="scoring.html" class="hdr-btn">채점</a>
+      <a href="edit.html" class="hdr-btn">편집</a>
+    </div>
+    <div class="hdr-sep"></div>
     <span class="tag tag-t">교사</span>
     <span id="t-name"></span>
-    <a href="index.html" class="hdr-btn hdr-btn-green">🏠 학생 화면</a>
-    <a href="edit.html" class="hdr-btn" style="background:#7c3aed;color:#fff">✏️ 학습지 편집</a>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
@@ -217,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8v";
+const VERSION = "3.8ak";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -317,8 +335,15 @@ async function loadCurriculum(){
       getDocs(collection(db,'curriculum'))
     ]);
     const units=uSnap.docs.map(d=>({...d.data()}));
+    const unitOrder={};
+    units.forEach((u,i)=>unitOrder[u.id]=u.order??i);
     const sheets=wSnap.docs.map(d=>({...d.data()}))
-      .sort((a,b)=>(a.order??99)-(b.order??99));
+      .sort((a,b)=>{
+        const ua=unitOrder[a.unitId]??999;
+        const ub=unitOrder[b.unitId]??999;
+        if(ua!==ub) return ua-ub;
+        return (a.order??99)-(b.order??99);
+      });
     sheets.forEach(ws=>{ if(!ws.questions) ws.questions=[]; if(!ws.vocab) ws.vocab=[];
       if(ws.questions && !ws.qCount) ws.qCount=ws.questions.filter(q=>q.type!=="link").length; });
     if(sheets.length) WORKSHEETS=sheets;   // Firestore 우선 (없으면 정적 worksheets.js 유지)
@@ -482,19 +507,79 @@ function perQCells(r, uid){
 }
 
 // ── 학생 목록 ──
-let _stuSort="class", _stuClass="", _stuSearch="";
+window._stuSort="class"; window._stuClass=""; window._stuSearch="";
+// 호환: 함수 내부에서 _stuSort로 참조 시 window._stuSort 가리키도록 전역 변수
+var _stuSort=window._stuSort, _stuClass=window._stuClass, _stuSearch=window._stuSearch;
+window.renderStudents=renderStudents;
+/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (index/edit와 동일 규칙)
+   커리큘럼에 없는(삭제된) 학습지는 진도율 집계 제외 */
+function countsForProgressWs(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  if(!ws) return false;
+  if(ws.type==="vocab" || ws.type==="exam") return false;
+  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
+  return true;
+}
+
 function studentList(){
-  return Object.entries(allData).map(([uid,wsMap])=>{
+  const entries=Object.entries(allData).map(([uid,wsMap])=>{
     const recs=Object.values(wsMap);
     const any=recs.find(r=>r.studentName)||recs[0]||{};
     const email=any.studentEmail||"-";
-    const total=recs.length;
-    const done=recs.filter(isRecDone).length;
+    // 이 학생이 시작한 진도율 대상 학습지(기록이 있으면 시작으로 간주)
+    const startedIds=Object.keys(wsMap).filter(countsForProgressWs);
+    const done=startedIds.filter(id=>isRecDone(wsMap[id])).length;
     const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
     const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
-    return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",total,done,avg};
+    return {uid,name:any.studentName||"-",email,cls:findClass(email)||"-",startedIds,done,avg};
   });
+  // 진도율 분모: 같은 반 학생이 1명이라도 시작한 진도율 대상 학습지 수
+  const classStarted={};  // 반 → Set(wsId)
+  entries.forEach(s=>{
+    if(!classStarted[s.cls]) classStarted[s.cls]=new Set();
+    s.startedIds.forEach(id=>classStarted[s.cls].add(id));
+  });
+  entries.forEach(s=>{
+    s.total=classStarted[s.cls]?.size||0;
+    s.pct=s.total?Math.round(s.done/s.total*100):null;  // 진도율% = 완료/전체
+  });
+  return entries;
 }
+
+/* 진단: 특정 학급의 진도율 분모 상세 출력
+   콘솔에서 progDebug('4반') 처럼 실행 (인자 없으면 전체 학급) */
+window.progDebug = function(filter){
+  const byCls={};
+  Object.entries(allData).forEach(([uid,wsMap])=>{
+    const recs=Object.values(wsMap);
+    const email=(recs.find(r=>r.studentEmail)||{}).studentEmail||'';
+    const cls=findClass(email)||'-';
+    const name=(recs.find(r=>r.studentName)||{}).studentName||email||uid;
+    (byCls[cls]=byCls[cls]||[]).push({name,wsMap});
+  });
+  Object.entries(byCls).forEach(([cls,studs])=>{
+    if(filter && !cls.includes(filter)) return;
+    const starters={};  // wsId -> [학생이름]
+    studs.forEach(s=>Object.keys(s.wsMap).forEach(id=>{ (starters[id]=starters[id]||[]).push(s.name); }));
+    const rows=Object.entries(starters).map(([id,names])=>{
+      const ws=WORKSHEETS.find(w=>w.id===id)||{};
+      return {
+        wsId:id,
+        제목:ws.title||'(삭제/커리큘럼없음)',
+        type:ws.type||'(없음)',
+        vocab배열:Array.isArray(ws.vocab)?ws.vocab.length:0,
+        진도반영:ws.includeInProgress===false?'OFF':'ON',
+        카운트:countsForProgressWs(id)?'✅ 분모포함':'— 제외',
+        시작학생:names.join(',')
+      };
+    }).sort((a,b)=>(a.카운트<b.카운트?1:a.카운트>b.카운트?-1:0));
+    const denom=rows.filter(r=>r.카운트==='✅ 분모포함').length;
+    console.log(`\n===== ${cls} : 진도율 분모 ${denom}개 (해당 반이 시작한 학습지 총 ${rows.length}개) =====`);
+    console.table(rows);
+  });
+  return '진단 완료 — 위 표에서 카운트=✅ 인 항목이 분모. 예상보다 많으면 그 학습지의 type/진도반영 확인.';
+};
 
 function renderClassMatrix(){
   selView="classmatrix";
@@ -640,15 +725,15 @@ function renderStudents(){
   const list=studentList();
   let students=[...list];
   // 학급 필터
-  if(_stuClass) students=students.filter(s=>s.cls===_stuClass);
+  if(window._stuClass) students=students.filter(s=>s.cls===window._stuClass);
   // 이름/이메일 검색
-  if(_stuSearch){ const kw=_stuSearch.toLowerCase();
+  if(window._stuSearch){ const kw=window._stuSearch.toLowerCase();
     students=students.filter(s=>(s.name||"").toLowerCase().includes(kw)||(s.email||"").toLowerCase().includes(kw)); }
   // 정렬
-  if(_stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
-  else if(_stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
-  else if(_stuSort==="done") students.sort((a,b)=>b.done-a.done);
-  else if(_stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
+  if(window._stuSort==="class") students.sort((a,b)=>(""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(window._stuSort==="name") students.sort((a,b)=>(""+a.name).localeCompare(""+b.name,"ko"));
+  else if(window._stuSort==="done") students.sort((a,b)=>(b.pct??-1)-(a.pct??-1));
+  else if(window._stuSort==="rate") students.sort((a,b)=>(b.avg??-1)-(a.avg??-1));
 
   const totalStu=list.length;
   const filtered=students;
@@ -659,33 +744,35 @@ function renderStudents(){
       <td><strong>${s.name}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${s.email}</td>
       <td style="font-size:12px">${s.cls}</td>
-      <td style="text-align:center"><span class="tries-badge ${s.done>0?'tries-1':'tries-many'}">${s.done}개</span></td>
-      <td>${s.avg!=null?rateBar(s.avg):'<span style="color:var(--ink3)">-</span>'}</td>
+      <td style="text-align:center">${s.pct!=null
+          ? `<span style="font-weight:700;color:${rateColor(s.pct)}">${s.pct}%</span> <span style="font-size:11px;color:var(--ink3)">(${s.done}/${s.total})</span>`
+          : '<span style="color:var(--ink3)">-</span>'}</td>
+      <td style="text-align:center">${s.avg!=null?`<span style="font-weight:600;color:${rateColor(s.avg)}">${s.avg}%</span>`:'<span style="color:var(--ink3)">-</span>'}</td>
       <td style="text-align:center;color:var(--accent);font-size:12px;font-weight:600">상세 →</td>
     </tr>`).join("");
 
   document.getElementById("content").innerHTML=`
     <div class="card">
       <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
-        <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${_stuSearch||_stuClass?` / 전체 ${totalStu}명`:''}</span></span>
+        <span class="card-title">👤 학생별 조회 <span style="color:var(--ink3);font-weight:400">· ${filtered.length}명${window._stuSearch||window._stuClass?` / 전체 ${totalStu}명`:''}</span></span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${_stuSearch}"
-            oninput="_stuSearch=this.value;renderStudents()"
+          <input id="stu-search" type="text" placeholder="이름·이메일 검색" value="${window._stuSearch}"
+            oninput="window._stuSearch=this.value;window._stuSearch=this.value;renderStudents()"
             style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;width:160px">
-          <select onchange="_stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
-            <option value="" ${!_stuClass?'selected':''}>전체 학급</option>
-            ${allClasses.map(c=>`<option value="${c}" ${_stuClass===c?'selected':''}>${c}</option>`).join('')}
+          <select onchange="window._stuClass=this.value;window._stuClass=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="" ${!window._stuClass?'selected':''}>전체 학급</option>
+            ${allClasses.map(c=>`<option value="${c}" ${window._stuClass===c?'selected':''}>${c}</option>`).join('')}
           </select>
-          <select onchange="_stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
-            <option value="class" ${_stuSort==='class'?'selected':''}>학급 순</option>
-            <option value="name"  ${_stuSort==='name'?'selected':''}>이름 순</option>
-            <option value="done"  ${_stuSort==='done'?'selected':''}>완료 많은 순</option>
-            <option value="rate"  ${_stuSort==='rate'?'selected':''}>정답률 높은 순</option>
+          <select onchange="window._stuSort=this.value;window._stuSort=this.value;renderStudents()" style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+            <option value="class" ${window._stuSort==='class'?'selected':''}>학급 순</option>
+            <option value="name"  ${window._stuSort==='name'?'selected':''}>이름 순</option>
+            <option value="done"  ${window._stuSort==='done'?'selected':''}>진도율 높은 순</option>
+            <option value="rate"  ${window._stuSort==='rate'?'selected':''}>정답률 높은 순</option>
           </select>
         </div>
       </div>
       <table class="data-table">
-        <thead><tr><th>이름</th><th>이메일</th><th>학급</th><th style="text-align:center">완료 학습지</th><th>평균 정답률</th><th></th></tr></thead>
+        <thead><tr><th>이름</th><th>이메일</th><th>학급</th><th style="text-align:center">진도율</th><th style="text-align:center">평균 정답률</th><th></th></tr></thead>
         <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:30px">학생 데이터가 없습니다</td></tr>'}</tbody>
       </table>
     </div>`;
@@ -699,7 +786,10 @@ function renderStudentDetail(uid){
   const recs=Object.values(wsMap);
   const any=recs.find(r=>r.studentName)||recs[0]||{};
   const name=any.studentName||"-", email=any.studentEmail||"-", cls=findClass(email)||"-";
-  const done=recs.filter(isRecDone).length;
+  // 진도율: 목록 화면과 동일 기준(반별 분모) 사용 — studentList 1회 계산 후 재사용
+  const _slist=studentList();
+  const me=_slist.find(s=>s.uid===uid)||{done:0,total:0,pct:null};
+  const done=me.done, progTotal=me.total, progPct=me.pct;
   const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
   const totalTries=recs.reduce((s,r)=>s+getAttempts(r),0);
@@ -707,8 +797,7 @@ function renderStudentDetail(uid){
   // 학습지별 행 (WORKSHEETS 정의 순서, 학생이 시작한 것만)
   const ordered=WORKSHEETS.filter(ws=>wsMap[ws.id]);
   const startedIds=new Set(ordered.map(w=>w.id));
-  // WORKSHEETS에 없지만 기록이 있는 경우(삭제된 학습지 등)
-  Object.keys(wsMap).forEach(id=>{ if(!startedIds.has(id)){ ordered.push({id,title:wsMap[id].worksheetTitle||id,unitId:wsMap[id].unitId}); } });
+  // 삭제된 학습지는 표시하지 않음
 
   const rows=ordered.map(ws=>{
     const r=wsMap[ws.id]; if(!r) return "";
@@ -729,14 +818,35 @@ function renderStudentDetail(uid){
     </tr>`;
   }).join("");
 
+  // ── 다른 학생으로 바로 이동 (목록과 동일 정렬: 학급→이름) ──
+  let navList=[..._slist].sort((a,b)=>
+    (""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
+  // 목록에서 학급 필터가 걸려 있고 현재 학생이 그 학급이면, 같은 학급 안에서만 이동
+  if(window._stuClass){
+    const f=navList.filter(s=>s.cls===window._stuClass);
+    if(f.some(s=>s.uid===uid)) navList=f;
+  }
+  const navIdx=navList.findIndex(s=>s.uid===uid);
+  const prevUid=navIdx>0?navList[navIdx-1].uid:null;
+  const nextUid=(navIdx>=0&&navIdx<navList.length-1)?navList[navIdx+1].uid:null;
+  const stuOptions=navList.map(s=>
+    `<option value="${s.uid}" ${s.uid===uid?'selected':''}>${s.cls&&s.cls!=='-'?s.cls+' · ':''}${s.name}</option>`).join("");
+
   document.getElementById("content").innerHTML=`
     <div class="card">
-      <div class="card-hdr">
+      <div class="card-hdr" style="flex-wrap:wrap;gap:8px">
         <span class="card-title">👤 ${name} <span style="color:var(--ink3);font-weight:400">· ${cls} · ${email}</span></span>
-        <button class="btn" onclick="navigate('students')">← 학생 목록</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="navigate('students')">← 목록</button>
+          <button class="btn" ${prevUid?`onclick="navigate('stu:${prevUid}')"`:'disabled style="opacity:.4;cursor:not-allowed"'} title="이전 학생">◀ 이전</button>
+          <select onchange="if(this.value)navigate('stu:'+this.value)" title="학생 선택"
+            style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;max-width:220px;font-family:inherit;cursor:pointer">${stuOptions}</select>
+          <button class="btn" ${nextUid?`onclick="navigate('stu:${nextUid}')"`:'disabled style="opacity:.4;cursor:not-allowed"'} title="다음 학생">다음 ▶</button>
+          <span style="font-size:12px;color:var(--ink3)">${navIdx>=0?navIdx+1:'-'} / ${navList.length}</span>
+        </div>
       </div>
       <div class="summary-row" style="margin-bottom:16px">
-        <div class="sum-card"><div class="sum-label">완료 학습지</div><div class="sum-num">${done}<span style="font-size:14px;color:var(--ink3)">/${recs.length}</span></div></div>
+        <div class="sum-card"><div class="sum-label">진도율</div><div class="sum-num" style="color:${progPct!=null?rateColor(progPct):'var(--ink3)'}">${progPct!=null?progPct+'%':'-'}<span style="font-size:14px;color:var(--ink3)"> (${done}/${progTotal})</span></div><div style="font-size:11px;color:var(--ink3)">반 시작 학습지 기준</div></div>
         <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
         <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
       </div>
@@ -1180,21 +1290,33 @@ function renderWS(wsId){
     </tr></thead><tbody id="ws-tbody"></tbody></table>
   </div>`;
   const qStats={};
+  const wrongCnt={};  // qid → {답: 빈도}
   recs.forEach(r=>{ if(!r.perQuestion) return;
     Object.entries(r.perQuestion).forEach(([qid,v])=>{
       if(!qStats[qid]) qStats[qid]={total:0,totalTries:0};
       qStats[qid].total++; qStats[qid].totalTries+=v.attempts||1;
+      // 빈출 오답 집계
+      if(Array.isArray(v.wrongInputs)){
+        if(!wrongCnt[qid]) wrongCnt[qid]={};
+        v.wrongInputs.forEach(w=>{
+          const key=String(w||'(빈칸)').slice(0,40);
+          wrongCnt[qid][key]=(wrongCnt[qid][key]||0)+1;
+        });
+      }
     });
   });
   if(Object.keys(qStats).length){
     h+=`<div class="card"><div class="card-hdr"><span class="card-title">📊 문항별 난이도</span></div>
-    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th></tr></thead><tbody>`;
+    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th><th>빈출 오답 (TOP 3)</th></tr></thead><tbody>`;
     Object.entries(qStats).sort().forEach(([qid,s])=>{
       const avg=(s.totalTries/s.total).toFixed(1);
       const diff=avg<=1.2?"🟢 쉬움":avg<=2.0?"🟡 보통":"🔴 어려움";
+      const top3=Object.entries(wrongCnt[qid]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      const wrongHtml=top3.length?top3.map(([ans,cnt])=>`<span style="display:inline-block;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;font-family:monospace">${ans} <b>${cnt}</b></span>`).join(''):'<span style="color:var(--ink3);font-size:11px">-</span>';
       h+=`<tr><td>${qid}</td><td>${s.total}명</td>
         <td><span class="tries-badge ${avg<=1.2?'tries-1':avg<=2?'tries-2':'tries-many'}">${avg}회</span></td>
-        <td>${diff}</td></tr>`;
+        <td>${diff}</td>
+        <td>${wrongHtml}</td></tr>`;
     });
     h+=`</tbody></table></div>`;
   }
@@ -1265,6 +1387,51 @@ function renderClasses(){
 async function saveClasses(){
   try{ await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true}); }
   catch(e){ console.error("학급 저장 오류:",e); }
+  syncAllowedEmails(); // 반별 잠금 학습지의 allowedEmails 재계산 (백그라운드, 실패해도 무방)
+}
+
+/* 학급 명단 변경 시: 잠금 학습지의 해제 반 명단(allowedEmails)을 최신 명단으로 재계산
+   (잠금 해제 시점의 스냅샷이 낡는 문제 방지 — 전학생 추가/삭제 반영) */
+async function syncAllowedEmails(){
+  try{
+    // 모든 교사의 학급 병합 (반 이름 → 학생 이메일 Set)
+    let docsData=[];
+    try{
+      const allSnap=await getDocs(collection(db,"teacher_data"));
+      docsData=allSnap.docs.map(d=>d.data());
+    }catch(eAll){ docsData=[{classes}]; }
+    const roster={};
+    for(const data of docsData){
+      for(const c of Object.values(data.classes||{})){
+        const name=`${c.year}/${c.grade}학년 ${c.classNum}반`;
+        if(!roster[name]) roster[name]=new Set();
+        (c.students||[]).forEach(e=>roster[name].add(String(e).toLowerCase()));
+      }
+    }
+    // 반별 잠금(allowedEmails) + 파트별 잠금(partAllowed) 재계산
+    const calc=m=>[...new Set(Object.keys(m||{}).filter(n=>m[n]).flatMap(n=>[...(roster[n]||[])]))].sort();
+    const norm=a=>[...(a||[])].map(e=>String(e).toLowerCase()).sort();
+    const wSnap=await getDocs(collection(db,'curriculum'));
+    for(const d of wSnap.docs){
+      const ws=d.data();
+      const updates={};
+      // 학습지 전체 잠금의 해제 반 명단
+      if(ws.status==='locked' && Object.values(ws.unlockedClasses||{}).some(Boolean)){
+        const newAllowed=calc(ws.unlockedClasses);
+        if(JSON.stringify(newAllowed)!==JSON.stringify(norm(ws.allowedEmails))) updates.allowedEmails=newAllowed;
+      }
+      // 파트별 잠금의 해제 반 명단
+      for(const [pid,clsMap] of Object.entries(ws.partUnlocked||{})){
+        if(!Object.values(clsMap||{}).some(Boolean)) continue;
+        const newArr=calc(clsMap);
+        if(JSON.stringify(newArr)!==JSON.stringify(norm((ws.partAllowed||{})[pid]))) updates['partAllowed.'+pid]=newArr;
+      }
+      if(Object.keys(updates).length){
+        await updateDoc(doc(db,'curriculum',d.id),updates);
+        console.log('[syncAllowedEmails]',d.id,Object.keys(updates));
+      }
+    }
+  }catch(e){ console.warn('[syncAllowedEmails 실패]',e); }
 }
 
 window.addClass=async function(){

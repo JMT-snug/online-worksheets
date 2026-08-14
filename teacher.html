@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.8ak">
+<meta name="app-version" content="3.9">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -223,7 +223,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc}
+import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, deleteDoc, doc, getDoc, setDoc, updateDoc, deleteField, FieldPath}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.8ak";
+const VERSION = "3.9";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -247,8 +247,24 @@ const STEP_MARK={a:'①',b:'②',c:'③',d:'④',e:'⑤',f:'⑥'};
 function fmtQid(qid){
   return (qid||'').replace(/^q(\d+)([a-f]?)$/,(_,n,s)=>'Q'+n+(s?STEP_MARK[s]:''));
 } // teacher 버전
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+const MASTER_EMAIL = "rapidwing@snu-g.ms.kr";                            // 교사 계정 관리 권한
+const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // 고정 교사 계정
+const TEACHER_EMAILS = [...BASE_TEACHER_EMAILS];  // + config/teachers의 학급 담당 교사 (loadExtraTeachers)
 const STUDENT_DOMAIN = "@snu-g.ms.kr";
+function isMaster(){ return !!(tUser && tUser.email===MASTER_EMAIL); }
+
+/* config/teachers 문서(학급 담당 교사 목록)를 읽어 TEACHER_EMAILS에 병합 */
+async function loadExtraTeachers(){
+  try{
+    const snap=await getDoc(doc(db,"config","teachers"));
+    if(snap.exists()){
+      (snap.data().emails||[]).forEach(e=>{
+        e=String(e).toLowerCase();
+        if(e && !TEACHER_EMAILS.includes(e)) TEACHER_EMAILS.push(e);
+      });
+    }
+  }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
+}
 
 let UNITS = [
   { id:"u1-01", title:"소인수분해",            grade:1, category:"수와 연산" },
@@ -312,6 +328,7 @@ WORKSHEETS.forEach(ws => {
 
 onAuthStateChanged(auth,async u=>{
   if(!u){ showGate(true); return; }
+  await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 권한이 없습니다."); await signOut(auth); return; }
   tUser=u;
   document.getElementById("t-name").textContent=u.displayName||u.email;
@@ -1329,7 +1346,7 @@ function renderWS(wsId){
 
 function renderClasses(){
   let h=`<div class="pg-title">🏫 학급 관리</div>
-  <div class="pg-sub">학년도·학년·반 단위로 학생 이메일을 등록합니다.</div>
+  <div class="pg-sub">학년도·학년·반 단위로 학생 이메일을 등록합니다. 담당 교사 지정은 마스터 계정만 가능합니다.</div>
   <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
     <div class="card-title" style="margin-bottom:12px">새 학급 추가</div>
     <div class="class-row" style="gap:10px;margin-bottom:10px">
@@ -1357,6 +1374,7 @@ function renderClasses(){
           <button onclick="deleteClass('${key}')" style="margin-left:auto;background:none;border:none;color:var(--ink3);cursor:pointer;font-size:13px">🗑</button>
         </div>
         <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">${students.length}명 등록</div>
+        ${renderClassTeacher(key,cls)}
         <div class="student-list" id="list-${key}">
           ${students.map((e,i)=>{
             const disp=e.endsWith(STUDENT_DOMAIN)?e.replace(STUDENT_DOMAIN,''):e;
@@ -1382,6 +1400,88 @@ function renderClasses(){
   h+=`</div>`;
   document.getElementById("content").innerHTML=h;
   
+}
+
+/* 학급 카드의 담당 교사 영역 (학급당 1명, 지정/해제는 마스터 계정만) */
+function renderClassTeacher(key,cls){
+  const tEmail=cls.teacher||"";
+  let inner;
+  if(tEmail){
+    const disp=tEmail.endsWith(STUDENT_DOMAIN)?tEmail.replace(STUDENT_DOMAIN,''):tEmail;
+    inner=`<div class="student-chip" style="background:#eef2ff;border-color:#c7d2fe">
+      <span>👩‍🏫 ${disp}</span>
+      <span style="font-size:11px;color:var(--ink3);margin-left:2px">${tEmail.endsWith(STUDENT_DOMAIN)?STUDENT_DOMAIN:''}</span>
+      ${isMaster()?`<button class="remove" onclick="removeClassTeacher('${key}')">×</button>`:''}
+    </div>`;
+  } else if(isMaster()){
+    inner=`<div style="display:flex;gap:6px">
+      <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
+        <input type="text" id="tch-${key}" placeholder="교사 아이디 입력"
+          style="border:none;outline:none;padding:6px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
+          onkeydown="if(event.key==='Enter')setClassTeacher('${key}')">
+        <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
+      </div>
+      <button class="btn-sm" onclick="setClassTeacher('${key}')">지정</button>
+    </div>`;
+  } else {
+    inner=`<div style="font-size:13px;color:var(--ink3)">미지정</div>`;
+  }
+  return `<div style="margin-bottom:10px;padding:8px 10px;border:1px dashed var(--rule);border-radius:7px">
+    <div style="font-size:11px;color:var(--ink3);font-weight:600;margin-bottom:5px">담당 교사${isMaster()?'':' <span style="font-weight:400">(마스터 계정만 변경 가능)</span>'}</div>
+    ${inner}
+  </div>`;
+}
+
+window.setClassTeacher=async function(key){
+  if(!isMaster()){ alert(`교사 계정 지정은 마스터 계정(${MASTER_EMAIL})만 가능합니다.`); return; }
+  const inp=document.getElementById("tch-"+key);
+  let val=(inp?.value||"").trim().toLowerCase();
+  if(!val) return;
+  const email=val.includes("@")?val:val+STUDENT_DOMAIN;
+  if(classes[key].teacher){ alert("이미 담당 교사가 지정된 학급입니다. 기존 교사를 해제한 뒤 지정하세요."); return; }
+  if((classes[key].students||[]).includes(email)){ alert("이 학급에 학생으로 등록된 이메일입니다. 교사로 지정할 수 없습니다."); return; }
+  classes[key].teacher=email;
+  await saveClasses();
+  await updateTeacherConfig();
+  renderClasses();
+};
+window.removeClassTeacher=async function(key){
+  if(!isMaster()){ alert(`교사 계정 해제는 마스터 계정(${MASTER_EMAIL})만 가능합니다.`); return; }
+  const cls=classes[key];
+  if(!confirm(`${cls?.year}학년도 ${cls?.grade}학년 ${cls?.classNum}반의 담당 교사(${cls?.teacher})를 해제할까요?\n해제하면 해당 계정은 교사 권한을 잃습니다.`)) return;
+  classes[key].teacher="";  // merge:true는 맵 키 삭제를 반영 못 하므로 빈 값으로 저장
+  await saveClasses();
+  await updateTeacherConfig();
+  renderClasses();
+};
+
+/* 모든 teacher_data 문서의 classes[*].teacher를 모아 config/teachers.emails로 저장
+   → index/edit/teacher/scoring이 로그인 시 이 문서를 읽어 교사 권한을 부여 (마스터 전용) */
+async function updateTeacherConfig(){
+  if(!isMaster()) return;
+  try{
+    let docsData=[];
+    try{
+      const allSnap=await getDocs(collection(db,"teacher_data"));
+      docsData=allSnap.docs.map(d=>d.data());
+    }catch(eAll){ docsData=[{classes}]; }
+    const emails=new Set(), byClass={};
+    for(const data of docsData){
+      for(const [k,c] of Object.entries(data.classes||{})){
+        if(c && c.teacher){ const e=String(c.teacher).toLowerCase(); emails.add(e); byClass[k]=e; }
+      }
+    }
+    await setDoc(doc(db,"config","teachers"),{
+      emails:[...emails].sort(),
+      byClass,
+      updatedAt:new Date().toISOString(),
+      updatedBy:tUser.email
+    });
+    // 현재 세션의 TEACHER_EMAILS에도 즉시 반영 (기본 교사 + 담당 교사로 재구성)
+    const merged=[...BASE_TEACHER_EMAILS,...[...emails].filter(e=>!BASE_TEACHER_EMAILS.includes(e))];
+    TEACHER_EMAILS.splice(0,TEACHER_EMAILS.length,...merged);
+    console.log("[updateTeacherConfig] 담당 교사",[...emails]);
+  }catch(e){ console.error("[updateTeacherConfig 실패]",e); alert("교사 목록 저장 중 오류: "+e.message); }
 }
 
 async function saveClasses(){
@@ -1449,7 +1549,14 @@ window.addClass=async function(){
 };
 window.deleteClass=async function(key){
   if(!confirm(`${classes[key]?.year}학년도 ${classes[key]?.grade}학년 ${classes[key]?.classNum}반을 삭제할까요?`)) return;
-  delete classes[key]; await saveClasses(); renderClasses();
+  const hadTeacher=!!classes[key]?.teacher;
+  delete classes[key];
+  // setDoc(merge:true)는 맵 키 삭제를 반영 못 함 → 필드 자체를 삭제 (키에 하이픈이 있어 FieldPath 사용)
+  try{ await updateDoc(doc(db,"teacher_data",tUser.uid), new FieldPath("classes",key), deleteField()); }
+  catch(e){ console.error("학급 삭제 오류:",e); }
+  syncAllowedEmails();
+  if(hadTeacher) await updateTeacherConfig(); // 담당 교사가 있던 학급이면 교사 목록 재계산
+  renderClasses();
 };
 window.addStudent=async function(key){
   const inp=document.getElementById("add-"+key);

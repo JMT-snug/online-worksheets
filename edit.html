@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.0">
+<meta name="app-version" content="edit-v3.0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -542,11 +542,24 @@ const FB = {
   messagingSenderId:"404100779359",
   appId:"1:404100779359:web:d94e5be4b4f29ae9c55bb0"
 };
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
 
 const fbApp = initializeApp(FB);
 const auth  = getAuth(fbApp);
 const db    = getFirestore(fbApp);
+
+/* config/teachers 문서(마스터가 teacher.html 학급 관리에서 지정한 담당 교사)를 읽어 TEACHER_EMAILS에 병합 */
+async function loadExtraTeachers(){
+  try{
+    const snap = await getDoc(doc(db,"config","teachers"));
+    if(snap.exists()){
+      (snap.data().emails||[]).forEach(e=>{
+        e=String(e).toLowerCase();
+        if(e && !TEACHER_EMAILS.includes(e)) TEACHER_EMAILS.push(e);
+      });
+    }
+  }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
+}
 
 // ── 상태 ──
 let currentUser = null;
@@ -559,7 +572,8 @@ let altAnswers = [];     // 대안 정답 배열
 let poolCorrect = [], poolWrong = []; // 랜덤 풀
 
 // ── 인증 ──
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async user => {
+  if(user) await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(user && TEACHER_EMAILS.includes(user.email)){
     currentUser = user;
     document.getElementById('auth-gate').style.display='none';

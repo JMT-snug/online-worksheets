@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0i">
+<meta name="app-version" content="scoring-v1.0j">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -268,11 +268,24 @@ const FB = {
   messagingSenderId:"404110714320",
   appId:"1:404110714320:web:cb79c555a383801f3205d5"
 };
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
 
 const fbApp = initializeApp(FB);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+
+/* config/teachers 문서(마스터가 teacher.html 학급 관리에서 지정한 담당 교사)를 읽어 TEACHER_EMAILS에 병합 */
+async function loadExtraTeachers(){
+  try{
+    const snap = await getDoc(doc(db,"config","teachers"));
+    if(snap.exists()){
+      (snap.data().emails||[]).forEach(e=>{
+        e=String(e).toLowerCase();
+        if(e && !TEACHER_EMAILS.includes(e)) TEACHER_EMAILS.push(e);
+      });
+    }
+  }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
+}
 
 // ── 상태 ──
 let currentUser = null;
@@ -299,6 +312,7 @@ document.getElementById("btn-logout").addEventListener("click", () => signOut(au
 
 onAuthStateChanged(auth, async u => {
   if(!u){ showPage("login-page"); return; }
+  await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 계정만 접근 가능합니다"); await signOut(auth); return; }
   currentUser = u;
   document.getElementById("hdr-user").style.display = "flex";

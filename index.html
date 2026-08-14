@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.1">
+  <meta name="app-version" content="8.2">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "8.1";
+const VERSION = "8.2";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -697,7 +697,7 @@ const FB = {
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
 const ALLOWED_DOMAINS = [];
-const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
 // Storage 버킷이 프로젝트에 없음 (Spark 요금제 — 신규 버킷 생성 불가). 오답 이미지 업로드는
 // 처음부터 실패해 왔으므로 비활성화. Blaze 전환 후 버킷 생성 시 true로 변경.
 const STORAGE_ENABLED = false;
@@ -755,6 +755,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 /* ── Firestore에서 학습지 로드 ── */
 let UNITS = [], WORKSHEETS = [];
+
+/* config/teachers 문서(마스터가 teacher.html 학급 관리에서 지정한 담당 교사)를 읽어 TEACHER_EMAILS에 병합 */
+async function loadExtraTeachers(){
+  try{
+    const snap = await getDoc(doc(db,"config","teachers"));
+    if(snap.exists()){
+      (snap.data().emails||[]).forEach(e=>{
+        e=String(e).toLowerCase();
+        if(e && !TEACHER_EMAILS.includes(e)) TEACHER_EMAILS.push(e);
+      });
+    }
+  }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
+}
 async function loadTeacherData(){
   if(!user || !TEACHER_EMAILS.includes(user.email)) return;
   try{
@@ -825,6 +838,7 @@ async function loadCurriculum(){
 onAuthStateChanged(auth, async u => {
   if (!u) { showPage("login-page"); updateHeader(null); return; }
   user = u;
+  await loadExtraTeachers(); // 담당 교사 병합 후 헤더 렌더 (교사용 네비 노출 판정)
   updateHeader(u);
   await loadCurriculum();
   await loadTeacherData();

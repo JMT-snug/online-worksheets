@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.10">
+<meta name="app-version" content="3.11">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.10";
+const VERSION = "3.11";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -316,6 +316,7 @@ const storage = getStorage(fbApp);
 let tUser=null, allData={}, progressData={}, classes={}, selView="overview";
 // 담당 교사 범위: 기본 교사(BASE)는 null=전체, 담당 교사는 담당 학급 학생 이메일 Set (loadClassScope에서 설정)
 let scopedTeacher=false, scopeEmails=null;
+let classOwner={}; // 학급키 → 그 학급이 저장된 teacher_data 문서 uid (담당 교사의 명단 수정이 소유 문서에 기록되도록)
 let WORKSHEETS = (typeof window!=="undefined" && window.WORKSHEETS) ? window.WORKSHEETS : [];  // 정적 기본값, loadCurriculum이 Firestore로 교체
 
 document.getElementById("btn-login").addEventListener("click",async()=>{
@@ -377,10 +378,10 @@ async function loadClassScope(){
   try{
     if(scopedTeacher){
       const allSnap=await getDocs(collection(db,"teacher_data"));
-      classes={};
+      classes={}; classOwner={};
       allSnap.forEach(s=>{
         for(const [k,c] of Object.entries(s.data().classes||{})){
-          if(c && String(c.teacher||'').toLowerCase()===tUser.email.toLowerCase()) classes[k]=c;
+          if(c && String(c.teacher||'').toLowerCase()===tUser.email.toLowerCase()){ classes[k]=c; classOwner[k]=s.id; }
         }
       });
       scopeEmails=new Set(Object.values(classes).flatMap(c=>(c.students||[]).map(e=>String(e).toLowerCase())));
@@ -388,6 +389,7 @@ async function loadClassScope(){
     } else {
       const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
       classes=cSnap.exists()?(cSnap.data().classes||{}):{};
+      classOwner={};
       scopeEmails=null;
     }
   }catch(e){ classes={}; if(scopedTeacher) scopeEmails=new Set(); console.error("[loadClassScope]",e); }
@@ -1369,7 +1371,7 @@ function renderWS(wsId){
 function renderClasses(){
   let h=`<div class="pg-title">🏫 학급 관리</div>
   <div class="pg-sub">${scopedTeacher
-    ?'담당 학급 명단입니다 (읽기 전용 — 명단 수정은 기본 교사에게 요청하세요).'
+    ?'담당 학급 명단입니다. 학생 추가/삭제가 가능합니다 (학급 추가·삭제와 담당 교사 지정은 기본 교사/마스터만).'
     :'학년도·학년·반 단위로 학생 이메일을 등록합니다. 담당 교사 지정은 마스터 계정만 가능합니다.'}</div>`;
   if(!scopedTeacher) h+=`
   <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
@@ -1406,11 +1408,11 @@ function renderClasses(){
             return `<div class="student-chip">
               <span>${disp}</span>
               <span style="font-size:11px;color:var(--ink3);margin-left:2px">${STUDENT_DOMAIN}</span>
-              ${scopedTeacher?'':`<button class="remove" onclick="removeStudent('${key}',${i})">×</button>`}
+              <button class="remove" onclick="removeStudent('${key}',${i})">×</button>
             </div>`;
           }).join("")}
         </div>
-        ${scopedTeacher?'':`<div class="add-student-row">
+        <div class="add-student-row">
           <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
             <input type="text" id="add-${key}" placeholder="아이디 입력"
               style="border:none;outline:none;padding:7px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
@@ -1418,7 +1420,7 @@ function renderClasses(){
             <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
           </div>
           <button class="btn-sm" onclick="addStudent('${key}')">추가</button>
-        </div>`}
+        </div>
       </div>`;
     });
   }
@@ -1516,6 +1518,17 @@ async function saveClasses(){
   syncAllowedEmails(); // 반별 잠금 학습지의 allowedEmails 재계산 (백그라운드, 실패해도 무방)
 }
 
+/* 학생 명단만 저장 — 학급이 저장된 소유 문서에 필드 단위로 기록
+   (담당 교사도 자기 담당 학급의 명단은 수정 가능. 학급키에 하이픈이 있어 FieldPath 사용) */
+async function saveClassStudents(key){
+  const ownerUid=classOwner[key]||tUser.uid;
+  try{
+    await updateDoc(doc(db,"teacher_data",ownerUid), new FieldPath("classes",key,"students"), classes[key].students||[]);
+  }catch(e){ console.error("명단 저장 오류:",e); alert("명단 저장 실패: "+e.message); return; }
+  if(scopeEmails) scopeEmails=new Set(Object.values(classes).flatMap(c=>(c.students||[]).map(e=>String(e).toLowerCase()))); // 세션 범위 갱신
+  syncAllowedEmails(); // 잠금 학습지 허용 목록 재계산 (백그라운드)
+}
+
 /* 학급 명단 변경 시: 잠금 학습지의 해제 반 명단(allowedEmails)을 최신 명단으로 재계산
    (잠금 해제 시점의 스냅샷이 낡는 문제 방지 — 전학생 추가/삭제 반영) */
 async function syncAllowedEmails(){
@@ -1587,7 +1600,6 @@ window.deleteClass=async function(key){
   renderClasses();
 };
 window.addStudent=async function(key){
-  if(scopedTeacher){ alert("담당 교사 계정은 명단을 수정할 수 없습니다."); return; }
   const inp=document.getElementById("add-"+key);
   let val=inp.value.trim().toLowerCase();
   if(!val) return;
@@ -1595,16 +1607,15 @@ window.addStudent=async function(key){
   if(!classes[key].students) classes[key].students=[];
   if(classes[key].students.includes(email)){ alert("이미 등록된 학생입니다."); inp.select(); return; }
   classes[key].students.push(email);
-  await saveClasses(); renderClasses();
+  await saveClassStudents(key); renderClasses();
   requestAnimationFrame(()=>{
     const newInp=document.getElementById("add-"+key);
     if(newInp){ newInp.value=""; newInp.focus(); }
   });
 };
 window.removeStudent=async function(key,idx){
-  if(scopedTeacher){ alert("담당 교사 계정은 명단을 수정할 수 없습니다."); return; }
   classes[key].students.splice(idx,1);
-  await saveClasses(); renderClasses();
+  await saveClassStudents(key); renderClasses();
 };
 
 function findClass(email){

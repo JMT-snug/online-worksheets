@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.0j">
+<meta name="app-version" content="scoring-v1.1">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -268,7 +268,9 @@ const FB = {
   messagingSenderId:"404110714320",
   appId:"1:404110714320:web:cb79c555a383801f3205d5"
 };
-const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // 전체 권한 교사
+const TEACHER_EMAILS = [...BASE_TEACHER_EMAILS]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+let myClsNames = null; // 담당 교사 채점 범위: null=전체(기본 교사), Set=담당 학급 이름만 (loadAllRecords에서 계산)
 
 const fbApp = initializeApp(FB);
 const auth = getAuth(fbApp);
@@ -362,18 +364,24 @@ async function loadAllRecords(){
     try{
       const clsSnap = await getDocs(collection(db, 'teacher_data'));
       classMap = {};
+      const clsTeacher = {}; // 반 이름 → 담당 교사 이메일
       clsSnap.forEach(d => {
         const data = d.data();
         if(data.classes){
-          // 실제 구조: classes[key] = {year, grade, classNum, students:[이메일]}
+          // 실제 구조: classes[key] = {year, grade, classNum, students:[이메일], teacher?}
           Object.entries(data.classes).forEach(([key, c]) => {
             if(!c || typeof c !== 'object') return;
             const name = `${c.year}/${c.grade}학년 ${c.classNum}반`;
             (c.students||[]).forEach(email => { classMap[String(email).toLowerCase()] = name; });
+            if(c.teacher) clsTeacher[name] = String(c.teacher).toLowerCase();
           });
         }
       });
       console.log("[반 정보] 로드 완료", Object.keys(classMap).length, "명");
+      // 담당 교사(기본 교사 아님)는 담당 학급 학생의 답안만 채점 가능
+      myClsNames = BASE_TEACHER_EMAILS.includes(currentUser.email) ? null
+        : new Set(Object.keys(clsTeacher).filter(n => clsTeacher[n] === currentUser.email.toLowerCase()));
+      if(myClsNames) console.log("[담당 교사 범위]", [...myClsNames]);
     }catch(e){ console.warn("[반 정보 로드 실패]", e.message); }
   }catch(e){ console.error(e); }
 }
@@ -512,6 +520,7 @@ function loadQuestion(){
       cls: classMap[String(email).toLowerCase()] || "",
       data: r.perQuestion[curQid]
     }))
+    .filter(s => !myClsNames || (s.cls && myClsNames.has(s.cls))) // 담당 교사: 담당 학급 학생만
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
 
   // 반 목록 채우기

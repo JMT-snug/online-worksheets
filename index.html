@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.2">
+  <meta name="app-version" content="8.3">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "8.2";
+const VERSION = "8.3";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -697,7 +697,12 @@ const FB = {
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
 const ALLOWED_DOMAINS = [];
-const TEACHER_EMAILS  = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // 전체 권한 교사
+const TEACHER_EMAILS  = [...BASE_TEACHER_EMAILS]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+// 담당 교사 권한 범위: null=전체 권한(기본 교사), Set=담당 학급 이름만 잠금 조작 가능 (loadTeacherData에서 계산)
+let myClassNames = null;
+function isScopedTeacher(){ return !!(user && TEACHER_EMAILS.includes(user.email) && myClassNames!==null); }
+function canManageClass(name){ return !myClassNames || myClassNames.has(name); }
 // Storage 버킷이 프로젝트에 없음 (Spark 요금제 — 신규 버킷 생성 불가). 오답 이미지 업로드는
 // 처음부터 실패해 왔으므로 비활성화. Blaze 전환 후 버킷 생성 시 true로 변경.
 const STORAGE_ENABLED = false;
@@ -792,6 +797,7 @@ async function loadTeacherData(){
         const name=`${c.year}/${c.grade}학년 ${c.classNum}반`;
         if(!byName[name]) byName[name]={key:k,name,students:new Set()};
         (c.students||[]).forEach(e=>byName[name].students.add(String(e).toLowerCase()));
+        if(c.teacher) byName[name].teacher=String(c.teacher).toLowerCase(); // 담당 교사
       }
       // 진도 체크 데이터 병합 (둘 중 하나라도 완료면 완료)
       for(const [wsId,m] of Object.entries(data.teacherProgress||{})){
@@ -813,6 +819,10 @@ async function loadTeacherData(){
       .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
     classStudents={};
     teacherClasses.forEach(c=>{ classStudents[c.name]=c.students; });
+    // 담당 교사(기본 교사 아님)는 자기 담당 학급만 잠금 조작 가능
+    myClassNames = BASE_TEACHER_EMAILS.includes(user.email) ? null
+      : new Set(Object.values(byName).filter(c=>c.teacher===user.email.toLowerCase()).map(c=>c.name));
+    if(myClassNames) console.log('[담당 교사 범위]',[...myClassNames]);
   }catch(e){console.error('[loadTeacherData 오류]',e);}
 }
 
@@ -876,7 +886,7 @@ function updateHeader(u) {
   document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
   document.getElementById("hdr-scoring-link").style.display = isT ? "inline-flex" : "none";
   document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
-  document.getElementById("hdr-sync-progress").style.display= isT ? "inline-flex" : "none";
+  document.getElementById("hdr-sync-progress").style.display= (isT && BASE_TEACHER_EMAILS.includes(u.email)) ? "inline-flex" : "none"; // 진도 동기화는 기본 교사 전용
 }
 
 /* ── DASHBOARD ── */
@@ -1212,6 +1222,7 @@ function watchWs(ws){
 
 /* 전체 잠금/해제 토글 (반별·파트별 정보 초기화) */
 window.toggleWsLock=async function(wsId, btn){
+  if(isScopedTeacher()){ alert('전체 잠금/공개는 기본 교사 계정만 가능합니다.\n담당 학급 버튼으로 잠금을 조절하세요.'); return; }
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const newStatus = ws.status==='published' ? 'locked' : 'published';
   try{
@@ -1227,6 +1238,11 @@ window.toggleWsLock=async function(wsId, btn){
 window.toggleClassLock=async function(wsId, clsName){
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   if(ws.status==='draft'){ alert('준비 중(draft) 학습지는 edit에서 발행 후 잠금을 설정하세요.'); return; }
+  if(isScopedTeacher()){
+    if(!canManageClass(clsName)){ alert('담당 학급이 아닙니다.'); return; }
+    // published→locked 전환은 다른 반 상태까지 일괄 변경하므로 기본 교사 전용
+    if(ws.status!=='locked'){ alert('현재 전체 공개 상태입니다.\n반별 잠금 시작(전체 공개→잠금 전환)은 기본 교사 계정만 가능합니다.'); return; }
+  }
   let newStatus=ws.status, newUnlocked;
   const parts=getParts(ws);
   const pu=JSON.parse(JSON.stringify(ws.partUnlocked||{}));
@@ -1269,6 +1285,7 @@ window.toggleClassLock=async function(wsId, clsName){
 
 /* 파트×반 잠금 토글 (교사가 학습지 문제 화면의 파트 바에서 클릭) */
 window.togglePartLock=async function(wsId, partId, clsName){
+  if(isScopedTeacher() && !canManageClass(clsName)){ alert('담당 학급이 아닙니다.'); return; }
   const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
   const cur={...((ws.partUnlocked||{})[partId]||{})};
   if(cur[clsName]) delete cur[clsName]; else cur[clsName]=true;
@@ -1292,7 +1309,7 @@ window.togglePartLock=async function(wsId, partId, clsName){
    삭제 대상: 모든 교사 계정의 records/results 풀이 기록
    (오답 이미지는 Storage 버킷 미생성으로 애초에 저장된 적 없음 → 대상 아님) */
 window.purgeTeacherRecords = async function(){
-  if(!isTeacherAcct()){ alert('교사 전용 기능'); return; }
+  if(!user || !BASE_TEACHER_EMAILS.includes(user.email)){ alert('기본 교사 전용 기능'); return; }
   const targets=[];
   for(const email of TEACHER_EMAILS){
     for(const col of ['records','results']){
@@ -1312,7 +1329,7 @@ window.purgeTeacherRecords = async function(){
 
 window.syncAutoProgress = async function(){
   const btn=document.getElementById('hdr-sync-progress');
-  if(!user||!TEACHER_EMAILS.includes(user.email)){ alert('교사 전용 기능'); return; }
+  if(!user||!BASE_TEACHER_EMAILS.includes(user.email)){ alert('진도 동기화는 기본 교사 전용 기능입니다.'); return; }
   btn.disabled=true; const orig=btn.textContent; btn.textContent='📊 계산 중...';
 
   try{
@@ -1480,10 +1497,11 @@ function showUnitPage(unit) {
         const lockBtn=document.createElement('button');
         const isNowLocked=(ws.status==='locked');
         const isNowDraft=(ws.status==='draft');
+        const scoped=isScopedTeacher(); // 담당 교사: 전체 토글 불가, 담당 학급 버튼만
         lockBtn.textContent=isNowLocked?'🔒 전체 잠금':(isNowDraft?'📝 준비 중':'🔓 전체 공개');
-        lockBtn.title=isNowLocked?'클릭하면 전체 공개 (반별 해제도 초기화)':(isNowDraft?'edit에서 변경하세요':'클릭하면 전체 잠금');
-        lockBtn.style.cssText=`padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid;cursor:${isNowDraft?'default':'pointer'};font-family:inherit;background:${isNowLocked?'#fef3c7':isNowDraft?'#f1f5f9':'#f0fdf4'};color:${isNowLocked?'#b45309':isNowDraft?'#64748b':'#15803d'};border-color:${isNowLocked?'#b45309':isNowDraft?'#94a3b8':'#15803d'}`;
-        if(!isNowDraft) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
+        lockBtn.title=scoped?'전체 잠금/공개는 기본 교사 전용':(isNowLocked?'클릭하면 전체 공개 (반별 해제도 초기화)':(isNowDraft?'edit에서 변경하세요':'클릭하면 전체 잠금'));
+        lockBtn.style.cssText=`padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid;cursor:${(isNowDraft||scoped)?'default':'pointer'};font-family:inherit;background:${isNowLocked?'#fef3c7':isNowDraft?'#f1f5f9':'#f0fdf4'};color:${isNowLocked?'#b45309':isNowDraft?'#64748b':'#15803d'};border-color:${isNowLocked?'#b45309':isNowDraft?'#94a3b8':'#15803d'}${scoped?';opacity:.5':''}`;
+        if(!isNowDraft && !scoped) lockBtn.onclick=(e)=>{e.stopPropagation();window.toggleWsLock(ws.id,lockBtn);};
         row.appendChild(lockBtn);
 
         // 학급별 버튼: 모든 학습지 유형에 표시 (시험지/VOCA도 반별 잠금 대상)
@@ -1502,8 +1520,10 @@ function showUnitPage(unit) {
             const btn=document.createElement('button');
             btn.className=`cls-tog ${clsLocked?'cls-locked':'cls-open'} fill-${fill}`;
             btn.textContent=(clsLocked?'🔒 ':'')+name.replace(/\d+\//,'').replace('학년 ','학년\n');
-            btn.title=`${name}: ${clsLocked?'잠금':'열림'} · 완료율 ${rate}% — 클릭하면 ${clsLocked?'해제':'잠금'}`;
-            if(!isNowDraft) btn.onclick=(e)=>{ e.stopPropagation(); window.toggleClassLock(ws.id,name); };
+            const mine=canManageClass(name); // 담당 교사는 자기 학급만 조작 가능
+            btn.title=mine?`${name}: ${clsLocked?'잠금':'열림'} · 완료율 ${rate}% — 클릭하면 ${clsLocked?'해제':'잠금'}`:`${name}: 담당 학급이 아닙니다 (조회만 가능)`;
+            if(!mine){ btn.style.opacity='.35'; btn.style.cursor='default'; }
+            if(!isNowDraft && mine) btn.onclick=(e)=>{ e.stopPropagation(); window.toggleClassLock(ws.id,name); };
             row.appendChild(btn);
           });
           const note=document.createElement('div');
@@ -1928,12 +1948,13 @@ function renderPartPopContent(pop,p){
   teacherClasses.forEach(({name})=>{
     const clsOpen=!!((curWS.unlockedClasses||{})[name]);
     const on=!!((curWS.partUnlocked||{})[p.id]||{})[name];
+    const mine=canManageClass(name); // 담당 교사는 자기 학급만 조작 가능
     const b=document.createElement('button');
     b.className='cls-tog '+(on?'cls-open fill-3':'cls-locked fill-0');
-    b.style.cssText='display:block;width:100%;text-align:left;margin-bottom:4px'+(clsOpen?'':';opacity:.4');
-    b.textContent=(on?'🔓 ':'🔒 ')+name+(clsOpen?'':' · 학습지 잠김');
-    b.title=on?'클릭하면 잠금':'클릭하면 해제';
-    b.onclick=(e)=>{ e.stopPropagation(); window.togglePartLock(curWS.id,p.id,name); };
+    b.style.cssText='display:block;width:100%;text-align:left;margin-bottom:4px'+((clsOpen&&mine)?'':';opacity:.4')+(mine?'':';cursor:default');
+    b.textContent=(on?'🔓 ':'🔒 ')+name+(clsOpen?'':' · 학습지 잠김')+(mine?'':' · 담당 아님');
+    b.title=mine?(on?'클릭하면 잠금':'클릭하면 해제'):'담당 학급이 아닙니다';
+    if(mine) b.onclick=(e)=>{ e.stopPropagation(); window.togglePartLock(curWS.id,p.id,name); };
     pop.appendChild(b);
   });
 }

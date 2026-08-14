@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.9">
+<meta name="app-version" content="3.10">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.9";
+const VERSION = "3.10";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -314,6 +314,8 @@ const db      = getFirestore(fbApp);
 const storage = getStorage(fbApp);
 
 let tUser=null, allData={}, progressData={}, classes={}, selView="overview";
+// 담당 교사 범위: 기본 교사(BASE)는 null=전체, 담당 교사는 담당 학급 학생 이메일 Set (loadClassScope에서 설정)
+let scopedTeacher=false, scopeEmails=null;
 let WORKSHEETS = (typeof window!=="undefined" && window.WORKSHEETS) ? window.WORKSHEETS : [];  // 정적 기본값, loadCurriculum이 Firestore로 교체
 
 document.getElementById("btn-login").addEventListener("click",async()=>{
@@ -331,6 +333,7 @@ onAuthStateChanged(auth,async u=>{
   await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 권한이 없습니다."); await signOut(auth); return; }
   tUser=u;
+  scopedTeacher=!BASE_TEACHER_EMAILS.includes(u.email); // 담당 교사 = 담당 학급 학생만 조회
   document.getElementById("t-name").textContent=u.displayName||u.email;
   showGate(false);
   await loadCurriculum();
@@ -369,9 +372,31 @@ async function loadCurriculum(){
   }catch(e){ console.warn('[커리큘럼 로드 실패 → 정적 worksheets.js 사용]', e.message); }
 }
 
+/* 학급 로드: 기본 교사는 본인 문서, 담당 교사는 전체 문서에서 자기 담당 학급만 (+학생 이메일 범위) */
+async function loadClassScope(){
+  try{
+    if(scopedTeacher){
+      const allSnap=await getDocs(collection(db,"teacher_data"));
+      classes={};
+      allSnap.forEach(s=>{
+        for(const [k,c] of Object.entries(s.data().classes||{})){
+          if(c && String(c.teacher||'').toLowerCase()===tUser.email.toLowerCase()) classes[k]=c;
+        }
+      });
+      scopeEmails=new Set(Object.values(classes).flatMap(c=>(c.students||[]).map(e=>String(e).toLowerCase())));
+      console.log(`[담당 교사 범위] 학급 ${Object.keys(classes).length}개, 학생 ${scopeEmails.size}명`);
+    } else {
+      const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
+      classes=cSnap.exists()?(cSnap.data().classes||{}):{};
+      scopeEmails=null;
+    }
+  }catch(e){ classes={}; if(scopedTeacher) scopeEmails=new Set(); console.error("[loadClassScope]",e); }
+}
+
 async function loadAll(){
   document.getElementById("content").innerHTML='<div class="loading">데이터 불러오는 중…</div>';
   allData={};
+  await loadClassScope();
   try{
     progressData={};
     const snap=await getDocs(collectionGroup(db,"worksheets"));
@@ -379,6 +404,7 @@ async function loadAll(){
       const parts=d.ref.path.split("/");
       const col=parts[0], uid=parts[1], wsId=parts[3];
       if(TEACHER_EMAILS.includes(uid)) return; // 교사 계정 제외
+      if(scopeEmails && !scopeEmails.has(String(uid).toLowerCase())) return; // 담당 학급 학생만
       if(col==="records"){                        // 새 통합 구조
         if(!allData[uid]) allData[uid]={};
         allData[uid][wsId]=d.data();
@@ -391,10 +417,6 @@ async function loadAll(){
       }
     });
   }catch(e){ console.error("Firestore 오류:",e); }
-  try{
-    const cSnap=await getDoc(doc(db,"teacher_data",tUser.uid));
-    if(cSnap.exists()) classes=cSnap.data().classes||{};
-  }catch(e){ classes={}; }
   buildSidebar();
   // 새로고침 후 직전 학습지 복원
   try{
@@ -1346,7 +1368,10 @@ function renderWS(wsId){
 
 function renderClasses(){
   let h=`<div class="pg-title">🏫 학급 관리</div>
-  <div class="pg-sub">학년도·학년·반 단위로 학생 이메일을 등록합니다. 담당 교사 지정은 마스터 계정만 가능합니다.</div>
+  <div class="pg-sub">${scopedTeacher
+    ?'담당 학급 명단입니다 (읽기 전용 — 명단 수정은 기본 교사에게 요청하세요).'
+    :'학년도·학년·반 단위로 학생 이메일을 등록합니다. 담당 교사 지정은 마스터 계정만 가능합니다.'}</div>`;
+  if(!scopedTeacher) h+=`
   <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
     <div class="card-title" style="margin-bottom:12px">새 학급 추가</div>
     <div class="class-row" style="gap:10px;margin-bottom:10px">
@@ -1358,11 +1383,11 @@ function renderClasses(){
         <input type="text" id="new-class" placeholder="예: 3" style="width:100%"></div>
     </div>
     <button class="btn-sm btn-sm-accent" onclick="addClass()">+ 학급 추가</button>
-  </div>
-  <div class="class-grid" id="class-grid">`;
+  </div>`;
+  h+=`<div class="class-grid" id="class-grid">`;
   const classKeys=Object.keys(classes).sort();
   if(!classKeys.length){
-    h+=`<div style="color:var(--ink3);font-size:14px;padding:8px">등록된 학급이 없습니다.</div>`;
+    h+=`<div style="color:var(--ink3);font-size:14px;padding:8px">${scopedTeacher?'담당으로 지정된 학급이 없습니다. 마스터 계정에 문의하세요.':'등록된 학급이 없습니다.'}</div>`;
   } else {
     classKeys.forEach(key=>{
       const cls=classes[key];
@@ -1371,7 +1396,7 @@ function renderClasses(){
         <div class="class-card-title">
           <span style="font-size:18px">📚</span>
           <span>${cls.year}학년도 ${cls.grade}학년 ${cls.classNum}반</span>
-          <button onclick="deleteClass('${key}')" style="margin-left:auto;background:none;border:none;color:var(--ink3);cursor:pointer;font-size:13px">🗑</button>
+          ${scopedTeacher?'':`<button onclick="deleteClass('${key}')" style="margin-left:auto;background:none;border:none;color:var(--ink3);cursor:pointer;font-size:13px">🗑</button>`}
         </div>
         <div style="font-size:12px;color:var(--ink3);margin-bottom:10px">${students.length}명 등록</div>
         ${renderClassTeacher(key,cls)}
@@ -1381,11 +1406,11 @@ function renderClasses(){
             return `<div class="student-chip">
               <span>${disp}</span>
               <span style="font-size:11px;color:var(--ink3);margin-left:2px">${STUDENT_DOMAIN}</span>
-              <button class="remove" onclick="removeStudent('${key}',${i})">×</button>
+              ${scopedTeacher?'':`<button class="remove" onclick="removeStudent('${key}',${i})">×</button>`}
             </div>`;
           }).join("")}
         </div>
-        <div class="add-student-row">
+        ${scopedTeacher?'':`<div class="add-student-row">
           <div style="display:flex;align-items:center;border:1.5px solid var(--rule);border-radius:7px;overflow:hidden;flex:1;background:var(--paper)">
             <input type="text" id="add-${key}" placeholder="아이디 입력"
               style="border:none;outline:none;padding:7px 10px;font-size:13px;font-family:inherit;flex:1;background:transparent"
@@ -1393,7 +1418,7 @@ function renderClasses(){
             <span style="font-size:12px;color:var(--ink3);padding-right:10px;white-space:nowrap">${STUDENT_DOMAIN}</span>
           </div>
           <button class="btn-sm" onclick="addStudent('${key}')">추가</button>
-        </div>
+        </div>`}
       </div>`;
     });
   }
@@ -1485,6 +1510,7 @@ async function updateTeacherConfig(){
 }
 
 async function saveClasses(){
+  if(scopedTeacher){ console.warn("[saveClasses] 담당 교사 계정은 학급 저장 불가"); return; } // 본인 uid 문서에 잘못 저장되는 것 방지
   try{ await setDoc(doc(db,"teacher_data",tUser.uid),{classes},{merge:true}); }
   catch(e){ console.error("학급 저장 오류:",e); }
   syncAllowedEmails(); // 반별 잠금 학습지의 allowedEmails 재계산 (백그라운드, 실패해도 무방)
@@ -1538,6 +1564,7 @@ async function syncAllowedEmails(){
 }
 
 window.addClass=async function(){
+  if(scopedTeacher){ alert("담당 교사 계정은 학급을 추가할 수 없습니다."); return; }
   const year=document.getElementById("new-year").value.trim();
   const grade=document.getElementById("new-grade").value;
   const cn=document.getElementById("new-class").value.trim();
@@ -1548,6 +1575,7 @@ window.addClass=async function(){
   await saveClasses(); renderClasses();
 };
 window.deleteClass=async function(key){
+  if(scopedTeacher){ alert("담당 교사 계정은 학급을 삭제할 수 없습니다."); return; }
   if(!confirm(`${classes[key]?.year}학년도 ${classes[key]?.grade}학년 ${classes[key]?.classNum}반을 삭제할까요?`)) return;
   const hadTeacher=!!classes[key]?.teacher;
   delete classes[key];
@@ -1559,6 +1587,7 @@ window.deleteClass=async function(key){
   renderClasses();
 };
 window.addStudent=async function(key){
+  if(scopedTeacher){ alert("담당 교사 계정은 명단을 수정할 수 없습니다."); return; }
   const inp=document.getElementById("add-"+key);
   let val=inp.value.trim().toLowerCase();
   if(!val) return;
@@ -1573,6 +1602,7 @@ window.addStudent=async function(key){
   });
 };
 window.removeStudent=async function(key,idx){
+  if(scopedTeacher){ alert("담당 교사 계정은 명단을 수정할 수 없습니다."); return; }
   classes[key].students.splice(idx,1);
   await saveClasses(); renderClasses();
 };

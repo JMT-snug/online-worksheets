@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.4">
+  <meta name="app-version" content="8.5">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-const VERSION = "8.4";
+/* 오류 신고용 콘솔 링 버퍼: 페이지 시작부터 콘솔 출력·JS 오류를 최근 150개까지 기록 (🐞 신고 시 함께 저장) */
+window._errlog=[];
+(function(){
+  const MAX=150;
+  const push=(l,args)=>{ try{
+    const m=args.map(a=>{ try{ return typeof a==='string'?a:JSON.stringify(a); }catch(e){ return String(a); } }).join(' ').slice(0,500);
+    window._errlog.push({t:new Date().toISOString().slice(11,19),l,m});
+    if(window._errlog.length>MAX) window._errlog.shift();
+  }catch(e){} };
+  ['log','warn','error','info'].forEach(l=>{ const o=console[l].bind(console); console[l]=function(...a){ push(l,a); o(...a); }; });
+  window.addEventListener('error',e=>push('uncaught',[(e.message||'')+' @'+String(e.filename||'').split('/').pop()+':'+(e.lineno||'')]));
+  window.addEventListener('unhandledrejection',e=>push('unhandled',[String((e.reason&&e.reason.message)||e.reason).slice(0,300)]));
+})();
+</script>
+<script>
+const VERSION = "8.5";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -73,6 +88,13 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn{padding:4px 11px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-teacher{background:var(--accent);border-color:var(--accent)}
+
+/* ── 🐞 오류 신고 ── */
+#bugrep-overlay{position:fixed;inset:0;z-index:9000;cursor:crosshair;background:rgba(59,130,246,.05)}
+#bugrep-banner{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:9001;background:#111827;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap}
+#bugrep-mark{position:fixed;z-index:9002;width:56px;height:56px;border:3px solid #ef4444;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+#bugrep-form{position:fixed;z-index:9003;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:18px;width:min(92vw,380px);color:#1f2937}
+#bugrep-form textarea{width:100%;height:70px;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px;font-family:inherit;font-size:13px;resize:none;box-sizing:border-box}
 
 /* PAGE SYSTEM — all hidden by default */
 .page{display:none!important}
@@ -505,6 +527,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
       <div class="bell-panel" id="hdr-bell-panel"></div>
     </div>
+    <button class="hdr-btn" id="hdr-bug" style="display:none" title="화면 오류 신고 (오류 위치를 클릭해 캡처와 함께 전송)" onclick="startBugReport()">🐞</button>
     <div class="hdr-sep"></div>
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
@@ -879,6 +902,8 @@ onAuthStateChanged(auth, async u => {
 function updateHeader(u) {
   const hi = document.getElementById("hdr-user");
   const manual = document.getElementById("hdr-manual");
+  const bug = document.getElementById("hdr-bug");
+  if(bug) bug.style.display = u ? "inline-flex" : "none"; // 오류 신고: 로그인한 모든 사용자
   if (!u) { hi.style.display = "none"; if(manual) manual.style.display = "none"; return; }
   hi.style.display = "flex";
   const av = document.getElementById("hdr-avatar");
@@ -1313,6 +1338,81 @@ window.togglePartLock=async function(wsId, partId, clsName){
       updateStrip(); refreshPartPop();
     } else if(window._currentUnit) showUnitPage(window._currentUnit);
   }catch(e){ alert('저장 실패: '+e.message); }
+};
+
+/* ── 🐞 오류 신고: 클릭 위치 표시 + 화면 캡처(html2canvas) + 콘솔 로그를 Firestore(error_reports)에 저장
+   확인은 report.html(기본 교사 전용)에서. Storage 버킷이 없어 스크린샷은 JPEG data URL로
+   문서에 직접 저장 — Firestore 문서 1MB 제한에 맞춰 700KB 이하로 자동 압축 ── */
+let _bugPt=null;
+function _bugCleanup(){ ['bugrep-overlay','bugrep-banner','bugrep-mark','bugrep-form'].forEach(id=>document.getElementById(id)?.remove()); document.removeEventListener('keydown',_bugEsc); }
+function _bugEsc(e){ if(e.key==='Escape') _bugCleanup(); }
+window.startBugReport=function(){
+  if(document.getElementById('bugrep-overlay')||document.getElementById('bugrep-form')) return;
+  const ov=document.createElement('div'); ov.id='bugrep-overlay';
+  const bn=document.createElement('div'); bn.id='bugrep-banner'; bn.textContent='🐞 오류가 있는 곳을 클릭해 주세요 (ESC 취소)';
+  ov.onclick=(e)=>{
+    _bugPt={x:e.clientX,y:e.clientY};
+    ov.remove(); bn.remove();
+    const mk=document.createElement('div'); mk.id='bugrep-mark'; mk.style.left=_bugPt.x+'px'; mk.style.top=_bugPt.y+'px';
+    document.body.appendChild(mk);
+    const f=document.createElement('div'); f.id='bugrep-form';
+    f.innerHTML=`<div style="font-weight:800;margin-bottom:8px">🐞 오류 신고</div>
+      <textarea id="bugrep-desc" placeholder="어떤 오류인지 간단히 적어 주세요 (선택)"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button class="hdr-btn" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151" onclick="cancelBugReport()">취소</button>
+        <button class="hdr-btn" style="background:#dc2626;border-color:#dc2626" id="bugrep-send" onclick="sendBugReport()">신고 보내기</button>
+      </div>`;
+    document.body.appendChild(f);
+  };
+  document.body.appendChild(ov); document.body.appendChild(bn);
+  document.addEventListener('keydown',_bugEsc);
+};
+window.cancelBugReport=_bugCleanup;
+async function _loadH2C(){
+  if(window.html2canvas) return true;
+  try{
+    await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); });
+    return true;
+  }catch(e){ console.warn('[오류신고] html2canvas 로드 실패'); return false; }
+}
+window.sendBugReport=async function(){
+  const btn=document.getElementById('bugrep-send'); if(btn){ btn.disabled=true; btn.textContent='캡처 중…'; }
+  const desc=(document.getElementById('bugrep-desc')?.value||'').trim();
+  const pt=_bugPt||{x:0,y:0};
+  let shot='';
+  try{
+    if(await _loadH2C()){
+      const canvas=await html2canvas(document.body,{
+        x:scrollX, y:scrollY, width:innerWidth, height:innerHeight,
+        windowWidth:innerWidth, windowHeight:innerHeight,
+        useCORS:true, logging:false,
+        ignoreElements:el=>String(el.id||'').startsWith('bugrep') // 신고 UI는 캡처 제외
+      });
+      const r=canvas.width/innerWidth;
+      const ctx=canvas.getContext('2d');
+      ctx.strokeStyle='#ef4444'; ctx.lineWidth=4*r;
+      ctx.beginPath(); ctx.arc(pt.x*r,pt.y*r,28*r,0,Math.PI*2); ctx.stroke();
+      let out=canvas; const maxW=1100;
+      if(canvas.width>maxW){ const s=maxW/canvas.width; const c2=document.createElement('canvas'); c2.width=maxW; c2.height=Math.round(canvas.height*s); c2.getContext('2d').drawImage(canvas,0,0,c2.width,c2.height); out=c2; }
+      let q=0.75; shot=out.toDataURL('image/jpeg',q);
+      while(shot.length>700000 && q>0.3){ q-=0.15; shot=out.toDataURL('image/jpeg',q); }
+    }
+  }catch(e){ console.warn('[오류신고] 캡처 실패:',e.message); } // 캡처 실패해도 신고 자체는 저장
+  try{
+    const report={
+      createdAt:new Date().toISOString(), status:'open',
+      email:user?.email||'', page:'index', version:(typeof VERSION!=='undefined'?VERSION:''),
+      url:location.href, userAgent:navigator.userAgent,
+      viewport:{w:innerWidth,h:innerHeight}, click:pt,
+      wsId:curWS?.id||null, wsTitle:curWS?.title||null, qIdx:(typeof curQIdx==='number'?curQIdx:null),
+      description:desc,
+      consoleLog:(window._errlog||[]).slice(-100),
+      screenshot:shot
+    };
+    await setDoc(doc(collection(db,'error_reports')), report);
+    _bugCleanup();
+    alert('🐞 신고가 접수되었습니다. 감사합니다!');
+  }catch(e){ _bugCleanup(); alert('신고 저장에 실패했습니다: '+e.message); }
 };
 
 /* ── 교사 풀이 기록 일괄 삭제 (1회성 정리 도구) ──

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="app-version" content="report-v1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오류 신고 관리 · 수학 학습지+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#111827;--ink2:#374151;--ink3:#9ca3af;--paper:#fff;--cream:#faf9f6;--rule:#e5e7eb;
+  --accent:#2563eb;--acc-lt:#eff6ff;--red:#dc2626;--green:#16a34a;--r:12px;
+}
+*{box-sizing:border-box}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6;margin:0}
+
+header{position:sticky;top:0;z-index:100;background:var(--ink);height:52px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 20px;gap:12px}
+.hdr-left{justify-self:start}
+.hdr-center{display:flex;gap:8px;align-items:center;justify-self:center;white-space:nowrap}
+.hdr-right{display:flex;gap:6px;align-items:center;justify-self:end}
+.logo{font-weight:900;font-size:17px;color:#fff;letter-spacing:-.5px}
+.logo em{color:#60a5fa;font-style:normal}
+.hdr-ver{font-size:10px;color:rgba(255,255,255,.45);font-family:monospace}
+.hdr-btn{padding:4px 11px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.hdr-btn:hover{background:rgba(255,255,255,.18)}
+#hdr-name{font-size:12px;color:rgba(255,255,255,.65)}
+
+#auth-gate{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 52px)}
+.gate-card{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:40px 48px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+.gate-card h2{margin:0 0 6px}
+.gate-card p{color:var(--ink3);margin:0 0 20px;font-size:13px}
+.btn-login{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+
+#app{display:none;max-width:900px;margin:0 auto;padding:24px 16px 80px}
+.pg-title{font-size:20px;font-weight:900;margin-bottom:4px}
+.pg-sub{font-size:13px;color:var(--ink3);margin-bottom:16px}
+
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:6px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink2)}
+.tab.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.tab .cnt{font-weight:400;opacity:.7;margin-left:3px}
+
+.rep-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.rep-card.fixed{opacity:.75}
+.rep-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.pill{display:inline-block;border-radius:10px;padding:1px 10px;font-size:11px;font-weight:800}
+.pill.open{background:#fee2e2;color:#b91c1c}
+.pill.fixed{background:#dcfce7;color:#15803d}
+.rep-time{font-size:12px;color:var(--ink3)}
+.rep-email{font-size:12px;font-weight:700;color:var(--ink2)}
+.rep-meta{font-size:11px;color:var(--ink3)}
+.rep-desc{font-size:14px;margin:6px 0;white-space:pre-wrap;word-break:break-word}
+.rep-desc.empty{color:var(--ink3);font-style:italic}
+.rep-ws{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
+.rep-shot{max-width:100%;max-height:260px;border:1px solid var(--rule);border-radius:8px;cursor:zoom-in;display:block;margin:8px 0}
+.rep-shot.zoom{max-height:none;cursor:zoom-out}
+.rep-noshot{font-size:12px;color:var(--ink3);background:var(--cream);border:1px dashed var(--rule);border-radius:8px;padding:10px;margin:8px 0}
+details.rep-log{margin:8px 0;font-size:12px}
+details.rep-log summary{cursor:pointer;font-weight:700;color:var(--ink2)}
+details.rep-log pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:10px;max-height:280px;overflow:auto;font-size:11px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+details.rep-log pre .l-error,details.rep-log pre .l-uncaught,details.rep-log pre .l-unhandled{color:#fca5a5}
+details.rep-log pre .l-warn{color:#fde68a}
+.rep-foot{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.btn{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink2)}
+.btn.fix{background:var(--green);border-color:var(--green);color:#fff}
+.btn.reopen{background:#fef3c7;border-color:#f59e0b;color:#92400e}
+.btn.del{color:var(--red);border-color:#fecaca}
+.fixed-info{font-size:11px;color:var(--ink3);margin-left:auto}
+.loading,.empty-msg{text-align:center;color:var(--ink3);padding:60px 0;font-size:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-left">
+    <button class="hdr-btn" onclick="loadReports()" title="목록 새로고침">🔄 새로고침</button>
+  </div>
+  <div class="hdr-center">
+    <div class="logo">🐞 오류 신고 관리<em>+</em></div>
+    <span class="hdr-ver" id="hdr-version"></span>
+  </div>
+  <div class="hdr-right" id="hdr-user" style="display:none">
+    <a href="index.html" class="hdr-btn">학습지</a>
+    <a href="teacher.html" class="hdr-btn">관리</a>
+    <span id="hdr-name"></span>
+    <button class="hdr-btn" id="btn-logout">로그아웃</button>
+  </div>
+</header>
+
+<div id="auth-gate">
+  <div class="gate-card">
+    <h2>🐞 오류 신고 관리</h2>
+    <p>기본 교사 계정으로 로그인하세요.</p>
+    <button class="btn-login" id="btn-login">Google 로그인</button>
+  </div>
+</div>
+
+<div id="app">
+  <div class="pg-title">🐞 오류 신고 목록</div>
+  <div class="pg-sub">index의 🐞 버튼으로 접수된 신고입니다. 스크린샷의 빨간 원이 신고자가 클릭한 오류 위치입니다.</div>
+  <div class="tabs" id="tabs"></div>
+  <div id="rep-list"><div class="loading">불러오는 중…</div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const FB = {
+  apiKey:"AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:"online-worksheets.firebaseapp.com",
+  projectId:"online-worksheets",
+  storageBucket:"online-worksheets.firebasestorage.app",
+  messagingSenderId:"404110714320",
+  appId:"1:404110714320:web:cb79c555a383801f3205d5"
+};
+const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // 접속 허용: 기본 교사만
+
+const fbApp = initializeApp(FB);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+let tUser=null, reports=[], curTab="open";
+
+document.getElementById("hdr-version").textContent=document.querySelector('meta[name="app-version"]').content;
+document.getElementById("btn-login").addEventListener("click", async ()=>{
+  try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){ alert("로그인 오류: "+e.message); }
+});
+document.getElementById("btn-logout").addEventListener("click", ()=>signOut(auth));
+
+onAuthStateChanged(auth, async u=>{
+  if(!u){ showGate(true); return; }
+  if(!BASE_TEACHER_EMAILS.includes(u.email)){ alert("기본 교사 계정만 접속할 수 있습니다."); await signOut(auth); return; }
+  tUser=u;
+  document.getElementById("hdr-user").style.display="flex";
+  document.getElementById("hdr-name").textContent=u.displayName||u.email;
+  showGate(false);
+  loadReports();
+});
+
+function showGate(on){
+  document.getElementById("auth-gate").style.display=on?"flex":"none";
+  document.getElementById("app").style.display=on?"none":"block";
+}
+
+window.loadReports=async function(){
+  document.getElementById("rep-list").innerHTML='<div class="loading">불러오는 중…</div>';
+  try{
+    const snap=await getDocs(collection(db,"error_reports"));
+    reports=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+  }catch(e){
+    document.getElementById("rep-list").innerHTML=`<div class="empty-msg">불러오기 실패: ${e.message}</div>`;
+    return;
+  }
+  render();
+};
+
+window.setTab=function(t){ curTab=t; render(); };
+
+function fmtTime(iso){
+  if(!iso) return "-";
+  try{ const d=new Date(iso); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+  catch(e){ return iso; }
+}
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+function render(){
+  const openCnt=reports.filter(r=>r.status!=="fixed").length;
+  const fixedCnt=reports.length-openCnt;
+  document.getElementById("tabs").innerHTML=`
+    <div class="tab ${curTab==='open'?'active':''}" onclick="setTab('open')">🔴 미해결<span class="cnt">${openCnt}</span></div>
+    <div class="tab ${curTab==='fixed'?'active':''}" onclick="setTab('fixed')">✅ 수정 완료<span class="cnt">${fixedCnt}</span></div>
+    <div class="tab ${curTab==='all'?'active':''}" onclick="setTab('all')">전체<span class="cnt">${reports.length}</span></div>`;
+
+  const list=reports.filter(r=>curTab==="all"||(curTab==="fixed"?r.status==="fixed":r.status!=="fixed"));
+  const el=document.getElementById("rep-list");
+  if(!list.length){ el.innerHTML=`<div class="empty-msg">${curTab==='open'?'미해결 신고가 없습니다. 🎉':'신고 내역이 없습니다.'}</div>`; return; }
+
+  el.innerHTML=list.map(r=>{
+    const isFixed=r.status==="fixed";
+    const logs=(r.consoleLog||[]);
+    const logHtml=logs.length
+      ? logs.map(x=>`<span class="l-${esc(x.l)}">[${esc(x.t)}] ${esc(x.l).toUpperCase().padEnd(9)} ${esc(x.m)}</span>`).join("\n")
+      : "(콘솔 기록 없음)";
+    return `<div class="rep-card ${isFixed?'fixed':''}">
+      <div class="rep-head">
+        <span class="pill ${isFixed?'fixed':'open'}">${isFixed?'✅ 수정 완료':'🔴 미해결'}</span>
+        <span class="rep-time">${fmtTime(r.createdAt)}</span>
+        <span class="rep-email">${esc(r.email||'(미상)')}</span>
+        <span class="rep-meta">${esc(r.page||'')} v${esc(r.version||'?')} · ${r.viewport?`${r.viewport.w}×${r.viewport.h}`:''}</span>
+      </div>
+      ${r.wsTitle?`<div class="rep-ws">📄 ${esc(r.wsTitle)}${r.qIdx!=null?` · ${r.qIdx+1}번 문항 화면`:''}</div>`:''}
+      <div class="rep-desc ${r.description?'':'empty'}">${r.description?esc(r.description):'(설명 없음)'}</div>
+      ${r.screenshot
+        ? `<img class="rep-shot" src="${r.screenshot}" alt="신고 스크린샷" onclick="this.classList.toggle('zoom')">`
+        : `<div class="rep-noshot">📷 스크린샷 없음 (캡처 실패 또는 미지원 환경)</div>`}
+      <details class="rep-log"><summary>🖥 콘솔 로그 ${logs.length}건</summary><pre>${logHtml}</pre></details>
+      <div class="rep-meta" style="word-break:break-all">${esc(r.userAgent||'')}</div>
+      <div class="rep-foot">
+        ${isFixed
+          ? `<button class="btn reopen" onclick="setStatus('${r.id}','open')">↩ 미해결로 되돌리기</button>`
+          : `<button class="btn fix" onclick="setStatus('${r.id}','fixed')">✅ 수정 완료</button>`}
+        <button class="btn del" onclick="delReport('${r.id}')">🗑 삭제</button>
+        ${isFixed&&r.fixedAt?`<span class="fixed-info">${fmtTime(r.fixedAt)} · ${esc(r.fixedBy||'')} 처리</span>`:''}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+window.setStatus=async function(id,status){
+  try{
+    await updateDoc(doc(db,"error_reports",id),
+      status==="fixed"
+        ? {status:"fixed", fixedAt:new Date().toISOString(), fixedBy:tUser.email}
+        : {status:"open", fixedAt:null, fixedBy:null});
+    const r=reports.find(x=>x.id===id);
+    if(r){ r.status=status; if(status==="fixed"){ r.fixedAt=new Date().toISOString(); r.fixedBy=tUser.email; } }
+    render();
+  }catch(e){ alert("상태 변경 실패: "+e.message); }
+};
+
+window.delReport=async function(id){
+  if(!confirm("이 신고를 삭제할까요? 되돌릴 수 없습니다.")) return;
+  try{
+    await deleteDoc(doc(db,"error_reports",id));
+    reports=reports.filter(x=>x.id!==id);
+    render();
+  }catch(e){ alert("삭제 실패: "+e.message); }
+};
+</script>
+</body>
+</html>

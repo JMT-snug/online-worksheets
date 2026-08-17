@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.1">
+<meta name="app-version" content="scoring-v1.2">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -147,6 +147,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
       <a href="index.html" class="hdr-btn">학습지</a>
       <a href="teacher.html" class="hdr-btn">관리</a>
       <a href="edit.html" class="hdr-btn">편집</a>
+      <a href="report.html" class="hdr-btn" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
     </div>
     <div class="hdr-sep"></div>
     <span id="hdr-name"></span>
@@ -317,6 +318,7 @@ onAuthStateChanged(auth, async u => {
   await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 계정만 접근 가능합니다"); await signOut(auth); return; }
   currentUser = u;
+  { const rl=document.getElementById("hdr-report-link"); if(rl) rl.style.display=BASE_TEACHER_EMAILS.includes(u.email)?"inline-flex":"none"; } // 신고 목록: 기본 교사 전용
   document.getElementById("hdr-user").style.display = "flex";
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   showPage("main-page");

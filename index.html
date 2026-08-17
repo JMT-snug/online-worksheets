@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.8">
+  <meta name="app-version" content="8.9">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.8";
+const VERSION = "8.9";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -524,7 +524,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
       <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
       <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
-      <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">🚨 신고</a>
+      <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
     </div>
     <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
       <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>

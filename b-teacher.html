@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.11">
+<meta name="app-version" content="3.12">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -173,6 +173,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
       <a href="index.html" class="hdr-btn">학습지</a>
       <a href="scoring.html" class="hdr-btn">채점</a>
       <a href="edit.html" class="hdr-btn">편집</a>
+      <a href="report.html" class="hdr-btn" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
     </div>
     <div class="hdr-sep"></div>
     <span class="tag tag-t">교사</span>
@@ -235,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.11";
+const VERSION = "3.12";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -335,6 +336,7 @@ onAuthStateChanged(auth,async u=>{
   if(!TEACHER_EMAILS.includes(u.email)){ alert("교사 권한이 없습니다."); await signOut(auth); return; }
   tUser=u;
   scopedTeacher=!BASE_TEACHER_EMAILS.includes(u.email); // 담당 교사 = 담당 학급 학생만 조회
+  { const rl=document.getElementById("hdr-report-link"); if(rl) rl.style.display=BASE_TEACHER_EMAILS.includes(u.email)?"inline-flex":"none"; } // 신고 목록: 기본 교사 전용
   document.getElementById("t-name").textContent=u.displayName||u.email;
   showGate(false);
   await loadCurriculum();

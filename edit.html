@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.0a">
+<meta name="app-version" content="edit-v3.0b">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -244,6 +244,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
         <a href="index.html" class="hdr-btn">학습지</a>
         <a href="teacher.html" class="hdr-btn">관리</a>
         <a href="scoring.html" class="hdr-btn">채점</a>
+        <a href="report.html" class="hdr-btn" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
       </div>
       <div class="hdr-sep"></div>
       <button class="hdr-btn btn-logout" id="btn-logout">로그아웃</button>
@@ -576,6 +577,7 @@ onAuthStateChanged(auth, async user => {
   if(user) await loadExtraTeachers(); // 학급 담당 교사도 접근 허용
   if(user && TEACHER_EMAILS.includes(user.email)){
     currentUser = user;
+    { const rl=document.getElementById("hdr-report-link"); if(rl) rl.style.display=["rapidwing@snu-g.ms.kr","mint0026@snu-g.ms.kr"].includes(user.email)?"inline-flex":"none"; } // 신고 목록: 기본 교사 전용
     document.getElementById('auth-gate').style.display='none';
     document.getElementById('app').style.display='flex';
     loadAll();

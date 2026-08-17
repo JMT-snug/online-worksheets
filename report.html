@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="report-v1.0b">
+<meta name="app-version" content="report-v1.0c">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오류 신고 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,6 +76,7 @@ details.rep-log pre .l-warn{color:#fde68a}
 <header>
   <div class="hdr-left">
     <button class="hdr-btn" onclick="loadReports()" title="목록 새로고침">🔄 새로고침</button>
+    <button class="hdr-btn" id="btn-drive-setup" onclick="prepareDriveFolder()" title="스크린샷 폴더를 만들고 학교 도메인에 공유합니다 (최초 1회)">⚙️ Drive 폴더 준비</button>
     <button class="hdr-btn" id="btn-drive-sync" onclick="syncAllToDrive()" title="저장되지 않은 스크린샷을 Google Drive 폴더에 올립니다">☁️ Drive 저장</button>
   </div>
   <div class="hdr-center">
@@ -111,7 +112,7 @@ details.rep-log pre .l-warn{color:#fde68a}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc }
+import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -200,9 +201,12 @@ function render(){
       </div>
       ${r.wsTitle?`<div class="rep-ws">📄 ${esc(r.wsTitle)}${r.qIdx!=null?` · ${r.qIdx+1}번 문항 화면`:''}</div>`:''}
       <div class="rep-desc ${r.description?'':'empty'}">${r.description?esc(r.description):'(설명 없음)'}</div>
-      ${r.screenshot
-        ? `<img class="rep-shot" src="${r.screenshot}" alt="신고 스크린샷" onclick="this.classList.toggle('zoom')">`
-        : `<div class="rep-noshot">📷 스크린샷 없음 (캡처 실패 또는 미지원 환경)</div>`}
+      ${r.driveFileId
+        ? `<img class="rep-shot" src="https://drive.google.com/thumbnail?id=${r.driveFileId}&sz=w1200" alt="신고 스크린샷(Drive)" onclick="this.classList.toggle('zoom')" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+           <div class="rep-noshot" style="display:none">🖼 Drive 이미지 미리보기를 불러오지 못했습니다 — 아래 <b>Drive 사본</b> 링크로 열어 보세요.</div>`
+        : (r.screenshot
+          ? `<img class="rep-shot" src="${r.screenshot}" alt="신고 스크린샷" onclick="this.classList.toggle('zoom')">`
+          : `<div class="rep-noshot">📷 스크린샷 없음 ${r.screenshotNote?`(${esc(r.screenshotNote)})`:'(캡처 실패 또는 미지원 환경)'}</div>`)}
       <details class="rep-log"><summary>🖥 콘솔 로그 ${logs.length}건</summary><pre>${logHtml}</pre></details>
       <div class="rep-meta" style="word-break:break-all">${esc(r.userAgent||'')}</div>
       <div class="rep-foot">
@@ -243,6 +247,8 @@ async function driveFind(q){
   if(!res.ok) throw new Error(`Drive 조회 실패 (${res.status})`);
   return (await res.json()).files || [];
 }
+const SHARE_DOMAIN = "snu-g.ms.kr";   // 이 도메인 계정이면 폴더에 파일을 올릴 수 있음(학생 신고 업로드용)
+
 async function ensureDriveFolder(){
   if(_driveFolderId) return _driveFolderId;
   await getDriveToken();
@@ -251,15 +257,58 @@ async function ensureDriveFolder(){
   const q = `name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
           + (parentId ? ` and '${parentId}' in parents` : '');
   const found = await driveFind(q);
-  if(found.length){ _driveFolderId = found[0].id; return _driveFolderId; }
-  const meta = { name: DRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder' };
-  if(parentId) meta.parents = [parentId];
-  const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
-    { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}`, 'Content-Type':'application/json' }, body: JSON.stringify(meta) });
-  if(!res.ok) throw new Error(`폴더 생성 실패 (${res.status})`);
-  _driveFolderId = (await res.json()).id;
+  if(found.length){ _driveFolderId = found[0].id; }
+  else{
+    const meta = { name: DRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder' };
+    if(parentId) meta.parents = [parentId];
+    const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
+      { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}`, 'Content-Type':'application/json' }, body: JSON.stringify(meta) });
+    if(!res.ok) throw new Error(`폴더 생성 실패 (${res.status})`);
+    _driveFolderId = (await res.json()).id;
+  }
+  await shareFolderWithDomain(_driveFolderId);   // 학교 도메인에 쓰기 권한 (학생이 직접 업로드)
+  await saveFolderConfig(_driveFolderId);        // index.html이 읽을 폴더 ID 공유
   return _driveFolderId;
 }
+
+/* 폴더를 학교 도메인(snu-g.ms.kr)에 쓰기 권한으로 공유 — 이미 있으면 건너뜀 */
+async function shareFolderWithDomain(folderId){
+  try{
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions?fields=permissions(id,type,domain,role)`,
+      { headers:{ Authorization:`Bearer ${_driveToken}` } });
+    if(res.ok){
+      const list = (await res.json()).permissions || [];
+      if(list.some(p=>p.type==='domain' && p.domain===SHARE_DOMAIN && (p.role==='writer'||p.role==='owner'))) return;
+    }
+    const add = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions?sendNotificationEmail=false`,
+      { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}`, 'Content-Type':'application/json' },
+        body: JSON.stringify({ type:'domain', domain:SHARE_DOMAIN, role:'writer' }) });
+    if(!add.ok) console.warn('[Drive] 도메인 공유 실패', add.status);
+  }catch(e){ console.warn('[Drive] 도메인 공유 오류', e.message); }
+}
+
+/* 폴더 ID를 config/errorReports에 저장 → 학생 index.html이 이 폴더로 바로 업로드 */
+async function saveFolderConfig(folderId){
+  try{
+    await setDoc(doc(db,'config','errorReports'), {
+      folderId, folderName: DRIVE_FOLDER_NAME,
+      folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
+      sharedDomain: SHARE_DOMAIN,
+      updatedAt: new Date().toISOString(), updatedBy: tUser.email
+    }, { merge:true });
+  }catch(e){ console.warn('[Drive] 폴더 설정 저장 실패', e.message); }
+}
+
+/* 최초 1회: 폴더 준비 + 도메인 공유 + 설정 저장 (헤더 버튼) */
+window.prepareDriveFolder = async function(){
+  const btn=document.getElementById('btn-drive-setup');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 준비 중…'; }
+  try{
+    const id = await ensureDriveFolder();
+    alert(`✅ Drive 폴더 준비 완료\n\n폴더: 내 드라이브 > ${DRIVE_PARENT_NAME} > ${DRIVE_FOLDER_NAME}\n공유: ${SHARE_DOMAIN} 도메인 쓰기 권한\n\n이제 학생이 신고하면 스크린샷이 이 폴더에 바로 저장됩니다.`);
+  }catch(e){ alert('폴더 준비 실패: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='⚙️ Drive 폴더 준비'; } }
+};
 function dataUrlToBlob(d){
   const parts = d.split(',');
   const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.6">
+  <meta name="app-version" content="8.7">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.6";
+const VERSION = "8.7";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -89,7 +89,9 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-teacher{background:var(--accent);border-color:var(--accent)}
 
-/* ── 🐞 오류 신고 ── */
+/* ── ⚠️ 오류 신고 ── */
+#bugrep-fab{position:fixed;right:14px;bottom:14px;z-index:8000;display:none;align-items:center;gap:5px;padding:9px 14px;border-radius:22px;border:none;background:#111827;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.8;transition:opacity .15s,transform .15s}
+#bugrep-fab:hover{opacity:1;transform:translateY(-1px)}
 #bugrep-overlay{position:fixed;inset:0;z-index:9000;cursor:crosshair;background:rgba(59,130,246,.05)}
 #bugrep-banner{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:9001;background:#111827;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap}
 #bugrep-mark{position:fixed;z-index:9002;width:56px;height:56px;border:3px solid #ef4444;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(239,68,68,.25)}
@@ -528,13 +530,15 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
       <div class="bell-panel" id="hdr-bell-panel"></div>
     </div>
-    <button class="hdr-btn" id="hdr-bug" style="display:none" title="화면 오류 신고 (오류 위치를 클릭해 캡처와 함께 전송)" onclick="startBugReport()">🐞</button>
     <div class="hdr-sep"></div>
     <img id="hdr-avatar" alt="">
     <span id="hdr-name"></span>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
 </header>
+
+<!-- 오류 신고 플로팅 버튼 (로그인 시 표시, 캡처에서는 제외됨) -->
+<button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">⚠️ 오류 신고</button>
 
 <!-- LOGIN -->
 <div id="login-page" class="page active">
@@ -903,7 +907,7 @@ onAuthStateChanged(auth, async u => {
 function updateHeader(u) {
   const hi = document.getElementById("hdr-user");
   const manual = document.getElementById("hdr-manual");
-  const bug = document.getElementById("hdr-bug");
+  const bug = document.getElementById("bugrep-fab");
   if(bug) bug.style.display = u ? "inline-flex" : "none"; // 오류 신고: 로그인한 모든 사용자
   if (!u) { hi.style.display = "none"; if(manual) manual.style.display = "none"; return; }
   hi.style.display = "flex";

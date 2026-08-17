@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="report-v1.0">
+<meta name="app-version" content="report-v1.0a">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오류 신고 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -78,7 +78,7 @@ details.rep-log pre .l-warn{color:#fde68a}
     <button class="hdr-btn" onclick="loadReports()" title="목록 새로고침">🔄 새로고침</button>
   </div>
   <div class="hdr-center">
-    <div class="logo">🐞 오류 신고 관리<em>+</em></div>
+    <div class="logo">🚨 오류 신고 관리<em>+</em></div>
     <span class="hdr-ver" id="hdr-version"></span>
   </div>
   <div class="hdr-right" id="hdr-user" style="display:none">
@@ -91,15 +91,15 @@ details.rep-log pre .l-warn{color:#fde68a}
 
 <div id="auth-gate">
   <div class="gate-card">
-    <h2>🐞 오류 신고 관리</h2>
+    <h2>🚨 오류 신고 관리</h2>
     <p>기본 교사 계정으로 로그인하세요.</p>
     <button class="btn-login" id="btn-login">Google 로그인</button>
   </div>
 </div>
 
 <div id="app">
-  <div class="pg-title">🐞 오류 신고 목록</div>
-  <div class="pg-sub">index의 🐞 버튼으로 접수된 신고입니다. 스크린샷의 빨간 원이 신고자가 클릭한 오류 위치입니다.</div>
+  <div class="pg-title">🚨 오류 신고 목록</div>
+  <div class="pg-sub">index의 🚨 오류 신고 버튼으로 접수된 신고입니다. 스크린샷의 빨간 원이 신고자가 클릭한 오류 위치입니다.</div>
   <div class="tabs" id="tabs"></div>
   <div id="rep-list"><div class="loading">불러오는 중…</div></div>
 </div>

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.7">
+  <meta name="app-version" content="8.8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- MathJax: LaTeX 수식 렌더링 -->
 <script>
-/* 오류 신고용 콘솔 링 버퍼: 페이지 시작부터 콘솔 출력·JS 오류를 최근 150개까지 기록 (🐞 신고 시 함께 저장) */
+/* 오류 신고용 콘솔 링 버퍼: 페이지 시작부터 콘솔 출력·JS 오류를 최근 150개까지 기록 (🚨 신고 시 함께 저장) */
 window._errlog=[];
 (function(){
   const MAX=150;
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.7";
+const VERSION = "8.8";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -89,7 +89,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-teacher{background:var(--accent);border-color:var(--accent)}
 
-/* ── ⚠️ 오류 신고 ── */
+/* ── 🚨 오류 신고 ── */
 #bugrep-fab{position:fixed;right:14px;bottom:14px;z-index:8000;display:none;align-items:center;gap:5px;padding:9px 14px;border-radius:22px;border:none;background:#111827;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.8;transition:opacity .15s,transform .15s}
 #bugrep-fab:hover{opacity:1;transform:translateY(-1px)}
 #bugrep-overlay{position:fixed;inset:0;z-index:9000;cursor:crosshair;background:rgba(59,130,246,.05)}
@@ -524,7 +524,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
       <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
       <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
-      <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">🐞 신고</a>
+      <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">🚨 신고</a>
     </div>
     <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
       <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
@@ -538,7 +538,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 </header>
 
 <!-- 오류 신고 플로팅 버튼 (로그인 시 표시, 캡처에서는 제외됨) -->
-<button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">⚠️ 오류 신고</button>
+<button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 오류 신고</button>
 
 <!-- LOGIN -->
 <div id="login-page" class="page active">
@@ -1346,7 +1346,7 @@ window.togglePartLock=async function(wsId, partId, clsName){
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
-/* ── 🐞 오류 신고: 클릭 위치 표시 + 화면 캡처(html2canvas) + 콘솔 로그를 Firestore(error_reports)에 저장
+/* ── 🚨 오류 신고: 클릭 위치 표시 + 화면 캡처(html2canvas) + 콘솔 로그를 Firestore(error_reports)에 저장
    확인은 report.html(기본 교사 전용)에서. Storage 버킷이 없어 스크린샷은 JPEG data URL로
    문서에 직접 저장 — Firestore 문서 1MB 제한에 맞춰 700KB 이하로 자동 압축 ── */
 let _bugPt=null;
@@ -1355,14 +1355,14 @@ function _bugEsc(e){ if(e.key==='Escape') _bugCleanup(); }
 window.startBugReport=function(){
   if(document.getElementById('bugrep-overlay')||document.getElementById('bugrep-form')) return;
   const ov=document.createElement('div'); ov.id='bugrep-overlay';
-  const bn=document.createElement('div'); bn.id='bugrep-banner'; bn.textContent='🐞 오류가 있는 곳을 클릭해 주세요 (ESC 취소)';
+  const bn=document.createElement('div'); bn.id='bugrep-banner'; bn.textContent='🚨 오류가 있는 곳을 클릭해 주세요 (ESC 취소)';
   ov.onclick=(e)=>{
     _bugPt={x:e.clientX,y:e.clientY};
     ov.remove(); bn.remove();
     const mk=document.createElement('div'); mk.id='bugrep-mark'; mk.style.left=_bugPt.x+'px'; mk.style.top=_bugPt.y+'px';
     document.body.appendChild(mk);
     const f=document.createElement('div'); f.id='bugrep-form';
-    f.innerHTML=`<div style="font-weight:800;margin-bottom:8px">🐞 오류 신고</div>
+    f.innerHTML=`<div style="font-weight:800;margin-bottom:8px">🚨 오류 신고</div>
       <textarea id="bugrep-desc" placeholder="어떤 오류인지 간단히 적어 주세요 (선택)"></textarea>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
         <button class="hdr-btn" style="background:#f3f4f6;border-color:#e5e7eb;color:#374151" onclick="cancelBugReport()">취소</button>
@@ -1417,7 +1417,7 @@ window.sendBugReport=async function(){
     };
     await setDoc(doc(collection(db,'error_reports')), report);
     _bugCleanup();
-    alert('🐞 신고가 접수되었습니다. 감사합니다!');
+    alert('🚨 신고가 접수되었습니다. 감사합니다!');
   }catch(e){ _bugCleanup(); alert('신고 저장에 실패했습니다: '+e.message); }
 };
 

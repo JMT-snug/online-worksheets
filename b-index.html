@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.14">
+  <meta name="app-version" content="8.15">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.14";
+const VERSION = "8.15";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -802,14 +802,16 @@ async function loadExtraTeachers(){
     }
   }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
 }
-
-/* 오류 신고 스크린샷을 올릴 Drive 폴더 ID (report.html에서 기본 교사가 준비하면 config/errorReports에 저장됨) */
+/* 오류 신고 전송 설정 (report.html에서 기본 교사가 저장 → config/errorReports)
+   webAppUrl: Apps Script 웹앱 주소 (스크린샷을 교사 Drive 폴더 + 스프레드시트에 저장) */
 async function loadErrorReportConfig(){
   try{
     const snap = await getDoc(doc(db,"config","errorReports"));
-    window._errFolderId = snap.exists() ? (snap.data().folderId||null) : null;
-    if(!window._errFolderId) console.log('[오류신고] Drive 폴더 미설정 → 스크린샷은 Firestore에 저장');
-  }catch(e){ window._errFolderId=null; console.warn('[오류신고] Drive 폴더 설정 읽기 실패:', e.message); }
+    const d = snap.exists() ? snap.data() : {};
+    window._errWebApp = d.webAppUrl || null;
+    window._errToken  = d.token || 'snug-error-report';
+    if(!window._errWebApp) console.log('[오류신고] 신고 서버 미설정 → 스크린샷은 Firestore에 저장');
+  }catch(e){ window._errWebApp=null; console.warn('[오류신고] 설정 읽기 실패:', e.message); }
 }
 async function loadTeacherData(){
   if(!user || !TEACHER_EMAILS.includes(user.email)) return;
@@ -884,7 +886,7 @@ async function loadCurriculum(){
 }
 
 onAuthStateChanged(auth, async u => {
-  if(window._driveAuthInFlight && u && user && u.uid===user.uid) return; // 오류 신고용 Drive 인증 팝업 — 화면 재로딩 방지
+  if(window._reportBusy && u && user && u.uid===user.uid) return; // 신고 처리 중 재인증으로 인한 화면 재로딩 방지
   if (!u) { showPage("login-page"); updateHeader(null); return; }
   user = u;
   // 준비 단계는 각각 독립적으로 보호 — 하나가 실패해도 학생이 로그인 화면에 갇히지 않도록
@@ -1399,21 +1401,6 @@ async function _loadH2C(){
     return true;
   }catch(e){ console.warn('[오류신고] html2canvas 로드 실패'); return false; }
 }
-/* Drive 업로드용 액세스 토큰 (drive.file: 이 앱이 만든 파일 + 지정한 폴더에만 접근)
-   신고 버튼 클릭 직후 호출해 팝업 차단을 피함. 같은 계정 재인증이라 화면은 유지(_driveAuthInFlight 가드) */
-async function getReportDriveToken(){
-  if(window._reportDriveToken) return window._reportDriveToken;
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-  if(user?.email) provider.setCustomParameters({ login_hint:user.email });
-  window._driveAuthInFlight = true;
-  try{
-    const result = await signInWithPopup(auth, provider);
-    const cred = GoogleAuthProvider.credentialFromResult(result);
-    window._reportDriveToken = cred?.accessToken || null;
-  } finally { setTimeout(()=>{ window._driveAuthInFlight=false; }, 1500); }
-  return window._reportDriveToken;
-}
 function _dataUrlToBlob(d){
   const parts=d.split(',');
   const mime=(parts[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
@@ -1421,7 +1408,7 @@ function _dataUrlToBlob(d){
   for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
   return new Blob([arr],{type:mime});
 }
-/* 캔버스를 목표 용량 이하 JPEG로 (Drive용은 넉넉히, Firestore 폴백은 문서 1MB 제한 때문에 빡빡하게) */
+/* 캔버스를 목표 용량 이하 JPEG로 축소 (Firestore 폴백은 문서 1MB 제한 때문에 더 빡빡하게) */
 function _canvasToJpeg(canvas, maxW, limit){
   let out=canvas;
   if(canvas.width>maxW){
@@ -1432,7 +1419,7 @@ function _canvasToJpeg(canvas, maxW, limit){
   }
   let q=0.75, d=out.toDataURL('image/jpeg',q);
   while(d.length>limit && q>0.35){ q-=0.1; d=out.toDataURL('image/jpeg',q); }
-  if(d.length>limit){ // 그래도 크면 가로 폭을 절반으로 줄여 한 번 더
+  if(d.length>limit){
     const c3=document.createElement('canvas');
     c3.width=Math.round(out.width/2); c3.height=Math.round(out.height/2);
     c3.getContext('2d').drawImage(out,0,0,c3.width,c3.height);
@@ -1441,19 +1428,11 @@ function _canvasToJpeg(canvas, maxW, limit){
   return d;
 }
 window.sendBugReport=async function(){
-  const btn=document.getElementById('bugrep-send'); if(btn){ btn.disabled=true; btn.textContent='준비 중…'; }
+  const btn=document.getElementById('bugrep-send'); if(btn){ btn.disabled=true; btn.textContent='캡처 중…'; }
   const desc=(document.getElementById('bugrep-desc')?.value||'').trim();
   const pt=_bugPt||{x:0,y:0};
 
-  // 1) Drive 토큰 먼저 (버튼 클릭 직후여야 팝업이 뜸)
-  let token=null;
-  if(window._errFolderId){
-    try{ token=await getReportDriveToken(); }
-    catch(e){ console.warn('[오류신고] Drive 인증 실패 → Firestore 저장으로 대체:', e.message); }
-  }
-
-  // 2) 화면 캡처 + 클릭 위치 표시
-  if(btn) btn.textContent='캡처 중…';
+  // 1) 화면 캡처 + 클릭 위치 표시
   let canvas=null;
   try{
     if(await _loadH2C()){
@@ -1469,45 +1448,42 @@ window.sendBugReport=async function(){
     }
   }catch(e){ console.warn('[오류신고] 캡처 실패:',e.message); } // 캡처 실패해도 신고는 저장
 
-  // 3) 스크린샷 저장 — Drive 우선, 실패하면 Firestore 문서에 직접(축소 저장)
+  const base={
+    createdAt:new Date().toISOString(), status:'open',
+    email:user?.email||'', page:'index', version:(typeof VERSION!=='undefined'?VERSION:''),
+    url:location.href, userAgent:navigator.userAgent,
+    viewport:{w:innerWidth,h:innerHeight}, click:pt,
+    wsId:curWS?.id||null, wsTitle:curWS?.title||null, qIdx:(typeof curQIdx==='number'?curQIdx:null),
+    description:desc,
+    consoleLog:(window._errlog||[]).slice(-100)
+  };
+
+  // 2) 스크린샷 저장 — Apps Script 웹앱(교사 Drive 폴더+스프레드시트) 우선, 실패하면 Firestore에 축소 저장
   let driveFileId=null, driveUrl=null, shot='', shotNote='';
-  if(canvas){
-    if(token && window._errFolderId){
-      try{
-        if(btn) btn.textContent='업로드 중…';
-        const ts=new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
-        const who=(user?.email||'unknown').split('@')[0];
-        const meta=JSON.stringify({ name:`report_${ts}_${who}.jpg`, parents:[window._errFolderId] });
-        const body=new FormData();
-        body.append('metadata', new Blob([meta],{type:'application/json'}));
-        body.append('file', _dataUrlToBlob(_canvasToJpeg(canvas,1400,1500000)));
-        const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
-          { method:'POST', headers:{ Authorization:`Bearer ${token}` }, body });
-        if(!res.ok) throw new Error('업로드 응답 '+res.status);
-        const out=await res.json();
-        driveFileId=out.id;
-        driveUrl=out.webViewLink||`https://drive.google.com/file/d/${out.id}/view`;
-      }catch(e){ console.warn('[오류신고] Drive 업로드 실패 → Firestore 저장:',e.message); }
-    }
-    if(!driveUrl){
-      shot=_canvasToJpeg(canvas,1000,800000);           // Firestore 문서 1MB 제한 대비
-      if(shot.length>900000){ shot=''; shotNote='스크린샷이 너무 커서 저장하지 못했습니다'; }
+  if(canvas && window._errWebApp){
+    if(btn) btn.textContent='전송 중…';
+    try{
+      const res=await fetch(window._errWebApp,{
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },  // 단순 요청(프리플라이트 없음)
+        body: JSON.stringify({ ...base, token:window._errToken, image:_canvasToJpeg(canvas,1400,1500000) })
+      });
+      const out=await res.json();
+      if(out && out.ok){ driveFileId=out.fileId||null; driveUrl=out.fileUrl||null; }
+      else throw new Error(out?.error||'서버 응답 오류');
+    }catch(e){
+      console.warn('[오류신고] 신고 서버 전송 실패 → Firestore 저장:',e.message);
+      shotNote='신고 서버 전송 실패';
     }
   }
+  if(canvas && !driveUrl){
+    shot=_canvasToJpeg(canvas,1000,800000);            // Firestore 문서 1MB 제한 대비
+    if(shot.length>900000){ shot=''; shotNote='스크린샷이 너무 커서 저장하지 못했습니다'; }
+  }
 
-  // 4) 신고 저장
+  // 3) 신고 목록용 문서 저장 (report.html이 읽음)
   try{
-    await setDoc(doc(collection(db,'error_reports')), {
-      createdAt:new Date().toISOString(), status:'open',
-      email:user?.email||'', page:'index', version:(typeof VERSION!=='undefined'?VERSION:''),
-      url:location.href, userAgent:navigator.userAgent,
-      viewport:{w:innerWidth,h:innerHeight}, click:pt,
-      wsId:curWS?.id||null, wsTitle:curWS?.title||null, qIdx:(typeof curQIdx==='number'?curQIdx:null),
-      description:desc,
-      consoleLog:(window._errlog||[]).slice(-100),
-      screenshot:shot, screenshotNote:shotNote,
-      driveFileId, driveUrl
-    });
+    await setDoc(doc(collection(db,'error_reports')), { ...base, screenshot:shot, screenshotNote:shotNote, driveFileId, driveUrl });
     _bugCleanup();
     alert('🚨 신고가 접수되었습니다. 감사합니다!');
   }catch(e){ _bugCleanup(); alert('신고 저장에 실패했습니다: '+e.message); }

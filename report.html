@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="report-v1.0c">
+<meta name="app-version" content="report-v1.1">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오류 신고 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,8 +76,8 @@ details.rep-log pre .l-warn{color:#fde68a}
 <header>
   <div class="hdr-left">
     <button class="hdr-btn" onclick="loadReports()" title="목록 새로고침">🔄 새로고침</button>
-    <button class="hdr-btn" id="btn-drive-setup" onclick="prepareDriveFolder()" title="스크린샷 폴더를 만들고 학교 도메인에 공유합니다 (최초 1회)">⚙️ Drive 폴더 준비</button>
-    <button class="hdr-btn" id="btn-drive-sync" onclick="syncAllToDrive()" title="저장되지 않은 스크린샷을 Google Drive 폴더에 올립니다">☁️ Drive 저장</button>
+    <button class="hdr-btn" id="btn-report-setup" onclick="setupReportServer()" title="스크린샷을 저장할 Apps Script 웹앱 주소를 지정합니다 (최초 1회)">⚙️ 신고 서버 설정</button>
+    <button class="hdr-btn" id="btn-report-test" onclick="testReportServer()" title="신고 서버가 정상 동작하는지 확인합니다">🔍 서버 확인</button>
   </div>
   <div class="hdr-center">
     <div class="logo">🚨 오류 신고 관리<em>+</em></div>
@@ -112,7 +112,7 @@ details.rep-log pre .l-warn{color:#fde68a}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, getDocs, doc, setDoc, updateDoc, deleteDoc }
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -210,7 +210,7 @@ function render(){
       <details class="rep-log"><summary>🖥 콘솔 로그 ${logs.length}건</summary><pre>${logHtml}</pre></details>
       <div class="rep-meta" style="word-break:break-all">${esc(r.userAgent||'')}</div>
       <div class="rep-foot">
-        ${r.driveUrl ? `<a class="btn" href="${r.driveUrl}" target="_blank" rel="noopener">☁️ Drive 사본</a>` : (r.screenshot ? `<button class="btn" onclick="saveOneToDrive('${r.id}')">☁️ Drive에 저장</button>` : '')}
+        ${r.driveUrl ? `<a class="btn" href="${r.driveUrl}" target="_blank" rel="noopener">☁️ Drive 원본</a>` : ""}
         ${isFixed
           ? `<button class="btn reopen" onclick="setStatus('${r.id}','open')">↩ 미해결로 되돌리기</button>`
           : `<button class="btn fix" onclick="setStatus('${r.id}','fixed')">✅ 수정 완료</button>`}
@@ -221,142 +221,53 @@ function render(){
   }).join("");
 }
 
-/* ── Google Drive 저장 ──
-   신고 스크린샷은 Firestore 문서(error_reports.screenshot)에 JPEG로 들어 있음.
-   이 버튼을 누르면 로그인한 기본 교사의 Drive에서
-   "온라인 학습지 시스템 / 오류신고_스크린샷" 폴더를 찾아(없으면 생성) 사본을 올림.
-   → Drive 데스크톱으로 동기화되므로 PC의 같은 폴더에서도 바로 열람 가능 */
-const DRIVE_FOLDER_NAME = "오류신고_스크린샷";
-const DRIVE_PARENT_NAME = "온라인 학습지 시스템";
-let _driveToken = null, _driveFolderId = null;
-
-async function getDriveToken(){
-  if(_driveToken) return _driveToken;
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive');   // 폴더 검색·생성이 필요해 drive 범위 사용
-  provider.setCustomParameters({ login_hint: tUser.email });
-  const result = await signInWithPopup(auth, provider);
-  const cred = GoogleAuthProvider.credentialFromResult(result);
-  if(!cred || !cred.accessToken) throw new Error('Drive 접근 권한을 얻지 못했습니다');
-  _driveToken = cred.accessToken;
-  return _driveToken;
-}
-async function driveFind(q){
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=5`,
-    { headers:{ Authorization:`Bearer ${_driveToken}` } });
-  if(!res.ok) throw new Error(`Drive 조회 실패 (${res.status})`);
-  return (await res.json()).files || [];
-}
-const SHARE_DOMAIN = "snu-g.ms.kr";   // 이 도메인 계정이면 폴더에 파일을 올릴 수 있음(학생 신고 업로드용)
-
-async function ensureDriveFolder(){
-  if(_driveFolderId) return _driveFolderId;
-  await getDriveToken();
-  const parents = await driveFind(`name='${DRIVE_PARENT_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-  const parentId = parents.length ? parents[0].id : null;
-  const q = `name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
-          + (parentId ? ` and '${parentId}' in parents` : '');
-  const found = await driveFind(q);
-  if(found.length){ _driveFolderId = found[0].id; }
-  else{
-    const meta = { name: DRIVE_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder' };
-    if(parentId) meta.parents = [parentId];
-    const res = await fetch('https://www.googleapis.com/drive/v3/files?fields=id',
-      { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}`, 'Content-Type':'application/json' }, body: JSON.stringify(meta) });
-    if(!res.ok) throw new Error(`폴더 생성 실패 (${res.status})`);
-    _driveFolderId = (await res.json()).id;
+/* ── 신고 수신 서버(Apps Script 웹앱) 설정 ──
+   학생이 신고하면 스크린샷은 이 웹앱을 거쳐 교사 Drive의 "오류신고_스크린샷" 폴더와
+   "오류신고_기록" 스프레드시트에 저장된다. 여기서는 그 주소만 지정해 두면 된다.
+   (배포 방법은 프로젝트 폴더의 오류신고_AppsScript.gs 주석 참고) */
+window.setupReportServer = async function(){
+  let cur='';
+  try{
+    const snap=await getDoc(doc(db,'config','errorReports'));
+    cur = snap.exists() ? (snap.data().webAppUrl||'') : '';
+  }catch(e){}
+  const url = prompt(
+    'Apps Script 웹앱 주소를 붙여넣으세요.\n\n'
+    + '· script.google.com에서 [배포] → [웹 앱]으로 배포한 뒤 나오는\n'
+    + '  https://script.google.com/macros/s/.../exec 주소입니다.\n'
+    + '· 비우고 확인을 누르면 설정을 해제합니다(스크린샷은 Firestore에 저장).',
+    cur);
+  if(url===null) return;
+  const clean=url.trim();
+  if(clean && !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(clean)){
+    alert('주소 형식이 올바르지 않습니다.\nhttps://script.google.com/macros/s/…/exec 형태여야 합니다.');
+    return;
   }
-  await shareFolderWithDomain(_driveFolderId);   // 학교 도메인에 쓰기 권한 (학생이 직접 업로드)
-  await saveFolderConfig(_driveFolderId);        // index.html이 읽을 폴더 ID 공유
-  return _driveFolderId;
-}
-
-/* 폴더를 학교 도메인(snu-g.ms.kr)에 쓰기 권한으로 공유 — 이미 있으면 건너뜀 */
-async function shareFolderWithDomain(folderId){
   try{
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions?fields=permissions(id,type,domain,role)`,
-      { headers:{ Authorization:`Bearer ${_driveToken}` } });
-    if(res.ok){
-      const list = (await res.json()).permissions || [];
-      if(list.some(p=>p.type==='domain' && p.domain===SHARE_DOMAIN && (p.role==='writer'||p.role==='owner'))) return;
-    }
-    const add = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions?sendNotificationEmail=false`,
-      { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}`, 'Content-Type':'application/json' },
-        body: JSON.stringify({ type:'domain', domain:SHARE_DOMAIN, role:'writer' }) });
-    if(!add.ok) console.warn('[Drive] 도메인 공유 실패', add.status);
-  }catch(e){ console.warn('[Drive] 도메인 공유 오류', e.message); }
-}
-
-/* 폴더 ID를 config/errorReports에 저장 → 학생 index.html이 이 폴더로 바로 업로드 */
-async function saveFolderConfig(folderId){
-  try{
-    await setDoc(doc(db,'config','errorReports'), {
-      folderId, folderName: DRIVE_FOLDER_NAME,
-      folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
-      sharedDomain: SHARE_DOMAIN,
-      updatedAt: new Date().toISOString(), updatedBy: tUser.email
-    }, { merge:true });
-  }catch(e){ console.warn('[Drive] 폴더 설정 저장 실패', e.message); }
-}
-
-/* 최초 1회: 폴더 준비 + 도메인 공유 + 설정 저장 (헤더 버튼) */
-window.prepareDriveFolder = async function(){
-  const btn=document.getElementById('btn-drive-setup');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ 준비 중…'; }
-  try{
-    const id = await ensureDriveFolder();
-    alert(`✅ Drive 폴더 준비 완료\n\n폴더: 내 드라이브 > ${DRIVE_PARENT_NAME} > ${DRIVE_FOLDER_NAME}\n공유: ${SHARE_DOMAIN} 도메인 쓰기 권한\n\n이제 학생이 신고하면 스크린샷이 이 폴더에 바로 저장됩니다.`);
-  }catch(e){ alert('폴더 준비 실패: '+e.message); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent='⚙️ Drive 폴더 준비'; } }
+    await setDoc(doc(db,'config','errorReports'),
+      { webAppUrl:clean, token:'snug-error-report', updatedAt:new Date().toISOString(), updatedBy:tUser.email },
+      { merge:true });
+    alert(clean ? '✅ 신고 서버가 설정되었습니다.\n이제 신고 스크린샷이 Drive 폴더와 스프레드시트에 자동 저장됩니다.'
+                : '설정을 해제했습니다. 스크린샷은 Firestore에 저장됩니다.');
+  }catch(e){ alert('설정 저장 실패: '+e.message); }
 };
-function dataUrlToBlob(d){
-  const parts = d.split(',');
-  const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
-  const bin = atob(parts[1]), arr = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}
-function driveFileName(r){
-  const t = (r.createdAt||'').replace(/[-:T]/g,'').slice(0,12);  // YYYYMMDDHHMM
-  const who = (r.email||'unknown').split('@')[0];
-  return `report_${t||'nodate'}_${who}_${r.id.slice(0,6)}.jpg`;
-}
-async function uploadReport(r){
-  const folderId = await ensureDriveFolder();
-  const meta = JSON.stringify({ name: driveFileName(r), parents:[folderId] });
-  const body = new FormData();
-  body.append('metadata', new Blob([meta], { type:'application/json' }));
-  body.append('file', dataUrlToBlob(r.screenshot));
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
-    { method:'POST', headers:{ Authorization:`Bearer ${_driveToken}` }, body });
-  if(!res.ok) throw new Error(`업로드 실패 (${res.status})`);
-  const out = await res.json();
-  const url = out.webViewLink || `https://drive.google.com/file/d/${out.id}/view`;
-  await updateDoc(doc(db,'error_reports',r.id), { driveFileId:out.id, driveUrl:url, driveSavedAt:new Date().toISOString() });
-  r.driveFileId = out.id; r.driveUrl = url;
-  return url;
-}
-window.saveOneToDrive = async function(id){
-  const r = reports.find(x=>x.id===id);
-  if(!r || !r.screenshot){ alert('스크린샷이 없는 신고입니다.'); return; }
-  try{ await uploadReport(r); render(); }
-  catch(e){ alert('Drive 저장 실패: '+e.message); }
-};
-window.syncAllToDrive = async function(){
-  const targets = reports.filter(r=>r.screenshot && !r.driveUrl);
-  const btn = document.getElementById('btn-drive-sync');
-  if(!targets.length){ alert('새로 저장할 스크린샷이 없습니다.'); return; }
-  if(!confirm(`저장되지 않은 스크린샷 ${targets.length}건을 Google Drive에 올릴까요?`)) return;
-  btn.disabled = true;
-  let ok=0, fail=0;
-  for(let i=0;i<targets.length;i++){
-    btn.textContent = `☁️ ${i+1}/${targets.length}`;
-    try{ await uploadReport(targets[i]); ok++; }
-    catch(e){ fail++; console.warn('[Drive 저장 실패]', targets[i].id, e.message); }
+
+/* 설정된 웹앱이 살아 있는지 확인 (GET 호출) */
+window.testReportServer = async function(){
+  const btn=document.getElementById('btn-report-test');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 확인 중…'; }
+  try{
+    const snap=await getDoc(doc(db,'config','errorReports'));
+    const url = snap.exists() ? (snap.data().webAppUrl||'') : '';
+    if(!url){ alert('먼저 [⚙️ 신고 서버 설정]에서 주소를 등록하세요.'); return; }
+    const res = await fetch(url);
+    const out = await res.json();
+    alert(out && out.ok ? '✅ 신고 서버 정상 동작 중입니다.' : '⚠️ 응답이 예상과 다릅니다:\n'+JSON.stringify(out));
+  }catch(e){
+    alert('연결 실패: '+e.message
+      + '\n\n확인할 점\n· 배포 시 [액세스 권한]이 "모든 사용자"인지\n· 코드 수정 후 [배포 관리]에서 새 버전으로 다시 배포했는지');
   }
-  btn.disabled = false; btn.textContent = '☁️ Drive 저장';
-  render();
-  alert(`Drive 저장 완료: ${ok}건${fail?` (실패 ${fail}건)`:''}\n폴더: 내 드라이브 > ${DRIVE_PARENT_NAME} > ${DRIVE_FOLDER_NAME}`);
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔍 서버 확인'; } }
 };
 
 window.setStatus=async function(id,status){

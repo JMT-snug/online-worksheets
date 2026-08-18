@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.12">
+  <meta name="app-version" content="8.13">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.12";
+const VERSION = "8.13";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2060,12 +2060,17 @@ async function startQuiz(ws) {
         const s=_pq[q.id]; if(!s) return;
         if(curWS.questions[i]?.type==='graph'){
           answered[i]=s.drawing?{drawing:s.drawing,teacherDrawing:s.teacherDrawing||null,feedback:s.feedback||null,correct:s.correct}:false;
+        } else if(s.examAnswer!==undefined && s.examAnswer!==null){
+          // 시험지 답안 복원 — 복원하지 않으면 새로고침 후 시험 종료 시
+          // 답안이 없는 상태로 채점되고 저장된 답안까지 지워짐
+          answered[i]={examAnswer:s.examAnswer,_isExam:true,
+                       correct:(s.correct===undefined?null:s.correct), score:s.score||0};
+          attempts[i]=s.attempts||0;
+          wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
         } else {
           answered[i]=s.correct||false;
           attempts[i]=s.attempts||0;
-          answered[i]=s.correct||false;
-        attempts[i]=s.attempts||0;
-        wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
+          wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
         }      });
       if(_d.isComplete) _wsIsCompleted=true;
       const _first=answered.findIndex(a=>!a);
@@ -2837,8 +2842,8 @@ window.submitMulti = function(){
     return submitExamAns(q);
   }
   const sel = [...multiSel].sort((a,b)=>a-b);
-  const ans = [...q.answer].sort((a,b)=>a-b);
-  const ok = sel.length===ans.length && sel.every((v,i)=>v===ans[i]);
+  const ans = normalizeMultiAnswer(q);   // 시험지 채점과 동일한 정규화 사용
+  const ok = sel.length>0 && ans.length>0 && sel.length===ans.length && sel.every((v,i)=>v===ans[i]);
   if(!ok) attempts[curQIdx]++;
   const ab=document.getElementById("attempt-badge");
   const an=document.getElementById("attempt-num");
@@ -3457,6 +3462,19 @@ function _examEvExpr(s,x){
     return Function('"use strict";return('+t+')')();
   }catch(e){ return NaN; }
 }
+/* 선택형 정답 인덱스 정규화.
+   edit.html은 0-based(선지1=0)로 저장하지만, 과거/수기 데이터에 1-based가 섞여 있으면
+   0-based로는 존재할 수 없는 인덱스(=선지 개수)가 나타난다. 그 경우에만 1로 보정한다.
+   (근거 없이 보정하면 실제 오답이 정답으로 둔갑하므로 확실한 경우로 제한) */
+function normalizeMultiAnswer(q){
+  const n=(q.options||[]).length;
+  let a=[...(q.answer||[])].map(Number).filter(v=>!isNaN(v));
+  if(n>0 && a.length && a.every(v=>v>=1&&v<=n) && a.some(v=>v===n)){
+    a=a.map(v=>v-1);   // 0-based면 불가능한 인덱스 존재 → 1-based 데이터로 판단
+  }
+  return a.sort((x,y)=>x-y);
+}
+
 function gradeExamWord(q, ans){
   if(ans===null||ans===undefined) return false;
   const raw=String(ans).trim();
@@ -3518,9 +3536,12 @@ async function endExamAndGrade(){
     if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
       ok=gradeExamWord(q, ans);          // 일반 모드와 동일한 동치 판정 사용
     } else if(q.type==='multi'){
-      if(Array.isArray(ans)){
-        const expected=[...(q.answer||[])].sort((a,b)=>a-b);
-        ok=ans.length===expected.length && ans.every((v,i)=>v===expected[i]);
+      const expected=normalizeMultiAnswer(q);
+      // 선택이 없거나 정답이 설정돼 있지 않으면 정답 처리하지 않는다
+      // (빈 배열끼리 length 비교가 통과해 '무응답인데 정답'이 되던 문제)
+      if(Array.isArray(ans) && ans.length>0 && expected.length>0){
+        const sel=[...ans].map(Number).sort((a,b)=>a-b);
+        ok=sel.length===expected.length && sel.every((v,i)=>v===expected[i]);
       }
     } else if(q.type==='link'){
       ok=ans===true;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.13">
+<meta name="app-version" content="3.14">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.13";
+const VERSION = "3.14";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -529,8 +529,38 @@ function navigate(view){
 }
 window.navigate=navigate;
 
+/* 시험지 제출 답안을 사람이 읽을 수 있게 변환.
+   선택형은 인덱스 배열(0-based)이라 번호만 보면 헷갈리므로 선지 내용까지 함께 표시 */
+function findQDef(wsId, qid){
+  const ws=(typeof WORKSHEETS!=='undefined'?WORKSHEETS:[]).find(w=>w.id===wsId);
+  return ws?.questions?.find(x=>x.id===qid)||null;
+}
+function _stripTex(s){ return String(s??'').replace(/\\\(|\\\)/g,'').replace(/\s+/g,' ').trim(); }
+function fmtExamAnswer(raw, wsId, qid){
+  if(raw===null||raw===undefined||raw==='') return '(무응답)';
+  if(Array.isArray(raw)){
+    if(!raw.length) return '(무응답)';
+    const opts=findQDef(wsId,qid)?.options||[];
+    return raw.map(n=>`${Number(n)+1}번${opts[n]!=null?` (${_stripTex(opts[n])})`:''}`).join(', ');
+  }
+  return _stripTex(raw);
+}
+/* 문항의 정답을 사람이 읽을 수 있게 (교사가 제출답안과 비교할 수 있도록) */
+function fmtCorrectAnswer(wsId, qid){
+  const q=findQDef(wsId,qid);
+  if(!q) return null;
+  if(q.type==='multi'){
+    const opts=q.options||[];
+    const a=[...(q.answer||[])].map(Number);
+    if(!a.length) return '(정답 미설정)';
+    return a.map(n=>`${n+1}번${opts[n]!=null?` (${_stripTex(opts[n])})`:''}`).join(', ');
+  }
+  if(q.answer==null||q.answer==='') return null;
+  return _stripTex(q.answer);
+}
+
 // ── 학생별 조회: 공용 문항 셀 렌더 ──
-function perQCells(r, uid){
+function perQCells(r, uid, wsIdArg){
   if(!r || !r.perQuestion) return '<span style="color:var(--ink3);font-size:12px">기록 없음</span>';
   window._qd=window._qd||{};
   const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
@@ -543,7 +573,7 @@ function perQCells(r, uid){
     let col, mark, ttl;
     if(isExamQ){
       // 시험지: 채점 결과가 없으면 '미채점'으로 표시 (정답으로 오인 방지)
-      const ansTxt = v.examAnswer==null||v.examAnswer==='' ? '(무응답)' : String(v.examAnswer);
+      const ansTxt = fmtExamAnswer(v.examAnswer, wsIdArg||r.wsId, qid);
       if(v.correct===true){ col="var(--green)"; mark="⭕"; }
       else if(v.correct===false){ col="var(--red)"; mark="❌"; }
       else { col="var(--amber)"; mark="📝"; }
@@ -554,7 +584,7 @@ function perQCells(r, uid){
     else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
     else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
     const dkey=(uid||r.uid||"x")+"_"+qid;
-    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ};
+    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ,wsId:(wsIdArg||r.wsId)};
     return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
   }).join("");
   return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
@@ -868,7 +898,7 @@ function renderStudentDetail(uid){
       <td style="font-size:12px">${statusBadge}<br><span style="font-size:11px;color:var(--ink3)">${ts}</span></td>
       <td>${rate!=null?rateBar(rate):'-'}</td>
       <td style="text-align:center"><span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span></td>
-      <td style="min-width:200px">${perQCells(r,uid)}</td>
+      <td style="min-width:200px">${perQCells(r,uid,ws.id)}</td>
     </tr>`;
   }).join("");
 
@@ -1894,9 +1924,8 @@ window.showQDetail=function(key){
   // 시험지 제출 답안 표시 (그래프가 아닌 경우) — 교사가 학생 답안을 확인할 수 있도록
   if(_isExam && !d.v?.drawing){
     const raw=d.v?.examAnswer;
-    const ansTxt = (raw===null||raw===undefined||raw==='')
-      ? '(무응답)'
-      : (Array.isArray(raw) ? raw.map(n=>`${n+1}번`).join(', ') : String(raw));
+    const ansTxt = fmtExamAnswer(raw, d.wsId, d.qid);
+    const correctTxt = fmtCorrectAnswer(d.wsId, d.qid);
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const st=d.v?.correct===true?['정답','var(--green)','#dcfce7']
             :d.v?.correct===false?['오답','var(--red)','#fee2e2']
@@ -1904,6 +1933,8 @@ window.showQDetail=function(key){
     body+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📝 시험지 제출 답안</div>
       <div style="padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--paper);font-size:15px;font-family:'DM Mono',monospace;word-break:break-all">${esc(ansTxt)}</div>
+      ${correctTxt?`<div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">✅ 정답</div>
+      <div style="padding:10px 12px;border:1px solid var(--green);border-radius:8px;background:#f0fdf4;font-size:15px;font-family:'DM Mono',monospace;word-break:break-all;color:var(--green)">${esc(correctTxt)}</div>`:''}
       <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:700;color:${st[1]};background:${st[2]};padding:3px 10px;border-radius:12px">${st[0]}</span>
         ${d.v?.score!=null&&d.v?.maxScore!=null?`<span style="font-size:12px;color:var(--ink3)">획득 ${d.v.score} / ${d.v.maxScore}점</span>`:''}

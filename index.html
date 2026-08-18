@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.21">
+  <meta name="app-version" content="8.22">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.21";
+const VERSION = "8.22";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2115,13 +2115,27 @@ async function startQuiz(ws) {
         if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
         let _mx=_d.examMaxScore;
         if(_mx==null) _mx=ws.questions.reduce((s,q)=>s+(q.score??1),0);
-        window._examFinalScore=_d.examScore??0;
-        window._examMaxScore=_mx;
+        /* ── 표시용 재판정 ──
+           저장된 correct와 score는 서로 다른 시점에 쓰여 어긋날 수 있다
+           (과거 자동저장이 correct=true를 덮어쓴 오염, scoring이 score 없이 correct만 저장 등)
+           → 결과 화면의 O/X와 점수가 "⭕인데 0/1점"처럼 모순되게 표시되던 원인.
+           그래프 외 문항은 저장된 답안을 judgeAnswer로 재판정해 O/X·점수를 한 소스에서 계산하고,
+           그래프는 교사 수동 판정(correct)을 진실로 삼아 점수를 유도한다. (표시 전용 — 저장 안 함) */
         ws.questions.forEach((q,i)=>{
           const s=_pq[q.id]||{};
-          answered[i]={examAnswer:s.examAnswer, _isExam:true,
-                       correct:(s.correct===undefined?null:s.correct), score:s.score||0};
+          let c=(s.correct===undefined?null:s.correct), sc=s.score||0;
+          if(q.type==='graph'){
+            sc = c===true ? (q.score??1) : 0;   // scoring은 correct만 저장하므로 점수는 판정에서 유도
+          } else {
+            let tk=null;
+            try{ if(s.examAnswerTokens) tk=JSON.parse(s.examAnswerTokens); }catch(_e){}
+            const rj=judgeAnswer(q, s.examAnswer, tk);
+            if(rj!==null){ c=rj; sc=rj===true?(q.score??1):0; }
+          }
+          answered[i]={examAnswer:s.examAnswer, _isExam:true, correct:c, score:sc};
         });
+        window._examFinalScore=ws.questions.reduce((t,q,i)=>t+(answered[i]?.score||0),0);
+        window._examMaxScore=_mx;
         _wsDataLoaded=true;
         window._examReentry=true;   // 결과 화면에 '제출 완료' 안내 표시용
         if(_activeWsId!==ws.id) return;
@@ -3835,7 +3849,7 @@ async function finishQuiz(){
         <div class="r-body">
           <div class="r-qnum">
             <span>문제 ${i+1}</span>
-            <span style="margin-left:8px;color:${ec===true?'var(--green)':'var(--red)'};font-weight:700">${escr}/${emax}점</span>
+            <span style="margin-left:8px;color:${ec===true?'var(--green)':ec===false?'var(--red)':'var(--amber)'};font-weight:700">${escr}/${emax}점${ec==null?' (미채점)':''}</span>
           </div>
           <div style="font-size:13px;color:var(--ink2);margin-top:2px"><span class="r-qtext">${q.text||""}</span></div>
         </div>`;

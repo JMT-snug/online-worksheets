@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.2">
+<meta name="app-version" content="scoring-v1.3">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -775,6 +775,12 @@ window.saveCurrent = async function(){
       [`perQuestion.${curQid}.correct`]: (_curJudgment===undefined ? null : _curJudgment),
       [`perQuestion.${curQid}.feedback`]: feedback || null,
     };
+    // 시험지 문항이면 점수도 판정과 함께 기록 — correct만 쓰면 '⭕인데 0점' 모순 데이터가 됨
+    const _ws = WORKSHEETS.find(w=>w.id===curWsId);
+    if(_ws?.type==='exam'){
+      const _q = _ws.questions?.find(x=>x.id===curQid);
+      upd[`perQuestion.${curQid}.score`] = (_curJudgment===true ? (_q?.score??1) : 0);
+    }
     if(teacherDrawing) upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
     try{
       await updateDoc(ref, upd);

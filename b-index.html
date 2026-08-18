@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.13">
+  <meta name="app-version" content="8.14">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.13";
+const VERSION = "8.14";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2035,6 +2035,8 @@ async function startQuiz(ws) {
   window._examMode = ws.type==='exam';
   window._examTimeLimit = (ws.timeLimit||0)*60;
   window._examStartTime = null;
+  window._examStartedAt = null;   // 저장된 시험 시작 시각 (복원 시 채워짐)
+  window._examReentry = false;
   window._examEnded = false;
   // 랜덤 출제: 원본 보존 후 셔플 (파트가 있는 학습지는 순서 유지)
   if(!ws._orig) ws._orig=ws.questions;
@@ -2073,6 +2075,31 @@ async function startQuiz(ws) {
           wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
         }      });
       if(_d.isComplete) _wsIsCompleted=true;
+      // ── 시험지 시작 시각 복원 (재접속해도 남은 시간 유지) ──
+      if(ws.type==='exam' && _d.examStartedAt) window._examStartedAt=Number(_d.examStartedAt)||null;
+
+      // ── 시험지: 이미 제출했으면 재응시 불가, 채점 결과 화면으로 ──
+      if(ws.type==='exam' && (_d.examFinished || _d.isComplete) && !isTeacherAcct()){
+        window._examEnded=true; window._examMode=false;
+        if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
+        let _mx=_d.examMaxScore;
+        if(_mx==null) _mx=ws.questions.reduce((s,q)=>s+(q.score??1),0);
+        window._examFinalScore=_d.examScore??0;
+        window._examMaxScore=_mx;
+        ws.questions.forEach((q,i)=>{
+          const s=_pq[q.id]||{};
+          answered[i]={examAnswer:s.examAnswer, _isExam:true,
+                       correct:(s.correct===undefined?null:s.correct), score:s.score||0};
+        });
+        _wsDataLoaded=true;
+        window._examReentry=true;   // 결과 화면에 '제출 완료' 안내 표시용
+        if(_activeWsId!==ws.id) return;
+        console.log('[시험지] 제출 완료 기록 → 결과 화면 표시 (재응시 불가)');
+        document.getElementById("quiz-ws-title").textContent=ws.title;
+        curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
+        finishQuiz();
+        return;
+      }
       const _first=answered.findIndex(a=>!a);
       curQIdx=_first===-1?ws.questions.length-1:_first;
       if(_activeWsId!==ws.id) return;
@@ -3589,9 +3616,30 @@ function _stopExamTimer(){
 // 시험지 타이머 시작 (renderQuestion 안에서 첫 호출)
 function startExamTimer(){
   if(!window._examMode||window._examTimer) return;
-  window._examStartTime=Date.now();
+  // 재접속해도 남은 시간이 유지되도록 '최초 시작 시각'을 Firestore에 기록해 두고 재사용한다.
+  // (예전에는 매번 Date.now()로 다시 시작해서 새로고침하면 시간이 초기화됨)
+  if(window._examStartedAt){
+    window._examStartTime=Number(window._examStartedAt);
+  } else {
+    window._examStartTime=Date.now();
+    window._examStartedAt=window._examStartTime;
+    if(curWS && user && !isTeacherAcct()){
+      setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
+        studentEmail:user.email, studentName:user.displayName||'',
+        worksheetId:curWS.id, worksheetTitle:curWS.title,
+        examMode:true, examStartedAt:window._examStartTime,
+        lastUpdated:new Date().toISOString(),
+      },{merge:true}).catch(e=>console.warn('[시험 시작시각 저장 실패]',e.message));
+    }
+  }
   const hasLimit=!!window._examTimeLimit;
   const endTime=hasLimit?window._examStartTime+window._examTimeLimit*1000:0;
+  // 재접속 시점에 이미 시간이 지났으면 즉시 종료 채점
+  if(hasLimit && Date.now()>=endTime && !window._examEnded){
+    alert('⏰ 시험 시간이 이미 종료되었습니다.\n자동 채점됩니다.');
+    endExamAndGrade();
+    return;
+  }
   window._examTimer=setInterval(()=>{
     const el=document.getElementById('exam-timer');
     if(!el) return;
@@ -3613,9 +3661,17 @@ function startExamTimer(){
       el.style.color='#15803d';
     }
   },1000);
-  // 즉시 한 번 표시
+  // 즉시 한 번 표시 (재접속이면 남은 시간/경과 시간 기준)
   const el=document.getElementById('exam-timer');
-  if(el) el.textContent=hasLimit?`⏱ ${Math.floor(window._examTimeLimit/60)}:${String(window._examTimeLimit%60).padStart(2,'0')}`:'⏱ 0:00';
+  if(el){
+    if(hasLimit){
+      const r=Math.max(0,Math.floor((endTime-Date.now())/1000));
+      el.textContent=`⏱ ${Math.floor(r/60)}:${String(r%60).padStart(2,'0')}`;
+    } else {
+      const e0=Math.max(0,Math.floor((Date.now()-window._examStartTime)/1000));
+      el.textContent=`⏱ ${Math.floor(e0/60)}:${String(e0%60).padStart(2,'0')}`;
+    }
+  }
 }
 
 
@@ -3871,6 +3927,9 @@ async function finishQuiz(){
     curWS.questions[i]?.type==="link"?s:s+a, 0);
   // 시험 종료 시 _stopExamTimer가 _examMode를 끄므로 _examEnded도 함께 확인
   const _exView=window._examMode||window._examEnded;
+  // 시험지는 재응시 불가 → '다시 풀기' 숨김 (재응시하려면 교사가 기록을 삭제해야 함)
+  const _retryBtn=document.getElementById("btn-retry");
+  if(_retryBtn) _retryBtn.style.display=(_exView && !isTeacherAcct())?'none':'';
   if(_exView){
     document.getElementById("r-score").textContent=window._examFinalScore??0;
     document.getElementById("r-of").textContent=`/ ${window._examMaxScore??0}`;
@@ -3892,7 +3951,8 @@ async function finishQuiz(){
     const pct=mx>0?Math.round(sc/mx*100):0;
     document.getElementById("r-msg").textContent=
       pct===100?"만점이에요! 🏆":pct>=80?"훌륭해요! 🎉":pct>=60?"잘했어요! 👍":"다시 도전해봐요 💪";
-    document.getElementById("r-sub").textContent=`📝 시험 점수: ${sc} / ${mx} (${pct}%)`;
+    document.getElementById("r-sub").textContent=
+      (window._examReentry ? `✅ 이미 제출한 시험입니다 · ` : '') + `📝 시험 점수: ${sc} / ${mx} (${pct}%)`;
   } else {
     document.getElementById("r-msg").textContent=
       wrongTotal===0?"완벽해요! 🏆":

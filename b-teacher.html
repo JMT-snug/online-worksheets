@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.14">
+<meta name="app-version" content="3.15">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.14";
+const VERSION = "3.15";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1145,7 +1145,9 @@ window.deleteStudentRec=async function(wsId, uid){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   const rec=allData[uid]?.[wsId];
   const name=rec?.studentName||uid;
-  if(!confirm(`⚠️ "${name}"의 "${ws?.title||wsId}" 학습 기록을 삭제하시겠습니까?`)) return;
+  const _isExam = ws?.type==='exam';
+  if(!confirm(`⚠️ "${name}"의 "${ws?.title||wsId}" 학습 기록을 삭제하시겠습니까?`
+    + (_isExam ? `\n\n📝 시험지입니다. 삭제하면 이 학생이 다시 응시할 수 있습니다.\n(제출한 답안·점수는 복구할 수 없습니다)` : ''))) return;
   try{
     await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
     if(allData[uid]) delete allData[uid][wsId];

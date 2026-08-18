@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.16">
+<meta name="app-version" content="3.17">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.16";
+const VERSION = "3.17";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1141,6 +1141,296 @@ window.migrateWsIds=async function(){
   navigate('overview');
 };
 
+
+/* ══════════════════════════════════════════════════════════════
+   시험지 재채점 — 저장된 제출 답안(examAnswer)으로 정답/점수를 다시 계산
+   채점 함수는 index.html에서 그대로 옮겨와 두 화면의 판정이 항상 일치하도록 함
+   (수정 시 index.html의 동일 함수도 함께 고쳐야 함)
+   ══════════════════════════════════════════════════════════════ */
+function normEq(s){
+    s=String(s).toLowerCase().replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
+    let prev;
+    do{prev=s;
+      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
+      s=s.replace(/\)(\d|x|\()/g,')*$1');
+      s=s.replace(/(\d)x/g,'$1*x');
+      s=s.replace(/x(\d)/g,'x*$1');
+    }while(prev!==s);
+    return s;
+  }
+
+function evalSide(s,x){
+    try{
+      let t=normEq(s).replace(/\^/g,'**').replace(/x/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+      return Function('"use strict";return('+t+')')();
+    }catch(e){return NaN;}
+  }
+
+function ev(s,x){
+    try{
+      let t=String(s).toLowerCase().replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
+      let prev;
+      do{prev=t;
+        t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+        t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+        t=t.replace(/(\d)([a-z])/g,'$1*$2');
+        t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      }while(prev!==t);
+      t=t.replace(/\^/g,'**').replace(/[a-z]/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+      return Function('"use strict";return('+t+')')();
+    }catch(e){return NaN;}
+  }
+
+function evalAnswer(s){
+  // 문자열 수식("8/3", "Math.sqrt(2)", "23/5")을 수치로 평가
+  if(typeof s==='number') return s;
+  if(s==null||s==='') return NaN;
+  let t=String(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**');
+  // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
+  if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
+    const n=parseFloat(s); return isNaN(n)?NaN:n;
+  }
+  try{ return Function('"use strict";return('+t+')')(); }
+  catch(e){ const n=parseFloat(s); return isNaN(n)?NaN:n; }
+}
+
+function eqEquivCheck(userEq, correctEq){
+  function normEq(s){
+    s=String(s).toLowerCase().replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
+    let prev;
+    do{prev=s;
+      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
+      s=s.replace(/\)(\d|x|\()/g,')*$1');
+      s=s.replace(/(\d)x/g,'$1*x');
+      s=s.replace(/x(\d)/g,'x*$1');
+    }while(prev!==s);
+    return s;
+  }
+  function evalSide(s,x){
+    try{
+      let t=normEq(s).replace(/\^/g,'**').replace(/x/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+      return Function('"use strict";return('+t+')')();
+    }catch(e){return NaN;}
+  }
+  try{
+    const uParts=userEq.split('=');
+    const cParts=correctEq.split('=');
+    if(uParts.length!==2||cParts.length!==2) return false;
+    const pts=[0.317,1.234,-2.57,4.91,-0.718,7.37];
+    let ratio=null;
+    for(const x of pts){
+      const du=evalSide(uParts[0],x)-evalSide(uParts[1],x);
+      const dc=evalSide(cParts[0],x)-evalSide(cParts[1],x);
+      if(!isFinite(du)||!isFinite(dc)) return false;
+      if(Math.abs(dc)<1e-9){if(Math.abs(du)>1e-6) return false; continue;}
+      const r=du/dc;
+      if(ratio===null) ratio=r;
+      else if(Math.abs(r-ratio)>1e-6) return false;
+    }
+    return ratio!==null&&Math.abs(ratio)>1e-9;
+  }catch(e){return false;}
+}
+
+function exprEquivCheck(userExpr, correctExpr){
+  function ev(s,x){
+    try{
+      let t=String(s).toLowerCase().replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
+      let prev;
+      do{prev=t;
+        t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+        t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+        t=t.replace(/(\d)([a-z])/g,'$1*$2');
+        t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      }while(prev!==t);
+      t=t.replace(/\^/g,'**').replace(/[a-z]/g,`(${x})`);
+      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+      return Function('"use strict";return('+t+')')();
+    }catch(e){return NaN;}
+  }
+  const pts=[1,-1,2,-2,0.5,3];
+  return pts.every(x=>{
+    const uv=ev(userExpr,x), cv=ev(correctExpr,x);
+    return isFinite(uv)&&isFinite(cv)&&Math.abs(uv-cv)<0.001;
+  });
+}
+
+function isExprInput(q){
+  if(!q||q.type!=="word") return false;
+  if(q.answerType==="expr") return true;
+  // answerType이 명시되어 있지 않을 때만 자동 판정 (한글 없으면 expr)
+  if(q.answerType==null){
+    return !/[가-힣]/.test((q.answer||"")+(q.answerAlt||[]).join(""));
+  }
+  return false;
+}
+
+function _examEvExpr(s,x){
+  try{
+    let t=String(s).replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
+      .replace(/\*\*/g,'^').replace(/\^/g,'**')          // ^ 와 ** 모두 수용
+      .replace(/Math\.sqrt\(/g,'sqrt(')
+      .replace(/sqrt\(([^)]+)\)/g,(_,v)=>`((${v})**0.5)`);
+    let prev;
+    do{prev=t;
+      t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+      t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+      t=t.replace(/(\d)([a-z])/g,'$1*$2');
+      t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      t=t.replace(/([a-z])([a-z])/g,'$1*$2');
+    }while(prev!==t);
+    t=t.replace(/[a-z]/g,`(${x})`);
+    if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+    return Function('"use strict";return('+t+')')();
+  }catch(e){ return NaN; }
+}
+
+function normalizeMultiAnswer(q){
+  const n=(q.options||[]).length;
+  let a=[...(q.answer||[])].map(Number).filter(v=>!isNaN(v));
+  if(n>0 && a.length && a.every(v=>v>=1&&v<=n) && a.some(v=>v===n)){
+    a=a.map(v=>v-1);   // 0-based면 불가능한 인덱스 존재 → 1-based 데이터로 판단
+  }
+  return a.sort((x,y)=>x-y);
+}
+
+function gradeExamWord(q, ans){
+  if(ans===null||ans===undefined) return false;
+  const raw=String(ans).trim();
+  if(!raw || raw==='(빈칸)') return false;
+  const allAns=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a)!=='');
+  if(!allAns.length) return false;
+  // 1) 방정식(= 포함)
+  if(raw.includes('=')||allAns.some(a=>String(a).includes('='))){
+    try{ if(allAns.some(a=>eqEquivCheck(raw,String(a)))) return true; }catch(e){}
+  }
+  // 2) 수식 동치 (여러 값 대입) — 일반 모드와 동일
+  const pts=[1,-1,2,-2,0.5,3];
+  try{
+    if(allAns.some(a=>{
+      let any=false;
+      const okAll=pts.every(x=>{
+        const uv=_examEvExpr(raw,x), av=_examEvExpr(String(a),x);
+        if(!isFinite(uv)||!isFinite(av)) return false;
+        any=true;
+        return Math.abs(uv-av)<0.001;
+      });
+      return any&&okAll;
+    })) return true;
+  }catch(e){}
+  // 3) 텍스트 정규화 비교 — 일반 모드와 동일한 normW
+  const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",")
+    .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
+  if(allAns.map(normW).includes(normW(raw))) return true;
+  // 4) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
+  //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
+  const hasVar=s=>/[a-zA-Z가-힣]/.test(String(s));
+  if(!hasVar(raw)){
+    const uf=parseFloat(raw.replace(/−/g,'-'));
+    if(!isNaN(uf)){
+      try{
+        if(allAns.some(a=>{
+          if(hasVar(a)) return false;
+          const av=evalAnswer(String(a));
+          return isFinite(av)&&Math.abs(uf-av)<0.001;
+        })) return true;
+      }catch(e){}
+    }
+  }
+  return false;
+}
+
+/* 한 문항 채점: index의 endExamAndGrade와 동일한 분기 */
+function regradeOne(q, ans){
+  if(q.type==='word'||q.type==='equation'||q.type==='word_text'||q.type==='word_expr'){
+    return gradeExamWord(q, ans);
+  }
+  if(q.type==='multi'){
+    const expected=normalizeMultiAnswer(q);
+    if(Array.isArray(ans) && ans.length>0 && expected.length>0){
+      const sel=[...ans].map(Number).sort((a,b)=>a-b);
+      return sel.length===expected.length && sel.every((v,i)=>v===expected[i]);
+    }
+    return false;
+  }
+  if(q.type==='link') return ans===true;
+  if(q.type==='graph') return null;   // 수동 채점 → 미채점 유지
+  return false;
+}
+
+/* 재채점 미리보기 계산 (쓰기 없음) */
+function buildRegradePlan(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const plan=[];
+  if(!ws) return plan;
+  for(const [uid,d] of Object.entries(allData)){
+    const rec=d[wsId]; if(!rec?.perQuestion) continue;
+    const changes=[]; let before=0, after=0, maxScore=0;
+    (ws.questions||[]).forEach(q=>{
+      const v=rec.perQuestion[q.id]; if(!v) return;
+      const isExamQ = v.examAnswer!==undefined || v.maxScore!==undefined;
+      if(!isExamQ) return;                       // 시험지 문항만 대상
+      const mx=(q.score??v.maxScore??1); maxScore+=mx;
+      before+=(v.score||0);
+      const nc=regradeOne(q, v.examAnswer);
+      const ns=(nc===true)?mx:0;
+      after+=ns;
+      const oldC=(v.correct===undefined?null:v.correct);
+      if(oldC!==nc || (v.score||0)!==ns) changes.push({qid:q.id, from:oldC, to:nc, fromScore:v.score||0, toScore:ns});
+    });
+    if(changes.length) plan.push({uid, name:rec.studentName||uid, changes, before, after, maxScore});
+  }
+  return plan;
+}
+
+window.regradeWS=async function(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  if(!ws){ alert('학습지를 찾을 수 없습니다.'); return; }
+  if(ws.type!=='exam' && !confirm('시험지가 아닌 학습지입니다.\n시험지 문항(제출 답안이 저장된 문항)만 재채점됩니다. 계속할까요?')) return;
+
+  let plan;
+  try{ plan=buildRegradePlan(wsId); }
+  catch(e){ alert('재채점 계산 실패: '+e.message); console.error(e); return; }
+
+  if(!plan.length){ alert('✅ 재채점해도 바뀌는 기록이 없습니다.\n(이미 모두 올바르게 채점되어 있습니다)'); return; }
+
+  const lines=plan.slice(0,12).map(p=>{
+    const mk=v=>v===true?'⭕':v===false?'❌':'📝';
+    const det=p.changes.slice(0,4).map(c=>`${c.qid}: ${mk(c.from)}→${mk(c.to)}`).join(', ');
+    return `• ${p.name}: ${p.before}점 → ${p.after}점 (${p.changes.length}문항)\n    ${det}${p.changes.length>4?' …':''}`;
+  }).join('\n');
+  const totalCh=plan.reduce((s,p)=>s+p.changes.length,0);
+  if(!confirm(`📝 "${ws.title}" 재채점\n\n대상 학생 ${plan.length}명 · 변경 문항 ${totalCh}개\n\n${lines}${plan.length>12?`\n…외 ${plan.length-12}명`:''}\n\n저장된 제출 답안으로 정답/점수를 다시 계산합니다.\n적용할까요?`)) return;
+
+  let ok=0; const errs=[];
+  for(const p of plan){
+    try{
+      const upd={};
+      for(const c of p.changes){
+        upd[`perQuestion.${c.qid}.correct`]=c.to;
+        upd[`perQuestion.${c.qid}.score`]=c.toScore;
+      }
+      upd['examScore']=p.after;
+      upd['examMaxScore']=p.maxScore;
+      upd['regradedAt']=new Date().toISOString();
+      await updateDoc(doc(db,'records',p.uid,'worksheets',wsId), upd);
+      // 메모리 반영
+      const rec=allData[p.uid]?.[wsId];
+      if(rec){
+        for(const c of p.changes){
+          if(rec.perQuestion[c.qid]){ rec.perQuestion[c.qid].correct=c.to; rec.perQuestion[c.qid].score=c.toScore; }
+        }
+        rec.examScore=p.after; rec.examMaxScore=p.maxScore;
+      }
+      ok++;
+    }catch(e){ errs.push(`${p.name}: ${e.message}`); }
+  }
+  alert(`✅ 재채점 완료: ${ok}명`+(errs.length?`\n⚠️ 실패 ${errs.length}건\n${errs.slice(0,3).join('\n')}`:''));
+  renderWS(wsId);
+};
+
 window.deleteStudentRec=async function(wsId, uid){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   const rec=allData[uid]?.[wsId];
@@ -1282,6 +1572,7 @@ window.renderWSTable=function(wsId){
       <td>${tries>0?`<span class="tries-badge ${wcls}">${tries}회</span>`:"-"}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--amber);font-weight:600">⏳ 진행 중</span><br>${upd}</td>
+      <td><button onclick="deleteStudentRec('${wsId}','${r.uid}')" title="이 학생의 이 학습지 기록만 삭제 (다시 풀 수 있게 됨)" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:600">🗑 삭제</button></td>
     </tr>`;
   }).join("");
 
@@ -1366,6 +1657,7 @@ function renderWS(wsId){
     <div class="card-hdr">
       <span class="card-title">✅ 완료 학생 목록</span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button onclick="regradeWS('${wsId}')" title="저장된 제출 답안으로 정답/점수를 다시 계산합니다 (시험지 문항 대상)" style="padding:5px 12px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">♻️ 재채점</button>
         <button onclick="clearWSRecords('${wsId}')" style="padding:5px 12px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">🗑 기록 초기화</button>
         <select onchange="setWSFilter(this.value,'${wsId}')"
           style="font-size:12px;padding:5px 8px;border-radius:6px;border:1.5px solid var(--rule);font-family:inherit">

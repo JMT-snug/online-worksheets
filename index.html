@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.10">
+  <meta name="app-version" content="8.11">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.10";
+const VERSION = "8.11";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -801,6 +801,7 @@ async function loadExtraTeachers(){
       });
     }
   }catch(e){ console.warn("[교사 목록 로드 실패 — 기본 목록 사용]", e.message); }
+}
 
 /* 오류 신고 스크린샷을 올릴 Drive 폴더 ID (report.html에서 기본 교사가 준비하면 config/errorReports에 저장됨) */
 async function loadErrorReportConfig(){
@@ -809,7 +810,6 @@ async function loadErrorReportConfig(){
     window._errFolderId = snap.exists() ? (snap.data().folderId||null) : null;
     if(!window._errFolderId) console.log('[오류신고] Drive 폴더 미설정 → 스크린샷은 Firestore에 저장');
   }catch(e){ window._errFolderId=null; console.warn('[오류신고] Drive 폴더 설정 읽기 실패:', e.message); }
-}
 }
 async function loadTeacherData(){
   if(!user || !TEACHER_EMAILS.includes(user.email)) return;
@@ -887,12 +887,19 @@ onAuthStateChanged(auth, async u => {
   if(window._driveAuthInFlight && u && user && u.uid===user.uid) return; // 오류 신고용 Drive 인증 팝업 — 화면 재로딩 방지
   if (!u) { showPage("login-page"); updateHeader(null); return; }
   user = u;
-  await loadExtraTeachers(); // 담당 교사 병합 후 헤더 렌더 (교사용 네비 노출 판정)
-  loadErrorReportConfig();   // 신고 스크린샷 Drive 폴더 ID 미리 확보 (팝업 지연 방지)
-  updateHeader(u);
-  await loadCurriculum();
-  await loadTeacherData();
-  await loadDash();
+  // 준비 단계는 각각 독립적으로 보호 — 하나가 실패해도 학생이 로그인 화면에 갇히지 않도록
+  try{ await loadExtraTeachers(); }catch(e){ console.warn('[교사 목록 준비 실패]', e); } // 담당 교사 병합 후 헤더 렌더
+  try{ loadErrorReportConfig(); }catch(e){ console.warn('[오류신고 설정 준비 실패]', e); } // 신고 스크린샷 Drive 폴더 ID 미리 확보
+  try{ updateHeader(u); }catch(e){ console.warn('[헤더 렌더 실패]', e); }
+  try{ await loadCurriculum(); }catch(e){ console.error('[커리큘럼 로드 실패]', e); }
+  try{ await loadTeacherData(); }catch(e){ console.warn('[교사 데이터 로드 실패]', e); }
+  try{
+    await loadDash();
+  }catch(e){
+    console.error('[대시보드 로드 실패]', e);
+    showPage("dash-page");   // 최소한 단원 목록 화면으로는 진입시킨다
+    alert('학습지 목록을 불러오는 중 문제가 발생했습니다.\n새로고침 해도 계속되면 선생님께 알려주세요.\n\n('+(e?.message||e)+')');
+  }
   // 새로고침 시 직전 페이지 복원 (microtask 후 실행해 함수 정의 보장)
   setTimeout(()=>{
     try{

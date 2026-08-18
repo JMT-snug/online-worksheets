@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.17">
+  <meta name="app-version" content="8.18">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.17";
+const VERSION = "8.18";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -708,7 +708,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=8.17"></script>
+<script src="grading.js?v=8.18"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1928,6 +1928,13 @@ let _progressTimer=null, _wsIsCompleted=false;
 
 async function saveWorksheet(isComplete=false){
   if(!curWS||!user) return;
+  // ★ 시험지는 여기서 저장하지 않는다 ★
+  // 답안 저장은 submitExamAns, 채점 저장은 endExamAndGrade 전담.
+  // (과거엔 자동저장/페이지 이탈 시 이 함수가 시험 기록 위에
+  //  correct:!!answered[i] — 답안 객체는 무조건 truthy라 전원 정답 — 과
+  //  correctRate=응답률(100%)을 덮어써 채점 결과가 오염됐다:
+  //  '정답 배지인데 0점' 모순과 teacher 완료율 100% 표시의 원인)
+  if(curWS.type==='exam' || window._examMode || window._examEnded){ return; }
   if(isTeacherAcct()){ console.log('[교사 미리보기] 채점 결과 저장 안 함'); return; }
   if(!_wsDataLoaded) { console.log('[저장 차단] 데이터 로드 전'); return; }  // 로드 전 저장 차단
   if(_wsIsCompleted && !isComplete) return; // 이미 완료된 학습지에 false 저장 차단
@@ -2043,6 +2050,7 @@ async function startQuiz(ws) {
           // 시험지 답안 복원 — 복원하지 않으면 새로고침 후 시험 종료 시
           // 답안이 없는 상태로 채점되고 저장된 답안까지 지워짐
           answered[i]={examAnswer:s.examAnswer,_isExam:true,
+                       ...(s.examAnswerTokens?{examAnswerTokens:s.examAnswerTokens}:{}),
                        correct:(s.correct===undefined?null:s.correct), score:s.score||0};
           attempts[i]=s.attempts||0;
           wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
@@ -3193,29 +3201,11 @@ function renderStep3Body(q){
 /* eqEquivCheck → grading.js 로 이동 (채점 로직 단일 소스) */
 
 // 소수 판별
-function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
+/* isPrime → grading.js 로 이동 */
 // 곱의 형태 검증: 최상위 레벨에 +/- 없어야 함
-function isFactoredForm(tokens){
-  let depth=0;
-  for(const t of tokens){
-    if(t.type==='frac'||t.type==='exp'||t.type==='sqrt') continue;
-    if(t.type==='char'){
-      if(t.val==='(') depth++;
-      else if(t.val===')') depth--;
-      else if(depth===0&&(t.val==='+'||t.val==='−'||t.val==='-')) return false;
-    }
-  }
-  return true;
-}
+/* isFactoredForm → grading.js 로 이동 */
 // 소인수분해 형식 검증: 모든 밑수가 소수인지 확인
-function isPrimeFactorExpr(tokens){
-  return tokens.every(t=>{
-    if(t.type==='char') return /[+*×\-()]/.test(t.val)||isPrime(Number(t.val));
-    if(t.type==='exp')  return isPrime(Number(t.base));
-    if(t.type==='frac') return false;
-    return true;
-  });
-}
+/* isPrimeFactorExpr → grading.js 로 이동 */
 // 다항식/식 동치 판정 (샘플 대입)
 /* exprEquivCheck → grading.js 로 이동 (채점 로직 단일 소스) */
 
@@ -3333,16 +3323,21 @@ async function submitExamAns(q){
   } else if(q.type==='link'){
     userAns=true;
   }
-  // 답안 저장 (수정 가능하도록)
-  answered[curQIdx]={examAnswer:userAns,_isExam:true};
+  // 답안 저장 (수정 가능하도록). factorMode 문항은 형태 검사용 토큰도 보존.
+  const ansTokens = (q.factorMode && isExprInput(q)) ? JSON.stringify(qTokens) : null;
+  answered[curQIdx]={examAnswer:userAns,_isExam:true,...(ansTokens?{examAnswerTokens:ansTokens}:{})};
   // perQuestion에 저장 (교사 미리보기는 저장 안 함)
   if(curWS && user && !isTeacherAcct()){
+    const _n=curWS.questions.filter(x=>x.type!=='link').length;
+    const _a=answered.reduce((s,v,i)=>curWS.questions[i]?.type!=='link'&&v&&v.examAnswer!=null&&v.examAnswer!==''?s+1:s,0);
     setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
       studentEmail:user.email, studentName:user.displayName||'',
       worksheetId:curWS.id, worksheetTitle:curWS.title,
       lastUpdated:new Date().toISOString(),
       examMode:true,
-      perQuestion:{[q.id]:{examAnswer:userAns,examSubmittedAt:new Date().toISOString()}}
+      totalCount:_n, answeredCount:_a,   // 진행 표시용 응답 수 (correctRate는 시험지에 쓰지 않음)
+      perQuestion:{[q.id]:{examAnswer:userAns,examSubmittedAt:new Date().toISOString(),
+        ...(ansTokens?{examAnswerTokens:ansTokens}:{})}}
     },{merge:true}).catch(e=>console.error('[exam save]',e));
   }
   updateStrip();
@@ -3410,8 +3405,10 @@ async function endExamAndGrade(){
             ||(typeof cur==='string'&&cur.trim()==='');
           const saved=_pq[q.id]?.examAnswer;
           if(isEmpty && saved!==undefined && saved!==null){
+            const savedTk=_pq[q.id]?.examAnswerTokens;
             answered[i]={...(typeof answered[i]==='object'&&answered[i]?answered[i]:{}),
-                         examAnswer:saved,_isExam:true};
+                         examAnswer:saved,_isExam:true,
+                         ...(savedTk?{examAnswerTokens:savedTk}:{})};
             _restored++;
           }
         });
@@ -3427,7 +3424,7 @@ async function endExamAndGrade(){
     const ans=answered[i]?.examAnswer;
     const score=q.score??1;
     maxScore+=score;
-    const ok=judgeAnswer(q, ans);   // 채점은 grading.js의 judgeAnswer 하나로 통일 (true/false/null)
+    const ok=judgeAnswer(q, ans, answered[i]?.examAnswerTokens);   // grading.js 단일 판정 (factorMode 토큰 포함)
     answered[i]={...answered[i],correct:ok,score:ok===true?score:0};
     if(ok===true) totalScore+=score;
   }
@@ -3443,6 +3440,7 @@ async function endExamAndGrade(){
       };
       // 답안은 있을 때만 기록 — 값이 없다고 기존 저장분을 null로 덮어쓰지 않도록
       if(a.examAnswer!==undefined && a.examAnswer!==null) ent.examAnswer=a.examAnswer;
+      if(a.examAnswerTokens) ent.examAnswerTokens=a.examAnswerTokens;
       perQ[q.id]=ent;
     });
     await setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
@@ -3610,11 +3608,8 @@ async function submitQAns(){
         return "";
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
-      // 채점은 grading.js의 judgeAnswer로 통일 (시험지·재채점과 동일 판정)
-      ok = judgeAnswer(q, rawInput) === true;
-      // 소인수분해 형태 검사는 입력 토큰 구조가 필요해 화면에서만 추가 검증
-      if(ok && q.factorMode==='prime')  ok=isPrimeFactorExpr(qTokens)&&isFactoredForm(qTokens);
-      if(ok && q.factorMode==='factor') ok=isFactoredForm(qTokens);
+      // 채점은 grading.js의 judgeAnswer로 통일 — 토큰까지 넘겨 factorMode 형태 검사 포함
+      ok = judgeAnswer(q, rawInput, qTokens) === true;
     } else {
       input=document.getElementById("word-input");
       userAns=(input?.value||"").trim().replace(/\s+/g," ");

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.15">
+  <meta name="app-version" content="8.16">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.15";
+const VERSION = "8.16";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3528,6 +3528,34 @@ async function endExamAndGrade(){
   if(window._examEnded) return;  // 중복 호출 방지
   window._examEnded=true;
   _stopExamTimer();
+
+  /* ── 채점 전 안전장치 ──
+     메모리(answered[])의 답안이 비어 있으면 Firestore에 저장된 답안으로 보완한다.
+     새로고침·구버전 캐시 등으로 메모리 답안이 유실되면 '제출은 됐는데 오답' 이 되던 문제 방지.
+     (제출 시 submitExamAns가 이미 examAnswer를 저장해 두므로 그 값을 신뢰) */
+  if(curWS && user && !isTeacherAcct()){
+    try{
+      const _snap=await getDoc(doc(db,'records',user.email,'worksheets',curWS.id));
+      if(_snap.exists()){
+        const _pq=_snap.data().perQuestion||{};
+        let _restored=0;
+        curWS.questions.forEach((q,i)=>{
+          const cur=answered[i]?.examAnswer;
+          const isEmpty = cur===undefined||cur===null
+            ||(Array.isArray(cur)&&cur.length===0)
+            ||(typeof cur==='string'&&cur.trim()==='');
+          const saved=_pq[q.id]?.examAnswer;
+          if(isEmpty && saved!==undefined && saved!==null){
+            answered[i]={...(typeof answered[i]==='object'&&answered[i]?answered[i]:{}),
+                         examAnswer:saved,_isExam:true};
+            _restored++;
+          }
+        });
+        if(_restored) console.log(`[시험 채점] 저장된 답안 ${_restored}개 복구 후 채점`);
+      }
+    }catch(e){ console.warn('[시험 채점] 저장 답안 확인 실패:', e.message); }
+  }
+
   // 각 문제 채점
   let totalScore=0, maxScore=0;
   for(let i=0;i<curWS.questions.length;i++){

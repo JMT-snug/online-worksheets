@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.18">
+<meta name="app-version" content="3.19">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.18";
+const VERSION = "3.19";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -536,8 +536,12 @@ function findQDef(wsId, qid){
   return ws?.questions?.find(x=>x.id===qid)||null;
 }
 function _stripTex(s){ return String(s??'').replace(/\\\(|\\\)/g,'').replace(/\s+/g,' ').trim(); }
-function fmtExamAnswer(raw, wsId, qid){
-  if(raw===null||raw===undefined||raw==='') return '(무응답)';
+/* submittedAt(제출 시각)이 있는데 답안이 비어 있으면 '안 푼 것'이 아니라
+   구버전(v8.12 이전)의 시험 종료 저장이 답안을 null로 덮어써 유실된 경우다.
+   실제 무응답과 구분해 표시해야 교사가 개별 조치를 할 수 있다. */
+function fmtExamAnswer(raw, wsId, qid, submittedAt){
+  const empty = raw===null||raw===undefined||raw===''||(Array.isArray(raw)&&!raw.length);
+  if(empty) return submittedAt ? '⚠️ 답안 유실 (제출 기록은 있음)' : '(무응답)';
   if(Array.isArray(raw)){
     if(!raw.length) return '(무응답)';
     const opts=findQDef(wsId,qid)?.options||[];
@@ -573,7 +577,7 @@ function perQCells(r, uid, wsIdArg){
     let col, mark, ttl;
     if(isExamQ){
       // 시험지: 채점 결과가 없으면 '미채점'으로 표시 (정답으로 오인 방지)
-      const ansTxt = fmtExamAnswer(v.examAnswer, wsIdArg||r.wsId, qid);
+      const ansTxt = fmtExamAnswer(v.examAnswer, wsIdArg||r.wsId, qid, v.examSubmittedAt);
       if(v.correct===true){ col="var(--green)"; mark="⭕"; }
       else if(v.correct===false){ col="var(--red)"; mark="❌"; }
       else { col="var(--amber)"; mark="📝"; }
@@ -1369,20 +1373,25 @@ function buildRegradePlan(wsId){
   if(!ws) return plan;
   for(const [uid,d] of Object.entries(allData)){
     const rec=d[wsId]; if(!rec?.perQuestion) continue;
-    const changes=[]; let before=0, after=0, maxScore=0;
+    const changes=[]; let before=0, after=0, maxScore=0, lost=0;
     (ws.questions||[]).forEach(q=>{
       const v=rec.perQuestion[q.id]; if(!v) return;
       const isExamQ = v.examAnswer!==undefined || v.maxScore!==undefined;
       if(!isExamQ) return;                       // 시험지 문항만 대상
       const mx=(q.score??v.maxScore??1); maxScore+=mx;
       before+=(v.score||0);
+      // 제출 기록은 있는데 답안이 비어 있으면(구버전이 답안을 지운 경우) 자동 채점 대상에서 제외.
+      // 근거 없이 오답으로 확정하지 않고 교사가 개별 판단하도록 현재 값을 유지한다.
+      const _empty=v.examAnswer===null||v.examAnswer===undefined||v.examAnswer===''
+                   ||(Array.isArray(v.examAnswer)&&!v.examAnswer.length);
+      if(_empty && v.examSubmittedAt){ lost++; after+=(v.score||0); return; }
       const nc=regradeOne(q, v.examAnswer);
       const ns=(nc===true)?mx:0;
       after+=ns;
       const oldC=(v.correct===undefined?null:v.correct);
       if(oldC!==nc || (v.score||0)!==ns) changes.push({qid:q.id, from:oldC, to:nc, fromScore:v.score||0, toScore:ns});
     });
-    if(changes.length) plan.push({uid, name:rec.studentName||uid, changes, before, after, maxScore});
+    if(changes.length||lost) plan.push({uid, name:rec.studentName||uid, changes, before, after, maxScore, lost});
   }
   return plan;
 }
@@ -1396,18 +1405,27 @@ window.regradeWS=async function(wsId){
   try{ plan=buildRegradePlan(wsId); }
   catch(e){ alert('재채점 계산 실패: '+e.message); console.error(e); return; }
 
-  if(!plan.length){ alert('✅ 재채점해도 바뀌는 기록이 없습니다.\n(이미 모두 올바르게 채점되어 있습니다)'); return; }
+  const totalCh=plan.reduce((s,p)=>s+p.changes.length,0);
+  const totalLost=plan.reduce((s,p)=>s+(p.lost||0),0);
+  if(!totalCh){
+    alert('✅ 재채점해도 바뀌는 채점 결과가 없습니다.'
+      + (totalLost?`\n\n⚠️ 다만 답안이 유실된 문항이 ${totalLost}개 있습니다.\n(제출 기록은 있으나 답안이 비어 있어 자동 채점 불가 — 개별 확인 필요)`:''));
+    return;
+  }
 
-  const lines=plan.slice(0,12).map(p=>{
+  const lines=plan.filter(p=>p.changes.length).slice(0,12).map(p=>{
     const mk=v=>v===true?'⭕':v===false?'❌':'📝';
     const det=p.changes.slice(0,4).map(c=>`${c.qid}: ${mk(c.from)}→${mk(c.to)}`).join(', ');
     return `• ${p.name}: ${p.before}점 → ${p.after}점 (${p.changes.length}문항)\n    ${det}${p.changes.length>4?' …':''}`;
   }).join('\n');
-  const totalCh=plan.reduce((s,p)=>s+p.changes.length,0);
-  if(!confirm(`📝 "${ws.title}" 재채점\n\n대상 학생 ${plan.length}명 · 변경 문항 ${totalCh}개\n\n${lines}${plan.length>12?`\n…외 ${plan.length-12}명`:''}\n\n저장된 제출 답안으로 정답/점수를 다시 계산합니다.\n적용할까요?`)) return;
+  const nChanged=plan.filter(p=>p.changes.length).length;
+  if(!confirm(`📝 "${ws.title}" 재채점\n\n대상 학생 ${nChanged}명 · 변경 문항 ${totalCh}개\n\n${lines}${nChanged>12?`\n…외 ${nChanged-12}명`:''}`
+    + (totalLost?`\n\n⚠️ 답안 유실 ${totalLost}개 문항은 건드리지 않습니다 (개별 확인 필요)`:'')
+    + `\n\n저장된 제출 답안으로 정답/점수를 다시 계산합니다.\n적용할까요?`)) return;
 
   let ok=0; const errs=[];
   for(const p of plan){
+    if(!p.changes.length) continue;   // 유실 문항만 있는 학생은 저장하지 않음
     try{
       const upd={};
       for(const c of p.changes){
@@ -1521,7 +1539,7 @@ window.renderWSTable=function(wsId){
         ttl=`${fmtQ(qid)}: 그래프`;
       } else if(isExamQ){
         // 시험지: 미채점을 정답으로 오인하지 않도록 별도 표시 + 제출 답안을 툴팁에 노출
-        const ansTxt = v.examAnswer==null||v.examAnswer==='' ? '(무응답)' : String(v.examAnswer);
+        const ansTxt = fmtExamAnswer(v.examAnswer, r.wsId||wsId, qid, v.examSubmittedAt);
         if(v.correct===true){ col="var(--green)"; mark="⭕"; }
         else if(v.correct===false){ col="var(--red)"; mark="❌"; }
         else { col="var(--amber)"; mark="📝"; }
@@ -2220,7 +2238,7 @@ window.showQDetail=function(key){
   // 시험지 제출 답안 표시 (그래프가 아닌 경우) — 교사가 학생 답안을 확인할 수 있도록
   if(_isExam && !d.v?.drawing){
     const raw=d.v?.examAnswer;
-    const ansTxt = fmtExamAnswer(raw, d.wsId, d.qid);
+    const ansTxt = fmtExamAnswer(raw, d.wsId, d.qid, d.v?.examSubmittedAt);
     const correctTxt = fmtCorrectAnswer(d.wsId, d.qid);
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const st=d.v?.correct===true?['정답','var(--green)','#dcfce7']

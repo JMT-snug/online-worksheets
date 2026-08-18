@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.16">
+  <meta name="app-version" content="8.17">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.16";
+const VERSION = "8.17";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -708,6 +708,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
+<script src="grading.js?v=8.17"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -2660,18 +2661,7 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
 }
 
 
-function evalAnswer(s){
-  // 문자열 수식("8/3", "Math.sqrt(2)", "23/5")을 수치로 평가
-  if(typeof s==='number') return s;
-  if(s==null||s==='') return NaN;
-  let t=String(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**');
-  // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
-  if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
-    const n=parseFloat(s); return isNaN(n)?NaN:n;
-  }
-  try{ return Function('"use strict";return('+t+')')(); }
-  catch(e){ const n=parseFloat(s); return isNaN(n)?NaN:n; }
-}
+/* evalAnswer → grading.js 로 이동 (채점 로직 단일 소스) */
 
 function qTokensToNum(){
   let s=qTokens.map(t=>{
@@ -3200,43 +3190,7 @@ function renderStep3Body(q){
 }
 
 // 방정식 동치성 판정
-function eqEquivCheck(userEq, correctEq){
-  function normEq(s){
-    s=String(s).toLowerCase().replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
-    let prev;
-    do{prev=s;
-      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
-      s=s.replace(/\)(\d|x|\()/g,')*$1');
-      s=s.replace(/(\d)x/g,'$1*x');
-      s=s.replace(/x(\d)/g,'x*$1');
-    }while(prev!==s);
-    return s;
-  }
-  function evalSide(s,x){
-    try{
-      let t=normEq(s).replace(/\^/g,'**').replace(/x/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-      return Function('"use strict";return('+t+')')();
-    }catch(e){return NaN;}
-  }
-  try{
-    const uParts=userEq.split('=');
-    const cParts=correctEq.split('=');
-    if(uParts.length!==2||cParts.length!==2) return false;
-    const pts=[0.317,1.234,-2.57,4.91,-0.718,7.37];
-    let ratio=null;
-    for(const x of pts){
-      const du=evalSide(uParts[0],x)-evalSide(uParts[1],x);
-      const dc=evalSide(cParts[0],x)-evalSide(cParts[1],x);
-      if(!isFinite(du)||!isFinite(dc)) return false;
-      if(Math.abs(dc)<1e-9){if(Math.abs(du)>1e-6) return false; continue;}
-      const r=du/dc;
-      if(ratio===null) ratio=r;
-      else if(Math.abs(r-ratio)>1e-6) return false;
-    }
-    return ratio!==null&&Math.abs(ratio)>1e-9;
-  }catch(e){return false;}
-}
+/* eqEquivCheck → grading.js 로 이동 (채점 로직 단일 소스) */
 
 // 소수 판별
 function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
@@ -3263,28 +3217,7 @@ function isPrimeFactorExpr(tokens){
   });
 }
 // 다항식/식 동치 판정 (샘플 대입)
-function exprEquivCheck(userExpr, correctExpr){
-  function ev(s,x){
-    try{
-      let t=String(s).toLowerCase().replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
-      let prev;
-      do{prev=t;
-        t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
-        t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
-        t=t.replace(/(\d)([a-z])/g,'$1*$2');
-        t=t.replace(/([a-z])(\d)/g,'$1*$2');
-      }while(prev!==t);
-      t=t.replace(/\^/g,'**').replace(/[a-z]/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-      return Function('"use strict";return('+t+')')();
-    }catch(e){return NaN;}
-  }
-  const pts=[1,-1,2,-2,0.5,3];
-  return pts.every(x=>{
-    const uv=ev(userExpr,x), cv=ev(correctExpr,x);
-    return isFinite(uv)&&isFinite(cv)&&Math.abs(uv-cv)<0.001;
-  });
-}
+/* exprEquivCheck → grading.js 로 이동 (채점 로직 단일 소스) */
 
 function submitStep3(stepNum){
   const q=curWS.questions[curQIdx];
@@ -3446,83 +3379,14 @@ window.confirmExamEnd=function(){
    일반 모드는 수식 동치(수치 대입)로 판정하는데 시험지는 단순 문자열 비교라
    키패드 입력(`(2)/(3)`, `(x)^(2)`, `Math.sqrt(5)`)이 정답 표기(`2/3`, `x^2`)와
    달라 정답도 오답 처리되던 문제를 해결. 일반 모드와 동일한 판정을 사용한다. */
-function _examEvExpr(s,x){
-  try{
-    let t=String(s).replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
-      .replace(/\*\*/g,'^').replace(/\^/g,'**')          // ^ 와 ** 모두 수용
-      .replace(/Math\.sqrt\(/g,'sqrt(')
-      .replace(/sqrt\(([^)]+)\)/g,(_,v)=>`((${v})**0.5)`);
-    let prev;
-    do{prev=t;
-      t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
-      t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
-      t=t.replace(/(\d)([a-z])/g,'$1*$2');
-      t=t.replace(/([a-z])(\d)/g,'$1*$2');
-      t=t.replace(/([a-z])([a-z])/g,'$1*$2');
-    }while(prev!==t);
-    t=t.replace(/[a-z]/g,`(${x})`);
-    if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-    return Function('"use strict";return('+t+')')();
-  }catch(e){ return NaN; }
-}
+/* _examEvExpr → grading.js 로 이동 (채점 로직 단일 소스) */
 /* 선택형 정답 인덱스 정규화.
    edit.html은 0-based(선지1=0)로 저장하지만, 과거/수기 데이터에 1-based가 섞여 있으면
    0-based로는 존재할 수 없는 인덱스(=선지 개수)가 나타난다. 그 경우에만 1로 보정한다.
    (근거 없이 보정하면 실제 오답이 정답으로 둔갑하므로 확실한 경우로 제한) */
-function normalizeMultiAnswer(q){
-  const n=(q.options||[]).length;
-  let a=[...(q.answer||[])].map(Number).filter(v=>!isNaN(v));
-  if(n>0 && a.length && a.every(v=>v>=1&&v<=n) && a.some(v=>v===n)){
-    a=a.map(v=>v-1);   // 0-based면 불가능한 인덱스 존재 → 1-based 데이터로 판단
-  }
-  return a.sort((x,y)=>x-y);
-}
+/* normalizeMultiAnswer → grading.js 로 이동 (채점 로직 단일 소스) */
 
-function gradeExamWord(q, ans){
-  if(ans===null||ans===undefined) return false;
-  const raw=String(ans).trim();
-  if(!raw || raw==='(빈칸)') return false;
-  const allAns=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a)!=='');
-  if(!allAns.length) return false;
-  // 1) 방정식(= 포함)
-  if(raw.includes('=')||allAns.some(a=>String(a).includes('='))){
-    try{ if(allAns.some(a=>eqEquivCheck(raw,String(a)))) return true; }catch(e){}
-  }
-  // 2) 수식 동치 (여러 값 대입) — 일반 모드와 동일
-  const pts=[1,-1,2,-2,0.5,3];
-  try{
-    if(allAns.some(a=>{
-      let any=false;
-      const okAll=pts.every(x=>{
-        const uv=_examEvExpr(raw,x), av=_examEvExpr(String(a),x);
-        if(!isFinite(uv)||!isFinite(av)) return false;
-        any=true;
-        return Math.abs(uv-av)<0.001;
-      });
-      return any&&okAll;
-    })) return true;
-  }catch(e){}
-  // 3) 텍스트 정규화 비교 — 일반 모드와 동일한 normW
-  const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",")
-    .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
-  if(allAns.map(normW).includes(normW(raw))) return true;
-  // 4) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
-  //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
-  const hasVar=s=>/[a-zA-Z가-힣]/.test(String(s));
-  if(!hasVar(raw)){
-    const uf=parseFloat(raw.replace(/−/g,'-'));
-    if(!isNaN(uf)){
-      try{
-        if(allAns.some(a=>{
-          if(hasVar(a)) return false;
-          const av=evalAnswer(String(a));
-          return isFinite(av)&&Math.abs(uf-av)<0.001;
-        })) return true;
-      }catch(e){}
-    }
-  }
-  return false;
-}
+/* gradeExamWord → grading.js 로 이동 (채점 로직 단일 소스) */
 
 async function endExamAndGrade(){
   if(window._examEnded) return;  // 중복 호출 방지
@@ -3563,22 +3427,7 @@ async function endExamAndGrade(){
     const ans=answered[i]?.examAnswer;
     const score=q.score??1;
     maxScore+=score;
-    let ok=false;
-    if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
-      ok=gradeExamWord(q, ans);          // 일반 모드와 동일한 동치 판정 사용
-    } else if(q.type==='multi'){
-      const expected=normalizeMultiAnswer(q);
-      // 선택이 없거나 정답이 설정돼 있지 않으면 정답 처리하지 않는다
-      // (빈 배열끼리 length 비교가 통과해 '무응답인데 정답'이 되던 문제)
-      if(Array.isArray(ans) && ans.length>0 && expected.length>0){
-        const sel=[...ans].map(Number).sort((a,b)=>a-b);
-        ok=sel.length===expected.length && sel.every((v,i)=>v===expected[i]);
-      }
-    } else if(q.type==='link'){
-      ok=ans===true;
-    } else if(q.type==='graph'){
-      ok=null;                           // 그래프는 scoring.html에서 수동 채점 → 미채점으로 보류
-    }
+    const ok=judgeAnswer(q, ans);   // 채점은 grading.js의 judgeAnswer 하나로 통일 (true/false/null)
     answered[i]={...answered[i],correct:ok,score:ok===true?score:0};
     if(ok===true) totalScore+=score;
   }
@@ -3761,54 +3610,17 @@ async function submitQAns(){
         return "";
       }).join("").replace(/−/g,"-");
       userAns=rawInput||"(빈칸)";
-      // 수치 대입으로 동치 확인
-      function evExpr(s,x){
-        try{
-          let t=s.replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
-            .replace(/\^/g,'**')  // ^ → ** (거듭제곱)
-            .replace(/Math\.sqrt\(/g,'sqrt(')  // Math.sqrt → sqrt 통일
-            .replace(/sqrt\(([^)]+)\)/g,(_,x)=>`((${x})**0.5)`); // sqrt(x) → x^0.5
-          let prev;
-          do{prev=t;
-            t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
-            t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
-            t=t.replace(/(\d)([a-z])/g,'$1*$2');
-            t=t.replace(/([a-z])(\d)/g,'$1*$2');
-            t=t.replace(/([a-z])([a-z])/g,'$1*$2');
-          }while(prev!==t);
-          t=t.replace(/[a-z]/g,`(${x})`); // x,a,b 등 모든 단문자 변수 대입
-          if(!/^[\d+\-*/().\/\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-          return Function('"use strict";return('+t+')')();
-        }catch(e){return NaN;}
-      }
-      const allAns=[q.answer,...(q.answerAlt||[])];
-      const pts=[1,-1,2,-2,0.5,3];
-      // 방정식(= 포함)이면 eqEquivCheck로, 아니면 다항식 동치
-      if(rawInput.includes('=')||String(q.answer||'').includes('=')){
-        ok=allAns.some(ans=>eqEquivCheck(rawInput,String(ans)));
-      } else {
-        ok=allAns.some(ans=>pts.every(x=>{
-          const uv=evExpr(rawInput,x), av=evExpr(String(ans),x);
-          return isFinite(uv)&&isFinite(av)&&Math.abs(uv-av)<0.001;
-        }));
-      }
-      // 채점 모드 추가 검증
+      // 채점은 grading.js의 judgeAnswer로 통일 (시험지·재채점과 동일 판정)
+      ok = judgeAnswer(q, rawInput) === true;
+      // 소인수분해 형태 검사는 입력 토큰 구조가 필요해 화면에서만 추가 검증
       if(ok && q.factorMode==='prime')  ok=isPrimeFactorExpr(qTokens)&&isFactoredForm(qTokens);
       if(ok && q.factorMode==='factor') ok=isFactoredForm(qTokens);
     } else {
       input=document.getElementById("word-input");
       userAns=(input?.value||"").trim().replace(/\s+/g," ");
-      const correct=[q.answer,...(q.answerAlt||[])];
-      // 유니코드 마이너스·쉼표 주변 공백 정규화 후 비교
-      const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",").replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
-      const userNorm=normW(userAns);
-      const correctNorms=correct.map(normW);
-      console.log('[text 채점] 사용자:', JSON.stringify(userAns), '→', JSON.stringify(userNorm));
-      console.log('[text 채점] 정답들:', correct.map(c=>JSON.stringify(c)));
-      console.log('[text 채점] 정답 정규화:', correctNorms.map(c=>JSON.stringify(c)));
-      console.log('[text 채점] 사용자 코드:', [...userAns].map(c=>c.charCodeAt(0)).join(','));
-      console.log('[text 채점] 정답 코드:', [...correct[0]].map(c=>c.charCodeAt(0)).join(','));
-      ok=correctNorms.includes(userNorm);
+      // 채점은 grading.js의 judgeAnswer로 통일 (정규화·수식 동치 포함)
+      ok = judgeAnswer(q, userAns) === true;
+      console.log('[text 채점]', JSON.stringify(userAns), '→', ok?'정답':'오답');
     }
     const fb=document.getElementById("feedback-strip");
     if(!fb) return;

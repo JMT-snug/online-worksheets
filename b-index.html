@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.20">
+  <meta name="app-version" content="8.21">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.20";
+const VERSION = "8.21";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3349,7 +3349,15 @@ window.goStep3=goStep3;
 async function submitExamAns(q){
   let userAns=null;
   if(['word','equation','word_text','word_expr'].includes(q.type)){
-    if(isExprInput(q)){
+    // ★화면에 실제로 있는 입력을 기준으로 캡처★
+    // 과거엔 isExprInput(q)로 유형을 추론했는데, isExprInput은 q.type==='word'가
+    // 아니면 무조건 false라서 equation(숫자 키패드) 문항이 존재하지 않는
+    // word-input을 읽어 ''로 저장됨 — '1학기 복습' equation 18문항 × 전원
+    // (1032건) 답안 유실의 원인. 텍스트박스가 있으면 그 값, 없으면 키패드 토큰.
+    const ip=document.getElementById('word-input');
+    if(ip){
+      userAns=(ip.value||'').trim();
+    } else {
       userAns=qTokens.map(t=>{
         if(t.type==='char') return t.val;
         if(t.type==='frac') return `(${t.num||0})/(${t.den||1})`;
@@ -3357,9 +3365,6 @@ async function submitExamAns(q){
         if(t.type==='sqrt') return `Math.sqrt(${t.inner||0})`;
         return '';
       }).join('').replace(/−/g,'-');
-    } else {
-      const ip=document.getElementById('word-input');
-      userAns=(ip?.value||'').trim();
     }
   } else if(q.type==='multi'){
     userAns=[...multiSel].sort((a,b)=>a-b);

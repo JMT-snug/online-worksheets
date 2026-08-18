@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.17">
+<meta name="app-version" content="3.18">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.17";
+const VERSION = "3.18";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -583,7 +583,9 @@ function perQCells(r, uid, wsIdArg){
     else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
     else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
     else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
-    const dkey=(uid||r.uid||"x")+"_"+qid;
+    // 학생 상세는 한 학생의 여러 학습지를 한 화면에 그리므로 학습지 ID를 키에 포함해야 한다.
+    // (없으면 학습지가 달라도 q19끼리 같은 키가 되어 마지막 학습지 기록이 덮어써짐)
+    const dkey=(uid||r.uid||"x")+"_"+(wsIdArg||r.wsId||"ws")+"_"+qid;
     window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ,wsId:(wsIdArg||r.wsId)};
     return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
   }).join("");
@@ -1528,7 +1530,7 @@ window.renderWSTable=function(wsId){
       } else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQ(qid)}: 미응답`; }
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
       else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQ(qid)}: 오답 ${wc}회`; }
-      const dkey=r.uid+"_"+qid;
+      const dkey=r.uid+"_"+(r.wsId||wsId||"ws")+"_"+qid;   // 학습지 ID 포함 (다른 화면/학습지와 키 충돌 방지)
       window._qd[dkey]={studentName:r.studentName||"-",qid,uid:r.uid,wsId:r.wsId,v,attempts:att,wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
       return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQ(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");

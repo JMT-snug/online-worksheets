@@ -159,16 +159,51 @@ function gradeExamWord(q, ans){
   return false;
 }
 
+/* ── 입력 형태 검사 (소인수분해 등) — 키패드 토큰 구조 기반 ── */
+function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
+
+function isFactoredForm(tokens){
+  let depth=0;
+  for(const t of tokens){
+    if(t.type==='frac'||t.type==='exp'||t.type==='sqrt') continue;
+    if(t.type==='char'){
+      if(t.val==='(') depth++;
+      else if(t.val===')') depth--;
+      else if(depth===0&&(t.val==='+'||t.val==='−'||t.val==='-')) return false;
+    }
+  }
+  return true;
+}
+
+function isPrimeFactorExpr(tokens){
+  return tokens.every(t=>{
+    if(t.type==='char') return /[+*×\-()]/.test(t.val)||isPrime(Number(t.val));
+    if(t.type==='exp')  return isPrime(Number(t.base));
+    if(t.type==='frac') return false;
+    return true;
+  });
+}
+
 /* ── 단일 채점 진입점 ──
    답안값(문자열/배열/불리언)을 받아 정답 여부를 판정한다. 화면(DOM)을 보지 않는 순수 함수.
    반환: true=정답, false=오답, null=수동 채점 대상(그래프)
-   ※ 소인수분해 형태 검사(factorMode)는 입력 토큰 구조가 필요해 여기서 못 하며,
-     일반 모드에서 judgeAnswer 통과 후 추가 검사로 처리된다. */
-function judgeAnswer(q, ans){
+   tokens(선택): 키패드 토큰 배열 또는 그 JSON 문자열. factorMode(소인수분해/인수분해)
+   문항의 '형태 검사'에 사용한다. 시험지는 제출 시 examAnswerTokens로 저장해 두고
+   채점·재채점 때 넘긴다. tokens가 없으면 값 동치만 판정한다(과거 기록 호환). */
+function judgeAnswer(q, ans, tokens){
   if(!q) return false;
   const t = q.type;
   if(t==='word' || t==='equation' || t==='word_text' || t==='word_expr'){
-    return gradeExamWord(q, ans);
+    let ok = gradeExamWord(q, ans);
+    if(ok && q.factorMode){
+      let tk = tokens;
+      if(typeof tk === 'string'){ try{ tk = JSON.parse(tk); }catch(e){ tk = null; } }
+      if(Array.isArray(tk) && tk.length){
+        if(q.factorMode==='prime')  ok = isPrimeFactorExpr(tk) && isFactoredForm(tk);
+        if(q.factorMode==='factor') ok = isFactoredForm(tk);
+      }
+    }
+    return ok;
   }
   if(t==='multi'){
     const expected = normalizeMultiAnswer(q);

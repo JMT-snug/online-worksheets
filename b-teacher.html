@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.20">
+<meta name="app-version" content="3.21">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -220,7 +220,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=3.20"></script>
+<script src="grading.js?v=3.21"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.20";
+const VERSION = "3.21";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -903,7 +903,7 @@ function renderStudentDetail(uid){
     return `<tr>
       <td><strong>${ws.title||"-"}</strong><br><span style="font-size:11px;color:var(--ink3)">${unit}</span></td>
       <td style="font-size:12px">${statusBadge}<br><span style="font-size:11px;color:var(--ink3)">${ts}</span></td>
-      <td>${rate!=null?rateBar(rate):'-'}</td>
+      <td>${ws.type==='exam'?examCountsHtml(ws,r):(rate!=null?rateBar(rate):'-')}</td>
       <td style="text-align:center"><span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span></td>
       <td style="min-width:200px">${perQCells(r,uid,ws.id)}</td>
     </tr>`;
@@ -1152,8 +1152,8 @@ window.migrateWsIds=async function(){
 /* ── 시험지 재채점 ──
    채점 함수는 공용 grading.js(judgeAnswer)를 사용한다. HTML에 복사하지 말 것. */
 /* 한 문항 채점: index의 endExamAndGrade와 동일한 분기 */
-function regradeOne(q, ans){
-  return judgeAnswer(q, ans);   // grading.js 공용 판정 (index 채점과 동일)
+function regradeOne(q, ans, tokens){
+  return judgeAnswer(q, ans, tokens);   // grading.js 공용 판정 (factorMode 토큰 포함)
 }
 
 /* 재채점 미리보기 계산 (쓰기 없음) */
@@ -1175,7 +1175,7 @@ function buildRegradePlan(wsId){
       const _empty=v.examAnswer===null||v.examAnswer===undefined||v.examAnswer===''
                    ||(Array.isArray(v.examAnswer)&&!v.examAnswer.length);
       if(_empty && v.examSubmittedAt){ lost++; after+=(v.score||0); return; }
-      const nc=regradeOne(q, v.examAnswer);
+      const nc=regradeOne(q, v.examAnswer, v.examAnswerTokens);
       const ns=(nc===true)?mx:0;
       after+=ns;
       const oldC=(v.correct===undefined?null:v.correct);
@@ -1225,6 +1225,8 @@ window.regradeWS=async function(wsId){
       upd['examScore']=p.after;
       upd['examMaxScore']=p.maxScore;
       upd['regradedAt']=new Date().toISOString();
+      // 과거 자동저장이 시험 기록에 남긴 응답률 기반 correctRate(100%) 오염 제거
+      upd['correctRate']=deleteField();
       await updateDoc(doc(db,'records',p.uid,'worksheets',wsId), upd);
       // 메모리 반영
       const rec=allData[p.uid]?.[wsId];
@@ -1358,7 +1360,7 @@ window.renderWSTable=function(wsId){
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:rateBar(rate)}</td>
+      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:ws.type==='exam'?examCountsHtml(ws,r):rateBar(rate)}</td>
       <td>${isVoca?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
@@ -1378,7 +1380,7 @@ window.renderWSTable=function(wsId){
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td><div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div></td>
+      <td>${ws.type==='exam'?examCountsHtml(ws,r):`<div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div>`}</td>
       <td>${tries>0?`<span class="tries-badge ${wcls}">${tries}회</span>`:"-"}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--amber);font-weight:600">⏳ 진행 중</span><br>${upd}</td>
@@ -1792,6 +1794,36 @@ function formatDate(v){
   return "-";
 }
 function rateColor(r){ return r>=80?"var(--green)":r>=60?"var(--amber)":"var(--red)"; }
+/* 시험지 학습지: 학생 기록에서 ⭕정답/❌오답/⬜미응답/📝미채점 문항 수 집계.
+   시험지는 '완료율'이 의미가 없어(제출만 하면 100%) 문항 수로 표시한다. */
+function examCounts(ws, r){
+  let ok=0, ng=0, none=0, pend=0;
+  (ws?.questions||[]).forEach(q=>{
+    if(q.type==='link') return;
+    const v=r?.perQuestion?.[q.id];
+    if(!v){ none++; return; }
+    if(v.correct===true) ok++;
+    else if(v.correct===false) ng++;
+    else {
+      const hasAns = !(v.examAnswer===null||v.examAnswer===undefined||v.examAnswer===''
+                       ||(Array.isArray(v.examAnswer)&&!v.examAnswer.length));
+      (hasAns||v.examSubmittedAt) ? pend++ : none++;
+    }
+  });
+  return {ok,ng,none,pend};
+}
+function examCountsHtml(ws, r){
+  const c=examCounts(ws, r);
+  const chip=(txt,col,bg)=>`<span style="font-size:11px;font-weight:700;color:${col};background:${bg};padding:2px 7px;border-radius:10px;white-space:nowrap">${txt}</span>`;
+  let h='<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">'
+    + chip('⭕ '+c.ok,'var(--green)','#dcfce7')
+    + chip('❌ '+c.ng,'var(--red)','#fee2e2')
+    + chip('⬜ 미응답 '+c.none,'var(--ink3)','var(--cream)');
+  if(c.pend) h+=chip('📝 미채점 '+c.pend,'var(--amber)','#fef3c7');
+  if(r?.examScore!=null&&r?.examMaxScore!=null)
+    h+=`<span style="font-size:11px;color:var(--ink3)">${r.examScore}/${r.examMaxScore}점</span>`;
+  return h+'</div>';
+}
 function rateBar(rate){
   return `<div class="rate-row">
     <div class="rate-bg"><div class="rate-fill" style="width:${rate}%;background:${rateColor(rate)}"></div></div>

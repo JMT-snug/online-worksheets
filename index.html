@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.11">
+  <meta name="app-version" content="8.12">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.11";
+const VERSION = "8.12";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3434,6 +3434,75 @@ window.confirmExamEnd=function(){
   }
 };
 
+/* ── 시험지 채점 헬퍼 ──
+   일반 모드는 수식 동치(수치 대입)로 판정하는데 시험지는 단순 문자열 비교라
+   키패드 입력(`(2)/(3)`, `(x)^(2)`, `Math.sqrt(5)`)이 정답 표기(`2/3`, `x^2`)와
+   달라 정답도 오답 처리되던 문제를 해결. 일반 모드와 동일한 판정을 사용한다. */
+function _examEvExpr(s,x){
+  try{
+    let t=String(s).replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*')
+      .replace(/\*\*/g,'^').replace(/\^/g,'**')          // ^ 와 ** 모두 수용
+      .replace(/Math\.sqrt\(/g,'sqrt(')
+      .replace(/sqrt\(([^)]+)\)/g,(_,v)=>`((${v})**0.5)`);
+    let prev;
+    do{prev=t;
+      t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+      t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+      t=t.replace(/(\d)([a-z])/g,'$1*$2');
+      t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      t=t.replace(/([a-z])([a-z])/g,'$1*$2');
+    }while(prev!==t);
+    t=t.replace(/[a-z]/g,`(${x})`);
+    if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+    return Function('"use strict";return('+t+')')();
+  }catch(e){ return NaN; }
+}
+function gradeExamWord(q, ans){
+  if(ans===null||ans===undefined) return false;
+  const raw=String(ans).trim();
+  if(!raw || raw==='(빈칸)') return false;
+  const allAns=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a)!=='');
+  if(!allAns.length) return false;
+  // 1) 방정식(= 포함)
+  if(raw.includes('=')||allAns.some(a=>String(a).includes('='))){
+    try{ if(allAns.some(a=>eqEquivCheck(raw,String(a)))) return true; }catch(e){}
+  }
+  // 2) 수식 동치 (여러 값 대입) — 일반 모드와 동일
+  const pts=[1,-1,2,-2,0.5,3];
+  try{
+    if(allAns.some(a=>{
+      let any=false;
+      const okAll=pts.every(x=>{
+        const uv=_examEvExpr(raw,x), av=_examEvExpr(String(a),x);
+        if(!isFinite(uv)||!isFinite(av)) return false;
+        any=true;
+        return Math.abs(uv-av)<0.001;
+      });
+      return any&&okAll;
+    })) return true;
+  }catch(e){}
+  // 3) 텍스트 정규화 비교 — 일반 모드와 동일한 normW
+  const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",")
+    .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
+  if(allAns.map(normW).includes(normW(raw))) return true;
+  // 4) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
+  //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
+  const hasVar=s=>/[a-zA-Z가-힣]/.test(String(s));
+  if(!hasVar(raw)){
+    const uf=parseFloat(raw.replace(/−/g,'-'));
+    if(!isNaN(uf)){
+      try{
+        if(allAns.some(a=>{
+          if(hasVar(a)) return false;
+          const av=evalAnswer(String(a));
+          return isFinite(av)&&Math.abs(uf-av)<0.001;
+        })) return true;
+      }catch(e){}
+    }
+  }
+  return false;
+}
+
 async function endExamAndGrade(){
   if(window._examEnded) return;  // 중복 호출 방지
   window._examEnded=true;
@@ -3447,35 +3516,33 @@ async function endExamAndGrade(){
     maxScore+=score;
     let ok=false;
     if(q.type==='word' || q.type==='equation' || q.type==='word_text' || q.type==='word_expr'){
-      if(ans){
-        const norm=s=>String(s||'').replace(/−/g,'-').replace(/\s+/g,'').toLowerCase();
-        ok=[q.answer,...(q.answerAlt||[])].some(a=>norm(a)===norm(ans));
-        if(!ok && !isNaN(parseFloat(ans))){
-          ok=Math.abs(parseFloat(ans)-evalAnswer(q.answer))<0.001;
-        }
-      }
+      ok=gradeExamWord(q, ans);          // 일반 모드와 동일한 동치 판정 사용
     } else if(q.type==='multi'){
       if(Array.isArray(ans)){
-        const expected=[...q.answer].sort((a,b)=>a-b);
+        const expected=[...(q.answer||[])].sort((a,b)=>a-b);
         ok=ans.length===expected.length && ans.every((v,i)=>v===expected[i]);
       }
     } else if(q.type==='link'){
       ok=ans===true;
+    } else if(q.type==='graph'){
+      ok=null;                           // 그래프는 scoring.html에서 수동 채점 → 미채점으로 보류
     }
-    // graph는 수동 채점 → 일단 미채점
-    answered[i]={...answered[i],correct:ok,score:ok?score:0};
-    if(ok) totalScore+=score;
+    answered[i]={...answered[i],correct:ok,score:ok===true?score:0};
+    if(ok===true) totalScore+=score;
   }
   // Firestore 저장 (교사 미리보기는 저장 안 함)
   if(curWS && user && !isTeacherAcct()){
     const perQ={};
     curWS.questions.forEach((q,i)=>{
-      perQ[q.id]={
-        examAnswer:answered[i]?.examAnswer||null,
-        correct:answered[i]?.correct||false,
-        score:answered[i]?.score||0,
+      const a=answered[i]||{};
+      const ent={
+        correct:(a.correct===undefined?null:a.correct),   // null=미채점(그래프 등). ||false 쓰면 미채점이 오답이 됨
+        score:a.score||0,
         maxScore:q.score??1,
       };
+      // 답안은 있을 때만 기록 — 값이 없다고 기존 저장분을 null로 덮어쓰지 않도록
+      if(a.examAnswer!==undefined && a.examAnswer!==null) ent.examAnswer=a.examAnswer;
+      perQ[q.id]=ent;
     });
     await setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
       examFinished:true, examScore:totalScore, examMaxScore:maxScore,

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.12">
+<meta name="app-version" content="3.13">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -236,7 +236,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.12";
+const VERSION = "3.13";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -536,14 +536,25 @@ function perQCells(r, uid){
   const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
     const wc=(v.wrongInputs||[]).length;
     const att=v.attempts||0;
-    const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
-    const unanswered = (v.correct===false) && wc===0 && att===0;
+    const isExamQ = v.examAnswer!==undefined || v.maxScore!==undefined;  // 시험지 문항
+    const isCorrect = v.correct!==undefined && v.correct!==null ? v.correct===true
+                      : (isExamQ ? false : (wc===0));   // 시험지는 오답기록이 없다고 정답 처리하면 안 됨
+    const unanswered = !isExamQ && (v.correct===false) && wc===0 && att===0;
     let col, mark, ttl;
-    if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
+    if(isExamQ){
+      // 시험지: 채점 결과가 없으면 '미채점'으로 표시 (정답으로 오인 방지)
+      const ansTxt = v.examAnswer==null||v.examAnswer==='' ? '(무응답)' : String(v.examAnswer);
+      if(v.correct===true){ col="var(--green)"; mark="⭕"; }
+      else if(v.correct===false){ col="var(--red)"; mark="❌"; }
+      else { col="var(--amber)"; mark="📝"; }
+      ttl=`${fmtQid(qid)}: ${v.correct===true?'정답':v.correct===false?'오답':'미채점'} · 제출답안: ${ansTxt}`
+          + (v.score!=null&&v.maxScore!=null?` (${v.score}/${v.maxScore}점)`:'');
+    }
+    else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
     else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
     else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQid(qid)}: 오답 ${wc}회`; }
     const dkey=(uid||r.uid||"x")+"_"+qid;
-    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ};
     return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
   }).join("");
   return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
@@ -1174,14 +1185,24 @@ window.renderWSTable=function(wsId){
     const cells=Object.entries(r.perQuestion).sort().map(([qid,v])=>{
       const wc=(v.wrongInputs||[]).length;
       const att=v.attempts||0;
-      const isCorrect = v.correct!==undefined ? v.correct===true : (wc===0);
-      const unanswered = (v.correct===false) && wc===0 && att===0;
+      const isExamQ = v.examAnswer!==undefined || v.maxScore!==undefined;  // 시험지 문항
+      const isCorrect = v.correct!==undefined && v.correct!==null ? v.correct===true
+                        : (isExamQ ? false : (wc===0));  // 시험지는 오답기록 없다고 정답 처리 금지
+      const unanswered = !isExamQ && (v.correct===false) && wc===0 && att===0;
       let col, mark, ttl;
       // 그래프 그리기 (drawing 필드 있으면)
       if(v&&v.drawing){
         col=v.correct===true?"var(--green)":v.correct===false?"var(--red)":"var(--amber)";
         mark=v.correct===true?"⭕":v.correct===false?"❌":"📝";
         ttl=`${fmtQ(qid)}: 그래프`;
+      } else if(isExamQ){
+        // 시험지: 미채점을 정답으로 오인하지 않도록 별도 표시 + 제출 답안을 툴팁에 노출
+        const ansTxt = v.examAnswer==null||v.examAnswer==='' ? '(무응답)' : String(v.examAnswer);
+        if(v.correct===true){ col="var(--green)"; mark="⭕"; }
+        else if(v.correct===false){ col="var(--red)"; mark="❌"; }
+        else { col="var(--amber)"; mark="📝"; }
+        ttl=`${fmtQ(qid)}: ${v.correct===true?'정답':v.correct===false?'오답':'미채점'} · 제출답안: ${ansTxt}`
+            + (v.score!=null&&v.maxScore!=null?` (${v.score}/${v.maxScore}점)`:'');
       } else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQ(qid)}: 미응답`; }
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
       else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQ(qid)}: 오답 ${wc}회`; }
@@ -1864,9 +1885,32 @@ window.saveGraphFeedback=async function(key){
 
 window.showQDetail=function(key){
   const d=(window._qd||{})[key]; if(!d) return;
+  const _isExam = d.isExamQ || d.v?.examAnswer!==undefined || d.v?.maxScore!==undefined;
   document.getElementById('qd-title').textContent=
-    `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.v?.drawing?' (그래프)':d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
+    `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.v?.drawing?' (그래프)'
+      : _isExam ? ` (시험지 · ${d.v?.correct===true?'정답':d.v?.correct===false?'오답':'미채점'})`
+      : d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
   let body='';
+  // 시험지 제출 답안 표시 (그래프가 아닌 경우) — 교사가 학생 답안을 확인할 수 있도록
+  if(_isExam && !d.v?.drawing){
+    const raw=d.v?.examAnswer;
+    const ansTxt = (raw===null||raw===undefined||raw==='')
+      ? '(무응답)'
+      : (Array.isArray(raw) ? raw.map(n=>`${n+1}번`).join(', ') : String(raw));
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const st=d.v?.correct===true?['정답','var(--green)','#dcfce7']
+            :d.v?.correct===false?['오답','var(--red)','#fee2e2']
+            :['미채점','var(--amber)','#fef3c7'];
+    body+=`<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📝 시험지 제출 답안</div>
+      <div style="padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--paper);font-size:15px;font-family:'DM Mono',monospace;word-break:break-all">${esc(ansTxt)}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:${st[1]};background:${st[2]};padding:3px 10px;border-radius:12px">${st[0]}</span>
+        ${d.v?.score!=null&&d.v?.maxScore!=null?`<span style="font-size:12px;color:var(--ink3)">획득 ${d.v.score} / ${d.v.maxScore}점</span>`:''}
+        ${d.v?.examSubmittedAt?`<span style="font-size:11px;color:var(--ink3)">제출: ${formatDate(d.v.examSubmittedAt)}</span>`:''}
+      </div>
+    </div>`;
+  }
   // 그래프 답안
   if(d.v?.drawing){
     const curScore=d.v.teacherScore??'';

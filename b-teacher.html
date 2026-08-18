@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.21">
+<meta name="app-version" content="3.22">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.21";
+const VERSION = "3.22";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1185,6 +1185,52 @@ function buildRegradePlan(wsId){
   }
   return plan;
 }
+
+/* 유실 분포 리포트 — 콘솔에서 lostReport() 또는 lostReport('학습지 제목 일부')
+   (allData는 모듈 내부 변수라 외부 스크립트로는 접근 불가 → 여기 내장.
+    유실 판정은 재채점(buildRegradePlan)과 동일: 제출 시각은 있는데 답안이 비어 있음) */
+window.lostReport=function(nameFilter){
+  const rows=[];
+  for(const [uid,d] of Object.entries(allData)){
+    for(const [wsId,rec] of Object.entries(d)){
+      const ws=WORKSHEETS.find(w=>w.id===wsId);
+      if(!ws || !rec?.perQuestion) continue;
+      if(nameFilter && !(ws.title||'').includes(nameFilter)) continue;
+      let lost=0, answered=0, none=0, total=0;
+      const lostQids=[];
+      (ws.questions||[]).forEach(q=>{
+        if(q.type==='link') return;
+        const v=rec.perQuestion[q.id];
+        const isExamQ = v && (v.examAnswer!==undefined || v.maxScore!==undefined);
+        if(!isExamQ) return;   // 재채점과 동일하게 시험 형식 기록만 집계
+        total++;
+        const empty=v.examAnswer===null||v.examAnswer===undefined||v.examAnswer===''
+                    ||(Array.isArray(v.examAnswer)&&!v.examAnswer.length);
+        if(empty && v.examSubmittedAt){ lost++; lostQids.push(q.id); }
+        else if(!empty) answered++;
+        else none++;
+      });
+      if(lost>0){
+        rows.push({
+          학습지: ws.title||wsId,
+          학생: rec.studentName||uid,
+          유실: lost, 정상답안: answered, 미응답: none, 집계문항: total,
+          유실비율: total?Math.round(lost/total*100)+'%':'-',
+          판정: (total&&lost>=total*0.7) ? '🔴 전면 유실(구버전 탭 덮어쓰기)'
+               : lost<=2 ? '🟡 빈 답 제출 가능성' : '🟠 부분 유실',
+          마지막저장: rec.lastUpdated||'-',
+          유실문항: lostQids.slice(0,8).join(',')+(lostQids.length>8?'…':''),
+        });
+      }
+    }
+  }
+  rows.sort((a,b)=>b.유실-a.유실);
+  const totalLost=rows.reduce((s,r)=>s+r.유실,0);
+  console.log('%c=== 유실 분포 리포트 ===','font-size:14px;font-weight:bold;color:#b91c1c');
+  console.log(`유실 총 ${totalLost}개 · 학생기록 ${rows.length}건 · 🔴전면 ${rows.filter(r=>r.판정.startsWith('🔴')).length} / 🟠부분 ${rows.filter(r=>r.판정.startsWith('🟠')).length} / 🟡빈답추정 ${rows.filter(r=>r.판정.startsWith('🟡')).length}`);
+  console.table(rows);
+  return `${totalLost}개 (🔴=재시험/개별판정 필요, 🟡=무응답 처리 무방)`;
+};
 
 window.regradeWS=async function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);

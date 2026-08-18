@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.18">
+  <meta name="app-version" content="8.19">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.18";
+const VERSION = "8.19";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2003,6 +2003,34 @@ function _onVisibilityChange(){
   if(document.hidden && curWS) saveWorksheet();
 }
 
+/* ── 학습지 진입 시 버전 확인 ──
+   배포를 해도 이미 열려 있는 탭은 낡은 코드로 계속 동작한다. 실제로 구버전 탭의
+   시험 종료 코드가 제출 답안을 대량으로 지운 사고가 있어, 학습지에 들어갈 때마다
+   서버의 app-version을 확인해 다르면 강제 새로고침한다. (새로고침 후에는
+   lastQuizWsId 복원 로직이 같은 학습지로 자동 재진입시키므로 학생 흐름은 끊기지 않음)
+   네트워크 오류·CDN 전파 지연 시에는 진입을 막지 않는다(잠금 사고 방지). */
+async function ensureLatestVersion(){
+  try{
+    const res=await fetch(location.pathname, {cache:'no-store', headers:{'Range':'bytes=0-800'}});
+    const txt=await res.text();
+    const m=txt.match(/app-version"\s+content="([^"]+)"/);
+    if(!m) return true;                       // 파싱 실패 → 막지 않음
+    const server=m[1];
+    if(server===VERSION) return true;         // 최신
+    const last=Number(sessionStorage.getItem('_verReloadAt')||0);
+    if(Date.now()-last<60000){
+      // 방금 새로고침했는데도 불일치 → CDN 전파 지연으로 보고 진행 (무한 루프 방지)
+      console.warn('[버전확인] 새로고침 후에도 불일치 server='+server+' local='+VERSION+' — 진행');
+      return true;
+    }
+    sessionStorage.setItem('_verReloadAt', String(Date.now()));
+    console.log('[버전확인] 구버전 탭 감지 local='+VERSION+' → server='+server+' — 새로고침');
+    alert('새 버전이 배포되어 화면을 새로고침합니다.\n학습지는 자동으로 다시 열립니다.');
+    location.reload();
+    return false;                             // 진입 중단 (reload가 이어받음)
+  }catch(e){ return true; }                   // 오프라인 등 → 막지 않음
+}
+
 let _activeWsId=null;
 async function startQuiz(ws) {
   if(wsBlockedFor(ws, user?.email)){ // 새로고침 복원·알림 바로가기 경로 포함 차단
@@ -2011,6 +2039,8 @@ async function startQuiz(ws) {
   }
   _activeWsId=ws.id; _wsIsCompleted=false;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
+  // 구버전 탭이면 여기서 새로고침 (reload 후 lastQuizWsId로 이 학습지에 자동 재진입)
+  if(!(await ensureLatestVersion())) return;
   curWS=ws; curQIdx=0;
   // 시험지 모드 초기화 (일반 학습지면 타이머 중지/숨김)
   if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
@@ -4117,13 +4147,15 @@ function setCtx(){
 let vqWS=null, vqStreak=0, vqTimer=null, vqTimeLeft=0;
 const VQ_TARGET=50, VQ_TIME=10;
 
-function startVocabQuiz(ws){
+async function startVocabQuiz(ws){
   if(wsBlockedFor(ws, user?.email)){
     try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
     alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
   }
   vqWS=ws; vqStreak=0;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
+  // 구버전 탭이면 여기서 새로고침 (reload 후 자동 재진입)
+  if(!(await ensureLatestVersion())) return;
   document.getElementById('vq-complete').style.display='none';
   showPage('quiz-vocab-page');
   document.getElementById('vq-title').textContent=ws.title;

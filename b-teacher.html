@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.22">
+<meta name="app-version" content="3.23">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.22";
+const VERSION = "3.23";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1190,7 +1190,12 @@ function buildRegradePlan(wsId){
    (allData는 모듈 내부 변수라 외부 스크립트로는 접근 불가 → 여기 내장.
     유실 판정은 재채점(buildRegradePlan)과 동일: 제출 시각은 있는데 답안이 비어 있음) */
 window.lostReport=function(nameFilter){
+  if(!Object.keys(allData).length){
+    console.warn('⏳ 학생 데이터가 아직 로드되지 않았습니다. 화면에 학생 기록이 표시된 후 다시 실행하세요.');
+    return '데이터 로드 전';
+  }
   const rows=[];
+  const typeCount={}, typeQids={};   // 문항 유형별 유실 집계 (특정 유형 캡처 누락 진단용)
   for(const [uid,d] of Object.entries(allData)){
     for(const [wsId,rec] of Object.entries(d)){
       const ws=WORKSHEETS.find(w=>w.id===wsId);
@@ -1206,7 +1211,12 @@ window.lostReport=function(nameFilter){
         total++;
         const empty=v.examAnswer===null||v.examAnswer===undefined||v.examAnswer===''
                     ||(Array.isArray(v.examAnswer)&&!v.examAnswer.length);
-        if(empty && v.examSubmittedAt){ lost++; lostQids.push(q.id); }
+        if(empty && v.examSubmittedAt){
+          lost++; lostQids.push(q.id);
+          const qt=q.type||'?';
+          typeCount[qt]=(typeCount[qt]||0)+1;
+          (typeQids[qt]=typeQids[qt]||new Set()).add(wsId+'/'+q.id);
+        }
         else if(!empty) answered++;
         else none++;
       });
@@ -1229,6 +1239,13 @@ window.lostReport=function(nameFilter){
   console.log('%c=== 유실 분포 리포트 ===','font-size:14px;font-weight:bold;color:#b91c1c');
   console.log(`유실 총 ${totalLost}개 · 학생기록 ${rows.length}건 · 🔴전면 ${rows.filter(r=>r.판정.startsWith('🔴')).length} / 🟠부분 ${rows.filter(r=>r.판정.startsWith('🟠')).length} / 🟡빈답추정 ${rows.filter(r=>r.판정.startsWith('🟡')).length}`);
   console.table(rows);
+  if(Object.keys(typeCount).length){
+    console.log('%c── 문항 유형별 유실 (유형에 몰려 있으면 해당 유형의 답안 캡처 문제) ──','font-weight:bold');
+    console.table(Object.entries(typeCount).map(([유형,건수])=>({
+      유형, 유실건수:건수, '해당 문항 수':typeQids[유형].size,
+      비고: 유형==='step3' ? 'v8.20 이전: 시험지에서 답안 캡처 자체가 안 됨(복구 불가)' : ''
+    })));
+  }
   return `${totalLost}개 (🔴=재시험/개별판정 필요, 🟡=무응답 처리 무방)`;
 };
 

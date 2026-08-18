@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.19">
+  <meta name="app-version" content="8.20">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.19";
+const VERSION = "8.20";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -2055,6 +2055,22 @@ async function startQuiz(ws) {
   // 랜덤 출제: 원본 보존 후 셔플 (파트가 있는 학습지는 순서 유지)
   if(!ws._orig) ws._orig=ws.questions;
   ws.questions = (isRandom && !getParts(ws)) ? shuffleArr(ws._orig) : ws._orig;
+  // ── 시험지 모드: step3(단계형)는 최종 답 1개만 받는 word 문항으로 변환 ──
+  // 시험에서는 단계 진행이 동작하지 않는데 submitExamAns에 step3 분기도 없어서
+  // 학생이 입력한 답이 null로 저장되던 사고('1학기 복습' 문항 단위 대량 유실)의 원인.
+  // word로 변환하면 기존 렌더·답안 캡처·채점(judgeAnswer)을 그대로 재사용한다.
+  if(window._examMode){
+    ws.questions = ws.questions.map(q=>{
+      if(q.type!=='step3') return q;
+      const steps=getSteps(q);
+      const last=steps[steps.length-1]||{};
+      return {...q, type:'word', _origType:'step3',
+        answerType: last.answerType==='expr' ? 'expr' : 'text',
+        answer: last.answer,
+        answerAlt: last.answerAlt||[],
+        text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 입력하세요)</span>'};
+    });
+  }
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));

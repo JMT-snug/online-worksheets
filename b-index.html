@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.22">
+  <meta name="app-version" content="8.23">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.22";
+const VERSION = "8.23";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1753,11 +1753,13 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 /* multi 보기 렌더링: 라벨+(수식) */
 function renderOption(opt){
   if(!opt) return opt;
-  // 이미 LaTeX(\()나 HTML(<span)이 있으면 그대로
+  // 이미 LaTeX(\()나 HTML(<span)이 있으면 그대로 (교사가 edit에서 직접 수식 지정한 경우)
   if(opt.includes('\\(') || opt.includes('<span')) return opt;
-  // 아닌 경우: ² ³ 변환 후 LaTeX 래핑
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
   const lbl = m ? m[1] : '', raw = m ? m[2] : opt;
+  // 한글이 포함된 선지는 일반 텍스트로 표시 — 통째로 수식(\(...\))에 넣으면
+  // MathJax가 수학 변수처럼 이탤릭·문자별 배치로 렌더해 글이 기울고 자간이 깨짐
+  if(/[가-힣]/.test(raw)) return opt;
   let t = raw.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
   t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);

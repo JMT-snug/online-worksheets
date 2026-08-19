@@ -5,7 +5,7 @@
    채점 규칙을 바꿀 때는 이 파일만 수정하면 되고,
    HTML 안에 채점 함수를 복사해 넣지 말 것 (과거 세 벌 복사가 채점 불일치 사고의 원인).
 
-   포함: evalAnswer, eqEquivCheck, exprEquivCheck, _examEvExpr,
+   포함: evalAnswer, eqEquivCheck, exprEquivCheck, _examEvExpr, isTextAnswerQ, varsOf,
          normalizeMultiAnswer, gradeExamWord, judgeAnswer
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -113,20 +113,47 @@ function normalizeMultiAnswer(q){
   return a.sort((x,y)=>x-y);
 }
 
+/* 답을 '텍스트'로 다뤄야 하는 문항인가 (한글 용어 등)
+   텍스트 문항에 수식 동치 판정을 쓰면 단위가 변수로 파싱된다.
+   예: 정답 '40km/h' → k*m/h, 모든 문자가 같은 값이라 x*x/x = x
+       → '40km/h' ≡ '40m' ≡ '40x' ≡ '40km/s' 가 되어 엉뚱한 답이 정답 처리됨. */
+function isTextAnswerQ(q){
+  if(!q) return false;
+  if(q.type==='word_text') return true;
+  if(q.answerType==='text') return true;
+  if(q.answerType==='expr') return false;
+  // answerType 미지정(구 데이터)은 index의 isExprInput과 같은 규칙: 한글이 있으면 텍스트
+  if(q.answerType==null){
+    return /[가-힣]/.test(String(q.answer??'')+(q.answerAlt||[]).join(''));
+  }
+  return false;
+}
+
+/* 식에 쓰인 문자(변수·단위) 집합 — 함수명은 제외
+   수식 동치는 모든 문자를 같은 값으로 치환하므로, 쓰인 문자가 다르면 서로 다른 식으로 본다.
+   (40km/h vs 40m, 2x+3 vs 2y+3 처럼 문자만 다른 답이 통과하던 문제 방지) */
+function varsOf(s){
+  let t=String(s??'').toLowerCase().replace(/math\./g,'')
+        .replace(/sqrt|cbrt|pow|abs|log|sin|cos|tan|pi/g,'');
+  return [...new Set(t.match(/[a-z]/g)||[])].sort().join('');
+}
+
 function gradeExamWord(q, ans){
   if(ans===null||ans===undefined) return false;
   const raw=String(ans).trim();
   if(!raw || raw==='(빈칸)') return false;
   const allAns=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a)!=='');
   if(!allAns.length) return false;
+  const textMode=isTextAnswerQ(q);   // 텍스트 문항이면 수식 판정을 건너뛴다
   // 1) 방정식(= 포함)
-  if(raw.includes('=')||allAns.some(a=>String(a).includes('='))){
+  if(!textMode && (raw.includes('=')||allAns.some(a=>String(a).includes('=')))){
     try{ if(allAns.some(a=>eqEquivCheck(raw,String(a)))) return true; }catch(e){}
   }
-  // 2) 수식 동치 (여러 값 대입) — 일반 모드와 동일
+  // 2) 수식 동치 (여러 값 대입) — 쓰인 문자 집합이 같을 때만
   const pts=[1,-1,2,-2,0.5,3];
-  try{
+  if(!textMode) try{
     if(allAns.some(a=>{
+      if(varsOf(raw)!==varsOf(a)) return false;   // 단위·변수명이 다르면 다른 답
       let any=false;
       const okAll=pts.every(x=>{
         const uv=_examEvExpr(raw,x), av=_examEvExpr(String(a),x);

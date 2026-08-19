@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.23">
+  <meta name="app-version" content="8.24">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.23";
+const VERSION = "8.24";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -1494,6 +1494,51 @@ window.sendBugReport=async function(){
    사용법: 교사 계정으로 로그인 후 콘솔에서 purgeTeacherRecords() 실행
    삭제 대상: 모든 교사 계정의 records/results 풀이 기록
    (오답 이미지는 Storage 버킷 미생성으로 애초에 저장된 적 없음 → 대상 아님) */
+
+/* ── 완료율 진단 (읽기 전용) ──
+   사용법: 교사 계정으로 로그인 후 콘솔에서 rateDebug('ws-u1-05-04')
+   출력: 저장된 완료율 / 학급별 학생 명단 / 학생별 기록 존재·완료 여부 → 왜 0%인지 바로 확인 */
+window.rateDebug = async function(wsId){
+  if(!user || !TEACHER_EMAILS.includes(user.email)){ alert('교사 전용 기능'); return; }
+  const ws = WORKSHEETS.find(w=>w.id===wsId);
+  console.log('%c[rateDebug] '+wsId, 'font-weight:bold;color:#2563eb',
+    ws ? `— ${ws.title} (유형: ${ws.type||'일반'}, 문항 ${ (ws.questions||[]).filter(q=>q.type!=='link').length }개, 상태: ${ws.status||'-'})`
+       : '⚠️ 현재 학습지 목록에 없는 ID (ID가 바뀌었을 수 있음)');
+  if(!ws){
+    const cand=WORKSHEETS.filter(w=>w.id.includes(String(wsId).replace(/^ws-/,'').slice(0,8)));
+    if(cand.length) console.log('  비슷한 ID:', cand.map(w=>`${w.id} (${w.title})`));
+  }
+  console.log('저장된 완료율:', window.teacherClassRates?.[wsId] ?? '(없음 — 📊 진도 동기화를 실행하세요)');
+
+  const rows=[];
+  for(const c of teacherClasses){
+    for(const email of (classStudents[c.name]||[])){
+      rows.push({ 반:c.name, 학생:email, 기록:'없음', 완료:'', 진행:'' });
+    }
+  }
+  if(!rows.length){ console.warn('학급 명단이 비어 있습니다 (teacher.html 학급 관리 확인)'); return; }
+
+  for(const r of rows){
+    for(const col of ['records','results']){
+      try{
+        const s=await getDoc(doc(db,col,r.학생,'worksheets',wsId));
+        if(!s.exists()) continue;
+        const d=s.data();
+        r.기록 = r.기록==='없음' ? col : r.기록+'+'+col;
+        const done = d.isComplete||d.completedAt||d.passed||(d.totalCount>0&&d.answeredCount>=d.totalCount);
+        if(done) r.완료='✅';
+        else if(!r.완료) r.완료='—';
+        r.진행 = `${d.answeredCount??'?'}/${d.totalCount??'?'}`;
+      }catch(e){ r.기록='읽기실패'; }
+    }
+  }
+  console.table(rows);
+  const byCls={};
+  rows.forEach(r=>{ byCls[r.반]=byCls[r.반]||{t:0,d:0}; byCls[r.반].t++; if(r.완료==='✅') byCls[r.반].d++; });
+  for(const [cls,v] of Object.entries(byCls))
+    console.log(`  ${cls}: 완료 ${v.d}/${v.t}명 → ${v.t?Math.round(v.d/v.t*100):0}%`);
+  console.log('※ 기록이 "없음"인데 학생이 풀었다면 → 학습지 ID가 바뀐 경우입니다 (teacher.html의 🔧 학습지 ID 정리 확인)');
+};
 window.purgeTeacherRecords = async function(){
   if(!user || !BASE_TEACHER_EMAILS.includes(user.email)){ alert('기본 교사 전용 기능'); return; }
   const targets=[];
@@ -1560,13 +1605,17 @@ window.syncAutoProgress = async function(){
       for(const [cls,set] of Object.entries(byCls)) wsClassDone[wsId][cls]=set.size;
     }
 
-    // 학급별 완료율(%) = 완료 학생수 / 학급 전체 학생수 (모든 학습지)
+    // 학급별 완료율(%) = 완료 학생수 / 학급 전체 학생수
+    // ★ 완료자가 한 명도 없는 학습지도 0%로 기록한다 ★
+    //   (예전에는 wsClassDone에 있는 학습지만 저장 → 완료자가 없거나 동기화 이후 새로 만든
+    //    학습지는 키 자체가 없어서 버튼이 '완료율 없음' 상태로 남았다)
     const newRates={};
-    for(const [wsId, byCls] of Object.entries(wsClassDone)){
-      newRates[wsId]={};
-      for(const [cls, done] of Object.entries(byCls)){
-        const total=classTotal[cls]||0;
-        if(total>0) newRates[wsId][cls]=Math.round(done/total*100);
+    for(const w of WORKSHEETS){
+      newRates[w.id]={};
+      for(const [cls,total] of Object.entries(classTotal)){
+        if(!total) continue;
+        const done=wsClassDone[w.id]?.[cls]||0;
+        newRates[w.id][cls]=Math.round(done/total*100);
       }
     }
 
@@ -1590,7 +1639,10 @@ window.syncAutoProgress = async function(){
       console.log(`  ${wsId}:`, detail);
     }
     console.log('[sync] newAutoProg:', newAutoProg);
-    await setDoc(doc(db,'teacher_data',user.uid),{teacherAutoProgress:newAutoProg,teacherClassRates:newRates},{merge:true});
+    // merge:true는 맵을 깊게 병합해 예전 완료율이 남는다(삭제된 기록·바뀐 ID가 그대로 유지) → updateDoc으로 필드 전체 교체
+    const _tdRef=doc(db,'teacher_data',user.uid);
+    try{ await updateDoc(_tdRef,{teacherAutoProgress:newAutoProg,teacherClassRates:newRates}); }
+    catch(e){ await setDoc(_tdRef,{teacherAutoProgress:newAutoProg,teacherClassRates:newRates},{merge:true}); }
     // 로컬 상태는 병합 갱신 (다른 교사 문서에서 온 데이터 유지, 본인 학급만 갱신)
     const _myClasses=new Set(Object.keys(classTotal));
     const _mergeLocal=(store,fresh)=>{

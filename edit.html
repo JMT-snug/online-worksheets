@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.0b">
+<meta name="app-version" content="edit-v3.1">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -75,6 +75,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 /* ── 학습지 메타 ── */
 .meta-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:20px;margin-bottom:20px}
+.meta-card.collapsed{padding:0;border:none;background:transparent;margin-bottom:12px}
+.meta-card.collapsed .meta-body{display:none}
+.meta-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;user-select:none}
+.meta-card.collapsed .meta-head{margin-bottom:0;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:8px 14px}
+.meta-head h3{font-size:13px;font-weight:700;color:var(--ink2)}
+.meta-head .chev{font-size:12px;color:var(--ink3);transition:transform .15s}
+.meta-card.collapsed .meta-head .chev{transform:rotate(-90deg)}
+.meta-head .sum{font-size:12px;color:var(--ink3);margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-start}
 .meta-row:last-child{margin-bottom:0}
 .meta-label{font-size:12px;font-weight:600;color:var(--ink3);width:64px;padding-top:8px;flex-shrink:0}
@@ -260,6 +268,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <div style="padding:8px 12px">
         <div class="sb-add" id="btn-add-unit">＋ 단원 추가</div>
       </div>
+      <div style="padding:2px 12px 10px;display:flex;flex-direction:column;gap:4px">
+        <div class="sb-add" onclick="migrateWsIds()" style="background:#78350f;color:#fbbf24;font-size:12px" title="학습지 ID를 단원·순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)">🔧 학습지 ID 정리</div>
+        <div class="sb-add" onclick="migrateQuestionIds()" style="background:#78350f;color:#fbbf24;font-size:12px" title="문항 ID를 q01, q02… 순번으로 정리합니다 (학생 기록도 함께 이동)">🔧 문항 ID 정리</div>
+      </div>
       <div class="sb-footer">
         <div style="font-size:11px;color:#475569" id="sidebar-status">로딩 중...</div>
       </div>
@@ -276,7 +288,13 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
         <div id="editor-main" style="display:none">
 
           <!-- 학습지 메타 -->
-          <div class="meta-card">
+          <div class="meta-card" id="meta-card">
+            <div class="meta-head" onclick="toggleMetaCard()" title="클릭하면 접기/펼치기">
+              <span class="chev">▾</span>
+              <h3>학습지 정보</h3>
+              <span class="sum" id="meta-summary"></span>
+            </div>
+            <div class="meta-body">
             <div class="meta-row" style="align-items:center">
               <span class="meta-label">상태</span>
               <span id="ws-status-badge" style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700"></span>
@@ -329,6 +347,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div class="meta-row">
               <span class="meta-label">ID</span>
               <input class="meta-input" id="ws-id" placeholder="ws-u1-01-01" style="font-family:monospace;font-size:12px">
+            </div>
             </div>
           </div>
 
@@ -532,7 +551,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, collectionGroup, where, setDoc, deleteDoc, writeBatch, query, orderBy }
+import { getFirestore, collection, doc, getDoc, getDocs, collectionGroup, where, setDoc, updateDoc, deleteDoc, writeBatch, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -807,8 +826,148 @@ function renderEditor(){
       : `문항 목록 (${currentWs.questions.length}개)`;
 
   renderQList();
+  restoreMetaCollapsed();   // 접힘 상태 복원 + 요약 갱신
 }
 
+
+/* ── 학습지 정보 접기/펼치기 (문항 목록을 넓게 보기 위함, 상태는 localStorage 유지) ── */
+window.toggleMetaCard = function(force){
+  const card=document.getElementById('meta-card'); if(!card) return;
+  const on = (force===undefined) ? !card.classList.contains('collapsed') : !!force;
+  card.classList.toggle('collapsed', on);
+  try{ localStorage.setItem('edit_metaCollapsed', on?'1':'0'); }catch(e){}
+  updateMetaSummary();
+};
+/* 접었을 때 제목·유형·ID를 한 줄로 보여줌 */
+function updateMetaSummary(){
+  const el=document.getElementById('meta-summary'); if(!el) return;
+  if(!currentWs){ el.textContent=''; return; }
+  const t={regular:'일반',vocab:'VOCA',exam:'📝 시험지'}[currentWs.type||'regular']||'일반';
+  const st={published:'공개',locked:'잠금',draft:'준비 중'}[currentWs.status]||currentWs.status||'';
+  el.textContent = `${currentWs.title||'(제목 없음)'} · ${t}${st?' · '+st:''} · ${currentWs.id||''}`;
+}
+function restoreMetaCollapsed(){
+  let on=false;
+  try{ on = localStorage.getItem('edit_metaCollapsed')==='1'; }catch(e){}
+  const card=document.getElementById('meta-card');
+  if(card) card.classList.toggle('collapsed', on);
+  updateMetaSummary();
+}
+
+/* ══════════════ ID 정리 도구 (teacher.html과 동일 기능) ══════════════
+   학습지/문항 ID를 규칙에 맞게 정리하면서 **학생 기록(records·results)도 함께 옮긴다.**
+   edit는 학생 기록을 평소에 읽지 않으므로 실행 시점에 한 번만 조회한다. */
+
+/* 학생 기록 전체를 { 컬렉션: { 이메일: { 학습지ID: 데이터 } } } 로 읽어옴 */
+async function loadStudentRecords(){
+  const out={};
+  const snap=await getDocs(collectionGroup(db,'worksheets'));
+  snap.forEach(d=>{
+    const p=d.ref.path.split('/');
+    const col=p[0], uid=p[1], wsId=p[3];
+    if(col!=='records' && col!=='results') return;   // progress(구 데이터)는 대상 아님
+    ((out[col]=out[col]||{})[uid]=out[col][uid]||{})[wsId]=d.data();
+  });
+  return out;
+}
+
+window.migrateQuestionIds = async function(){
+  const toMigrate=worksheets.filter(ws=>(ws.questions||[]).some((q,i)=>q.id!==`q${String(i+1).padStart(2,'0')}`));
+  if(!toMigrate.length){ alert('모든 문항 ID가 이미 올바른 순번(q01, q02…)입니다.'); return; }
+  const preview=toMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
+  if(!confirm(`문항 ID를 q01, q02… 형식으로 바꿉니다.\n학생 기록의 문항별 데이터도 같이 옮깁니다.\n\n${preview}\n\n진행할까요?`)) return;
+
+  toast('학생 기록 확인 중…');
+  let recs;
+  try{ recs=await loadStudentRecords(); }
+  catch(e){ alert('학생 기록을 읽지 못해 중단합니다: '+e.message); return; }
+
+  let wsOk=0, recOk=0; const errors=[];
+  for(const ws of toMigrate){
+    try{
+      const idMap={};
+      ws.questions.forEach((q,i)=>{ idMap[q.id]=`q${String(i+1).padStart(2,'0')}`; });
+      const newQs=ws.questions.map(q=>({...q,id:idMap[q.id]||q.id}));
+      await setDoc(doc(db,'curriculum',ws.id),{questions:newQs},{merge:true});
+      ws.questions=newQs; wsOk++;
+      for(const col of ['records','results']){
+        for(const [uid,byWs] of Object.entries(recs[col]||{})){
+          const rec=byWs[ws.id]; if(!rec?.perQuestion) continue;
+          const newPQ={};
+          for(const [oid,val] of Object.entries(rec.perQuestion)) newPQ[idMap[oid]||oid]=val;
+          await updateDoc(doc(db,col,uid,'worksheets',ws.id),{perQuestion:newPQ});
+          recOk++;
+        }
+      }
+    }catch(e){ errors.push(`${ws.title}: ${e.message}`); }
+  }
+  alert(`✅ 문항 ID 정리 완료\n학습지 ${wsOk}개, 학생 기록 ${recOk}건`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:''));
+  if(currentWsId) selectWs(currentWsId);
+};
+
+window.migrateWsIds = async function(){
+  const byUnit={};
+  worksheets.forEach(ws=>{ (byUnit[ws.unitId||'etc']=byUnit[ws.unitId||'etc']||[]).push(ws); });
+  const changes=[];
+  for(const [unitId,list] of Object.entries(byUnit)){
+    list.sort((a,b)=>(a.order??99)-(b.order??99));
+    list.forEach((ws,i)=>{
+      const newId=`ws-${unitId}-${String(i+1).padStart(2,'0')}`;
+      if(ws.id!==newId) changes.push({ws,newId});
+    });
+  }
+  if(!changes.length){ alert('모든 학습지 ID가 단원·순서와 일치합니다.'); return; }
+  const preview=changes.map(({ws,newId})=>`• ${ws.id} → ${newId}  (${ws.title})`).join('\n');
+  if(!confirm(`학습지 ID를 표시 순서 기준으로 바꿉니다.\n학생 기록도 새 ID로 함께 옮깁니다.\n\n${preview}\n\n진행할까요?`)) return;
+
+  toast('학생 기록 확인 중…');
+  let recs;
+  try{ recs=await loadStudentRecords(); }
+  catch(e){ alert('학생 기록을 읽지 못해 중단합니다: '+e.message); return; }
+
+  // 이름 충돌(A→B, B→C)을 피하려고 임시 ID로 옮긴 뒤 최종 ID로 이동하는 2단계 방식
+  const tempPfx='ws-tmp-'+Date.now()+'-';
+  const errors=[]; let ok=0;
+  for(const {ws} of changes){
+    try{
+      const tmpId=tempPfx+ws.id;
+      const {_tmpId:_, ...wsData}=ws;
+      await setDoc(doc(db,'curriculum',tmpId),{...wsData,id:tmpId});
+      await deleteDoc(doc(db,'curriculum',ws.id));
+      for(const col of ['records','results']){
+        for(const [uid,byWs] of Object.entries(recs[col]||{})){
+          const rec=byWs[ws.id]; if(!rec) continue;
+          await setDoc(doc(db,col,uid,'worksheets',tmpId),rec);
+          await deleteDoc(doc(db,col,uid,'worksheets',ws.id));
+          byWs[tmpId]=rec; delete byWs[ws.id];
+        }
+      }
+      ws._tmpId=tmpId;
+    }catch(e){ errors.push(`1단계 ${ws.id}: ${e.message}`); }
+  }
+  for(const {ws,newId} of changes){
+    if(!ws._tmpId) continue;
+    try{
+      const {_tmpId:_, ...wsData}=ws;
+      await setDoc(doc(db,'curriculum',newId),{...wsData,id:newId});
+      await deleteDoc(doc(db,'curriculum',ws._tmpId));
+      for(const col of ['records','results']){
+        for(const [uid,byWs] of Object.entries(recs[col]||{})){
+          const rec=byWs[ws._tmpId]; if(!rec) continue;
+          await setDoc(doc(db,col,uid,'worksheets',newId),rec);
+          await deleteDoc(doc(db,col,uid,'worksheets',ws._tmpId));
+          byWs[newId]=rec; delete byWs[ws._tmpId];
+        }
+      }
+      if(currentWsId===ws.id) currentWsId=newId;
+      ws.id=newId; delete ws._tmpId; ok++;
+    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
+  }
+  alert(`✅ 학습지 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
+    + '\n\n※ 잠금·진도 데이터는 학습지 ID 기준이라, 필요하면 index에서 📊 진도 동기화를 다시 실행하세요.');
+  await loadAll();
+  if(currentWsId) selectWs(currentWsId);
+};
 // ── 문항 목록 렌더 ──
 function renderQList(){
   const list = document.getElementById('q-list');
@@ -1610,127 +1769,6 @@ window.cleanupTempWs=async function(){
   window.location.reload(); // 전체 새로고침
 };
 
-window.migrateQuestionIds=async function(){
-  const wsToMigrate=worksheets.filter(ws=>{
-    return (ws.questions||[]).some(q=>/^[Qq]\d{8,}$/.test(q.id)); // 긴 숫자 ID만
-  });
-  if(!wsToMigrate.length){ toast('마이그레이션할 문항이 없습니다.'); return; }
-  const preview=wsToMigrate.map(ws=>`• ${ws.title} (${ws.questions.length}개 문항)`).join('\n');
-  if(!confirm(`다음 학습지의 문항 ID를 q01, q02... 형식으로 변환합니다:\n\n${preview}\n\n계속하시겠습니까?`)) return;
-
-  const statusEl=document.createElement('div');
-  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:260px';
-  document.body.appendChild(statusEl);
-  const log=msg=>{ statusEl.textContent=msg; console.log('[migration]',msg); };
-
-  let wsOk=0, recOk=0, errors=[];
-  for(const ws of wsToMigrate){
-    log(`처리 중: ${ws.title}...`);
-    try{
-      // 1. 구 ID → 신 ID 매핑 (q01, q02...)
-      const idMap={};
-      ws.questions.forEach((q,i)=>{
-        idMap[q.id]=`q${String(i+1).padStart(2,'0')}`;
-      });
-      // 2. curriculum 문서 업데이트
-      const newQs=ws.questions.map(q=>({...q,id:idMap[q.id]||q.id}));
-      await setDoc(doc(db,'curriculum',ws.id),{questions:newQs},{merge:true});
-      ws.questions=newQs; // 로컬도 갱신
-      wsOk++;
-      // 3. 이 학습지가 있는 모든 학생 records 업데이트
-      const students=Object.entries(allData).filter(([uid,d])=>d[ws.id]?.perQuestion);
-      for(const [uid,d] of students){
-        const oldPQ=d[ws.id].perQuestion;
-        const newPQ={};
-        for(const [oid,val] of Object.entries(oldPQ)){
-          newPQ[idMap[oid]||oid]=val; // 매핑 있으면 새 ID, 없으면 유지
-        }
-        await setDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ},{merge:true});
-        if(allData[uid]?.[ws.id]) allData[uid][ws.id].perQuestion=newPQ; // 로컬 갱신
-        recOk++;
-      }
-    }catch(e){ errors.push(`${ws.title}: ${e.message}`); }
-  }
-  statusEl.remove();
-  const msg=`✅ 완료\n학습지: ${wsOk}개 변환\n학생 기록: ${recOk}개 업데이트`
-           +(errors.length?`\n\n⚠️ 오류:\n${errors.join('\n')}`:'');
-  toast(msg.replace(/\n/g," | "));
-  navigate(selView); // 현재 뷰 새로고침
-}
-
-window.migrateWsIds=async function(){
-  // 단원별로 order 순 정렬 후 ws-unitId-01, 02... 재번호
-  const byUnit={};
-  worksheets.forEach(ws=>{ (byUnit[ws.unitId||'etc']=byUnit[ws.unitId||'etc']||[]).push(ws); });
-
-  // 변경 필요한 항목 계산
-  const changes=[]; // {ws, newId}
-  for(const [unitId, wsList] of Object.entries(byUnit)){
-    wsList.sort((a,b)=>(a.order??99)-(b.order??99));
-    wsList.forEach((ws,i)=>{
-      const newId=`ws-${unitId}-${String(i+1).padStart(2,'0')}`;
-      if(ws.id!==newId) changes.push({ws,newId});
-    });
-  }
-  if(!changes.length){ toast('모든 ID가 이미 순서와 일치합니다.'); return; }
-
-  const preview=changes.map(({ws,newId})=>`• ${ws.id}  →  ${newId}`).join('\n');
-  if(!confirm(`다음 학습지 ID를 표시 순서 기준으로 변환합니다:\n\n${preview}\n\n⚠️ 학생 기록도 함께 이동됩니다.`)) return;
-
-  const statusEl=document.createElement('div');
-  statusEl.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:300px';
-  document.body.appendChild(statusEl);
-  const log=msg=>{ statusEl.textContent=msg; console.log('[wsIdMigration]',msg); };
-
-  let ok=0, errors=[];
-  // 충돌 방지: 먼저 임시 ID로 이동 후 최종 ID로
-  const tempPrefix='ws-temp-'+Date.now()+'-';
-
-  // 1단계: 원본 → 임시
-  for(const {ws,newId} of changes){
-    log(`임시 이동: ${ws.id}...`);
-    try{
-      const tmpId=tempPrefix+ws.id;
-      const {_tmpId:_t2,...wsTmp}=ws;
-      await setDoc(doc(db,'curriculum',tmpId),{...wsTmp,id:tmpId});
-      await deleteDoc(doc(db,'curriculum',ws.id));
-      // 학생 records도 임시로
-      const recSnap=await getDocs(collectionGroup(db,'worksheets'));
-      for(const d of recSnap.docs){
-        if(d.id===ws.id && d.ref.path.startsWith('records/')){
-          const uid=d.ref.parent.parent.id;
-          await setDoc(doc(db,'records',uid,'worksheets',tmpId),d.data());
-          await deleteDoc(d.ref);
-        }
-      }
-      ws._tmpId=tmpId; // 임시 저장
-    }catch(e){ errors.push(`1단계 ${ws.id}: ${e.message}`); }
-  }
-
-  // 2단계: 임시 → 최종
-  for(const {ws,newId} of changes){
-    if(!ws._tmpId) continue;
-    log(`최종 이동: ${newId}...`);
-    try{
-      const {_tmpId:_t, ...wsClean}=ws;
-      await setDoc(doc(db,'curriculum',newId),{...wsClean,id:newId});
-      await deleteDoc(doc(db,'curriculum',ws._tmpId));
-      const recSnap2=await getDocs(collectionGroup(db,'worksheets'));
-      for(const d of recSnap2.docs){
-        if(d.id===ws._tmpId && d.ref.path.startsWith('records/')){
-          const uid=d.ref.parent.parent.id;
-          await setDoc(doc(db,'records',uid,'worksheets',newId),d.data());
-          await deleteDoc(d.ref);
-        }
-      }
-      ws.id=newId; delete ws._tmpId; ok++;
-    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
-  }
-
-  statusEl.remove();
-  renderSidebar();
-  alert(`✅ 완료: ${ok}개 학습지 ID 변환`+(errors.length?`\n\n⚠️ 오류:\n${errors.join('\n')}`:''));
-};
 
 async function saveToFirestore(status, silent=false){
   if(!currentWs){ toast('학습지를 선택하세요'); return; }

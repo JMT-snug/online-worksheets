@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.26">
+  <meta name="app-version" content="8.27">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.26";
+const VERSION = "8.27";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -758,6 +758,16 @@ let classStudents = {};    // className → [학생 이메일(소문자)]
 let teacherProgress = {};  // wsId → {className: bool}
 let curQIdx = 0, attempts = [], answered = [];
 let wrongAnswers = []; // per question: array of wrong inputs
+/* 일반 학습지에서 정답으로 인정된 최종 제출 답안 (재채점용).
+   시험지는 examAnswer를 저장하지만 일반 학습지는 오답(wrongInputs)만 남겨
+   채점 규칙이 바뀌어도 다시 판정할 근거가 없었다. */
+let lastAnswers = [], lastAnswerTokens = [];
+function recordAnswer(idx, val, tokens){
+  lastAnswers[idx] = val;
+  if(Array.isArray(tokens) && tokens.length){
+    try{ lastAnswerTokens[idx] = JSON.stringify(tokens); }catch(e){}
+  }
+}
 
 /* ── PAGE SWITCH ── */
 function showPage(id) {
@@ -2016,6 +2026,10 @@ async function saveWorksheet(isComplete=false){
           wrongInputs: wrongAnswers[i]?.inputs||[],
           correct:    !!answered[i],
           canvasImage: wrongAnswers[i]?.imagePath||null,
+          // 정답으로 인정된 최종 답안 — 채점 규칙이 바뀌었을 때 재채점 근거가 된다.
+          // 값이 없으면 기존 저장분을 지우지 않도록 필드를 아예 넣지 않는다.
+          ...(lastAnswers[i]!==undefined&&lastAnswers[i]!==null ? {lastAnswer:lastAnswers[i]} : {}),
+          ...(lastAnswerTokens[i] ? {lastAnswerTokens:lastAnswerTokens[i]} : {}),
         };
       }
     });
@@ -2127,6 +2141,8 @@ async function startQuiz(ws) {
   }
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);
+  lastAnswers=new Array(ws.questions.length).fill(undefined);
+  lastAnswerTokens=new Array(ws.questions.length).fill(undefined);
   wrongAnswers=new Array(ws.questions.length).fill(null).map(()=>({inputs:[],imagePath:null}));
   // 학습지별 필기 보존: wsId별 객체 유지
   if(!window._canvasStoreByWs) window._canvasStoreByWs={};
@@ -2158,6 +2174,9 @@ async function startQuiz(ws) {
           answered[i]=s.correct||false;
           attempts[i]=s.attempts||0;
           wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
+          // 저장된 최종 답안 복원 — 다시 저장할 때 기존 값이 지워지지 않도록
+          if(s.lastAnswer!==undefined&&s.lastAnswer!==null) lastAnswers[i]=s.lastAnswer;
+          if(s.lastAnswerTokens) lastAnswerTokens[i]=s.lastAnswerTokens;
         }      });
       if(_d.isComplete) _wsIsCompleted=true;
       // ── 시험지 시작 시각 복원 (재접속해도 남은 시간 유지) ──
@@ -2972,6 +2991,7 @@ window.submitMulti = function(){
       if(ans.includes(i)) el.className="multi-opt ok";
     });
     fb.className="feedback-strip show fb-correct";
+    recordAnswer(curQIdx, sel);        // 재채점용 최종 답안 기록
     const isLast=curQIdx===curWS.questions.length-1;
     fb.innerHTML=`✅ 정답!&nbsp;
       <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
@@ -3377,6 +3397,7 @@ function submitStep3(stepNum){
       fb.innerHTML=`✅ 맞았어요! ${STEP_TAB_LABELS[stepNum]||(stepNum+1)}단계로 넘어가세요.`;
       setTimeout(()=>renderStep3Q(q,document.getElementById("quiz-left-panel")),700);
     } else {
+      recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
@@ -3749,6 +3770,7 @@ async function submitQAns(){
           cursor:pointer;font-family:inherit">
           ${allAnswered()?'결과 보기 →':'다음 문제 →'}
         </button>`;
+        recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
     } else {
       attempts[curQIdx]++;
@@ -3811,6 +3833,7 @@ async function submitQAns(){
         cursor:pointer;font-family:inherit">
         ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
+      recordAnswer(curQIdx, (typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     attempts[curQIdx]++;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.25">
+<meta name="app-version" content="3.26">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -220,7 +220,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=8.25"></script>
+<script src="grading.js?v=8.26"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.25";
+const VERSION = "3.26";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용

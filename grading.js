@@ -23,65 +23,91 @@ function evalAnswer(s){
   catch(e){ const n=parseFloat(s); return isNaN(n)?NaN:n; }
 }
 
-function eqEquivCheck(userEq, correctEq){
-  function normEq(s){
-    s=String(s).toLowerCase().replace(/\s+/g,'').replace(/−/g,'-').replace(/×/g,'*');
-    let prev;
-    do{prev=s;
-      s=s.replace(/(\d|\)|x)\(/g,'$1*(');
-      s=s.replace(/\)(\d|x|\()/g,')*$1');
-      s=s.replace(/(\d)x/g,'$1*x');
-      s=s.replace(/x(\d)/g,'x*$1');
-    }while(prev!==s);
-    return s;
-  }
-  function evalSide(s,x){
-    try{
-      let t=normEq(s).replace(/\^/g,'**').replace(/x/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-      return Function('"use strict";return('+t+')')();
-    }catch(e){return NaN;}
-  }
+/* ── 다변수 수식 평가 ──
+   예전에는 모든 문자를 '같은 값'으로 치환해서
+     · x²y 와 xy² 가 같은 식으로 판정됨(오답을 정답 처리)
+   또 방정식 판정은 x만 치환할 수 있어
+     · y가 들어간 식은 계산 자체가 불가능(정답도 오답 처리)
+   → 변수마다 서로 다른 값을 대입해 평가한다. */
+function _envsFor(vars){
+  const seeds=[
+    [ 1.7,  2.3,  3.1,  4.7,  5.3,  6.1],
+    [-2.1,  3.7, -1.3,  2.9, -4.1,  1.9],
+    [ 0.6, -1.4,  2.2, -3.8,  1.1, -0.7],
+    [ 3.3,  1.2, -2.6,  4.4, -1.8,  2.5],
+    [-0.9, -2.7,  1.6,  3.2, -3.4,  0.8],
+  ];
+  return seeds.map(seed=>{
+    const env={};
+    vars.forEach((v,i)=>{ env[v]=seed[i%seed.length]; });
+    return env;
+  });
+}
+
+function _evalMulti(s, env){
   try{
-    const uParts=userEq.split('=');
-    const cParts=correctEq.split('=');
-    if(uParts.length!==2||cParts.length!==2) return false;
-    const pts=[0.317,1.234,-2.57,4.91,-0.718,7.37];
+    let t=String(s).toLowerCase().replace(/\s/g,'')
+      .replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/')
+      .replace(/math\.sqrt\(/g,'sqrt(')
+      .replace(/\*\*/g,'^');
+    let g=0;
+    while(/sqrt\(/.test(t) && g++<12) t=t.replace(/sqrt\(([^()]*)\)/g,(_,v)=>`((${v})^0.5)`);
+    if(/sqrt/.test(t)) return NaN;
+    let prev;
+    do{prev=t;
+      t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
+      t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
+      t=t.replace(/(\d)([a-z])/g,'$1*$2');
+      t=t.replace(/([a-z])(\d)/g,'$1*$2');
+      t=t.replace(/([a-z])([a-z])/g,'$1*$2');
+    }while(prev!==t);
+    let bad=false;
+    t=t.replace(/[a-z]/g, ch=>{
+      const v=env[ch];
+      if(typeof v!=='number'||!isFinite(v)){ bad=true; return '0'; }
+      return `(${v})`;
+    });
+    if(bad) return NaN;
+    t=t.replace(/\^/g,'**');
+    if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
+    const r=Function('"use strict";return('+t+')')();
+    return (typeof r==='number'&&isFinite(r))?r:NaN;
+  }catch(e){ return NaN; }
+}
+
+/* 두 값이 사실상 같은가 (값이 커질 때를 대비한 상대 비교) */
+function _numEq(a,b){ return Math.abs(a-b) < 1e-6*Math.max(1,Math.abs(a),Math.abs(b)); }
+
+function eqEquivCheck(userEq, correctEq){
+  try{
+    const u=String(userEq).split('='), c=String(correctEq).split('=');
+    if(u.length!==2||c.length!==2) return false;
+    const vars=[...new Set((varsOf(userEq)+varsOf(correctEq)).split(''))].filter(Boolean);
     let ratio=null;
-    for(const x of pts){
-      const du=evalSide(uParts[0],x)-evalSide(uParts[1],x);
-      const dc=evalSide(cParts[0],x)-evalSide(cParts[1],x);
+    for(const env of _envsFor(vars)){
+      const du=_evalMulti(u[0],env)-_evalMulti(u[1],env);
+      const dc=_evalMulti(c[0],env)-_evalMulti(c[1],env);
       if(!isFinite(du)||!isFinite(dc)) return false;
-      if(Math.abs(dc)<1e-9){if(Math.abs(du)>1e-6) return false; continue;}
+      if(Math.abs(dc)<1e-9){ if(Math.abs(du)>1e-6) return false; continue; }
       const r=du/dc;
       if(ratio===null) ratio=r;
       else if(Math.abs(r-ratio)>1e-6) return false;
     }
     return ratio!==null&&Math.abs(ratio)>1e-9;
-  }catch(e){return false;}
+  }catch(e){ return false; }
 }
 
 function exprEquivCheck(userExpr, correctExpr){
-  function ev(s,x){
-    try{
-      let t=String(s).toLowerCase().replace(/\s/g,'').replace(/−/g,'-').replace(/×/g,'*');
-      let prev;
-      do{prev=t;
-        t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
-        t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
-        t=t.replace(/(\d)([a-z])/g,'$1*$2');
-        t=t.replace(/([a-z])(\d)/g,'$1*$2');
-      }while(prev!==t);
-      t=t.replace(/\^/g,'**').replace(/[a-z]/g,`(${x})`);
-      if(!/^[\d+\-*/().\s]+$/.test(t.replace(/\*\*/g,''))) return NaN;
-      return Function('"use strict";return('+t+')')();
-    }catch(e){return NaN;}
-  }
-  const pts=[1,-1,2,-2,0.5,3];
-  return pts.every(x=>{
-    const uv=ev(userExpr,x), cv=ev(correctExpr,x);
-    return isFinite(uv)&&isFinite(cv)&&Math.abs(uv-cv)<0.001;
+  if(varsOf(userExpr)!==varsOf(correctExpr)) return false;   // 변수·단위가 다르면 다른 식
+  const vars=varsOf(userExpr).split('').filter(Boolean);
+  let any=false;
+  const ok=_envsFor(vars).every(env=>{
+    const uv=_evalMulti(userExpr,env), cv=_evalMulti(correctExpr,env);
+    if(!isFinite(uv)||!isFinite(cv)) return false;
+    any=true;
+    return _numEq(uv,cv);
   });
+  return any&&ok;
 }
 
 function _examEvExpr(s,x){
@@ -149,20 +175,9 @@ function gradeExamWord(q, ans){
   if(!textMode && (raw.includes('=')||allAns.some(a=>String(a).includes('=')))){
     try{ if(allAns.some(a=>eqEquivCheck(raw,String(a)))) return true; }catch(e){}
   }
-  // 2) 수식 동치 (여러 값 대입) — 쓰인 문자 집합이 같을 때만
-  const pts=[1,-1,2,-2,0.5,3];
+  // 2) 수식 동치 — 변수마다 다른 값을 대입해 비교 (exprEquivCheck와 동일 규칙)
   if(!textMode) try{
-    if(allAns.some(a=>{
-      if(varsOf(raw)!==varsOf(a)) return false;   // 단위·변수명이 다르면 다른 답
-      let any=false;
-      const okAll=pts.every(x=>{
-        const uv=_examEvExpr(raw,x), av=_examEvExpr(String(a),x);
-        if(!isFinite(uv)||!isFinite(av)) return false;
-        any=true;
-        return Math.abs(uv-av)<0.001;
-      });
-      return any&&okAll;
-    })) return true;
+    if(allAns.some(a=>exprEquivCheck(raw, String(a)))) return true;
   }catch(e){}
   // 3) 텍스트 정규화 비교 — 일반 모드와 동일한 normW
   const normW=s=>String(s||"").replace(/−/g,"-").replace(/\s*,\s*/g,",")

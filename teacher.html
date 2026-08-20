@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.29">
+<meta name="app-version" content="3.30">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.29";
+const VERSION = "3.30";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -565,6 +565,23 @@ function fmtCorrectAnswer(wsId, qid){
 }
 
 // ── 학생별 조회: 공용 문항 셀 렌더 ──
+
+/* ── 그래프 문항 판정 (기록이 아니라 학습지 정의 기준) ──
+   기존에는 "drawing 필드가 있으면 그래프"로 판단해서, 그래프를 제출하지 않은 문항은
+   일반 문항 분기로 빠져 **오답 기록이 없다는 이유로 ✓(정답)** 으로 표시됐다. */
+function isGraphQ(wsId, qid){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  return (ws?.questions||[]).some(q=>q.id===qid && q.type==='graph');
+}
+/* 그래프 문항 셀 표시값 (제출 없으면 '미제출') */
+function graphCell(v, label){
+  if(v && v.drawing){
+    return { col: v.correct===true?"var(--green)":v.correct===false?"var(--red)":"var(--amber)",
+             mark: v.correct===true?"⭕":v.correct===false?"❌":"📝",
+             ttl: `${label}: 그래프 ${v.correct===true?'정답':v.correct===false?'오답':'미채점(교사 채점 대기)'}` };
+  }
+  return { col:"var(--ink3)", mark:"—", ttl:`${label}: 그래프 미제출 (학생이 그리지 않음 → 미완료 처리)` };
+}
 function perQCells(r, uid, wsIdArg){
   if(!r || !r.perQuestion) return '<span style="color:var(--ink3);font-size:12px">기록 없음</span>';
   window._qd=window._qd||{};
@@ -576,7 +593,9 @@ function perQCells(r, uid, wsIdArg){
                       : (isExamQ ? false : (wc===0));   // 시험지는 오답기록이 없다고 정답 처리하면 안 됨
     const unanswered = !isExamQ && (v.correct===false) && wc===0 && att===0;
     let col, mark, ttl;
-    if(isExamQ){
+    const _gq = isGraphQ(wsIdArg||r.wsId, qid);
+    if(_gq){ const g=graphCell(v, fmtQid(qid)); col=g.col; mark=g.mark; ttl=g.ttl; }
+    else if(isExamQ){
       // 시험지: 채점 결과가 없으면 '미채점'으로 표시 (정답으로 오인 방지)
       const ansTxt = fmtExamAnswer(v.examAnswer, wsIdArg||r.wsId, qid, v.examSubmittedAt);
       if(v.correct===true){ col="var(--green)"; mark="⭕"; }
@@ -1496,12 +1515,10 @@ window.renderWSTable=function(wsId){
                         : (isExamQ ? false : (wc===0));  // 시험지는 오답기록 없다고 정답 처리 금지
       const unanswered = !isExamQ && (v.correct===false) && wc===0 && att===0;
       let col, mark, ttl;
-      // 그래프 그리기 (drawing 필드 있으면)
-      if(v&&v.drawing){
-        col=v.correct===true?"var(--green)":v.correct===false?"var(--red)":"var(--amber)";
-        mark=v.correct===true?"⭕":v.correct===false?"❌":"📝";
-        ttl=`${fmtQ(qid)}: 그래프`;
-      } else if(isExamQ){
+      // 그래프 문항은 학습지 정의 기준으로 판정 (제출 안 했으면 미제출로 표시)
+      const _gq = isGraphQ(r.wsId||wsId, qid);
+      if(_gq){ const g=graphCell(v, fmtQ(qid)); col=g.col; mark=g.mark; ttl=g.ttl; }
+      else if(isExamQ){
         // 시험지: 미채점을 정답으로 오인하지 않도록 별도 표시 + 제출 답안을 툴팁에 노출
         const ansTxt = fmtExamAnswer(v.examAnswer, r.wsId||wsId, qid, v.examSubmittedAt);
         if(v.correct===true){ col="var(--green)"; mark="⭕"; }
@@ -2273,6 +2290,7 @@ window.showQDetail=function(key){
   const _isExam = d.isExamQ || d.v?.examAnswer!==undefined || d.v?.maxScore!==undefined;
   document.getElementById('qd-title').textContent=
     `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.v?.drawing?' (그래프)'
+      : (d.wsId && isGraphQ(d.wsId, d.qid)) ? " (그래프 · 미제출)"
       : _isExam ? ` (시험지 · ${d.v?.correct===true?'정답':d.v?.correct===false?'오답':'미채점'})`
       : d.unanswered?' (미응답)':` (오답 ${d.wrong}회)`);
   let body='';

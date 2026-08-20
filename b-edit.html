@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.1">
+<meta name="app-version" content="edit-v3.1a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -242,6 +242,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <button class="hdr-btn" id="btn-lock"
         style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d">🔒 잠금</button>
       <button class="hdr-btn btn-publish" id="btn-publish">발행</button>
+      <span style="width:1px;height:20px;background:rgba(255,255,255,.25);margin:0 2px"></span>
+      <button class="hdr-btn" onclick="migrateWsIds()" title="학습지 ID를 단원·표시 순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)"
+        style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 학습지 ID 정리</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -267,10 +270,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <div id="unit-list"></div>
       <div style="padding:8px 12px">
         <div class="sb-add" id="btn-add-unit">＋ 단원 추가</div>
-      </div>
-      <div style="padding:2px 12px 10px;display:flex;flex-direction:column;gap:4px">
-        <div class="sb-add" onclick="migrateWsIds()" style="background:#78350f;color:#fbbf24;font-size:12px" title="학습지 ID를 단원·순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)">🔧 학습지 ID 정리</div>
-        <div class="sb-add" onclick="migrateQuestionIds()" style="background:#78350f;color:#fbbf24;font-size:12px" title="문항 ID를 q01, q02… 순번으로 정리합니다 (학생 기록도 함께 이동)">🔧 문항 ID 정리</div>
       </div>
       <div class="sb-footer">
         <div style="font-size:11px;color:#475569" id="sidebar-status">로딩 중...</div>
@@ -354,9 +353,13 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <!-- 문항 목록 -->
           <div class="q-list-hdr">
             <h3 id="q-list-title">문항 목록</h3>
-            <div style="display:flex;gap:6px" id="add-q-area">
-            <button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>
-          </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <div style="display:flex;gap:6px" id="add-q-area">
+                <button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button>
+              </div>
+              <button class="btn-add-q" onclick="migrateQuestionIds()" title="문항 ID를 q01, q02… 순번으로 정리합니다 (학생 기록도 함께 이동)"
+                style="background:#78350f;color:#fbbf24">🔧 ID 정리</button>
+            </div>
           </div>
           <div id="q-list"></div>
 

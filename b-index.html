@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.27">
+  <meta name="app-version" content="8.28">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.27";
+const VERSION = "8.28";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3017,7 +3017,7 @@ window.submitMulti = function(){
 
 /* ── 3단계 풀이 렌더/채점 ── */
 // 각 문제별 step 상태
-const step3State = {}; // key: q.id → {curStep:1|2|3, done:[false,false,false]}
+const step3State = {}; // key: q.id → {curStep:1|2|3, done:[false,false,false], advTimer:타이머}
 
 function getSteps(q){
   if(Array.isArray(q.steps) && q.steps.length) return q.steps;
@@ -3343,6 +3343,18 @@ function renderStep3Body(q){
 // 다항식/식 동치 판정 (샘플 대입)
 /* exprEquivCheck → grading.js 로 이동 (채점 로직 단일 소스) */
 
+/* 단계 정답 후 다음 단계로 넘어가기를 기다리는 중이면 즉시 넘긴다.
+   학생들은 '엔터=채점, 엔터=다음'이 습관이라 대기(700ms) 중에 두 번째 엔터가 들어온다.
+   이때 예전에는 ① 키패드 단계면 아직 비어 있는 다음 단계를 채점해 ❌가 번쩍이고
+   ② 텍스트 단계면 남아 있던 입력창이 이전 단계를 다시 채점했다. */
+function s3AdvanceNow(q){
+  const st=getS3State(q.id);
+  if(!st.advTimer) return false;
+  clearTimeout(st.advTimer); st.advTimer=null;
+  renderStep3Q(q,document.getElementById("quiz-left-panel"));
+  return true;
+}
+
 function submitStep3(stepNum){
   const q=curWS.questions[curQIdx];
   if(q.type!=="step3") return;
@@ -3350,6 +3362,7 @@ function submitStep3(stepNum){
   if(window._examMode && !window._examEnded){
     return submitExamAns(q);
   }
+  if(s3AdvanceNow(q)) return;   // 다음 단계 대기 중이면 채점 대신 '다음 단계로'
   const steps=getSteps(q);
   const st=getS3State(q.id);
   const i=stepNum-1;
@@ -3359,6 +3372,13 @@ function submitStep3(stepNum){
   const at=step.answerType||'number';
   const isLastStep = stepNum===steps.length;
   const lp=()=>document.getElementById("quiz-left-panel");
+
+  // 빈 답 제출은 오답으로 세지 않고 무시한다 (엔터 연타·실수 입력).
+  const usesKeypad = ['number','expr','equation'].includes(at);
+  const isEmptyAns = usesKeypad
+    ? !(Array.isArray(qTokens) && qTokens.length)
+    : !((document.getElementById("s3-inp")?.value)||"").trim();
+  if(isEmptyAns) return;
 
   let ok=false, userAns="";
   // 키패드 토큰 → 원시 문자열 변환 헬퍼
@@ -3395,21 +3415,31 @@ function submitStep3(stepNum){
       st.curStep=stepNum+1;
       fb.className="feedback-strip show fb-correct";
       fb.innerHTML=`✅ 맞았어요! ${STEP_TAB_LABELS[stepNum]||(stepNum+1)}단계로 넘어가세요.`;
-      setTimeout(()=>renderStep3Q(q,document.getElementById("quiz-left-panel")),700);
+      st.advTimer=setTimeout(()=>{
+        st.advTimer=null;
+        if(curWS?.questions[curQIdx]?.id!==q.id) return;   // 그 사이 다른 문제로 갔으면 무시
+        renderStep3Q(q,document.getElementById("quiz-left-panel"));
+      },700);
     } else {
       recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
-      fb.className="feedback-strip show fb-correct";
-      const isLast=curQIdx===curWS.questions.length-1;
       const dispAns = at==='number' ? (typeof step.answer==='number'?step.answer:step.answer) : step.answer;
-      fb.innerHTML=`✅ 완료! 답: ${dispAns}&nbsp;
+      const doneHtml=`✅ 완료! 답: ${dispAns}&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
           cursor:pointer;font-family:inherit">
           ${allAnswered()?'결과 보기 →':'다음 문제 →'}
         </button>`;
+      // 탭 ✓ 갱신 렌더를 먼저 하고 피드백을 넣는다
+      // (예전 순서는 피드백을 채운 뒤 렌더해서 '다음 문제 →' 버튼이 곧바로 지워졌다)
       renderStep3Q(q,document.getElementById("quiz-left-panel"));
+      const fbDone=document.getElementById("s3-fb");
+      if(fbDone){ fbDone.className="feedback-strip show fb-correct"; fbDone.innerHTML=doneHtml; }
+      // 텍스트 입력은 잠근다 — 포커스가 남아 있으면 다음 엔터가 입력창의 onkeydown으로
+      // 흡수돼(stopPropagation) '다음 문제'가 아니라 빈 답 재채점이 된다.
+      const inpDone=document.getElementById("s3-inp");
+      if(inpDone){ inpDone.value=userAns; inpDone.disabled=true; inpDone.blur(); }
     }
   } else {
     fb.className="feedback-strip show fb-wrong";

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.27">
+<meta name="app-version" content="3.28">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -237,7 +237,7 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.27";
+const VERSION = "3.28";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
 const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
@@ -1830,12 +1830,54 @@ window.addClass=async function(){
 };
 window.deleteClass=async function(key){
   if(scopedTeacher){ alert("담당 교사 계정은 학급을 삭제할 수 없습니다."); return; }
-  if(!confirm(`${classes[key]?.year}학년도 ${classes[key]?.grade}학년 ${classes[key]?.classNum}반을 삭제할까요?`)) return;
-  const hadTeacher=!!classes[key]?.teacher;
+  const cls=classes[key];
+  const clsLabel=`${cls?.year}학년도 ${cls?.grade}학년 ${cls?.classNum}반`;
+  if(!confirm(`${clsLabel}을 삭제할까요?`)) return;
+
+  // ── 학습 기록도 함께 지울지 확인 ──
+  // 다른 학급에도 등록된 학생은 대상에서 제외한다(그 학급에서 계속 쓰는 기록이므로)
+  const others=new Set();
+  for(const [k,c] of Object.entries(classes)){
+    if(k===key) continue;
+    (c.students||[]).forEach(e=>others.add(String(e).toLowerCase()));
+  }
+  const targets=(cls?.students||[]).map(e=>String(e).toLowerCase()).filter(e=>!others.has(e));
+  const shared=(cls?.students||[]).length-targets.length;
+  let recCount=0;
+  targets.forEach(e=>{ recCount+=Object.keys(allData[e]||{}).length; });
+
+  let purge=false;
+  if(targets.length && recCount){
+    purge=confirm(`이 학급 학생들의 학습 기록도 함께 삭제할까요?\n\n`
+      + `• 대상 학생: ${targets.length}명\n`
+      + `• 삭제될 학습 기록: ${recCount}건 (푼 문제·점수·필기 전부)\n`
+      + (shared ? `• 다른 학급에도 있는 학생 ${shared}명의 기록은 남깁니다\n` : '')
+      + `\n[확인] 학급과 학습 기록 모두 삭제\n[취소] 학급만 삭제하고 기록은 보존`);
+    if(purge && !confirm(`⚠️ 마지막 확인\n\n학생 ${targets.length}명의 학습 기록 ${recCount}건을 영구 삭제합니다.\n되돌릴 수 없습니다. 정말 진행할까요?`)) purge=false;
+  }
+
+  // 1) 학급 삭제 (setDoc merge는 맵 키 삭제를 반영 못 해 FieldPath+deleteField 사용)
+  const hadTeacher=!!cls?.teacher;
   delete classes[key];
-  // setDoc(merge:true)는 맵 키 삭제를 반영 못 함 → 필드 자체를 삭제 (키에 하이픈이 있어 FieldPath 사용)
   try{ await updateDoc(doc(db,"teacher_data",tUser.uid), new FieldPath("classes",key), deleteField()); }
   catch(e){ console.error("학급 삭제 오류:",e); }
+
+  // 2) 선택 시 학생 기록 삭제 (records/results 모두)
+  if(purge){
+    let ok=0, fail=0;
+    for(const email of targets){
+      for(const wsId of Object.keys(allData[email]||{})){
+        for(const col of ['records','results']){
+          try{ await deleteDoc(doc(db,col,email,'worksheets',wsId)); }
+          catch(e){ if(col==='records'){ fail++; console.warn('[학급 삭제] 기록 삭제 실패',email,wsId,e.message); } }
+        }
+        ok++;
+      }
+      delete allData[email];
+    }
+    alert(`🗑 ${clsLabel} 삭제 완료\n학습 기록 ${ok}건 삭제${fail?` (실패 ${fail}건 — 콘솔 확인)`:''}`);
+  }
+
   syncAllowedEmails();
   if(hadTeacher) await updateTeacherConfig(); // 담당 교사가 있던 학급이면 교사 목록 재계산
   renderClasses();

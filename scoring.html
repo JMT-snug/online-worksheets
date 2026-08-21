@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+, lastGraded
+        gradedAt: new Date().toISOString(),<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.5">
+<meta name="app-version" content="scoring-v1.6">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -423,17 +424,19 @@ function collectWrongGraph(){
       const cls=classMap[String(email).toLowerCase()]||'';
       if(myClsNames && !(cls && myClsNames.has(cls))) return;   // 담당 교사는 담당 학급만
       const qNums=[];
+      let lastGraded=0;   // 이 학습지의 오답 문항 중 가장 최근 채점 시각 (재채점 감지용)
       gq.forEach(q=>{
         const v=(r.perQuestion||{})[q.id];
         if(v && v.correct===false){
           const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
           qNums.push(idx>=0?idx+1:q.id);
+          const g=Date.parse(v.gradedAt||"")||0; if(g>lastGraded) lastGraded=g;
         }
       });
       if(!qNums.length) return;
       const key=cls||'(학급 미지정)';
       ((out[ws.id]=out[ws.id]||{})[key]=out[ws.id][key]||[]).push({
-        email, name:r.studentName||email.split('@')[0], cls:key, qNums
+        email, name:r.studentName||email.split("@")[0], cls:key, qNums, lastGraded
       });
     });
   });
@@ -472,32 +475,53 @@ async function loadChatHistory(){
 /* 24시간 이내에 같은 학습지·같은 문항으로 이미 보냈는지
    · 24시간 이내 + 문항 동일 → 재발송 안 함
    · 24시간 지났으면 같은 내용이라도 다시 보냄 (재촉 목적) */
-function alreadyNotified(email, wsId, qNums){
+/* 발송 여부 판정
+   'new'   : 이력 없음(또는 24시간 경과) → 평소 문구로 발송
+   'retry' : 24시간 이내 같은 문항이지만 **발송 이후 다시 채점**됨
+             (학생이 고쳐서 냈는데 또 틀린 경우) → '다시 확인' 문구로 발송
+   'skip'  : 24시간 이내 + 같은 문항 + 새 채점 없음 → 발송 안 함 */
+function notifyStatus(email, wsId, qNums, lastGraded){
   const sig=[...qNums].join(',');
   const cut=Date.now()-24*60*60*1000;
-  return _chatHist.some(h=>h.email===email && h.wsId===wsId && h.q===sig && Date.parse(h.at)>=cut);
+  let lastSent=0;
+  _chatHist.forEach(h=>{
+    if(h.email!==email || h.wsId!==wsId || h.q!==sig) return;
+    const t=Date.parse(h.at)||0;
+    if(t>lastSent) lastSent=t;
+  });
+  if(!lastSent || lastSent<cut) return 'new';          // 이력 없음 / 하루 지남
+  return (lastGraded && lastGraded>lastSent) ? 'retry' : 'skip';
 }
 
 function buildChatMessages(){
   const picked=[...document.querySelectorAll('.chat-cell:checked')].map(c=>({ws:c.dataset.ws, cls:c.dataset.cls}));
-  const byStudent={};   // email → {name, items:[{wsId,title,qNums}]}
-  let skipped=0;
+  const byStudent={};   // email → {name, cls, items:[{wsId,title,qNums,retry}]}
+  let skipped=0, retried=0;
   picked.forEach(({ws,cls})=>{
     (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
-      if(alreadyNotified(s.email, ws, s.qNums)){ skipped++; return; }   // 24시간 이내 동일 내용 → 제외
+      const st=notifyStatus(s.email, ws, s.qNums, s.lastGraded);
+      if(st==='skip'){ skipped++; return; }            // 24시간 이내 + 새 채점 없음
+      if(st==='retry') retried++;                       // 고쳐 냈는데 또 틀림 → 문구 변경
       const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
       const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
-      e.items.push({wsId:ws, title, qNums:s.qNums});
+      e.items.push({wsId:ws, title, qNums:s.qNums, retry:st==='retry'});
     });
   });
-  window._chatSkipped=skipped;
-  return Object.entries(byStudent).map(([email,v])=>({
-    email, name:v.name, cls:v.cls,
-    items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.qNums})),
-    text:`📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 다시 풀어야 할 문제가 있어요.\n\n`
-      + v.items.map(it=>`• ${it.title}: ${it.qNums.map(n=>n+'번').join(', ')}`).join('\n')
-      + `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`
-  }));
+  window._chatSkipped=skipped; window._chatRetried=retried;
+  const link=`${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`;
+  return Object.entries(byStudent).map(([email,v])=>{
+    const allRetry=v.items.every(it=>it.retry);
+    const head = allRetry
+      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
+      : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 다시 풀어야 할 문제가 있어요.\n\n`;
+    const lines = v.items.map(it=>`• ${it.title}: ${it.qNums.map(n=>n+'번').join(', ')}${(!allRetry&&it.retry)?' (다시 확인)':''}`).join('\n');
+    const tail = allRetry
+      ? `\n\n선생님 첨삭과 피드백을 먼저 확인한 뒤 고쳐서 제출해 주세요.\n${link}`
+      : `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${link}`;
+    return { email, name:v.name, cls:v.cls, retry:allRetry,
+             items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.qNums})),
+             text: head + lines + tail };
+  });
 }
 
 window.openChatNotify=async function(){
@@ -565,7 +589,8 @@ window.refreshChatPreview=function(){
   const skipped=window._chatSkipped||0;
   if(btn) btn.disabled=!msgs.length;
   if(st) st.textContent = (msgs.length?`대상 ${msgs.length}명`:'')
-    + (skipped?`${msgs.length?' · ':''}⏱ 24시간 내 같은 내용으로 보낸 ${skipped}건 제외`:'');
+    + (window._chatRetried?`${msgs.length?" · ":""}🔁 재채점 후 또 오답 ${window._chatRetried}건(다시 확인 문구)`:"")
+    + (skipped?`${(msgs.length||window._chatRetried)?" · ":""}⏱ 24시간 내 같은 내용 ${skipped}건 제외`:"");
   if(!box) return;
   if(!msgs.length){
     box.textContent = skipped
@@ -993,6 +1018,7 @@ window.saveCurrent = async function(){
     const upd = {
       [`perQuestion.${curQid}.correct`]: (_curJudgment===undefined ? null : _curJudgment),
       [`perQuestion.${curQid}.feedback`]: feedback || null,
+      [`perQuestion.${curQid}.gradedAt`]: new Date().toISOString(),   // 재채점 여부 판단용 (챗 알림)
     };
     // 시험지 문항이면 점수도 판정과 함께 기록 — correct만 쓰면 '⭕인데 0점' 모순 데이터가 됨
     const _ws = WORKSHEETS.find(w=>w.id===curWsId);
@@ -1010,11 +1036,13 @@ window.saveCurrent = async function(){
       await setDoc(ref, { perQuestion: { [curQid]: {
         correct: (_curJudgment===undefined ? null : _curJudgment),
         feedback: feedback || null,
+        gradedAt: new Date().toISOString(),
         ...(teacherDrawing ? {teacherDrawing} : {}),
       } } }, {merge:true});
     }
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
+    stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
     toast('✅ 저장');
     // 필터 재적용

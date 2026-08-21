@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.3">
+<meta name="app-version" content="scoring-v1.4">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -132,12 +132,30 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .td-btn.active{background:var(--acc-lt);border-color:var(--accent);color:var(--accent);font-weight:700}
 .td-color{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer}
 .td-color.active{border-color:var(--ink)}
+/* ── 💬 챗 알림 모달 ── */
+#chat-modal{position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+#chat-box{background:#fff;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3);width:min(96vw,880px);max-height:90vh;overflow:auto;padding:20px 22px}
+#chat-box h3{font-size:16px;font-weight:800;margin-bottom:4px}
+#chat-box .sub{font-size:12px;color:#6b7280;margin-bottom:14px}
+.chat-grid{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:14px}
+.chat-grid th,.chat-grid td{border:1px solid #e5e7eb;padding:6px 8px;text-align:center}
+.chat-grid th{background:#f8fafc;font-weight:700;position:sticky;top:0}
+.chat-grid td.wsname{text-align:left;font-weight:600;max-width:280px}
+.chat-grid td.zero{background:#fafafa;color:#cbd5e1}
+.chat-cnt{font-size:10px;color:#dc2626;font-weight:700;margin-left:3px}
+#chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
+.chat-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.chat-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#374151}
+.chat-btn.go{background:#16a34a;border-color:#16a34a;color:#fff}
+.chat-btn:disabled{opacity:.5;cursor:default}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="hdr-left"></div>
+  <div class="hdr-left">
+    <button class="hdr-btn" id="btn-chat-notify" onclick="openChatNotify()" title="틀린 그래프 문제가 있는 학생에게 구글 챗으로 안내를 보냅니다">💬 챗 알림</button>
+  </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">그래프 수동 채점<em>+</em></div>
     <span id="scoring-version" style="font-size:11px;color:rgba(255,255,255,.5);font-weight:400"></span>
@@ -388,6 +406,159 @@ async function loadAllRecords(){
   }catch(e){ console.error(e); }
 }
 
+
+/* ══════════════ 💬 구글 챗 알림 ══════════════
+   그래프 문항이 틀린(❌) 학생에게 "학습지 이름 + 문제 번호"를 1:1 채팅으로 안내한다.
+   발송은 Apps Script 웹앱(config/errorReports.webAppUrl)이 대신 수행 — 학생 권한 팝업 없음.
+   ⚠️ 스크립트에 Google Chat API 서비스를 추가하고 새 버전으로 재배포해야 동작한다. */
+
+/* 그래프 문항이 틀린 학생 모으기 → { wsId: { 반이름: [ {email,name,cls,qNums[]} ] } } */
+function collectWrongGraph(){
+  const out={};
+  WORKSHEETS.forEach(ws=>{
+    const gq=(ws.questions||[]).filter(q=>q.type==='graph');
+    if(!gq.length) return;
+    const recs=allRecords[ws.id]||{};
+    Object.entries(recs).forEach(([email,r])=>{
+      const cls=classMap[String(email).toLowerCase()]||'';
+      if(myClsNames && !(cls && myClsNames.has(cls))) return;   // 담당 교사는 담당 학급만
+      const qNums=[];
+      gq.forEach(q=>{
+        const v=(r.perQuestion||{})[q.id];
+        if(v && v.correct===false){
+          const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
+          qNums.push(idx>=0?idx+1:q.id);
+        }
+      });
+      if(!qNums.length) return;
+      const key=cls||'(학급 미지정)';
+      ((out[ws.id]=out[ws.id]||{})[key]=out[ws.id][key]||[]).push({
+        email, name:r.studentName||email.split('@')[0], cls:key, qNums
+      });
+    });
+  });
+  return out;
+}
+
+/* 선택된 (학습지 × 학급) 칸을 모아 학생별 메시지 생성 */
+function buildChatMessages(){
+  const picked=[...document.querySelectorAll('.chat-cell:checked')].map(c=>({ws:c.dataset.ws, cls:c.dataset.cls}));
+  const byStudent={};   // email → {name, items:[{title,qNums}]}
+  picked.forEach(({ws,cls})=>{
+    (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
+      const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
+      const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
+      e.items.push({title, qNums:s.qNums});
+    });
+  });
+  return Object.entries(byStudent).map(([email,v])=>({
+    email, name:v.name, cls:v.cls,
+    text:`📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 다시 풀어야 할 문제가 있어요.\n\n`
+      + v.items.map(it=>`• ${it.title}: ${it.qNums.map(n=>n+'번').join(', ')}`).join('\n')
+      + `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`
+  }));
+}
+
+window.openChatNotify=function(){
+  window._wrongMap=collectWrongGraph();
+  const wsIds=Object.keys(window._wrongMap);
+  const clsSet=new Set();
+  wsIds.forEach(w=>Object.keys(window._wrongMap[w]).forEach(c=>clsSet.add(c)));
+  const classes=[...clsSet].sort((a,b)=>a.localeCompare(b,'ko'));
+
+  const wrap=document.createElement('div');
+  wrap.id='chat-modal';
+  wrap.onclick=e=>{ if(e.target===wrap) closeChatNotify(); };
+
+  let grid='';
+  if(!wsIds.length){
+    grid=`<div style="padding:24px;text-align:center;color:#6b7280">❌ 오답으로 채점된 그래프 문제가 없습니다.<br><span style="font-size:12px">(채점을 먼저 진행하거나, 미채점 문항을 확인해 주세요)</span></div>`;
+  }else{
+    grid=`<table class="chat-grid">
+      <thead><tr><th style="text-align:left">학습지 \ 학급</th>
+        ${classes.map(c=>`<th>${c}<br><label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
+      </tr></thead><tbody>
+      ${wsIds.map(w=>{
+        const title=WORKSHEETS.find(x=>x.id===w)?.title||w;
+        return `<tr>
+          <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
+          ${classes.map(c=>{
+            const list=window._wrongMap[w][c]||[];
+            if(!list.length) return `<td class="zero">·</td>`;
+            return `<td><label style="cursor:pointer"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span></label></td>`;
+          }).join('')}
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+  }
+
+  wrap.innerHTML=`<div id="chat-box">
+    <h3>💬 그래프 오답 안내 보내기</h3>
+    <div class="sub">체크한 칸(학습지 × 학급)의 <b>오답이 있는 학생</b>에게 구글 챗으로 1:1 안내를 보냅니다. 숫자는 대상 인원입니다.</div>
+    ${grid}
+    <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
+    <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>
+    <div class="chat-foot">
+      <span id="chat-status" style="margin-right:auto;font-size:12px;color:#6b7280"></span>
+      <button class="chat-btn" onclick="closeChatNotify()">닫기</button>
+      <button class="chat-btn go" id="chat-send-btn" onclick="sendChatNotify()" disabled>보내기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+};
+window.closeChatNotify=function(){ document.getElementById('chat-modal')?.remove(); };
+window.toggleChatRow=function(ws,on){
+  document.querySelectorAll(`.chat-cell[data-ws="${ws}"]`).forEach(c=>{ c.checked=on; });
+  refreshChatPreview();
+};
+window.toggleChatCol=function(cls,on){
+  document.querySelectorAll(`.chat-cell[data-cls="${cls}"]`).forEach(c=>{ c.checked=on; });
+  refreshChatPreview();
+};
+window.refreshChatPreview=function(){
+  const msgs=buildChatMessages();
+  const box=document.getElementById('chat-preview');
+  const btn=document.getElementById('chat-send-btn');
+  if(btn) btn.disabled=!msgs.length;
+  if(!box) return;
+  if(!msgs.length){ box.textContent='칸을 선택하면 여기에 표시됩니다.'; return; }
+  box.textContent = msgs.map(m=>`── ${m.name} (${m.cls}) ${m.email}\n${m.text}`).join('\n\n');
+  const st=document.getElementById('chat-status');
+  if(st) st.textContent=`대상 ${msgs.length}명`;
+};
+
+window.sendChatNotify=async function(){
+  const msgs=buildChatMessages();
+  if(!msgs.length){ alert('보낼 대상이 없습니다.'); return; }
+  let url='', token='snug-error-report';
+  try{
+    const snap=await getDoc(doc(db,'config','errorReports'));
+    if(snap.exists()){ url=snap.data().webAppUrl||''; token=snap.data().token||token; }
+  }catch(e){}
+  if(!url){ alert('발송 서버가 설정되지 않았습니다.\nreport.html의 [⚙️ 신고 서버 설정]에서 Apps Script 웹앱 주소를 등록해 주세요.'); return; }
+  if(!confirm(`학생 ${msgs.length}명에게 구글 챗으로 안내를 보냅니다.\n\n${msgs.slice(0,5).map(m=>`· ${m.name}(${m.cls})`).join('\n')}${msgs.length>5?`\n… 외 ${msgs.length-5}명`:''}\n\n보낼까요?`)) return;
+
+  const btn=document.getElementById('chat-send-btn');
+  const st=document.getElementById('chat-status');
+  if(btn){ btn.disabled=true; btn.textContent='보내는 중…'; }
+  try{
+    const res=await fetch(url,{
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token, action:'chat', messages: msgs.map(m=>({email:m.email, text:m.text})) })
+    });
+    const out=await res.json();
+    if(!out || !out.ok) throw new Error(out?.error||'서버 응답 오류');
+    const failed=(out.failed||[]).length;
+    alert(`💬 발송 완료: ${out.sent}명${failed?`\n실패 ${failed}명 (콘솔 확인)`:''}`);
+    if(failed) console.warn('[챗 발송 실패]', out.failed);
+    closeChatNotify();
+  }catch(e){
+    alert('발송 실패: '+e.message
+      + '\n\n확인할 점\n· Apps Script에 [서비스]→Google Chat API를 추가했는지\n· 코드 수정 후 새 버전으로 다시 배포했는지');
+    if(btn){ btn.disabled=false; btn.textContent='보내기'; }
+    if(st) st.textContent='';
+  }
+};
 function buildWsSelector(){
   const sel = document.getElementById('sel-ws');
   sel.innerHTML = '<option value="">-- 학습지 선택 --</option>' +

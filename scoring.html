@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.6">
+<meta name="app-version" content="scoring-v1.6a">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -621,10 +621,14 @@ window.sendChatNotify=async function(){
     });
     const out=await res.json();
     if(!out || !out.ok) throw new Error(out?.error||'서버 응답 오류');
-    const failed=(out.failed||[]).length;
-    alert(`💬 발송 완료: ${out.sent}명${failed?`\n실패 ${failed}명 (콘솔 확인)`:''}`);
-    if(failed) console.warn('[챗 발송 실패]', out.failed);
-    closeChatNotify();
+    const fails=out.failed||[];
+    if(fails.length) console.warn('[챗 발송 실패]', fails);
+    // 실패 사유를 화면에도 보여준다 (콘솔을 열지 않아도 원인 파악 가능)
+    const reasons=[...new Set(fails.map(f=>String(f.error||'').replace(/\s+/g,' ').slice(0,180)))];
+    alert(`💬 발송 결과\n\n성공 ${out.sent}명 / 실패 ${fails.length}명`
+      + (reasons.length?`\n\n실패 사유\n${reasons.slice(0,3).map(r=>'· '+r).join('\n')}`
+        + `\n\n자주 있는 원인\n· Apps Script를 [새 버전]으로 다시 배포하지 않아 Chat 권한이 반영 안 됨\n· Google Cloud에서 Google Chat API가 사용 설정되지 않음`:''));
+    if(!fails.length) closeChatNotify();
   }catch(e){
     alert('발송 실패: '+e.message
       + '\n\n확인할 점\n· Apps Script에 [서비스]→Google Chat API를 추가했는지\n· 코드 수정 후 새 버전으로 다시 배포했는지');

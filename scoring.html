@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.4">
+<meta name="app-version" content="scoring-v1.5">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -441,25 +441,67 @@ function collectWrongGraph(){
 }
 
 /* 선택된 (학습지 × 학급) 칸을 모아 학생별 메시지 생성 */
+
+/* 이 학생의 이 학습지에 "제출됐지만 아직 채점되지 않은 그래프"가 남아 있는지
+   (지금 채점 중인 문항 judgeNow까지 반영) — 평일 아침 미채점 알림의 근거 필드 */
+function stillPendingGraph(email, wsId, gradedQid, judgeNow){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const rec=(allRecords[wsId]||{})[email];
+  if(!ws || !rec) return false;
+  return (ws.questions||[]).some(q=>{
+    if(q.type!=='graph') return false;
+    const v=(rec.perQuestion||{})[q.id];
+    if(!v || !v.drawing) return false;                 // 제출 안 한 문항은 채점 대상 아님
+    const c = (q.id===gradedQid) ? (judgeNow===undefined?null:judgeNow) : v.correct;
+    return c===null || c===undefined;                  // 미채점이면 남아 있음
+  });
+}
+/* 최근 발송 이력 (Apps Script 웹앱에서 로드) — [{at,email,wsId,q}] */
+let _chatHist=[];
+async function loadChatHistory(){
+  _chatHist=[];
+  try{
+    const snap=await getDoc(doc(db,'config','errorReports'));
+    const url=snap.exists()?(snap.data().webAppUrl||''):'';
+    if(!url) return;
+    const res=await fetch(url+(url.includes('?')?'&':'?')+'action=chatHistory&days=7');
+    const out=await res.json();
+    if(out&&out.ok) _chatHist=out.history||[];
+  }catch(e){ console.warn('[챗 이력 로드 실패 — 중복 검사 없이 진행]', e.message); }
+}
+/* 24시간 이내에 같은 학습지·같은 문항으로 이미 보냈는지
+   · 24시간 이내 + 문항 동일 → 재발송 안 함
+   · 24시간 지났으면 같은 내용이라도 다시 보냄 (재촉 목적) */
+function alreadyNotified(email, wsId, qNums){
+  const sig=[...qNums].join(',');
+  const cut=Date.now()-24*60*60*1000;
+  return _chatHist.some(h=>h.email===email && h.wsId===wsId && h.q===sig && Date.parse(h.at)>=cut);
+}
+
 function buildChatMessages(){
   const picked=[...document.querySelectorAll('.chat-cell:checked')].map(c=>({ws:c.dataset.ws, cls:c.dataset.cls}));
-  const byStudent={};   // email → {name, items:[{title,qNums}]}
+  const byStudent={};   // email → {name, items:[{wsId,title,qNums}]}
+  let skipped=0;
   picked.forEach(({ws,cls})=>{
     (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
+      if(alreadyNotified(s.email, ws, s.qNums)){ skipped++; return; }   // 24시간 이내 동일 내용 → 제외
       const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
       const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
-      e.items.push({title, qNums:s.qNums});
+      e.items.push({wsId:ws, title, qNums:s.qNums});
     });
   });
+  window._chatSkipped=skipped;
   return Object.entries(byStudent).map(([email,v])=>({
     email, name:v.name, cls:v.cls,
+    items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.qNums})),
     text:`📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 다시 풀어야 할 문제가 있어요.\n\n`
       + v.items.map(it=>`• ${it.title}: ${it.qNums.map(n=>n+'번').join(', ')}`).join('\n')
       + `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`
   }));
 }
 
-window.openChatNotify=function(){
+window.openChatNotify=async function(){
+  await loadChatHistory();   // 24시간 중복 발송 방지용 이력
   window._wrongMap=collectWrongGraph();
   const wsIds=Object.keys(window._wrongMap);
   const clsSet=new Set();
@@ -519,14 +561,20 @@ window.refreshChatPreview=function(){
   const msgs=buildChatMessages();
   const box=document.getElementById('chat-preview');
   const btn=document.getElementById('chat-send-btn');
-  if(btn) btn.disabled=!msgs.length;
-  if(!box) return;
-  if(!msgs.length){ box.textContent='칸을 선택하면 여기에 표시됩니다.'; return; }
-  box.textContent = msgs.map(m=>`── ${m.name} (${m.cls}) ${m.email}\n${m.text}`).join('\n\n');
   const st=document.getElementById('chat-status');
-  if(st) st.textContent=`대상 ${msgs.length}명`;
+  const skipped=window._chatSkipped||0;
+  if(btn) btn.disabled=!msgs.length;
+  if(st) st.textContent = (msgs.length?`대상 ${msgs.length}명`:'')
+    + (skipped?`${msgs.length?' · ':''}⏱ 24시간 내 같은 내용으로 보낸 ${skipped}건 제외`:'');
+  if(!box) return;
+  if(!msgs.length){
+    box.textContent = skipped
+      ? `선택한 대상은 모두 24시간 이내에 같은 안내를 받았습니다. (${skipped}건 제외)\n하루가 지나면 다시 보낼 수 있습니다.`
+      : '칸을 선택하면 여기에 표시됩니다.';
+    return;
+  }
+  box.textContent = msgs.map(m=>`── ${m.name} (${m.cls}) ${m.email}\n${m.text}`).join('\n\n');
 };
-
 window.sendChatNotify=async function(){
   const msgs=buildChatMessages();
   if(!msgs.length){ alert('보낼 대상이 없습니다.'); return; }
@@ -544,7 +592,7 @@ window.sendChatNotify=async function(){
   try{
     const res=await fetch(url,{
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ token, action:'chat', messages: msgs.map(m=>({email:m.email, text:m.text})) })
+      body: JSON.stringify({ token, action:"chat", messages: msgs.map(m=>({email:m.email, text:m.text, items:m.items})) })
     });
     const out=await res.json();
     if(!out || !out.ok) throw new Error(out?.error||'서버 응답 오류');
@@ -952,6 +1000,8 @@ window.saveCurrent = async function(){
       const _q = _ws.questions?.find(x=>x.id===curQid);
       upd[`perQuestion.${curQid}.score`] = (_curJudgment===true ? (_q?.score??1) : 0);
     }
+    // 이 학생의 이 학습지에 아직 채점 안 된 그래프가 남았는지 표시 (아침 알림이 이 값을 봄)
+    upd["hasPendingGraph"] = stillPendingGraph(stu.email, curWsId, curQid, _curJudgment);
     if(teacherDrawing) upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
     try{
       await updateDoc(ref, upd);

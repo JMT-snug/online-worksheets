@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.29">
+  <meta name="app-version" content="8.30">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.29";
+const VERSION = "8.30";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3740,6 +3740,7 @@ async function submitQAns(){
           worksheetId: curWS.id,
           worksheetTitle: curWS.title,
           lastUpdated: new Date().toISOString(),
+          hasPendingGraph: true,   // 교사 채점 대기 (scoring에서 채점하면 해제 — 평일 아침 알림 근거)
           perQuestion: {
             [_qId]: {
               drawing: _drawing,

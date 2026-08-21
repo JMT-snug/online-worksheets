@@ -1,10 +1,9 @@
-, lastGraded
-        gradedAt: new Date().toISOString(),<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.6a">
+<meta name="app-version" content="scoring-v1.6b">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -465,9 +464,15 @@ async function loadChatHistory(){
   _chatHist=[];
   try{
     const snap=await getDoc(doc(db,'config','errorReports'));
-    const url=snap.exists()?(snap.data().webAppUrl||''):'';
+    if(!snap.exists()) return;
+    const url=snap.data().webAppUrl||'';
+    const token=snap.data().token||'snug-error-report';
     if(!url) return;
-    const res=await fetch(url+(url.includes('?')?'&':'?')+'action=chatHistory&days=7');
+    // GET은 Apps Script 리다이렉트 때문에 CORS로 막히므로, 발송과 동일하게 POST로 요청
+    const res=await fetch(url,{
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token, action:'chatHistory', days:7 })
+    });
     const out=await res.json();
     if(out&&out.ok) _chatHist=out.history||[];
   }catch(e){ console.warn('[챗 이력 로드 실패 — 중복 검사 없이 진행]', e.message); }

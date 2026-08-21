@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.28">
+  <meta name="app-version" content="8.29">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,7 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.28";
+const VERSION = "8.29";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {
@@ -3708,11 +3708,22 @@ async function submitQAns(){
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="graph"){
     const gc=document.getElementById('graph-answer-canvas');
+    let _regraded=false;
     if(gc){
       const prev=answered[curQIdx]||{};
       // 학생 답안만 PNG(투명 배경)로 저장
       const drawing=gc.toDataURL('image/png');
-      answered[curQIdx]={...prev,drawing};
+      // ★ 그래프를 새로 그려 제출하면 이전 채점 결과(교사 첨삭·피드백·정오답)를 지운다 ★
+      //   예전에는 prev를 그대로 펼쳐 담아, 새 답안 위에 옛 첨삭이 남고 옛 정오답 판정도 유지됐다.
+      _regraded = !!(prev.drawing && prev.drawing!==drawing && (prev.teacherDrawing||prev.feedback||prev.correct!=null));
+      answered[curQIdx] = (prev.drawing && prev.drawing!==drawing)
+        ? {drawing, teacherDrawing:null, feedback:null, correct:null}   // 새 답안 → 다시 채점 대기
+        : {...prev, drawing};
+      if(_regraded){
+        // 화면에 남아 있는 교사 첨삭·피드백·판정 배지도 즉시 정리
+        document.querySelector('#graph-canvas-wrap img')?.remove();
+        renderQuestion();
+      }
     } else {
       answered[curQIdx]=true;
     }
@@ -3737,14 +3748,14 @@ async function submitQAns(){
               feedback: _ans.feedback||null,
             }
           }
-        },{merge:true}).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length))
+        },{merge:true}).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length,_regraded?'(재제출 → 채점 초기화)':''))
           .catch(e=>console.error('[graph 저장 오류]',e.message));
       }
     }
     const fb=document.getElementById('feedback-strip');
     if(fb){
       fb.className='feedback-strip show fb-correct';
-      fb.innerHTML=`<span>✅ 그래프 제출 완료</span>
+      fb.innerHTML=`<span>✅ 그래프 제출 완료${_regraded?' · 선생님 채점은 초기화됐어요':''}</span>
         <button class="btn-next" onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}">다음 문제 →</button>`;
     }
     return;

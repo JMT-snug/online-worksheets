@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.8b">
+<meta name="app-version" content="scoring-v1.9">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,10 +59,31 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .main{max-width:1400px;margin:0 auto;padding:16px 20px 40px}
 
 /* SELECTOR BAR */
-.selector-bar{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.sel-label{font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
-.sel-input{padding:6px 12px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:inherit;background:var(--paper);cursor:pointer;min-width:180px}
+/* ── 필터 바: 1줄 = 필터, 2줄 = 통계 ── */
+.selector-bar{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px}
+.filter-row{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;overflow-x:auto}
+.stat-row{display:flex;align-items:center;gap:12px;border-top:1px solid var(--rule);padding-top:9px}
+.stat-row .stats-bar{flex:1;margin-top:0;justify-content:flex-start}
+.f-item{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
+.sel-label{font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.03em;white-space:nowrap}
+.sel-input{padding:6px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:inherit;background:var(--paper);cursor:pointer}
 .sel-input:focus{outline:none;border-color:var(--accent)}
+.btn-plain{font-weight:600;white-space:nowrap;flex:0 0 auto}
+/* 폭 고정 — 내용이 길어도 줄바꿈 없이 유지 */
+.w-ws{width:230px}
+.w-q{width:92px}
+.w-stu{width:190px}
+.w-cls{width:150px}
+.w-st{width:120px}
+/* 채점 모드: 학습지 → 문항 → 학급 → 상태 */
+.f-ws{order:1}.f-q{order:2}.f-cls{order:3}.f-st{order:4}.f-reset{order:9;margin-left:auto}
+.f-stu{display:none}
+/* 피드백 모드: 학급 → 학생 → 학습지 → 상태 (문항은 ◀▶로 넘기므로 숨김) */
+body.mode-feedback .f-cls{order:1}
+body.mode-feedback .f-stu{display:inline-flex;order:2}
+body.mode-feedback .f-ws{order:3}
+body.mode-feedback .f-st{order:4}
+body.mode-feedback .f-q{display:none}
 
 /* GRADING VIEW */
 .grade-cols{display:grid;grid-template-columns:1fr 1.2fr;gap:16px;align-items:start}
@@ -153,10 +174,6 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .mode-btn{padding:5px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.7)}
 .mode-btn:hover{background:rgba(255,255,255,.12);color:#fff}
 .mode-btn.active{background:#fff;color:#111827}
-/* 피드백 모드에서만 보이는 학생 선택 */
-#stu-filter-wrap{display:none;align-items:center;gap:6px}
-body.mode-feedback #stu-filter-wrap{display:inline-flex}
-body.mode-feedback #q-filter-wrap{opacity:.55}
 </style>
 </head>
 <body>
@@ -204,28 +221,30 @@ body.mode-feedback #q-filter-wrap{opacity:.55}
   <div class="main">
     <!-- 학습지/문항 선택 -->
     <div class="selector-bar">
-      <span class="sel-label">학습지</span>
-      <select class="sel-input" id="sel-ws" onchange="onWsChange()"></select>
-      <span id="q-filter-wrap" style="display:contents">      <span class="sel-label">문항</span>
-      <select class="sel-input" id="sel-q" onchange="onQChange()"></select>
-      </span>
-      <span id="stu-filter-wrap">
-        <span class="sel-label">학생</span>
-        <select class="sel-input" id="sel-stu" onchange="onStuChange()" style="min-width:150px"></select>
-      </span>
-      <span class="sel-label">반</span>
-      <select class="sel-input" id="sel-cls" onchange="onFilterChange()" style="min-width:120px"></select>
-      <span class="sel-label">상태</span>
-      <select class="sel-input" id="sel-status" onchange="onFilterChange()" style="min-width:140px">
-        <option value="all">전체</option>
-        <option value="pending">미채점만</option>
-        <option value="ng">오답만</option>
-        <option value="ok">정답만</option>
-      </select>
-      <div style="flex:1"></div>
-      <button class="sel-input" onclick="resetFilters()" style="cursor:pointer;min-width:auto;font-weight:600" title="학습지·문항·학생·반·상태 선택을 모두 지웁니다">↺ 필터 초기화</button>
-      <button class="sel-input" id="btn-refresh" style="cursor:pointer;min-width:auto;font-weight:600" onclick="refreshRecords(this)" title="학생이 수정한 답안을 최신 상태로 다시 불러옵니다">🔄 새로고침</button>
-      <div id="stats-bar" class="stats-bar" style="margin-top:0"></div>
+      <!-- 1줄: 필터 + 초기화 (순서는 모드에 따라 CSS order로 바뀐다) -->
+      <div class="filter-row">
+        <span class="f-item f-ws"><span class="sel-label">학습지</span>
+          <select class="sel-input w-ws" id="sel-ws" onchange="onWsChange()"></select></span>
+        <span class="f-item f-q"><span class="sel-label">문항</span>
+          <select class="sel-input w-q" id="sel-q" onchange="onQChange()"></select></span>
+        <span class="f-item f-stu"><span class="sel-label">학생</span>
+          <select class="sel-input w-stu" id="sel-stu" onchange="onStuChange()"></select></span>
+        <span class="f-item f-cls"><span class="sel-label">학급</span>
+          <select class="sel-input w-cls" id="sel-cls" onchange="onFilterChange()"></select></span>
+        <span class="f-item f-st"><span class="sel-label">상태</span>
+          <select class="sel-input w-st" id="sel-status" onchange="onFilterChange()">
+            <option value="all">전체</option>
+            <option value="pending">미채점만</option>
+            <option value="ng">오답만</option>
+            <option value="ok">정답만</option>
+          </select></span>
+        <button class="sel-input btn-plain f-reset" onclick="resetFilters()" title="학습지·문항·학생·학급·상태 선택을 모두 지웁니다">↺ 필터 초기화</button>
+      </div>
+      <!-- 2줄: 통계 + 답안 최신화 -->
+      <div class="stat-row">
+        <div id="stats-bar" class="stats-bar"></div>
+        <button class="sel-input btn-plain" id="btn-refresh" onclick="refreshRecords(this)" title="학생이 수정한 답안을 최신 상태로 다시 불러옵니다">🔄 답안 최신화</button>
+      </div>
     </div>
 
     <!-- 채점 화면 -->

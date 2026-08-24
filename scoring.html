@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.6c">
+<meta name="app-version" content="scoring-v1.7">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -265,7 +265,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 
     <div id="empty-view" class="empty-state" style="display:none">
       <h3 style="font-size:18px;margin-bottom:8px">📊 학습지와 그래프 문항을 선택하세요</h3>
-      <p>그래프 문항이 있는 학습지만 표시됩니다.</p>
+      <p id="empty-hint">그래프 문항이 있는 학습지만 표시됩니다. 상태·학급을 먼저 골라도 목록이 좁혀집니다.</p>
     </div>
   </div>
 </div>
@@ -342,7 +342,8 @@ onAuthStateChanged(auth, async u => {
   showPage("main-page");
   await loadCurriculum();
   await loadAllRecords();
-  buildWsSelector();
+  buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
+  refreshFilterOptions();    // 네 목록을 서로 반응하도록 채움
   restoreState();
 });
 
@@ -645,6 +646,100 @@ ${out.logWarn}`:"")
     if(st) st.textContent='';
   }
 };
+
+/* ══════════ 교차 필터(패싯) ══════════
+   학습지·문항·학급·상태 네 가지가 서로 반응한다.
+   예: 상태를 '미채점만'으로 두면, 미채점 답안이 있는 학습지·문항·학급만 목록에 남는다.
+   원리: 어떤 목록을 만들 때는 **그 항목을 뺀 나머지 조건**으로 걸러 후보를 뽑는다(표준 패싯 방식). */
+let graphRows = [];   // {wsId, wsTitle, unitTitle, qid, qIdx, qText, email, name, cls, status}
+
+function statusOf(v){
+  if(!v) return 'pending';
+  return v.correct===true ? 'ok' : v.correct===false ? 'ng' : 'pending';
+}
+
+/* 제출된 그래프 답안을 한 줄씩 펼친 색인 (담당 교사는 담당 학급만) */
+function buildGraphRows(){
+  graphRows = [];
+  WORKSHEETS.forEach(ws=>{
+    const unit = UNITS.find(u=>u.id===ws.unitId);
+    const gq = (ws.questions||[]).filter(q=>q.type==='graph');
+    if(!gq.length) return;
+    const recs = allRecords[ws.id] || {};
+    Object.entries(recs).forEach(([email, r])=>{
+      const cls = classMap[String(email).toLowerCase()] || "";
+      if(myClsNames && !(cls && myClsNames.has(cls))) return;
+      gq.forEach(q=>{
+        const v = (r.perQuestion||{})[q.id];
+        if(!v || !v.drawing) return;                    // 제출한 답안만 채점 대상
+        graphRows.push({
+          wsId: ws.id, wsTitle: ws.title, unitTitle: unit ? unit.title : '',
+          qid: q.id, qIdx: (ws.questions||[]).findIndex(x=>x.id===q.id),
+          qText: q.text || '', email,
+          name: r.studentName || email.split('@')[0],
+          cls, status: statusOf(v)
+        });
+      });
+    });
+  });
+}
+
+/* except에 지정한 항목만 빼고 현재 선택값으로 거른 행 */
+function rowsFiltered(except){
+  return graphRows.filter(r=>
+    (except==='ws'     || !curWsId   || r.wsId===curWsId) &&
+    (except==='q'      || !curQid    || r.qid===curQid) &&
+    (except==='cls'    || !curCls    || r.cls===curCls) &&
+    (except==='status' || !curStatus || curStatus==='all' || r.status===curStatus)
+  );
+}
+
+/* 네 목록을 현재 선택에 맞춰 다시 그린다 (선택값이 목록에서 사라지면 해제) */
+function refreshFilterOptions(){
+  const fill=(id, opts, cur, emptyLabel)=>{
+    const sel=document.getElementById(id); if(!sel) return cur;
+    const valid = opts.some(o=>o.v===cur);
+    sel.innerHTML = `<option value="">${emptyLabel}</option>`
+      + opts.map(o=>`<option value="${o.v}"${o.v===(valid?cur:'')?' selected':''}>${o.t}</option>`).join('');
+    if(!valid) sel.value='';
+    return valid ? cur : '';
+  };
+
+  // 학습지: 학습지 조건만 뺀 나머지로 후보 산출
+  const wsRows=rowsFiltered('ws');
+  const wsMap={};
+  wsRows.forEach(r=>{ (wsMap[r.wsId]=wsMap[r.wsId]||{t:(r.unitTitle?r.unitTitle+' · ':'')+r.wsTitle, n:0}).n++; });
+  curWsId = fill('sel-ws', Object.entries(wsMap).map(([v,o])=>({v, t:`${o.t} (${o.n})`})), curWsId, '-- 학습지 선택 --');
+
+  // 문항: 학습지가 정해졌을 때만 의미 있음
+  const qRows=rowsFiltered('q').filter(r=>!curWsId || r.wsId===curWsId);
+  const qMap={};
+  qRows.forEach(r=>{ (qMap[r.qid]=qMap[r.qid]||{t:`${r.qIdx+1}번 · ${(r.qText||'(제목없음)').replace(/<[^>]*>/g,'').slice(0,30)}`, n:0, i:r.qIdx}).n++; });
+  const qOpts=Object.entries(qMap).sort((a,b)=>a[1].i-b[1].i).map(([v,o])=>({v, t:`${o.t} (${o.n})`}));
+  curQid = fill('sel-q', qOpts, curQid, '-- 문항 선택 --');
+
+  // 학급
+  const clsMapCnt={};
+  rowsFiltered('cls').forEach(r=>{ if(r.cls) clsMapCnt[r.cls]=(clsMapCnt[r.cls]||0)+1; });
+  const clsOpts=Object.keys(clsMapCnt).sort((a,b)=>a.localeCompare(b,'ko')).map(c=>({v:c, t:`${c} (${clsMapCnt[c]})`}));
+  curCls = fill('sel-cls', clsOpts, curCls, '전체 반');
+
+  // 상태: 항목은 고정, 건수만 갱신하고 0건이면 비활성
+  const stRows=rowsFiltered('status');
+  const cnt={ok:0, ng:0, pending:0};
+  stRows.forEach(r=>cnt[r.status]++);
+  const stSel=document.getElementById('sel-status');
+  if(stSel){
+    const total=stRows.length;
+    const labels={all:`전체 (${total})`, pending:`미채점만 (${cnt.pending})`, ng:`오답만 (${cnt.ng})`, ok:`정답만 (${cnt.ok})`};
+    [...stSel.options].forEach(o=>{
+      o.textContent = labels[o.value] || o.textContent;
+      o.disabled = (o.value!=='all' && cnt[o.value]===0);
+    });
+    if(curStatus && curStatus!=='all' && cnt[curStatus]===0){ curStatus='all'; }
+    stSel.value = curStatus || 'all';
+  }
+}
 function buildWsSelector(){
   const sel = document.getElementById('sel-ws');
   sel.innerHTML = '<option value="">-- 학습지 선택 --</option>' +
@@ -690,10 +785,6 @@ function applyFilter(){
   }
   renderStats();
 }
-
-window.onFilterChange = function(){
-  applyFilter();
-};
 
 // 학생이 수정한 답안을 최신으로 다시 로드 (scoring은 로그인 시 1회만 읽으므로)
 window.refreshRecords = async function(btn){
@@ -743,27 +834,38 @@ function restoreState(){
 
 window.onWsChange = function(){
   curWsId = document.getElementById('sel-ws').value;
+  curQid = '';                      // 학습지가 바뀌면 문항 선택 초기화
+  refreshFilterOptions();           // 나머지 목록도 이 선택에 맞춰 갱신
   saveState();
-  const ws = WORKSHEETS.find(w=>w.id===curWsId);
-  const qSel = document.getElementById('sel-q');
-  if(!ws){ qSel.innerHTML=''; document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
-  const graphQs = ws.questions.filter(q => q.type === 'graph');
-  qSel.innerHTML = '<option value="">-- 문항 선택 --</option>' +
-    graphQs.map((q,i) => {
-      const label = `${q.id} · ${(q.text||'(제목없음)').slice(0,40)}`;
-      return `<option value="${q.id}">${label}</option>`;
-    }).join('');
-  document.getElementById('grade-view').style.display='none';
-  document.getElementById('empty-view').style.display='';
+  if(curQid) loadQuestion(); else showEmptyView();
 };
 
 window.onQChange = function(){
   curQid = document.getElementById('sel-q').value;
+  refreshFilterOptions();
   saveState();
-  if(!curQid){ document.getElementById('grade-view').style.display='none'; document.getElementById('empty-view').style.display=''; return; }
-  loadQuestion();
+  if(curQid) loadQuestion(); else showEmptyView();
 };
 
+window.onFilterChange = function(){
+  curCls = document.getElementById('sel-cls').value;
+  curStatus = document.getElementById('sel-status').value;
+  refreshFilterOptions();           // 학급·상태를 바꾸면 학습지·문항 목록도 좁혀진다
+  saveState();
+  if(curWsId && curQid) loadQuestion(); else showEmptyView();
+};
+
+function showEmptyView(){
+  document.getElementById('grade-view').style.display='none';
+  const ev=document.getElementById('empty-view');
+  ev.style.display='';
+  const left=rowsFiltered().length;
+  const hint=ev.querySelector('#empty-hint');
+  const msg = (!curWsId||!curQid)
+    ? `조건에 맞는 답안 ${left}건 — 학습지와 문항을 고르면 채점 화면이 열립니다.`
+    : '조건에 맞는 답안이 없습니다.';
+  if(hint) hint.textContent = msg;
+}
 function loadQuestion(){
   const ws = WORKSHEETS.find(w=>w.id===curWsId);
   const q = ws.questions.find(x=>x.id===curQid);
@@ -783,7 +885,7 @@ function loadQuestion(){
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
 
   // 반 목록 채우기
-  buildClsSelector();
+  refreshFilterOptions();   // 학급·상태 목록도 현재 선택에 맞춰 갱신 (구 buildClsSelector 대체)
   // 필터 적용
   applyFilter();
 
@@ -1056,6 +1158,8 @@ window.saveCurrent = async function(){
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
     stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)
+    // 색인의 상태도 갱신해 상태 필터·건수가 즉시 반영되게 한다
+    graphRows.forEach(r=>{ if(r.email===stu.email && r.wsId===curWsId && r.qid===curQid) r.status = statusOf({correct:_curJudgment}); });
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
     toast('✅ 저장');
     // 필터 재적용

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.7">
+<meta name="app-version" content="scoring-v1.8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -148,12 +148,25 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .chat-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#374151}
 .chat-btn.go{background:#16a34a;border-color:#16a34a;color:#fff}
 .chat-btn:disabled{opacity:.5;cursor:default}
+/* ── 채점/피드백 모드 전환 ── */
+.mode-switch{display:inline-flex;border:1px solid rgba(255,255,255,.25);border-radius:8px;overflow:hidden;margin-right:8px}
+.mode-btn{padding:5px 12px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.7)}
+.mode-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+.mode-btn.active{background:#fff;color:#111827}
+/* 피드백 모드에서만 보이는 학생 선택 */
+#stu-filter-wrap{display:none;align-items:center;gap:6px}
+body.mode-feedback #stu-filter-wrap{display:inline-flex}
+body.mode-feedback #q-filter-wrap{opacity:.55}
 </style>
 </head>
 <body>
 
 <header>
   <div class="hdr-left">
+    <div class="mode-switch">
+      <button class="mode-btn active" id="mode-grade" onclick="setMode('grade')" title="문항을 고정하고 학생을 넘기며 채점합니다">✏️ 채점 모드</button>
+      <button class="mode-btn" id="mode-feedback" onclick="setMode('feedback')" title="학생을 고정하고 그 학생의 문항을 넘기며 피드백합니다">💬 피드백 모드</button>
+    </div>
     <button class="hdr-btn" id="btn-chat-notify" onclick="openChatNotify()" title="틀린 그래프 문제가 있는 학생에게 구글 챗으로 안내를 보냅니다">💬 챗 알림</button>
   </div>
   <div class="hdr-center">
@@ -193,8 +206,13 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
     <div class="selector-bar">
       <span class="sel-label">학습지</span>
       <select class="sel-input" id="sel-ws" onchange="onWsChange()"></select>
-      <span class="sel-label">문항</span>
+      <span id="q-filter-wrap" style="display:contents">      <span class="sel-label">문항</span>
       <select class="sel-input" id="sel-q" onchange="onQChange()"></select>
+      </span>
+      <span id="stu-filter-wrap">
+        <span class="sel-label">학생</span>
+        <select class="sel-input" id="sel-stu" onchange="onStuChange()" style="min-width:150px"></select>
+      </span>
       <span class="sel-label">반</span>
       <select class="sel-input" id="sel-cls" onchange="onFilterChange()" style="min-width:120px"></select>
       <span class="sel-label">상태</span>
@@ -659,6 +677,79 @@ function statusOf(v){
 }
 
 /* 제출된 그래프 답안을 한 줄씩 펼친 색인 (담당 교사는 담당 학급만) */
+
+/* ══════════ 채점 / 피드백 모드 ══════════
+   · 채점 모드  : 문항 고정 → 학생을 넘기며 채점 (기존 방식)
+   · 피드백 모드: 학생 고정 → 그 학생의 그래프 문항을 넘기며 피드백
+   두 모드 모두 같은 채점 화면을 쓰고, ◀▶(그리고 ←→ 키)가 무엇을 넘길지만 달라진다. */
+let curMode = 'grade';      // 'grade' | 'feedback'
+let curStuEmail = '';       // 피드백 모드에서 고정된 학생
+let feedList = [];          // 그 학생의 문항 목록 [{wsId,wsTitle,qid,qIdx,status}]
+let feedIdx = 0;
+
+window.setMode = function(m){
+  curMode = (m==='feedback') ? 'feedback' : 'grade';
+  document.body.classList.toggle('mode-feedback', curMode==='feedback');
+  document.getElementById('mode-grade').classList.toggle('active', curMode==='grade');
+  document.getElementById('mode-feedback').classList.toggle('active', curMode==='feedback');
+  saveState();
+  if(curMode==='feedback'){
+    buildStuSelector();
+    if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView();
+  }else{
+    if(curWsId && curQid) loadQuestion(); else showEmptyView();
+  }
+};
+
+/* 피드백 모드 학생 목록 — 현재 학습지·학급·상태 필터를 반영 */
+function buildStuSelector(){
+  const sel=document.getElementById('sel-stu'); if(!sel) return;
+  const map={};
+  graphRows.filter(r=>
+    (!curWsId || r.wsId===curWsId) &&
+    (!curCls  || r.cls===curCls) &&
+    (!curStatus || curStatus==='all' || r.status===curStatus)
+  ).forEach(r=>{ (map[r.email]=map[r.email]||{name:r.name, cls:r.cls, n:0}).n++; });
+
+  const opts=Object.entries(map)
+    .sort((a,b)=>(a[1].cls||'').localeCompare(b[1].cls||'','ko') || a[1].name.localeCompare(b[1].name,'ko'));
+  const valid=opts.some(([e])=>e===curStuEmail);
+  sel.innerHTML='<option value="">-- 학생 선택 --</option>'
+    + opts.map(([e,o])=>`<option value="${e}"${e===curStuEmail?' selected':''}>${o.name} (${o.cls||'미분류'}) · ${o.n}문항</option>`).join('');
+  if(!valid){ curStuEmail=''; sel.value=''; }
+}
+
+window.onStuChange = function(){
+  curStuEmail = document.getElementById('sel-stu').value;
+  saveState();
+  if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView();
+};
+
+/* 한 학생의 문항 목록을 만들고 첫 문항을 연다 */
+function openFeedbackStudent(email){
+  feedList = graphRows.filter(r=>
+    r.email===email &&
+    (!curWsId || r.wsId===curWsId) &&
+    (!curStatus || curStatus==='all' || r.status===curStatus)
+  ).sort((a,b)=> a.wsTitle.localeCompare(b.wsTitle,'ko') || a.qIdx-b.qIdx);
+  if(!feedList.length){ showEmptyView(); return; }
+  showFeedItem(0);
+}
+
+/* 피드백 모드에서 i번째 문항 표시 (채점 화면을 그대로 재사용) */
+function showFeedItem(i){
+  if(!feedList.length) return;
+  feedIdx = Math.max(0, Math.min(i, feedList.length-1));
+  const it = feedList[feedIdx];
+  curWsId = it.wsId; curQid = it.qid;
+  const wsSel=document.getElementById('sel-ws'); if(wsSel && [...wsSel.options].some(o=>o.value===it.wsId)) wsSel.value=it.wsId;
+  const qSel=document.getElementById('sel-q');
+  saveState();
+  loadQuestion({ onlyEmail: it.email });
+}
+
+window.prevFeed = ()=>showFeedItem(feedIdx-1);
+window.nextFeed = ()=>showFeedItem(feedIdx+1);
 function buildGraphRows(){
   graphRows = [];
   WORKSHEETS.forEach(ws=>{
@@ -837,6 +928,7 @@ window.onWsChange = function(){
   curQid = '';                      // 학습지가 바뀌면 문항 선택 초기화
   refreshFilterOptions();           // 나머지 목록도 이 선택에 맞춰 갱신
   saveState();
+  if(curMode==='feedback'){ buildStuSelector(); if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView(); return; }
   if(curQid) loadQuestion(); else showEmptyView();
 };
 
@@ -852,6 +944,7 @@ window.onFilterChange = function(){
   curStatus = document.getElementById('sel-status').value;
   refreshFilterOptions();           // 학급·상태를 바꾸면 학습지·문항 목록도 좁혀진다
   saveState();
+  if(curMode==='feedback'){ buildStuSelector(); if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView(); return; }
   if(curWsId && curQid) loadQuestion(); else showEmptyView();
 };
 
@@ -866,7 +959,7 @@ function showEmptyView(){
     : '조건에 맞는 답안이 없습니다.';
   if(hint) hint.textContent = msg;
 }
-function loadQuestion(){
+function loadQuestion(opts){
   const ws = WORKSHEETS.find(w=>w.id===curWsId);
   const q = ws.questions.find(x=>x.id===curQid);
   if(!q) return;
@@ -884,10 +977,18 @@ function loadQuestion(){
     .filter(s => !myClsNames || (s.cls && myClsNames.has(s.cls))) // 담당 교사: 담당 학급 학생만
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
 
-  // 반 목록 채우기
-  refreshFilterOptions();   // 학급·상태 목록도 현재 선택에 맞춰 갱신 (구 buildClsSelector 대체)
-  // 필터 적용
-  applyFilter();
+  refreshFilterOptions();   // 학급·상태 목록도 현재 선택에 맞춰 갱신
+  if(opts && opts.onlyEmail){
+    // 피드백 모드: 학생을 고정하고 그 학생만 화면에 세운다
+    students = allStudents.filter(s=>s.email===opts.onlyEmail);
+    curStuIdx = 0;
+    if(!students.length){ showEmptyView(); return; }
+    document.getElementById("ans-preview").style.display="";
+    showStudent(0);
+    renderStats();
+  } else {
+    applyFilter();
+  }
 
   curStuIdx = 0;
   document.getElementById('grade-view').style.display='';
@@ -982,15 +1083,26 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
   }
 }
 
+
 function showStudent(idx){
   if(idx < 0 || idx >= students.length) return;
   curStuIdx = idx;
   const stu = students[idx];
   document.getElementById('stu-name').textContent = stu.name;
   document.getElementById('stu-email').textContent = stu.email;
-  document.getElementById('stu-progress').textContent = `${idx+1} / ${students.length}`;
-  document.getElementById('btn-prev-stu').disabled = idx === 0;
-  document.getElementById('btn-next-stu').disabled = idx === students.length - 1;
+  // 진행 표시·이동 버튼은 모드에 따라 다른 것을 넘긴다
+  const prevBtn=document.getElementById('btn-prev-stu'), nextBtn=document.getElementById('btn-next-stu');
+  if(curMode==='feedback'){
+    const it=feedList[feedIdx]||{};
+    document.getElementById('stu-progress').textContent =
+      `문항 ${feedIdx+1} / ${feedList.length}` + (it.wsTitle?` · ${it.wsTitle}`:'');
+    prevBtn.disabled = feedIdx===0;
+    nextBtn.disabled = feedIdx===feedList.length-1;
+  }else{
+    document.getElementById('stu-progress').textContent = `${idx+1} / ${students.length}`;
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === students.length - 1;
+  }
 
   // 캔버스 크기 (문제 격자와 동일)
   const ws = WORKSHEETS.find(w=>w.id===curWsId);
@@ -1202,8 +1314,8 @@ function updateJudgeButtons(v){
 
 
 
-window.prevStudent = ()=>showStudent(curStuIdx - 1);
-window.nextStudent = ()=>showStudent(curStuIdx + 1);
+window.prevStudent = ()=> curMode==='feedback' ? showFeedItem(feedIdx-1) : showStudent(curStuIdx - 1);
+window.nextStudent = ()=> curMode==='feedback' ? showFeedItem(feedIdx+1) : showStudent(curStuIdx + 1);
 
 function renderStats(){
   if(!students.length){ document.getElementById('stats-bar').innerHTML = ''; return; }

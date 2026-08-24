@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.8a">
+<meta name="app-version" content="scoring-v1.8b">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -820,7 +820,7 @@ function refreshFilterOptions(){
   // 문항: 학습지가 정해졌을 때만 의미 있음
   const qRows=rowsFiltered('q').filter(r=>!curWsId || r.wsId===curWsId);
   const qMap={};
-  qRows.forEach(r=>{ (qMap[r.qid]=qMap[r.qid]||{t:`${r.qIdx+1}번 · ${(r.qText||'(제목없음)').replace(/<[^>]*>/g,'').slice(0,30)}`, n:0, i:r.qIdx}).n++; });
+  qRows.forEach(r=>{ (qMap[r.qid]=qMap[r.qid]||{t:`${r.qIdx+1}번`, n:0, i:r.qIdx}).n++; });   // 목록에는 번호만 표시 (문제 내용은 채점 화면에서 확인)
   const qOpts=Object.entries(qMap).sort((a,b)=>a[1].i-b[1].i).map(([v,o])=>({v, t:`${o.t} (${o.n})`}));
   curQid = fill('sel-q', qOpts, curQid, '-- 문항 선택 --');
 

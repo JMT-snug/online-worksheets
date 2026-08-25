@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.11">
+<meta name="app-version" content="scoring-v1.11a">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -164,6 +164,7 @@ body.mode-feedback .f-q{display:none}
 .chat-grid td.wsname{text-align:left;font-weight:600;max-width:280px}
 .chat-grid td.zero{background:#fafafa;color:#cbd5e1}
 .chat-cnt{font-size:10px;color:#dc2626;font-weight:700;margin-left:3px}
+.chat-note{font-size:10px;color:#2563eb;font-weight:700;margin-left:3px}
 #chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
 .chat-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 .chat-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#374151}
@@ -619,10 +620,12 @@ window.openChatNotify=async function(){
           ${classes.map(c=>{
             const list=window._wrongMap[w][c]||[];
             if(!list.length) return `<td class="zero">·</td>`;
-            const nWrong=list.filter(s=>s.items.some(i=>i.kind==="wrong")).length;
-            const nNote =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 피드백만 있는 학생
-            const tip=`오답 ${nWrong}명` + (nNote?` · 피드백만 ${nNote}명`:"");
-            return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span></label></td>`;
+            const nWrong=list.filter(s=>s.items.some(i=>i.kind==="wrong")).length;   // 오답 문항이 있는 학생
+            const nNote =list.filter(s=>s.items.some(i=>i.kind==="note")).length;    // 피드백 문항이 있는 학생
+            const nOnly =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 피드백만 있는 학생
+            const tip=`총 ${list.length}명 · 오답 ${nWrong}명 · 피드백 ${nNote}명` + (nOnly?` (피드백만 ${nOnly}명)`:"");
+            const mark=nNote?`<span class="chat-note">💬${nNote}</span>`:"";
+            return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span>${mark}</label></td>`;
           }).join('')}
         </tr>`;
       }).join('')}

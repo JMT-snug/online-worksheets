@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.11b">
+<meta name="app-version" content="scoring-v1.11c">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -165,6 +165,12 @@ body.mode-feedback .f-q{display:none}
 .chat-grid td.zero{background:#fafafa;color:#cbd5e1}
 .chat-cnt{font-size:10px;color:#dc2626;font-weight:700;margin-left:3px}
 .chat-note{font-size:10px;color:#2563eb;font-weight:700;margin-left:3px}
+.cell-lab{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;white-space:nowrap}
+.c-w{color:#dc2626;font-weight:700}
+.c-b{color:#7c3aed;font-weight:700}
+.c-n{color:#2563eb;font-weight:700}
+.chat-legend{font-size:11px;color:#6b7280;margin:-6px 0 10px}
+.chat-legend b{font-weight:700}
 #chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
 .chat-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
 .chat-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid #e5e7eb;background:#fff;color:#374151}
@@ -621,12 +627,15 @@ function buildChatGridHtml(){
         ${classes.map(c=>{
           const list=chatCellList(w,c);
           if(!list.length) return `<td class="zero">·</td>`;
-          const nWrong=list.filter(s=>s.items.some(i=>i.kind==='wrong')).length;
-          const nNote =list.filter(s=>s.items.some(i=>i.kind==='note')).length;
-          const nOnly =list.filter(s=>s.items.every(i=>i.kind==='note')).length;
-          const tip=`총 ${list.length}명 · 오답 ${nWrong}명 · 피드백 ${nNote}명` + (nOnly?` (피드백만 ${nOnly}명)`:'');
-          const mark=nNote?`<span class="chat-note">💬${nNote}</span>`:'';
-          return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span>${mark}</label></td>`;
+          const hasW=s=>s.items.some(i=>i.kind==='wrong'), hasN=s=>s.items.some(i=>i.kind==='note');
+          const onlyW=list.filter(s=> hasW(s) && !hasN(s)).length;   // 오답만
+          const onlyN=list.filter(s=>!hasW(s) &&  hasN(s)).length;   // 피드백만
+          const both =list.filter(s=> hasW(s) &&  hasN(s)).length;   // 둘 다
+          const parts=[];
+          if(onlyW) parts.push(`<span class="c-w">✕${onlyW}</span>`);
+          if(both)  parts.push(`<span class="c-b">✕+💬${both}</span>`);
+          if(onlyN) parts.push(`<span class="c-n">💬${onlyN}</span>`);
+          return `<td><label class="cell-lab"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()">${parts.join(' ')}</label></td>`;
         }).join('')}
       </tr>`;
     }).join('')}
@@ -648,6 +657,7 @@ window.openChatNotify=async function(){
         <input type="checkbox" id="chat-incl-note" checked onchange="openChatNotifyRefresh()">
         정답이어도 <b>선생님 첨삭·피드백이 있는 문항</b> 포함
       </label></div>
+    <div class="chat-legend"><b class="c-w">✕</b> 오답만 · <b class="c-b">✕+💬</b> 오답+피드백 · <b class="c-n">💬</b> 피드백만 (숫자는 학생 수)</div>
     <div id="chat-grid-wrap"></div>
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
     <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>

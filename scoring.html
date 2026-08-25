@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.11c">
+<meta name="app-version" content="scoring-v1.12">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -165,11 +165,14 @@ body.mode-feedback .f-q{display:none}
 .chat-grid td.zero{background:#fafafa;color:#cbd5e1}
 .chat-cnt{font-size:10px;color:#dc2626;font-weight:700;margin-left:3px}
 .chat-note{font-size:10px;color:#2563eb;font-weight:700;margin-left:3px}
-.cell-lab{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;white-space:nowrap}
+.cell-lab{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap}
+.chat-grid td{vertical-align:middle;text-align:left;padding-left:12px}
+.chat-grid td.zero{text-align:center;padding-left:8px}
+.chat-grid td.wsname{padding-left:8px}
 .c-w{color:#dc2626;font-weight:700}
 .c-b{color:#7c3aed;font-weight:700}
 .c-n{color:#2563eb;font-weight:700}
-.chat-legend{font-size:11px;color:#6b7280;margin:-6px 0 10px}
+.chat-legend{font-size:11px;color:#6b7280;margin:-6px 0 10px;display:flex;gap:12px}
 .chat-legend b{font-weight:700}
 #chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
 .chat-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
@@ -552,16 +555,16 @@ function notifyStatus(email, wsId, qNums, lastGraded){
   if(!lastSent || lastSent<cut) return 'new';          // 이력 없음 / 하루 지남
   return (lastGraded && lastGraded>lastSent) ? 'retry' : 'skip';
 }
-
 function buildChatMessages(){
-  const inclNote = document.getElementById('chat-incl-note')?.checked !== false;   // 기본 포함
-  const picked=[...document.querySelectorAll('.chat-cell:checked')].map(c=>({ws:c.dataset.ws, cls:c.dataset.cls}));
+  // 체크한 칸은 (학습지 × 학급 × 그룹) 단위 — 그룹: w=오답만, b=오답+피드백, n=피드백만
+  const picked=[...document.querySelectorAll('.chat-cell:checked')]
+    .map(c=>({ws:c.dataset.ws, cls:c.dataset.cls, grp:c.dataset.grp}));
   const byStudent={};
   let skipped=0, retried=0;
-  picked.forEach(({ws,cls})=>{
-    (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
-      const items = inclNote ? s.items : s.items.filter(i=>i.kind==='wrong');
-      if(!items.length) return;                       // 피드백만 있는 학생을 제외한 경우
+  picked.forEach(({ws,cls,grp})=>{
+    chatCellList(ws,cls,grp).forEach(s=>{
+      const items = s.items;                                   // 그 학생의 대상 문항 전부
+      if(!items.length) return;
       const sig = items.map(i=>i.kind==='note'?i.n+'*':i.n);   // 피드백 문항은 *로 구분해 이력 비교
       const st=notifyStatus(s.email, ws, sig, s.lastGraded);
       if(st==='skip'){ skipped++; return; }
@@ -575,7 +578,10 @@ function buildChatMessages(){
     });
   });
   window._chatSkipped=skipped; window._chatRetried=retried;
-  const link=`${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`;
+  // 로컬 파일로 열었을 때(origin이 null) 링크가 깨지지 않도록 배포 주소로 대체
+  const link = /^https?:/.test(location.origin)
+    ? `${location.origin}${location.pathname.replace(/scoring.html$/,"index.html")}`
+    : "https://jmt-snug.github.io/online-worksheets/index.html";
   return Object.entries(byStudent).map(([email,v])=>{
     const anyWrong = v.items.some(it=>it.wrong.length);
     const allRetry = v.items.every(it=>it.retry);
@@ -599,13 +605,22 @@ function buildChatMessages(){
   });
 }
 
-/* 체크박스(피드백 포함 여부)를 반영한 칸별 대상 학생 */
-function chatCellList(w, c){
-  const incl = document.getElementById('chat-incl-note')?.checked !== false;
-  return (window._wrongMap?.[w]?.[c] || []).filter(s => incl || s.items.some(i=>i.kind==='wrong'));
+/* 학생을 세 그룹 중 하나로 분류: w=오답만, b=오답+피드백, n=피드백만 */
+function groupOf(s){
+  const w=s.items.some(i=>i.kind==='wrong'), n=s.items.some(i=>i.kind==='note');
+  return w && n ? 'b' : w ? 'w' : 'n';
+}
+const GRP = [
+  { k:'w', label:'✕',    cls:'c-w', title:'오답만' },
+  { k:'b', label:'✕+💬', cls:'c-b', title:'오답+피드백' },
+  { k:'n', label:'💬',   cls:'c-n', title:'피드백만' },
+];
+function chatCellList(w, c, grp){
+  const list = window._wrongMap?.[w]?.[c] || [];
+  return grp ? list.filter(s=>groupOf(s)===grp) : list;
 }
 
-/* 매트릭스 표 HTML만 따로 생성 — 팝업을 다시 열지 않고 이 부분만 갈아끼운다 */
+/* 매트릭스 표 — 학급마다 오답 / 오답+피드백 / 피드백 세 열, 각 열에 체크박스와 인원 */
 function buildChatGridHtml(){
   const wsIds=Object.keys(window._wrongMap||{});
   const clsSet=new Set();
@@ -614,29 +629,29 @@ function buildChatGridHtml(){
   const rows=wsIds.filter(w=>classes.some(c=>chatCellList(w,c).length));
   if(!rows.length){
     return `<div style="padding:24px;text-align:center;color:#6b7280">보낼 대상이 없습니다.<br>
-      <span style="font-size:12px">(채점을 먼저 진행하거나, 위 체크박스를 켜 보세요)</span></div>`;
+      <span style="font-size:12px">(그래프 채점을 먼저 진행해 주세요)</span></div>`;
   }
   return `<table class="chat-grid">
-    <thead><tr><th style="text-align:left">학습지 \ 학급</th>
-      ${classes.map(c=>`<th>${c}<br><label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
-    </tr></thead><tbody>
+    <thead>
+      <tr>
+        <th rowspan="2" style="text-align:left">학습지 \ 학급</th>
+        ${classes.map(c=>`<th colspan="3">${c}<br>
+          <label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
+      </tr>
+      <tr class="grp-row">
+        ${classes.map(c=>GRP.map(g=>`<th class="${g.cls}" title="${g.title}">
+          <label style="cursor:pointer;font-size:11px"><input type="checkbox" onclick="toggleChatGrp('${c}','${g.k}',this.checked)"> ${g.label}</label></th>`).join('')).join('')}
+      </tr>
+    </thead><tbody>
     ${rows.map(w=>{
       const title=WORKSHEETS.find(x=>x.id===w)?.title||w;
       return `<tr>
         <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
-        ${classes.map(c=>{
-          const list=chatCellList(w,c);
-          if(!list.length) return `<td class="zero">·</td>`;
-          const hasW=s=>s.items.some(i=>i.kind==='wrong'), hasN=s=>s.items.some(i=>i.kind==='note');
-          const onlyW=list.filter(s=> hasW(s) && !hasN(s)).length;   // 오답만
-          const onlyN=list.filter(s=>!hasW(s) &&  hasN(s)).length;   // 피드백만
-          const both =list.filter(s=> hasW(s) &&  hasN(s)).length;   // 둘 다
-          const parts=[];
-          if(onlyW) parts.push(`<span class="c-w">✕${onlyW}</span>`);
-          if(both)  parts.push(`<span class="c-b">✕+💬${both}</span>`);
-          if(onlyN) parts.push(`<span class="c-n">💬${onlyN}</span>`);
-          return `<td><label class="cell-lab"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()">${parts.join(' ')}</label></td>`;
-        }).join('')}
+        ${classes.map(c=>GRP.map(g=>{
+          const n=chatCellList(w,c,g.k).length;
+          if(!n) return `<td class="zero">·</td>`;
+          return `<td><label class="cell-lab"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" data-grp="${g.k}" onclick="refreshChatPreview()"><span class="${g.cls}">${n}</span></label></td>`;
+        }).join('')).join('')}
       </tr>`;
     }).join('')}
     </tbody></table>`;
@@ -652,12 +667,7 @@ window.openChatNotify=async function(){
   wrap.onclick=e=>{ if(e.target===wrap) closeChatNotify(); };
   wrap.innerHTML=`<div id="chat-box">
     <h3>💬 그래프 안내 보내기</h3>
-    <div class="sub">체크한 칸(학습지 × 학급)의 학생에게 구글 챗으로 1:1 안내를 보냅니다. 숫자는 대상 인원입니다.<br>
-      <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;color:#374151">
-        <input type="checkbox" id="chat-incl-note" checked onchange="openChatNotifyRefresh()">
-        정답이어도 <b>선생님 첨삭·피드백이 있는 문항</b> 포함
-      </label></div>
-    <div class="chat-legend"><b class="c-w">✕</b> 오답만 · <b class="c-b">✕+💬</b> 오답+피드백 · <b class="c-n">💬</b> 피드백만 (숫자는 학생 수)</div>
+    <div class="sub">학급마다 <b class="c-w">✕ 오답만</b> · <b class="c-b">✕+💬 오답+피드백</b> · <b class="c-n">💬 피드백만</b> 로 나뉘어 있습니다. 보낼 칸을 체크하세요 (숫자는 학생 수).</div>
     <div id="chat-grid-wrap"></div>
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
     <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>
@@ -688,6 +698,11 @@ window.toggleChatRow=function(ws,on){
 };
 window.toggleChatCol=function(cls,on){
   document.querySelectorAll(`.chat-cell[data-cls="${cls}"]`).forEach(c=>{ c.checked=on; });
+  refreshChatPreview();
+};
+/* 학급 안의 한 그룹(오답만/오답+피드백/피드백만) 열 전체 선택 */
+window.toggleChatGrp=function(cls,grp,on){
+  document.querySelectorAll(`.chat-cell[data-cls="${cls}"][data-grp="${grp}"]`).forEach(c=>{ c.checked=on; });
   refreshChatPreview();
 };
 window.refreshChatPreview=function(){

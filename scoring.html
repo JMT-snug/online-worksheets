@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.11a">
+<meta name="app-version" content="scoring-v1.11b">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -593,53 +593,62 @@ function buildChatMessages(){
   });
 }
 
-window.openChatNotify=async function(){
-  await loadChatHistory();   // 24시간 중복 발송 방지용 이력
-  window._wrongMap=collectWrongGraph();
-  const wsIds=Object.keys(window._wrongMap);
+/* 체크박스(피드백 포함 여부)를 반영한 칸별 대상 학생 */
+function chatCellList(w, c){
+  const incl = document.getElementById('chat-incl-note')?.checked !== false;
+  return (window._wrongMap?.[w]?.[c] || []).filter(s => incl || s.items.some(i=>i.kind==='wrong'));
+}
+
+/* 매트릭스 표 HTML만 따로 생성 — 팝업을 다시 열지 않고 이 부분만 갈아끼운다 */
+function buildChatGridHtml(){
+  const wsIds=Object.keys(window._wrongMap||{});
   const clsSet=new Set();
   wsIds.forEach(w=>Object.keys(window._wrongMap[w]).forEach(c=>clsSet.add(c)));
   const classes=[...clsSet].sort((a,b)=>a.localeCompare(b,'ko'));
+  const rows=wsIds.filter(w=>classes.some(c=>chatCellList(w,c).length));
+  if(!rows.length){
+    return `<div style="padding:24px;text-align:center;color:#6b7280">보낼 대상이 없습니다.<br>
+      <span style="font-size:12px">(채점을 먼저 진행하거나, 위 체크박스를 켜 보세요)</span></div>`;
+  }
+  return `<table class="chat-grid">
+    <thead><tr><th style="text-align:left">학습지 \ 학급</th>
+      ${classes.map(c=>`<th>${c}<br><label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
+    </tr></thead><tbody>
+    ${rows.map(w=>{
+      const title=WORKSHEETS.find(x=>x.id===w)?.title||w;
+      return `<tr>
+        <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
+        ${classes.map(c=>{
+          const list=chatCellList(w,c);
+          if(!list.length) return `<td class="zero">·</td>`;
+          const nWrong=list.filter(s=>s.items.some(i=>i.kind==='wrong')).length;
+          const nNote =list.filter(s=>s.items.some(i=>i.kind==='note')).length;
+          const nOnly =list.filter(s=>s.items.every(i=>i.kind==='note')).length;
+          const tip=`총 ${list.length}명 · 오답 ${nWrong}명 · 피드백 ${nNote}명` + (nOnly?` (피드백만 ${nOnly}명)`:'');
+          const mark=nNote?`<span class="chat-note">💬${nNote}</span>`:'';
+          return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span>${mark}</label></td>`;
+        }).join('')}
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+window.openChatNotify=async function(){
+  closeChatNotify();                       // 이미 열려 있으면 정리 (팝업이 겹쳐 보이던 문제 방지)
+  await loadChatHistory();                 // 24시간 중복 발송 방지용 이력
+  window._wrongMap=collectWrongGraph();
 
   const wrap=document.createElement('div');
   wrap.id='chat-modal';
   wrap.onclick=e=>{ if(e.target===wrap) closeChatNotify(); };
-
-  let grid='';
-  if(!wsIds.length){
-    grid=`<div style="padding:24px;text-align:center;color:#6b7280">❌ 오답으로 채점된 그래프 문제가 없습니다.<br><span style="font-size:12px">(채점을 먼저 진행하거나, 미채점 문항을 확인해 주세요)</span></div>`;
-  }else{
-    grid=`<table class="chat-grid">
-      <thead><tr><th style="text-align:left">학습지 \ 학급</th>
-        ${classes.map(c=>`<th>${c}<br><label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
-      </tr></thead><tbody>
-      ${wsIds.map(w=>{
-        const title=WORKSHEETS.find(x=>x.id===w)?.title||w;
-        return `<tr>
-          <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
-          ${classes.map(c=>{
-            const list=window._wrongMap[w][c]||[];
-            if(!list.length) return `<td class="zero">·</td>`;
-            const nWrong=list.filter(s=>s.items.some(i=>i.kind==="wrong")).length;   // 오답 문항이 있는 학생
-            const nNote =list.filter(s=>s.items.some(i=>i.kind==="note")).length;    // 피드백 문항이 있는 학생
-            const nOnly =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 피드백만 있는 학생
-            const tip=`총 ${list.length}명 · 오답 ${nWrong}명 · 피드백 ${nNote}명` + (nOnly?` (피드백만 ${nOnly}명)`:"");
-            const mark=nNote?`<span class="chat-note">💬${nNote}</span>`:"";
-            return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span>${mark}</label></td>`;
-          }).join('')}
-        </tr>`;
-      }).join('')}
-      </tbody></table>`;
-  }
-
   wrap.innerHTML=`<div id="chat-box">
-    <h3>💬 그래프 오답 안내 보내기</h3>
+    <h3>💬 그래프 안내 보내기</h3>
     <div class="sub">체크한 칸(학습지 × 학급)의 학생에게 구글 챗으로 1:1 안내를 보냅니다. 숫자는 대상 인원입니다.<br>
       <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;color:#374151">
         <input type="checkbox" id="chat-incl-note" checked onchange="openChatNotifyRefresh()">
         정답이어도 <b>선생님 첨삭·피드백이 있는 문항</b> 포함
       </label></div>
-    ${grid}
+    <div id="chat-grid-wrap"></div>
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
     <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>
     <div class="chat-foot">
@@ -649,22 +658,18 @@ window.openChatNotify=async function(){
     </div>
   </div>`;
   document.body.appendChild(wrap);
+  document.getElementById('chat-grid-wrap').innerHTML = buildChatGridHtml();
 };
 
-/* 체크박스(피드백 포함 여부)를 바꾸면 매트릭스 인원수와 미리보기를 다시 계산 */
+/* 포함 여부를 바꿔도 팝업은 그대로 두고 표만 다시 그린다 (선택은 최대한 유지) */
 window.openChatNotifyRefresh = function(){
-  const keep=[...document.querySelectorAll('.chat-cell:checked')].map(c=>c.dataset.ws+'|'+c.dataset.cls);
-  const incl=document.getElementById('chat-incl-note')?.checked;
-  closeChatNotify();
-  openChatNotify().then(()=>{
-    const box=document.getElementById('chat-incl-note'); if(box) box.checked=incl;
-    keep.forEach(k=>{
-      const [ws,cls]=k.split('|');
-      const c=document.querySelector(`.chat-cell[data-ws="${ws}"][data-cls="${cls}"]`);
-      if(c) c.checked=true;
-    });
-    refreshChatPreview();
+  const keep=new Set([...document.querySelectorAll('.chat-cell:checked')].map(c=>c.dataset.ws+'|'+c.dataset.cls));
+  const wrapEl=document.getElementById('chat-grid-wrap'); if(!wrapEl) return;
+  wrapEl.innerHTML = buildChatGridHtml();
+  document.querySelectorAll('.chat-cell').forEach(c=>{
+    if(keep.has(c.dataset.ws+'|'+c.dataset.cls)) c.checked=true;
   });
+  refreshChatPreview();
 };
 window.closeChatNotify=function(){ document.getElementById('chat-modal')?.remove(); };
 window.toggleChatRow=function(ws,on){

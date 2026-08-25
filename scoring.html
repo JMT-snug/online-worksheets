@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.12">
+<meta name="app-version" content="scoring-v1.12a">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -597,8 +597,18 @@ function buildChatMessages(){
       return `• ${it.title}\n${sub.join('\n')}`;
     }).join('\n');
     const tail = anyWrong
-      ? `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${link}`
-      : `\n\n학습지에서 선생님 첨삭과 피드백을 확인해 주세요.\n${link}`;
+      ? `
+
+학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.
+${link}
+
+잘 모르겠으면 교무실로 질문하러 오세요! 🙂`
+      : `
+
+학습지에서 선생님 첨삭과 피드백을 확인해 주세요.
+${link}
+
+잘 모르겠으면 교무실로 질문하러 오세요! 🙂`;
     return { email, name:v.name, cls:v.cls, retry:allRetry,
              items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.sig})),
              text: head + lines + tail };

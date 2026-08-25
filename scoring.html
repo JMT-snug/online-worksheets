@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.10">
+<meta name="app-version" content="scoring-v1.11">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -554,8 +554,8 @@ function buildChatMessages(){
   picked.forEach(({ws,cls})=>{
     (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
       const items = inclNote ? s.items : s.items.filter(i=>i.kind==='wrong');
-      if(!items.length) return;                       // 코멘트만 있는 학생을 제외한 경우
-      const sig = items.map(i=>i.kind==='note'?i.n+'*':i.n);   // 코멘트 문항은 *로 구분해 이력 비교
+      if(!items.length) return;                       // 피드백만 있는 학생을 제외한 경우
+      const sig = items.map(i=>i.kind==='note'?i.n+'*':i.n);   // 피드백 문항은 *로 구분해 이력 비교
       const st=notifyStatus(s.email, ws, sig, s.lastGraded);
       if(st==='skip'){ skipped++; return; }
       if(st==='retry') retried++;
@@ -573,14 +573,14 @@ function buildChatMessages(){
     const anyWrong = v.items.some(it=>it.wrong.length);
     const allRetry = v.items.every(it=>it.retry);
     const head = !anyWrong
-      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 코멘트가 있어요.\n확인해 볼까요?\n\n`
+      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 피드백이 있어요.\n확인해 볼까요?\n\n`
       : allRetry
         ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
         : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 확인할 것이 있어요.\n\n`;
     const lines = v.items.map(it=>{
       const sub=[];
       if(it.wrong.length) sub.push(`   ↳ 다시 풀기: ${it.wrong.map(n=>n+'번').join(', ')}${(!allRetry&&it.retry)?' (다시 확인)':''}`);
-      if(it.note.length)  sub.push(`   ↳ 코멘트 확인: ${it.note.map(n=>n+'번').join(', ')}`);
+      if(it.note.length)  sub.push(`   ↳ 피드백 확인: ${it.note.map(n=>n+'번').join(', ')}`);
       return `• ${it.title}\n${sub.join('\n')}`;
     }).join('\n');
     const tail = anyWrong
@@ -620,8 +620,8 @@ window.openChatNotify=async function(){
             const list=window._wrongMap[w][c]||[];
             if(!list.length) return `<td class="zero">·</td>`;
             const nWrong=list.filter(s=>s.items.some(i=>i.kind==="wrong")).length;
-            const nNote =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 코멘트만 있는 학생
-            const tip=`오답 ${nWrong}명` + (nNote?` · 코멘트만 ${nNote}명`:"");
+            const nNote =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 피드백만 있는 학생
+            const tip=`오답 ${nWrong}명` + (nNote?` · 피드백만 ${nNote}명`:"");
             return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span></label></td>`;
           }).join('')}
         </tr>`;
@@ -1355,7 +1355,26 @@ window.saveCurrent = async function(){
     graphRows.forEach(r=>{ if(r.email===stu.email && r.wsId===curWsId && r.qid===curQid) r.status = statusOf({correct:_curJudgment}); });
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
     toast('✅ 저장');
-    // 필터 재적용
+    // 저장 후 이동 — 모드에 따라 다르게 (피드백 모드는 학생을 유지한다)
+    if(curMode==='feedback'){
+      // 이 학생의 문항 목록을 다시 만들고(상태 필터 반영) 같은 자리에서 이어간다.
+      // 방금 채점한 문항이 필터에서 빠지면 그 자리에 다음 문항이 오므로 자연스럽게 넘어간다.
+      const email = curStuEmail || stu.email;
+      const prevPos = feedIdx;
+      const prevKey = curWsId + '|' + curQid;
+      feedList = graphRows.filter(r=>
+        r.email===email &&
+        (!curWsId || r.wsId===curWsId) &&
+        (!curStatus || curStatus==='all' || r.status===curStatus)
+      ).sort((a,b)=> a.wsTitle.localeCompare(b.wsTitle,'ko') || a.qIdx-b.qIdx);
+      renderStats();
+      if(!feedList.length){ toast('🎉 이 학생은 모두 처리했습니다'); showEmptyView(); return; }
+      const stillThere = feedList.findIndex(r=>(r.wsId+'|'+r.qid)===prevKey);
+      // 방금 문항이 남아 있으면 다음 문항으로, 빠졌으면 같은 자리(=다음 문항)로
+      showFeedItem(stillThere>=0 ? Math.min(stillThere+1, feedList.length-1) : Math.min(prevPos, feedList.length-1));
+      return;
+    }
+    // 채점 모드: 같은 문항에서 다음 학생으로
     const prevIdx = curStuIdx;
     students = allStudents.filter(s => {
       if(curCls && s.cls !== curCls) return false;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.9">
+<meta name="app-version" content="scoring-v1.10">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -452,6 +452,10 @@ async function loadAllRecords(){
    ⚠️ 스크립트에 Google Chat API 서비스를 추가하고 새 버전으로 재배포해야 동작한다. */
 
 /* 그래프 문항이 틀린 학생 모으기 → { wsId: { 반이름: [ {email,name,cls,qNums[]} ] } } */
+/* 안내가 필요한 문항 모으기
+   · wrong : 오답으로 채점된 문항 → 다시 풀어야 함
+   · note  : 정답이지만 선생님 첨삭(그림)이나 피드백(글)이 남아 있는 문항 → 확인만 하면 됨
+   (미채점은 제외 — 아직 채점 전) */
 function collectWrongGraph(){
   const out={};
   WORKSHEETS.forEach(ws=>{
@@ -461,20 +465,25 @@ function collectWrongGraph(){
     Object.entries(recs).forEach(([email,r])=>{
       const cls=classMap[String(email).toLowerCase()]||'';
       if(myClsNames && !(cls && myClsNames.has(cls))) return;   // 담당 교사는 담당 학급만
-      const qNums=[];
-      let lastGraded=0;   // 이 학습지의 오답 문항 중 가장 최근 채점 시각 (재채점 감지용)
+      const items=[];      // [{n, kind}]
+      let lastGraded=0;    // 대상 문항 중 가장 최근 채점 시각 (재채점 감지용)
       gq.forEach(q=>{
         const v=(r.perQuestion||{})[q.id];
-        if(v && v.correct===false){
-          const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
-          qNums.push(idx>=0?idx+1:q.id);
-          const g=Date.parse(v.gradedAt||"")||0; if(g>lastGraded) lastGraded=g;
-        }
+        if(!v || !v.drawing) return;
+        const hasNote = !!(v.teacherDrawing || (v.feedback && String(v.feedback).trim()));
+        let kind = null;
+        if(v.correct===false) kind='wrong';
+        else if(v.correct===true && hasNote) kind='note';
+        if(!kind) return;
+        const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
+        items.push({ n: idx>=0?idx+1:q.id, kind });
+        const g=Date.parse(v.gradedAt||"")||0; if(g>lastGraded) lastGraded=g;
       });
-      if(!qNums.length) return;
+      if(!items.length) return;
       const key=cls||'(학급 미지정)';
       ((out[ws.id]=out[ws.id]||{})[key]=out[ws.id][key]||[]).push({
-        email, name:r.studentName||email.split("@")[0], cls:key, qNums, lastGraded
+        email, name:r.studentName||email.split("@")[0], cls:key, items, lastGraded,
+        get qNums(){ return this.items.map(i=>i.n); }   // 기존 코드 호환
       });
     });
   });
@@ -538,32 +547,47 @@ function notifyStatus(email, wsId, qNums, lastGraded){
 }
 
 function buildChatMessages(){
+  const inclNote = document.getElementById('chat-incl-note')?.checked !== false;   // 기본 포함
   const picked=[...document.querySelectorAll('.chat-cell:checked')].map(c=>({ws:c.dataset.ws, cls:c.dataset.cls}));
-  const byStudent={};   // email → {name, cls, items:[{wsId,title,qNums,retry}]}
+  const byStudent={};
   let skipped=0, retried=0;
   picked.forEach(({ws,cls})=>{
     (window._wrongMap?.[ws]?.[cls]||[]).forEach(s=>{
-      const st=notifyStatus(s.email, ws, s.qNums, s.lastGraded);
-      if(st==='skip'){ skipped++; return; }            // 24시간 이내 + 새 채점 없음
-      if(st==='retry') retried++;                       // 고쳐 냈는데 또 틀림 → 문구 변경
+      const items = inclNote ? s.items : s.items.filter(i=>i.kind==='wrong');
+      if(!items.length) return;                       // 코멘트만 있는 학생을 제외한 경우
+      const sig = items.map(i=>i.kind==='note'?i.n+'*':i.n);   // 코멘트 문항은 *로 구분해 이력 비교
+      const st=notifyStatus(s.email, ws, sig, s.lastGraded);
+      if(st==='skip'){ skipped++; return; }
+      if(st==='retry') retried++;
       const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
       const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
-      e.items.push({wsId:ws, title, qNums:s.qNums, retry:st==='retry'});
+      e.items.push({wsId:ws, title, sig,
+        wrong: items.filter(i=>i.kind==='wrong').map(i=>i.n),
+        note:  items.filter(i=>i.kind==='note').map(i=>i.n),
+        retry: st==='retry'});
     });
   });
   window._chatSkipped=skipped; window._chatRetried=retried;
   const link=`${location.origin}${location.pathname.replace(/scoring\.html$/,'index.html')}`;
   return Object.entries(byStudent).map(([email,v])=>{
-    const allRetry=v.items.every(it=>it.retry);
-    const head = allRetry
-      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
-      : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 다시 풀어야 할 문제가 있어요.\n\n`;
-    const lines = v.items.map(it=>`• ${it.title}: ${it.qNums.map(n=>n+'번').join(', ')}${(!allRetry&&it.retry)?' (다시 확인)':''}`).join('\n');
-    const tail = allRetry
-      ? `\n\n선생님 첨삭과 피드백을 먼저 확인한 뒤 고쳐서 제출해 주세요.\n${link}`
-      : `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${link}`;
+    const anyWrong = v.items.some(it=>it.wrong.length);
+    const allRetry = v.items.every(it=>it.retry);
+    const head = !anyWrong
+      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 코멘트가 있어요.\n확인해 볼까요?\n\n`
+      : allRetry
+        ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
+        : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 확인할 것이 있어요.\n\n`;
+    const lines = v.items.map(it=>{
+      const sub=[];
+      if(it.wrong.length) sub.push(`   ↳ 다시 풀기: ${it.wrong.map(n=>n+'번').join(', ')}${(!allRetry&&it.retry)?' (다시 확인)':''}`);
+      if(it.note.length)  sub.push(`   ↳ 코멘트 확인: ${it.note.map(n=>n+'번').join(', ')}`);
+      return `• ${it.title}\n${sub.join('\n')}`;
+    }).join('\n');
+    const tail = anyWrong
+      ? `\n\n학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.\n${link}`
+      : `\n\n학습지에서 선생님 첨삭과 피드백을 확인해 주세요.\n${link}`;
     return { email, name:v.name, cls:v.cls, retry:allRetry,
-             items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.qNums})),
+             items:v.items.map(it=>({wsId:it.wsId, wsTitle:it.title, qNums:it.sig})),
              text: head + lines + tail };
   });
 }
@@ -595,7 +619,10 @@ window.openChatNotify=async function(){
           ${classes.map(c=>{
             const list=window._wrongMap[w][c]||[];
             if(!list.length) return `<td class="zero">·</td>`;
-            return `<td><label style="cursor:pointer"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span></label></td>`;
+            const nWrong=list.filter(s=>s.items.some(i=>i.kind==="wrong")).length;
+            const nNote =list.filter(s=>s.items.every(i=>i.kind==="note")).length;   // 코멘트만 있는 학생
+            const tip=`오답 ${nWrong}명` + (nNote?` · 코멘트만 ${nNote}명`:"");
+            return `<td><label style="cursor:pointer" title="${tip}"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" onclick="refreshChatPreview()"><span class="chat-cnt">${list.length}명</span></label></td>`;
           }).join('')}
         </tr>`;
       }).join('')}
@@ -604,7 +631,11 @@ window.openChatNotify=async function(){
 
   wrap.innerHTML=`<div id="chat-box">
     <h3>💬 그래프 오답 안내 보내기</h3>
-    <div class="sub">체크한 칸(학습지 × 학급)의 <b>오답이 있는 학생</b>에게 구글 챗으로 1:1 안내를 보냅니다. 숫자는 대상 인원입니다.</div>
+    <div class="sub">체크한 칸(학습지 × 학급)의 학생에게 구글 챗으로 1:1 안내를 보냅니다. 숫자는 대상 인원입니다.<br>
+      <label style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;color:#374151">
+        <input type="checkbox" id="chat-incl-note" checked onchange="openChatNotifyRefresh()">
+        정답이어도 <b>선생님 첨삭·피드백이 있는 문항</b> 포함
+      </label></div>
     ${grid}
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
     <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>
@@ -615,6 +646,22 @@ window.openChatNotify=async function(){
     </div>
   </div>`;
   document.body.appendChild(wrap);
+};
+
+/* 체크박스(피드백 포함 여부)를 바꾸면 매트릭스 인원수와 미리보기를 다시 계산 */
+window.openChatNotifyRefresh = function(){
+  const keep=[...document.querySelectorAll('.chat-cell:checked')].map(c=>c.dataset.ws+'|'+c.dataset.cls);
+  const incl=document.getElementById('chat-incl-note')?.checked;
+  closeChatNotify();
+  openChatNotify().then(()=>{
+    const box=document.getElementById('chat-incl-note'); if(box) box.checked=incl;
+    keep.forEach(k=>{
+      const [ws,cls]=k.split('|');
+      const c=document.querySelector(`.chat-cell[data-ws="${ws}"][data-cls="${cls}"]`);
+      if(c) c.checked=true;
+    });
+    refreshChatPreview();
+  });
 };
 window.closeChatNotify=function(){ document.getElementById('chat-modal')?.remove(); };
 window.toggleChatRow=function(ws,on){

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.15">
+<meta name="app-version" content="scoring-v1.16">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -173,6 +173,8 @@ body.mode-feedback .f-q{display:none}
 .c-b{color:#7c3aed;font-weight:700}
 .c-n{color:#2563eb;font-weight:700}
 .c-u{color:#6b7280;font-weight:700}
+.chat-grid tr.unit-row td{background:#eef2f7;text-align:left;font-weight:700;font-size:12px;color:#334155;padding:6px 10px}
+.unit-fold{border:none;background:none;color:#2563eb;cursor:pointer;font-size:11px;padding:2px 6px;font-weight:400}
 .chat-legend{font-size:11px;color:#6b7280;margin:-6px 0 10px;display:flex;gap:12px}
 .chat-legend b{font-weight:700}
 #chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
@@ -689,7 +691,9 @@ function chatCellList(w, c, grp){
   return grp ? list.filter(s=>groupOf(s)===grp) : list;
 }
 
-/* 매트릭스 표 — 학급마다 오답 / 오답+피드백 / 피드백 / 미완성 네 열, 각 열에 체크박스와 인원 */
+/* 매트릭스 표 — 대단원별로 묶고(체크박스·접기), 학급마다 오답 / 오답+피드백 / 피드백 / 미완성 네 열 */
+let _chatFold=new Set();   // 접힌 대단원 id 목록 (localStorage에 유지)
+try{ _chatFold=new Set(JSON.parse(localStorage.getItem('scoring.chatFold')||'[]')); }catch(e){}
 function buildChatGridHtml(){
   const wsIds=Object.keys(window._wrongMap||{});
   const clsSet=new Set();
@@ -700,6 +704,14 @@ function buildChatGridHtml(){
     return `<div style="padding:24px;text-align:center;color:#6b7280">보낼 대상이 없습니다.<br>
       <span style="font-size:12px">(오답·피드백·안 푼 문제가 있는 학생이 없습니다)</span></div>`;
   }
+  // 대단원별로 묶는다 — rows는 이미 단원 순서(ALL_WORKSHEETS 정렬)를 따른다
+  const gmap=new Map();
+  rows.forEach(w=>{
+    const uid=ALL_WORKSHEETS.find(x=>x.id===w)?.unitId||'';
+    if(!gmap.has(uid)) gmap.set(uid,{uid, name:UNITS.find(u=>u.id===uid)?.title||'기타', wsIds:[]});
+    gmap.get(uid).wsIds.push(w);
+  });
+  const totalCols=1+classes.length*GRP.length;
   return `<table class="chat-grid">
     <thead>
       <tr>
@@ -712,16 +724,26 @@ function buildChatGridHtml(){
           <label style="cursor:pointer;font-size:11px"><input type="checkbox" onclick="toggleChatGrp('${c}','${g.k}',this.checked)"> ${g.label}</label></th>`).join('')).join('')}
       </tr>
     </thead><tbody>
-    ${rows.map(w=>{
-      const title=ALL_WORKSHEETS.find(x=>x.id===w)?.title||w;
-      return `<tr>
-        <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
-        ${classes.map(c=>GRP.map(g=>{
-          const n=chatCellList(w,c,g.k).length;
-          if(!n) return `<td class="zero">·</td>`;
-          return `<td><label class="cell-lab"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" data-grp="${g.k}" onclick="refreshChatPreview()"><span class="${g.cls}">${n}</span></label></td>`;
-        }).join('')).join('')}
-      </tr>`;
+    ${[...gmap.values()].map(grp=>{
+      const folded=_chatFold.has(grp.uid);
+      return `<tr class="unit-row" data-unit="${grp.uid}">
+        <td colspan="${totalCols}">
+          <label style="cursor:pointer"><input type="checkbox" onclick="toggleChatUnit('${grp.uid}',this.checked)"> 📂 ${grp.name}</label>
+          <span style="font-weight:400;color:#94a3b8;font-size:11px">· 학습지 ${grp.wsIds.length}개</span>
+          <button type="button" class="unit-fold" onclick="toggleChatUnitFold('${grp.uid}')">${folded?'▸ 펼치기':'▾ 접기'}</button>
+        </td>
+      </tr>`
+      + grp.wsIds.map(w=>{
+        const title=ALL_WORKSHEETS.find(x=>x.id===w)?.title||w;
+        return `<tr class="ws-row" data-unit="${grp.uid}"${folded?' style="display:none"':''}>
+          <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
+          ${classes.map(c=>GRP.map(g=>{
+            const n=chatCellList(w,c,g.k).length;
+            if(!n) return `<td class="zero">·</td>`;
+            return `<td><label class="cell-lab"><input type="checkbox" class="chat-cell" data-ws="${w}" data-cls="${c}" data-grp="${g.k}" onclick="refreshChatPreview()"><span class="${g.cls}">${n}</span></label></td>`;
+          }).join('')).join('')}
+        </tr>`;
+      }).join('');
     }).join('')}
     </tbody></table>`;
 }
@@ -762,6 +784,20 @@ window.openChatNotifyRefresh = function(){
   refreshChatPreview();
 };
 window.closeChatNotify=function(){ document.getElementById('chat-modal')?.remove(); };
+/* 대단원 전체 선택 — 접혀 있어도 그 단원의 모든 칸을 체크/해제한다 */
+window.toggleChatUnit=function(uid,on){
+  document.querySelectorAll(`tr.ws-row[data-unit="${uid}"] .chat-cell`).forEach(c=>{ c.checked=on; });
+  refreshChatPreview();
+};
+/* 대단원 접기/펼치기 — 표를 다시 그리지 않고 행만 숨겨 선택 상태를 유지, 접힘은 localStorage에 기억 */
+window.toggleChatUnitFold=function(uid){
+  const fold=!_chatFold.has(uid);
+  if(fold) _chatFold.add(uid); else _chatFold.delete(uid);
+  try{ localStorage.setItem('scoring.chatFold', JSON.stringify([..._chatFold])); }catch(e){}
+  document.querySelectorAll(`tr.ws-row[data-unit="${uid}"]`).forEach(tr=>{ tr.style.display=fold?'none':''; });
+  const btn=document.querySelector(`tr.unit-row[data-unit="${uid}"] .unit-fold`);
+  if(btn) btn.textContent=fold?'▸ 펼치기':'▾ 접기';
+};
 window.toggleChatRow=function(ws,on){
   document.querySelectorAll(`.chat-cell[data-ws="${ws}"]`).forEach(c=>{ c.checked=on; });
   refreshChatPreview();

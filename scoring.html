@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.14">
+<meta name="app-version" content="scoring-v1.15">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -359,7 +359,8 @@ async function loadExtraTeachers(){
 
 // ── 상태 ──
 let currentUser = null;
-let WORKSHEETS = [];
+let WORKSHEETS = [];       // 그래프 문항이 있는 학습지 (채점 화면용)
+let ALL_WORKSHEETS = [];   // 전체 학습지 (챗 알림의 '안 푼 문제' 안내는 그래프 없는 학습지도 대상)
 let UNITS = [];
 let allRecords = {};  // { [wsId]: { [studentEmail]: recordData } }
 let curWsId = null, curQid = null;
@@ -405,16 +406,16 @@ async function loadCurriculum(){
     UNITS = uSnap.docs.map(d=>({...d.data()}));
     const unitOrder = {};
     UNITS.forEach((u,i)=>unitOrder[u.id] = u.order ?? i);
-    WORKSHEETS = wSnap.docs.map(d=>({...d.data()}))
+    ALL_WORKSHEETS = wSnap.docs.map(d=>({...d.data()}))
       .sort((a,b) => {
         const ua = unitOrder[a.unitId] ?? 999;
         const ub = unitOrder[b.unitId] ?? 999;
         if(ua !== ub) return ua - ub;
         return (a.order ?? 99) - (b.order ?? 99);
       });
-    // 그래프 문항이 있는 학습지만 필터
-    WORKSHEETS = WORKSHEETS.filter(ws => (ws.questions||[]).some(q => q.type === 'graph'));
-    console.log("[커리큘럼] 그래프 학습지", WORKSHEETS.length, "개");
+    // 채점 화면은 그래프 문항이 있는 학습지만 다룬다 (챗 알림은 ALL_WORKSHEETS 사용)
+    WORKSHEETS = ALL_WORKSHEETS.filter(ws => (ws.questions||[]).some(q => q.type === 'graph'));
+    console.log("[커리큘럼] 학습지", ALL_WORKSHEETS.length, "개 (그래프", WORKSHEETS.length, "개)");
   }catch(e){ console.error(e); }
 }
 
@@ -471,12 +472,14 @@ async function loadAllRecords(){
               학생이 그래프를 고쳐 내면 index가 첨삭·피드백을 초기화하므로,
               남아 있는 피드백은 항상 현재 답안에 대한 것이다. 피드백 없는 정답은 발송 안 함)
    · un    : 아직 풀지 않은(완성 못한) 문항 — 그래프뿐 아니라 **모든 유형** 대상 → 완성 안내
-             (1일 이내 발송 이력 체크. 시험지는 다시 풀 수 없으므로 제외)
+             (1일 이내 발송 이력 체크. 시험지는 다시 풀 수 없으므로 제외.
+              ⚠️ 그 학습지를 **시작한**(1문항이라도 답을 낸) 학생만 — 전입생이 전입 전 학습지를
+              열어만 봐도 기록이 생기는데, 시작 안 한 학습지까지 완성 안내가 나가지 않도록)
    (제출됐지만 아직 채점 전인 그래프는 제외) */
 function collectWrongGraph(){
   const out={};
   let noteDropped=0;   // "이미 안내한 피드백 문항"으로 제외한 건수 (팝업 안내용)
-  WORKSHEETS.forEach(ws=>{
+  ALL_WORKSHEETS.forEach(ws=>{      // 그래프 없는 학습지도 '안 푼 문제' 안내 대상
     const qs=(ws.questions||[]).filter(q=>q.type!=='link');   // link는 풀이 대상 문항이 아님
     if(!qs.length) return;
     const isExam = ws.type==='exam';
@@ -484,6 +487,9 @@ function collectWrongGraph(){
     Object.entries(recs).forEach(([email,r])=>{
       const cls=classMap[String(email).toLowerCase()]||'';
       if(myClsNames && !(cls && myClsNames.has(cls))) return;   // 담당 교사는 담당 학급만
+      // 이 학습지를 '시작'했는가 — 어떤 문항이든 답을 낸 흔적(그래프 제출·시도·정답·저장된 답안)이 있는가
+      const started = Object.values(r.perQuestion||{}).some(v=>v &&
+        (v.drawing || v.correct===true || (v.attempts||0)>0 || v.lastAnswer!=null || v.examAnswer!=null));
       const items=[];      // [{n, kind, g:문항 채점 시각}]
       let lastGraded=0;    // 대상 문항 중 가장 최근 채점 시각 (재채점 감지용)
       qs.forEach(q=>{
@@ -492,12 +498,12 @@ function collectWrongGraph(){
         const n = idx>=0?idx+1:q.id;
         if(q.type!=='graph'){
           // 그래프 외 유형: 정답 처리(완료)되지 않았으면 '안 푼 문제'로 안내
-          if(!isExam && (!v || v.correct!==true)) items.push({ n, kind:'un', g:0 });
+          if(!isExam && started && (!v || v.correct!==true)) items.push({ n, kind:'un', g:0 });
           return;
         }
         if(!v || !v.drawing){
           // 그래프 미제출 → '안 푼 문제'
-          if(!isExam) items.push({ n, kind:'un', g:0 });
+          if(!isExam && started) items.push({ n, kind:'un', g:0 });
           return;
         }
         const hasNote = !!(v.teacherDrawing || (v.feedback && String(v.feedback).trim()));
@@ -608,7 +614,7 @@ function buildChatMessages(){
       });
       if(!sendItems.length) return;
       const wrongs=sendItems.filter(i=>i.kind==='wrong');
-      const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
+      const title=ALL_WORKSHEETS.find(w=>w.id===ws)?.title||ws;
       const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
       e.items.push({wsId:ws, title,
         sig: sendItems.map(i=>i.kind==='note'?i.n+'*':i.kind==='un'?i.n+'!':i.n),  // 이력 기록용: 피드백=* 미완성=!
@@ -707,7 +713,7 @@ function buildChatGridHtml(){
       </tr>
     </thead><tbody>
     ${rows.map(w=>{
-      const title=WORKSHEETS.find(x=>x.id===w)?.title||w;
+      const title=ALL_WORKSHEETS.find(x=>x.id===w)?.title||w;
       return `<tr>
         <td class="wsname"><label style="cursor:pointer"><input type="checkbox" onclick="toggleChatRow('${w}',this.checked)"> ${title}</label></td>
         ${classes.map(c=>GRP.map(g=>{
@@ -730,7 +736,7 @@ window.openChatNotify=async function(){
   wrap.onclick=e=>{ if(e.target===wrap) closeChatNotify(); };
   wrap.innerHTML=`<div id="chat-box">
     <h3>💬 학습지 안내 보내기</h3>
-    <div class="sub">학급마다 <b class="c-w">✕ 오답</b> · <b class="c-b">✕+💬 오답+피드백</b> · <b class="c-n">💬 피드백만</b> · <b class="c-u">□ 안 푼 문제만</b> 으로 나뉘어 있습니다. 보낼 칸을 체크하세요 (숫자는 학생 수).${
+    <div class="sub">학급마다 <b class="c-w">✕ 오답</b> · <b class="c-b">✕+💬 오답+피드백</b> · <b class="c-n">💬 피드백만</b> · <b class="c-u">□ 안 푼 문제만</b> 으로 나뉘어 있습니다. 보낼 칸을 체크하세요 (숫자는 학생 수).<br>□ 안 푼 문제는 그 학습지를 <b>시작한(1문항 이상 답을 낸)</b> 학생에게만 안내합니다 — 전입 전 학습지처럼 시작하지 않은 학습지는 대상에서 빠집니다.${
       window._chatNoteDropped?`<br>💬 피드백 안내는 문항마다 1번만 보냅니다 — 이미 안내했던 피드백 문항 ${window._chatNoteDropped}건은 대상에서 뺐습니다.`:''}</div>
     <div id="chat-grid-wrap"></div>
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.12a">
+<meta name="app-version" content="scoring-v1.14">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -172,6 +172,7 @@ body.mode-feedback .f-q{display:none}
 .c-w{color:#dc2626;font-weight:700}
 .c-b{color:#7c3aed;font-weight:700}
 .c-n{color:#2563eb;font-weight:700}
+.c-u{color:#6b7280;font-weight:700}
 .chat-legend{font-size:11px;color:#6b7280;margin:-6px 0 10px;display:flex;gap:12px}
 .chat-legend b{font-weight:700}
 #chat-preview{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;max-height:230px;overflow:auto;font-size:12px;background:#f9fafb;white-space:pre-wrap;margin-bottom:14px}
@@ -194,7 +195,7 @@ body.mode-feedback .f-q{display:none}
       <button class="mode-btn active" id="mode-grade" onclick="setMode('grade')" title="문항을 고정하고 학생을 넘기며 채점합니다">✏️ 채점 모드</button>
       <button class="mode-btn" id="mode-feedback" onclick="setMode('feedback')" title="학생을 고정하고 그 학생의 문항을 넘기며 피드백합니다">💬 피드백 모드</button>
     </div>
-    <button class="hdr-btn" id="btn-chat-notify" onclick="openChatNotify()" title="틀린 그래프 문제가 있는 학생에게 구글 챗으로 안내를 보냅니다">💬 챗 알림</button>
+    <button class="hdr-btn" id="btn-chat-notify" onclick="openChatNotify()" title="틀린 그래프·피드백·안 푼 문제가 있는 학생에게 구글 챗으로 안내를 보냅니다">💬 챗 알림</button>
   </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">그래프 수동 채점<em>+</em></div>
@@ -457,37 +458,58 @@ async function loadAllRecords(){
 
 
 /* ══════════════ 💬 구글 챗 알림 ══════════════
-   그래프 문항이 틀린(❌) 학생에게 "학습지 이름 + 문제 번호"를 1:1 채팅으로 안내한다.
+   확인할 문제가 있는 학생에게 "학습지 이름 + 문제 번호"를 1:1 채팅으로 안내한다.
    발송은 Apps Script 웹앱(config/errorReports.webAppUrl)이 대신 수행 — 학생 권한 팝업 없음.
    ⚠️ 스크립트에 Google Chat API 서비스를 추가하고 새 버전으로 재배포해야 동작한다. */
 
-/* 그래프 문항이 틀린 학생 모으기 → { wsId: { 반이름: [ {email,name,cls,qNums[]} ] } } */
-/* 안내가 필요한 문항 모으기
-   · wrong : 오답으로 채점된 문항 → 다시 풀어야 함
-   · note  : 정답이지만 선생님 첨삭(그림)이나 피드백(글)이 남아 있는 문항 → 확인만 하면 됨
-   (미채점은 제외 — 아직 채점 전) */
+/* 안내가 필요한 학생 모으기 → { wsId: { 반이름: [ {email,name,cls,items[]} ] } } */
+/* 안내가 필요한 문항의 세 종류
+   · wrong : 오답으로 채점된 그래프 문항 → 다시 풀어야 함
+             (1일 이내 발송 이력만 체크 — 하루 지나면 재촉 재발송)
+   · note  : 정답인 그래프 문항에 선생님 첨삭(그림)·피드백(글)이 남아 있음 → 확인만 하면 됨
+             (문항마다 1번만 — 365일 이내 피드백 발송 이력이 있으면 제외.
+              학생이 그래프를 고쳐 내면 index가 첨삭·피드백을 초기화하므로,
+              남아 있는 피드백은 항상 현재 답안에 대한 것이다. 피드백 없는 정답은 발송 안 함)
+   · un    : 아직 풀지 않은(완성 못한) 문항 — 그래프뿐 아니라 **모든 유형** 대상 → 완성 안내
+             (1일 이내 발송 이력 체크. 시험지는 다시 풀 수 없으므로 제외)
+   (제출됐지만 아직 채점 전인 그래프는 제외) */
 function collectWrongGraph(){
   const out={};
+  let noteDropped=0;   // "이미 안내한 피드백 문항"으로 제외한 건수 (팝업 안내용)
   WORKSHEETS.forEach(ws=>{
-    const gq=(ws.questions||[]).filter(q=>q.type==='graph');
-    if(!gq.length) return;
+    const qs=(ws.questions||[]).filter(q=>q.type!=='link');   // link는 풀이 대상 문항이 아님
+    if(!qs.length) return;
+    const isExam = ws.type==='exam';
     const recs=allRecords[ws.id]||{};
     Object.entries(recs).forEach(([email,r])=>{
       const cls=classMap[String(email).toLowerCase()]||'';
       if(myClsNames && !(cls && myClsNames.has(cls))) return;   // 담당 교사는 담당 학급만
-      const items=[];      // [{n, kind}]
+      const items=[];      // [{n, kind, g:문항 채점 시각}]
       let lastGraded=0;    // 대상 문항 중 가장 최근 채점 시각 (재채점 감지용)
-      gq.forEach(q=>{
+      qs.forEach(q=>{
         const v=(r.perQuestion||{})[q.id];
-        if(!v || !v.drawing) return;
+        const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
+        const n = idx>=0?idx+1:q.id;
+        if(q.type!=='graph'){
+          // 그래프 외 유형: 정답 처리(완료)되지 않았으면 '안 푼 문제'로 안내
+          if(!isExam && (!v || v.correct!==true)) items.push({ n, kind:'un', g:0 });
+          return;
+        }
+        if(!v || !v.drawing){
+          // 그래프 미제출 → '안 푼 문제'
+          if(!isExam) items.push({ n, kind:'un', g:0 });
+          return;
+        }
         const hasNote = !!(v.teacherDrawing || (v.feedback && String(v.feedback).trim()));
         let kind = null;
         if(v.correct===false) kind='wrong';
         else if(v.correct===true && hasNote) kind='note';
-        if(!kind) return;
-        const idx=(ws.questions||[]).findIndex(x=>x.id===q.id);
-        items.push({ n: idx>=0?idx+1:q.id, kind });
-        const g=Date.parse(v.gradedAt||"")||0; if(g>lastGraded) lastGraded=g;
+        if(!kind) return;   // 미채점 또는 정답(피드백 없음)
+        // 피드백 안내는 문항마다 1번만: 365일 이내 피드백 발송 이력이 있으면 제외
+        if(kind==='note' && histOf(email, ws.id, n)?.note){ noteDropped++; return; }
+        const g=Date.parse(v.gradedAt||"")||0;
+        items.push({ n, kind, g });
+        if(g>lastGraded) lastGraded=g;
       });
       if(!items.length) return;
       const key=cls||'(학급 미지정)';
@@ -497,6 +519,7 @@ function collectWrongGraph(){
       });
     });
   });
+  window._chatNoteDropped=noteDropped;
   return out;
 }
 
@@ -516,10 +539,12 @@ function stillPendingGraph(email, wsId, gradedQid, judgeNow){
     return c===null || c===undefined;                  // 미채점이면 남아 있음
   });
 }
-/* 최근 발송 이력 (Apps Script 웹앱에서 로드) — [{at,email,wsId,q}] */
+/* 최근 발송 이력 (Apps Script 웹앱에서 로드) — [{at,email,wsId,q}]
+   · 피드백(note) 안내는 365일 이내 1번만이므로 조회 기간을 365일로 잡는다 */
 let _chatHist=[];
+let _histItems={};   // { 'email|wsId': { '문항번호': {wrong:마지막 오답발송, note:마지막 피드백발송, un:마지막 미완성발송} } }
 async function loadChatHistory(){
-  _chatHist=[];
+  _chatHist=[]; _histItems={};
   try{
     const snap=await getDoc(doc(db,'config','errorReports'));
     if(!snap.exists()) return;
@@ -529,52 +554,68 @@ async function loadChatHistory(){
     // GET은 Apps Script 리다이렉트 때문에 CORS로 막히므로, 발송과 동일하게 POST로 요청
     const res=await fetch(url,{
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ token, action:'chatHistory', days:7 })
+      body: JSON.stringify({ token, action:'chatHistory', days:365 })
     });
     const out=await res.json();
     if(out&&out.ok) _chatHist=out.history||[];
   }catch(e){ console.warn('[챗 이력 로드 실패 — 중복 검사 없이 진행]', e.message); }
-}
-/* 24시간 이내에 같은 학습지·같은 문항으로 이미 보냈는지
-   · 24시간 이내 + 문항 동일 → 재발송 안 함
-   · 24시간 지났으면 같은 내용이라도 다시 보냄 (재촉 목적) */
-/* 발송 여부 판정
-   'new'   : 이력 없음(또는 24시간 경과) → 평소 문구로 발송
-   'retry' : 24시간 이내 같은 문항이지만 **발송 이후 다시 채점**됨
-             (학생이 고쳐서 냈는데 또 틀린 경우) → '다시 확인' 문구로 발송
-   'skip'  : 24시간 이내 + 같은 문항 + 새 채점 없음 → 발송 안 함 */
-function notifyStatus(email, wsId, qNums, lastGraded){
-  const sig=[...qNums].join(',');
-  const cut=Date.now()-24*60*60*1000;
-  let lastSent=0;
+  // 이력을 문항 단위로 풀어 둔다 — q="3,5*,7!"이면 3=오답 안내, 5=피드백 안내(*), 7=미완성 안내(!)
+  //  (예전에는 문항 조합 문자열 전체를 비교해서, 일부 문항만 바뀌어도 나머지까지 전부 다시 보냈음)
   _chatHist.forEach(h=>{
-    if(h.email!==email || h.wsId!==wsId || h.q!==sig) return;
-    const t=Date.parse(h.at)||0;
-    if(t>lastSent) lastSent=t;
+    const t=Date.parse(h.at)||0; if(!t) return;
+    const m=_histItems[h.email+'|'+h.wsId]=_histItems[h.email+'|'+h.wsId]||{};
+    String(h.q||'').split(',').forEach(tok=>{
+      tok=tok.trim(); if(!tok) return;
+      const isNote=tok.endsWith('*'), isUn=tok.endsWith('!');
+      const n=(isNote||isUn)?tok.slice(0,-1):tok;
+      const e=m[n]=m[n]||{wrong:0,note:0,un:0};
+      if(isNote)   { if(t>e.note) e.note=t; }
+      else if(isUn){ if(t>e.un) e.un=t; }
+      else         { if(t>e.wrong) e.wrong=t; }
+    });
   });
-  if(!lastSent || lastSent<cut) return 'new';          // 이력 없음 / 하루 지남
-  return (lastGraded && lastGraded>lastSent) ? 'retry' : 'skip';
 }
+/* 이 학생·학습지·문항의 발송 이력 (없으면 null) */
+function histOf(email, wsId, n){ return (_histItems[email+'|'+wsId]||{})[String(n)] || null; }
 function buildChatMessages(){
-  // 체크한 칸은 (학습지 × 학급 × 그룹) 단위 — 그룹: w=오답만, b=오답+피드백, n=피드백만
+  // 체크한 칸은 (학습지 × 학급 × 그룹) 단위 — 그룹: w=오답, b=오답+피드백, n=피드백만, u=미완성만
   const picked=[...document.querySelectorAll('.chat-cell:checked')]
     .map(c=>({ws:c.dataset.ws, cls:c.dataset.cls, grp:c.dataset.grp}));
   const byStudent={};
   let skipped=0, retried=0;
+  const cut=Date.now()-24*60*60*1000;
   picked.forEach(({ws,cls,grp})=>{
     chatCellList(ws,cls,grp).forEach(s=>{
-      const items = s.items;                                   // 그 학생의 대상 문항 전부
-      if(!items.length) return;
-      const sig = items.map(i=>i.kind==='note'?i.n+'*':i.n);   // 피드백 문항은 *로 구분해 이력 비교
-      const st=notifyStatus(s.email, ws, sig, s.lastGraded);
-      if(st==='skip'){ skipped++; return; }
-      if(st==='retry') retried++;
+      // 발송 여부를 **문항 단위**로 판정한다
+      //  · note  : collectWrongGraph에서 이미 "365일 내 안내한 적 없는 문항"만 남김 → 그대로 발송
+      //  · wrong : 이력 없음/24시간 경과 → 발송(재촉), 24시간 이내라도 발송 후 재채점됐으면
+      //            '다시 확인' 문구로 발송, 그 외(24시간 이내 + 변화 없음)는 제외
+      //  · un    : 이력 없음/24시간 경과 → 발송(재촉), 24시간 이내면 제외
+      const sendItems=[];
+      s.items.forEach(i=>{
+        if(i.kind==='note'){ sendItems.push({n:i.n, kind:i.kind, retry:false}); return; }
+        const h=histOf(s.email, ws, i.n);
+        if(i.kind==='un'){
+          const lu=h?.un||0;
+          if(!lu || lu<cut) sendItems.push({n:i.n, kind:i.kind, retry:false});
+          else skipped++;
+          return;
+        }
+        const lw=h?.wrong||0;
+        if(!lw || lw<cut){ sendItems.push({n:i.n, kind:i.kind, retry:false}); return; }
+        if(i.g && i.g>lw){ sendItems.push({n:i.n, kind:i.kind, retry:true}); retried++; return; }
+        skipped++;
+      });
+      if(!sendItems.length) return;
+      const wrongs=sendItems.filter(i=>i.kind==='wrong');
       const title=WORKSHEETS.find(w=>w.id===ws)?.title||ws;
       const e=byStudent[s.email]=byStudent[s.email]||{name:s.name, cls:s.cls, items:[]};
-      e.items.push({wsId:ws, title, sig,
-        wrong: items.filter(i=>i.kind==='wrong').map(i=>i.n),
-        note:  items.filter(i=>i.kind==='note').map(i=>i.n),
-        retry: st==='retry'});
+      e.items.push({wsId:ws, title,
+        sig: sendItems.map(i=>i.kind==='note'?i.n+'*':i.kind==='un'?i.n+'!':i.n),  // 이력 기록용: 피드백=* 미완성=!
+        wrong: wrongs.map(i=>i.n),
+        note:  sendItems.filter(i=>i.kind==='note').map(i=>i.n),
+        un:    sendItems.filter(i=>i.kind==='un').map(i=>i.n),
+        retry: wrongs.length>0 && wrongs.every(i=>i.retry)});
     });
   });
   window._chatSkipped=skipped; window._chatRetried=retried;
@@ -582,30 +623,40 @@ function buildChatMessages(){
   const link = /^https?:/.test(location.origin)
     ? `${location.origin}${location.pathname.replace(/scoring.html$/,"index.html")}`
     : "https://jmt-snug.github.io/online-worksheets/index.html";
+  // 문항 번호가 아주 많으면(안 푼 문제 등) 앞쪽만 보여주고 줄인다
+  const fmtNums = arr => arr.length>8
+    ? arr.slice(0,8).map(n=>n+'번').join(', ')+` … 외 ${arr.length-8}문항`
+    : arr.map(n=>n+'번').join(', ');
   return Object.entries(byStudent).map(([email,v])=>{
     const anyWrong = v.items.some(it=>it.wrong.length);
-    const allRetry = v.items.every(it=>it.retry);
-    const head = !anyWrong
-      ? `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 피드백이 있어요.\n확인해 볼까요?\n\n`
-      : allRetry
+    const anyUn    = v.items.some(it=>(it.un||[]).length);
+    // 오답이 있는 학습지가 전부 '재채점 후 또 오답'일 때만 재제출 문구 사용 (피드백만 있는 학습지는 제외하고 판단)
+    const wrongEntries = v.items.filter(it=>it.wrong.length);
+    const allRetry = wrongEntries.length>0 && wrongEntries.every(it=>it.retry);
+    const head = anyWrong
+      ? (allRetry
         ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
-        : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제 중 확인할 것이 있어요.\n\n`;
+        : `📐 수학 학습지 안내\n\n${v.name} 학생, 학습지에 확인할 것이 있어요.\n\n`)
+      : anyUn
+        ? `📐 수학 학습지 안내\n\n${v.name} 학생, 아직 다 풀지 않은 학습지가 있어요.\n마저 완성해 볼까요?\n\n`
+        : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 피드백이 있어요.\n확인해 볼까요?\n\n`;
     const lines = v.items.map(it=>{
       const sub=[];
-      if(it.wrong.length) sub.push(`   ↳ 다시 풀기: ${it.wrong.map(n=>n+'번').join(', ')}${(!allRetry&&it.retry)?' (다시 확인)':''}`);
-      if(it.note.length)  sub.push(`   ↳ 피드백 확인: ${it.note.map(n=>n+'번').join(', ')}`);
+      if(it.wrong.length)     sub.push(`   ↳ 다시 풀기: ${fmtNums(it.wrong)}${(!allRetry&&it.retry)?' (다시 확인)':''}`);
+      if(it.note.length)      sub.push(`   ↳ 피드백 확인: ${fmtNums(it.note)}`);
+      if((it.un||[]).length)  sub.push(`   ↳ 안 푼 문제: ${fmtNums(it.un)}`);
       return `• ${it.title}\n${sub.join('\n')}`;
     }).join('\n');
-    const tail = anyWrong
-      ? `
+    const ask = anyWrong && anyUn
+      ? '학습지에 다시 들어가 틀린 그래프를 고치고, 남은 문제도 마저 풀어 주세요.'
+      : anyWrong
+        ? '학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.'
+        : anyUn
+          ? '학습지에 다시 들어가 남은 문제를 마저 풀어 주세요.'
+          : '학습지에서 선생님 첨삭과 피드백을 확인해 주세요.';
+    const tail = `
 
-학습지에 다시 들어가 그래프를 고쳐서 제출해 주세요.
-${link}
-
-잘 모르겠으면 교무실로 질문하러 오세요! 🙂`
-      : `
-
-학습지에서 선생님 첨삭과 피드백을 확인해 주세요.
+${ask}
 ${link}
 
 잘 모르겠으면 교무실로 질문하러 오세요! 🙂`;
@@ -615,22 +666,24 @@ ${link}
   });
 }
 
-/* 학생을 세 그룹 중 하나로 분류: w=오답만, b=오답+피드백, n=피드백만 */
+/* 학생을 네 그룹 중 하나로 분류: w=오답, b=오답+피드백, n=피드백만, u=미완성만
+   (오답·피드백이 있는 학생의 '안 푼 문제'는 그 그룹의 메시지에 함께 실린다) */
 function groupOf(s){
   const w=s.items.some(i=>i.kind==='wrong'), n=s.items.some(i=>i.kind==='note');
-  return w && n ? 'b' : w ? 'w' : 'n';
+  return w && n ? 'b' : w ? 'w' : n ? 'n' : 'u';
 }
 const GRP = [
-  { k:'w', label:'✕',    cls:'c-w', title:'오답만' },
+  { k:'w', label:'✕',    cls:'c-w', title:'오답 (안 푼 문제 있으면 함께 안내)' },
   { k:'b', label:'✕+💬', cls:'c-b', title:'오답+피드백' },
   { k:'n', label:'💬',   cls:'c-n', title:'피드백만' },
+  { k:'u', label:'□',    cls:'c-u', title:'안 푼 문제만' },
 ];
 function chatCellList(w, c, grp){
   const list = window._wrongMap?.[w]?.[c] || [];
   return grp ? list.filter(s=>groupOf(s)===grp) : list;
 }
 
-/* 매트릭스 표 — 학급마다 오답 / 오답+피드백 / 피드백 세 열, 각 열에 체크박스와 인원 */
+/* 매트릭스 표 — 학급마다 오답 / 오답+피드백 / 피드백 / 미완성 네 열, 각 열에 체크박스와 인원 */
 function buildChatGridHtml(){
   const wsIds=Object.keys(window._wrongMap||{});
   const clsSet=new Set();
@@ -639,13 +692,13 @@ function buildChatGridHtml(){
   const rows=wsIds.filter(w=>classes.some(c=>chatCellList(w,c).length));
   if(!rows.length){
     return `<div style="padding:24px;text-align:center;color:#6b7280">보낼 대상이 없습니다.<br>
-      <span style="font-size:12px">(그래프 채점을 먼저 진행해 주세요)</span></div>`;
+      <span style="font-size:12px">(오답·피드백·안 푼 문제가 있는 학생이 없습니다)</span></div>`;
   }
   return `<table class="chat-grid">
     <thead>
       <tr>
         <th rowspan="2" style="text-align:left">학습지 \ 학급</th>
-        ${classes.map(c=>`<th colspan="3">${c}<br>
+        ${classes.map(c=>`<th colspan="${GRP.length}">${c}<br>
           <label style="font-weight:400;font-size:10px;cursor:pointer"><input type="checkbox" onclick="toggleChatCol('${c}',this.checked)"> 열 전체</label></th>`).join('')}
       </tr>
       <tr class="grp-row">
@@ -676,8 +729,9 @@ window.openChatNotify=async function(){
   wrap.id='chat-modal';
   wrap.onclick=e=>{ if(e.target===wrap) closeChatNotify(); };
   wrap.innerHTML=`<div id="chat-box">
-    <h3>💬 그래프 안내 보내기</h3>
-    <div class="sub">학급마다 <b class="c-w">✕ 오답만</b> · <b class="c-b">✕+💬 오답+피드백</b> · <b class="c-n">💬 피드백만</b> 로 나뉘어 있습니다. 보낼 칸을 체크하세요 (숫자는 학생 수).</div>
+    <h3>💬 학습지 안내 보내기</h3>
+    <div class="sub">학급마다 <b class="c-w">✕ 오답</b> · <b class="c-b">✕+💬 오답+피드백</b> · <b class="c-n">💬 피드백만</b> · <b class="c-u">□ 안 푼 문제만</b> 으로 나뉘어 있습니다. 보낼 칸을 체크하세요 (숫자는 학생 수).${
+      window._chatNoteDropped?`<br>💬 피드백 안내는 문항마다 1번만 보냅니다 — 이미 안내했던 피드백 문항 ${window._chatNoteDropped}건은 대상에서 뺐습니다.`:''}</div>
     <div id="chat-grid-wrap"></div>
     <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">보낼 내용 미리보기</div>
     <div id="chat-preview">칸을 선택하면 여기에 표시됩니다.</div>

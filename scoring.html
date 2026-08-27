@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.17">
+<meta name="app-version" content="scoring-v1.18">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -997,11 +997,16 @@ function buildGraphRows(){
 
 /* except에 지정한 항목만 빼고 현재 선택값으로 거른 행 */
 function rowsFiltered(except){
+  // 피드백 모드는 문항 선택 UI가 없다 — curQid는 "지금 화면에 떠 있는 한 문항"일 뿐 사용자가
+  // 고른 필터가 아니므로, 이 값으로 학습지·학급·상태 후보를 거르면(특히 학습지 목록) 다른
+  // 문항을 가진 학습지가 전부 걸러져 거의 빈 목록이 된다. 대신 고정된 학생으로 좁힌다.
+  const isFeedback = curMode==='feedback';
   return graphRows.filter(r=>
     (except==='ws'     || !curWsId   || r.wsId===curWsId) &&
-    (except==='q'      || !curQid    || r.qid===curQid) &&
+    (except==='q'      || isFeedback || !curQid || r.qid===curQid) &&
     (except==='cls'    || !curCls    || r.cls===curCls) &&
-    (except==='status' || !curStatus || curStatus==='all' || r.status===curStatus)
+    (except==='status' || !curStatus || curStatus==='all' || r.status===curStatus) &&
+    (!isFeedback || !curStuEmail || r.email===curStuEmail)
   );
 }
 

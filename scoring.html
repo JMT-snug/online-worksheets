@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.16">
+<meta name="app-version" content="scoring-v1.17">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1103,13 +1103,19 @@ window.refreshRecords = async function(btn){
   if(btn){ btn.disabled=true; btn.textContent='🔄 불러오는 중...'; }
   try{
     await loadAllRecords();
-    if(curQid){
+    buildGraphRows();   // 색인도 다시 만들어야 필터·상태 건수(미채점 등)에 새 답안이 반영된다
+    if(curMode==='feedback'){
+      buildStuSelector();
+      if(curStuEmail) openFeedbackStudent(curStuEmail); else { refreshFilterOptions(); showEmptyView(); }
+    }else if(curQid){
       loadQuestion();
       if(students.length) showStudent(Math.min(prevIdx, students.length-1));
+    }else{
+      refreshFilterOptions();
     }
     toast('🔄 최신 답안으로 갱신됨');
   }catch(e){ toast('새로고침 실패: '+e.message); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent='🔄 새로고침'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔄 답안 최신화'; } }
 };
 
 // 상태 저장/복원 (sessionStorage)

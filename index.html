@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.30">
+  <meta name="app-version" content="8.31">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2004,7 +2004,9 @@ async function saveWorksheet(isComplete=false){
   if(_wsIsCompleted && !isComplete) return; // 이미 완료된 학습지에 false 저장 차단
   if(isComplete) _wsIsCompleted=true;
   try{
-    const perQ={};
+    const nowISO = new Date().toISOString();
+    const perQ={};   // 이 탭이 실제로 손댄(답을 낸) 문항만 담는다 — 안 건드린 문항은 아예 안 담아서
+                      // 다른 탭·기기가 먼저 저장해 둔 답을 덮어쓰지 않게 한다.
     // 모든 문항 정답이면 자동 완료 처리
     const _total=curWS.questions.filter(q=>q.type!=="link").length;
     const _ans=answered.filter(v=>v&&(typeof v!=='object'||v.drawing)).length;
@@ -2013,19 +2015,25 @@ async function saveWorksheet(isComplete=false){
       if(q.type==="link") return;
       if(q.type==='graph'){
         const prev=typeof answered[i]==='object'?answered[i]:{};
-        console.log('[saveWS graph] q.id:',q.id,'answered type:',typeof answered[i],'drawing:',!!prev.drawing,'len:',prev.drawing?.length||0);
+        if(!prev.drawing) return;  // 이 탭에서 아직 제출 안 한 그래프는 저장 대상에서 제외
         perQ[q.id]={
-          drawing:       prev.drawing||null,
+          drawing:       prev.drawing,
           teacherDrawing:prev.teacherDrawing||null,
           feedback:      prev.feedback||null,
           correct:       prev.correct??null,
+          answeredAt:    nowISO,
         };
       } else {
+        // 시도 횟수·정답 여부·최종 답안 중 하나라도 있어야 "이 탭이 손댄 문항"으로 본다
+        const touched = (attempts[i]||0)>0 || !!answered[i]
+          || (lastAnswers[i]!==undefined && lastAnswers[i]!==null);
+        if(!touched) return;
         perQ[q.id]={
           attempts:   attempts[i]||0,
           wrongInputs: wrongAnswers[i]?.inputs||[],
           correct:    !!answered[i],
           canvasImage: wrongAnswers[i]?.imagePath||null,
+          answeredAt: nowISO,
           // 정답으로 인정된 최종 답안 — 채점 규칙이 바뀌었을 때 재채점 근거가 된다.
           // 값이 없으면 기존 저장분을 지우지 않도록 필드를 아예 넣지 않는다.
           ...(lastAnswers[i]!==undefined&&lastAnswers[i]!==null ? {lastAnswer:lastAnswers[i]} : {}),
@@ -2033,11 +2041,28 @@ async function saveWorksheet(isComplete=false){
         };
       }
     });
+    if(!Object.keys(perQ).length && !isComplete) return;  // 저장할 변화가 없으면 쓰기 자체를 생략
+
+    const ref = doc(db,"records",user.email,"worksheets",curWS.id);
+    // 진도율 등 요약치는 "이 탭이 아는 것"이 아니라 서버의 최신 perQuestion(다른 기기가
+    // 저장해 둔 것 포함)과 이번에 새로 낸 답을 합친 기준으로 계산한다. 오프라인이면
+    // persistentLocalCache 캐시로 조회되고, 그마저 없으면 이 탭이 아는 범위로만 계산한다
+    // (표시상 진도율만 일시적으로 낮게 보일 수 있음 — 답안 자체는 아래 dot-path 쓰기로 안전).
+    let serverData=null;
+    try{ const snap=await getDoc(ref); if(snap.exists()) serverData=snap.data(); }catch(e){}
+    const mergedPQ = {...(serverData?.perQuestion||{}), ...perQ};
+    const finalIsComplete = !!serverData?.isComplete || isComplete;  // 완료 상태는 한번 true면 되돌리지 않음
+
     const _totalQ=curWS.questions.filter(q=>q.type!=="link").length;
-    const _ansQ=curWS.questions.reduce((s,q,i)=>q.type!=="link"&&answered[i]?s+1:s,0);
-    const _wrongTotal=Object.values(perQ).reduce((s,v)=>s+(v.attempts||0),0);
+    const _ansQ=curWS.questions.reduce((s,q,i)=>{
+      if(q.type==="link") return s;
+      const v=mergedPQ[q.id];
+      return (q.type==='graph' ? !!v?.drawing : !!v?.correct) ? s+1 : s;
+    },0);
+    const _wrongTotal=Object.values(mergedPQ).reduce((s,v)=>s+(v.attempts||0),0);
     const _correctRate=_totalQ?Math.min(100,Math.round(_ansQ/_totalQ*100)):0;
-    const data={
+
+    const updates={
       studentEmail: user.email,
       studentName:  user.displayName||"",
       worksheetId:  curWS.id,
@@ -2046,13 +2071,22 @@ async function saveWorksheet(isComplete=false){
       answeredCount: _ansQ,
       correctRate:  _correctRate,
       totalAttempts: _wrongTotal,   // 오답 제출 횟수 합계
-      isComplete,
-      perQuestion:  perQ,
-      lastUpdated:  new Date().toISOString(),
+      isComplete:   finalIsComplete,
+      lastUpdated:  nowISO,
     };
-    if(isComplete) data.completedAt=new Date().toISOString();
-    await setDoc(doc(db,"records",user.email,"worksheets",curWS.id), data, {merge:true});
-    console.log("[저장]", isComplete?"완료✅":"진행중", data.answeredCount+"/"+data.totalCount, "wsId:",curWS.id);
+    if(finalIsComplete && !serverData?.completedAt) updates.completedAt=nowISO;
+
+    if(serverData){
+      // 손댄 문항만 경로별로 갱신 — updates에 점(.) 경로 키를 섞어 넣어야
+      // Firestore가 perQuestion 필드 전체가 아니라 그 문항 키만 갱신한다.
+      const dotUpdates={...updates};
+      Object.entries(perQ).forEach(([qid,val])=>{ dotUpdates[`perQuestion.${qid}`]=val; });
+      await updateDoc(ref, dotUpdates);
+    } else {
+      // 이 학생의 첫 저장(문서가 아직 없음) — updateDoc은 문서가 없으면 실패하므로 생성
+      await setDoc(ref, {...updates, perQuestion:perQ}, {merge:true});
+    }
+    console.log("[저장]", finalIsComplete?"완료✅":"진행중", _ansQ+"/"+_totalQ, "wsId:",curWS.id);
   }catch(e){ console.warn("[저장실패]", e.message); }
 }
 

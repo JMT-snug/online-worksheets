@@ -520,7 +520,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
     <a class="hdr-btn" id="hdr-manual" style="display:none" target="_blank" rel="noopener" title="사용 방법 안내">📖 매뉴얼</a>
     <button class="hdr-btn" id="hdr-pen-only" onclick="togglePenOnlyMode()"
-      title="켜면 그림 그리기 캔버스에서 손가락 터치는 그리기 대신 화면 이동·확대/축소로만 쓰입니다(펜 오터치 방지). 펜이 고장났으면 꺼 주세요.">✏️ 펜 전용</button>
+      title="켜면 그림 그리기 캔버스에서 손가락 터치는 무시됩니다(필기 중 손바닥 오터치 방지). 펜이 고장났으면 꺼 주세요.">✏️ 펜 전용</button>
   </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">수학 학습지<em>+</em></div>
@@ -4211,13 +4211,17 @@ document.getElementById("btn-back").addEventListener("click",async ()=>{
    - 이전/다음 이동 시 현재 내용 저장 후 복원
 */
 /* ══════════ ✏️ 펜 전용 모드 ══════════
-   켜면 손가락(touch) 입력은 그리기에서 빠지고, 대신 브라우저 기본 화면 이동·확대/축소
-   제스처로 넘어간다(caption의 touch-action을 동적으로 바꿔서 처리). 마우스·펜(스타일러스)은
-   모드와 무관하게 항상 그릴 수 있다. 기기·세션 단위 설정이라 localStorage에 기억해 둔다. */
+   켜면 손가락(touch) 입력은 그리기에서 빠진다. 마우스·펜(스타일러스)은 모드와 무관하게
+   항상 그릴 수 있다. 기기·세션 단위 설정이라 localStorage에 기억해 둔다.
+   ⚠️ touch-action은 펜 전용 모드에서도 항상 'none'으로 고정한다 — 'manipulation'으로
+   바꿔서 손가락 제스처(화면 이동·확대)를 허용했더니, 펜으로 쓰는 동안 손바닥이 화면에
+   닿는 정상적인 필기 자세를 브라우저가 "스크롤/확대 제스처"로 오인해 진행 중이던 펜
+   스트로크를 pointercancel로 끊어버리는 문제가 실제로 발생했다(선이 짧게 끊기고 화면이
+   스크롤됨). 펜 스트로크가 안 끊기는 게 손가락 팬/줌보다 훨씬 중요하므로 이 기능은 포기. */
 let _penOnlyMode = false;
 try{ _penOnlyMode = localStorage.getItem('penOnlyMode')==='1'; }catch(e){}
 function isPenOnly(){ return _penOnlyMode; }
-function _applyTouchAction(cv){ if(cv) cv.style.touchAction = _penOnlyMode ? 'manipulation' : 'none'; }
+function _applyTouchAction(cv){ if(cv) cv.style.touchAction = 'none'; }
 window.setPenOnlyMode = function(on){
   _penOnlyMode = !!on;
   try{ localStorage.setItem('penOnlyMode', _penOnlyMode?'1':'0'); }catch(e){}

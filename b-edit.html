@@ -245,6 +245,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <span style="width:1px;height:20px;background:rgba(255,255,255,.25);margin:0 2px"></span>
       <button class="hdr-btn" onclick="migrateWsIds()" title="학습지 ID를 단원·표시 순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)"
         style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 학습지 ID 정리</button>
+      <button class="hdr-btn" onclick="setupAIServer()" title="🤖 AI 검토/분석 기능이 쓰는 Apps Script 웹앱 주소를 지정합니다 (최초 1회)"
+        style="background:#4c1d95;color:#e9d5ff;border:1px solid #6d28d9">⚙️ AI 서버 설정</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -2271,11 +2273,39 @@ window.deleteUnit = async function(unitId, e){
    모호한 표현 등을 점검한다. 그래프·링크·랜덤풀처럼 정답이 고정 텍스트가 아니거나
    수동 채점하는 유형은 대상에서 뺀다. 참고용 — 결과를 그대로 신뢰하지 말 것. */
 async function _aiWebAppConfig(){
-  const snap = await getDoc(doc(db,'config','errorReports'));
+  const snap = await getDoc(doc(db,'config','aiAssist'));
   if(!snap.exists()) return null;
   const d = snap.data();
-  return { url: d.webAppUrl||'', token: d.token||'snug-error-report' };
+  return { url: d.webAppUrl||'', token: d.token||'snug-ai-assist' };
 }
+/* AI 기능 전용 Apps Script 웹앱 주소 등록 (오류신고/챗 알림용과는 별개 프로젝트 —
+   AI기능_AppsScript.gs 주석 참고) */
+window.setupAIServer = async function(){
+  let cur='';
+  try{
+    const snap=await getDoc(doc(db,'config','aiAssist'));
+    cur = snap.exists() ? (snap.data().webAppUrl||'') : '';
+  }catch(e){}
+  const url = prompt(
+    'AI 기능용 Apps Script 웹앱 주소를 붙여넣으세요.\n\n'
+    + '· AI기능_AppsScript.gs를 별도 프로젝트로 배포한 뒤 나오는\n'
+    + '  https://script.google.com/macros/s/.../exec 주소입니다.\n'
+    + '· 오류신고/챗 알림용 웹앱과는 다른 주소입니다.\n'
+    + '· 비우고 확인을 누르면 설정을 해제합니다.',
+    cur);
+  if(url===null) return;
+  const clean=url.trim();
+  if(clean && !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(clean)){
+    alert('주소 형식이 올바르지 않습니다.\nhttps://script.google.com/macros/s/…/exec 형태여야 합니다.');
+    return;
+  }
+  try{
+    await setDoc(doc(db,'config','aiAssist'),
+      { webAppUrl:clean, token:'snug-ai-assist', updatedAt:new Date().toISOString(), updatedBy:currentUser?.email||'' },
+      { merge:true });
+    alert(clean ? '✅ AI 서버가 설정되었습니다.' : '설정을 해제했습니다.');
+  }catch(e){ alert('설정 저장 실패: '+e.message); }
+};
 function _aiAnswerSummary(q){
   if(q.type==='multi'){
     const opts=(q.options||[]).map((o,i)=>`${i+1}.${o}`).join(' / ');

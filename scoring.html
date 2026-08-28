@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.18">
+<meta name="app-version" content="scoring-v1.19">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,6 +39,7 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:48px;displ
 .logo em{color:#60a5fa;font-style:normal}
 .hdr-btn{padding:5px 12px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
+#hdr-pen-only.active{background:#4c1d95;border-color:#8b5cf6;color:#e9d5ff}
 #hdr-user{display:none;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,.65)}
 
 /* PAGE */
@@ -198,6 +199,8 @@ body.mode-feedback .f-q{display:none}
       <button class="mode-btn" id="mode-feedback" onclick="setMode('feedback')" title="학생을 고정하고 그 학생의 문항을 넘기며 피드백합니다">💬 피드백 모드</button>
     </div>
     <button class="hdr-btn" id="btn-chat-notify" onclick="openChatNotify()" title="틀린 그래프·피드백·안 푼 문제가 있는 학생에게 구글 챗으로 안내를 보냅니다">💬 챗 알림</button>
+    <button class="hdr-btn" id="hdr-pen-only" onclick="togglePenOnlyMode()"
+      title="켜면 첨삭 캔버스에서 손가락 터치는 그리기 대신 화면 이동·확대/축소로만 쓰입니다(펜 오터치 방지). 펜이 고장났으면 꺼 주세요.">✏️ 펜 전용</button>
   </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">그래프 수동 채점<em>+</em></div>
@@ -1378,9 +1381,26 @@ function showStudent(idx){
   document.getElementById('feedback').value = stu.data.feedback || '';
 }
 
+/* ══════════ ✏️ 펜 전용 모드 ══════════
+   켜면 손가락(touch) 입력은 첨삭 그리기에서 빠지고, 대신 브라우저 기본 화면 이동·확대/축소
+   제스처로 넘어간다. 마우스·펜(스타일러스)은 모드와 무관하게 항상 그릴 수 있다. */
+let _penOnlyMode = false;
+try{ _penOnlyMode = localStorage.getItem('penOnlyMode_scoring')==='1'; }catch(e){}
+function isPenOnly(){ return _penOnlyMode; }
+window.setPenOnlyMode = function(on){
+  _penOnlyMode = !!on;
+  try{ localStorage.setItem('penOnlyMode_scoring', _penOnlyMode?'1':'0'); }catch(e){}
+  const cv=document.getElementById('teacher-canvas');
+  if(cv) cv.style.touchAction = _penOnlyMode ? 'manipulation' : 'none';
+  const btn=document.getElementById('hdr-pen-only');
+  if(btn) btn.classList.toggle('active', _penOnlyMode);
+};
+window.togglePenOnlyMode = function(){ setPenOnlyMode(!_penOnlyMode); };
+
 let _tdColor = '#dc2626', _tdEraser = false, _tdUndo = [];
 function initTeacherCanvas(cv){
   _tdUndo = [];
+  cv.style.touchAction = isPenOnly() ? 'manipulation' : 'none';
   let drawing = false, lx=0, ly=0;
   const pos = e => {
     const r = cv.getBoundingClientRect();
@@ -1388,6 +1408,7 @@ function initTeacherCanvas(cv){
     return [(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
   };
   const start = e => {
+    if(isPenOnly() && e.pointerType==='touch') return;   // 펜 전용 모드: 손가락은 그리기 대신 화면 제스처로 넘긴다
     // 마우스는 왼쪽 버튼만
     if(e.pointerType==='mouse' && e.button!==0) return;
     e.preventDefault();
@@ -1419,6 +1440,8 @@ function initTeacherCanvas(cv){
 document.addEventListener('DOMContentLoaded', ()=>{
   const vMeta = document.querySelector('meta[name="app-version"]');
   if(vMeta) document.getElementById('scoring-version').textContent = vMeta.content;
+
+  document.getElementById('hdr-pen-only')?.classList.toggle('active', _penOnlyMode);
 
   document.getElementById('td-pen').onclick = ()=>{
     _tdEraser=false;

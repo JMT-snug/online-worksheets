@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.32">
+  <meta name="app-version" content="8.33">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -92,6 +92,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn{padding:4px 11px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-teacher{background:var(--accent);border-color:var(--accent)}
+#hdr-pen-only.active{background:#4c1d95;border-color:#8b5cf6;color:#e9d5ff}
 
 /* ── 🚨 오류 신고 ── */
 #bugrep-fab{position:fixed;right:14px;bottom:14px;z-index:8000;display:none;align-items:center;gap:5px;padding:9px 14px;border-radius:22px;border:none;background:#111827;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.8;transition:opacity .15s,transform .15s}
@@ -518,6 +519,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   <div class="hdr-left">
     <button class="hdr-btn hdr-teacher" id="hdr-sync-progress" style="display:none" onclick="syncAutoProgress()" title="모든 학습지의 학급별 완료율을 다시 계산합니다">📊 진도 동기화</button>
     <a class="hdr-btn" id="hdr-manual" style="display:none" target="_blank" rel="noopener" title="사용 방법 안내">📖 매뉴얼</a>
+    <button class="hdr-btn" id="hdr-pen-only" onclick="togglePenOnlyMode()"
+      title="켜면 그림 그리기 캔버스에서 손가락 터치는 그리기 대신 화면 이동·확대/축소로만 쓰입니다(펜 오터치 방지). 펜이 고장났으면 꺼 주세요.">✏️ 펜 전용</button>
   </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">수학 학습지<em>+</em></div>
@@ -3232,14 +3235,14 @@ function initGraphCanvas(canvas, W, H){
   const pos=e=>{
     const r=canvas.getBoundingClientRect();
     const scaleX=W/r.width, scaleY=H/r.height;
-    const cx=e.touches?e.touches[0].clientX:e.clientX;
-    const cy=e.touches?e.touches[0].clientY:e.clientY;
-    return [(cx-r.left)*scaleX,(cy-r.top)*scaleY];
+    return [(e.clientX-r.left)*scaleX,(e.clientY-r.top)*scaleY];
   };
   const start=e=>{
+    if(isPenOnly() && e.pointerType==='touch') return;   // 펜 전용 모드: 손가락은 그리기 대신 화면 제스처로 넘긴다
     e.preventDefault();
     graphUndoStack.push(ctx.getImageData(0,0,W,H));
     drawing=true; [lx,ly]=pos(e);
+    try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
     ctx.beginPath(); ctx.moveTo(lx,ly);
     if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
     else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
@@ -3250,13 +3253,14 @@ function initGraphCanvas(canvas, W, H){
     ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
     lx=x; ly=y;
   };
-  const end=e=>{ drawing=false; };
-  canvas.addEventListener('mousedown',start);
-  canvas.addEventListener('mousemove',move);
-  canvas.addEventListener('mouseup',end);
-  canvas.addEventListener('touchstart',start,{passive:false});
-  canvas.addEventListener('touchmove',move,{passive:false});
-  canvas.addEventListener('touchend',end);
+  const end=e=>{ drawing=false; try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} };
+  canvas.classList.add('draw-surface');
+  _applyTouchAction(canvas);
+  // Pointer Events: 마우스·터치·펜(스타일러스) 통합 처리
+  canvas.addEventListener('pointerdown',start);
+  canvas.addEventListener('pointermove',move);
+  canvas.addEventListener('pointerup',end);
+  canvas.addEventListener('pointercancel',end);
 
   // 도구 버튼
   document.getElementById('graph-pen-btn')?.addEventListener('click',()=>{
@@ -4206,6 +4210,26 @@ document.getElementById("btn-back").addEventListener("click",async ()=>{
    - quiz-page 표시 후 초기화해야 올바른 width 계산
    - 이전/다음 이동 시 현재 내용 저장 후 복원
 */
+/* ══════════ ✏️ 펜 전용 모드 ══════════
+   켜면 손가락(touch) 입력은 그리기에서 빠지고, 대신 브라우저 기본 화면 이동·확대/축소
+   제스처로 넘어간다(caption의 touch-action을 동적으로 바꿔서 처리). 마우스·펜(스타일러스)은
+   모드와 무관하게 항상 그릴 수 있다. 기기·세션 단위 설정이라 localStorage에 기억해 둔다. */
+let _penOnlyMode = false;
+try{ _penOnlyMode = localStorage.getItem('penOnlyMode')==='1'; }catch(e){}
+function isPenOnly(){ return _penOnlyMode; }
+function _applyTouchAction(cv){ if(cv) cv.style.touchAction = _penOnlyMode ? 'manipulation' : 'none'; }
+window.setPenOnlyMode = function(on){
+  _penOnlyMode = !!on;
+  try{ localStorage.setItem('penOnlyMode', _penOnlyMode?'1':'0'); }catch(e){}
+  document.querySelectorAll('.draw-surface').forEach(_applyTouchAction);
+  const btn=document.getElementById('hdr-pen-only');
+  if(btn) btn.classList.toggle('active', _penOnlyMode);
+};
+window.togglePenOnlyMode = function(){ setPenOnlyMode(!_penOnlyMode); };
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('hdr-pen-only')?.classList.toggle('active', _penOnlyMode);
+});
+
 const canvas=document.getElementById("draw-canvas");
 const ctx=canvas.getContext("2d");
 let cvDrawing=false, penColor="#1c1917", penSize=3, eraser=false, cvLX=0, cvLY=0;
@@ -4258,14 +4282,14 @@ function initProblemCanvas(){
     let drawing=false, lx=0, ly=0;
     const pos=e=>{
       const r=cv.getBoundingClientRect();
-      const cx=e.touches?e.touches[0].clientX:e.clientX;
-      const cy=e.touches?e.touches[0].clientY:e.clientY;
-      return [cx-r.left, cy-r.top];  // CSS 좌표 그대로 (ctx.setTransform이 DPR 처리)
+      return [e.clientX-r.left, e.clientY-r.top];  // CSS 좌표 그대로 (ctx.setTransform이 DPR 처리)
     };
     const start=e=>{
+      if(isPenOnly() && e.pointerType==='touch') return;   // 펜 전용 모드: 손가락은 그리기 대신 화면 제스처로 넘긴다
       e.preventDefault();
       drawing=true;
       [lx,ly]=pos(e);
+      try{ cv.setPointerCapture(e.pointerId); }catch(_){}
       const c=cv.getContext('2d');
       // 획 시작 전 스냅샷 저장 (undo용)
       try{
@@ -4296,17 +4320,20 @@ function initProblemCanvas(){
       c.beginPath(); c.moveTo(lx,ly); c.lineTo(x,y); c.stroke();
       lx=x; ly=y;
     };
-    const end=()=>{
+    const end=e=>{
       drawing=false;
+      try{ cv.releasePointerCapture(e.pointerId); }catch(_){}
       try{ _pCanvasStore[curQIdx]=cv.getContext('2d').getImageData(0,0,cv.width,cv.height); }catch(e){}
       // imageData는 cv.width(실제 픽셀) 기준이므로 그대로 OK
     };
-    cv.addEventListener('mousedown',start);
-    cv.addEventListener('mousemove',move);
-    cv.addEventListener('mouseup',end);
-    cv.addEventListener('mouseleave',end);
-    cv.addEventListener('touchstart',start,{passive:false});
-    cv.addEventListener('touchmove',move,{passive:false});
+    cv.classList.add('draw-surface');
+    _applyTouchAction(cv);
+    // Pointer Events: 마우스·터치·펜(스타일러스) 통합 처리
+    cv.addEventListener('pointerdown',start);
+    cv.addEventListener('pointermove',move);
+    cv.addEventListener('pointerup',end);
+    cv.addEventListener('pointercancel',end);
+    cv.addEventListener('pointerleave',end);
     cv.addEventListener('touchend',end);
   }
 }
@@ -4769,14 +4796,14 @@ function clearCanvas(){
 function cvPos(e){
   const r=canvas.getBoundingClientRect();
   const sx=canvas.width/r.width, sy=canvas.height/r.height;
-  return e.touches
-    ?[(e.touches[0].clientX-r.left)*sx,(e.touches[0].clientY-r.top)*sy]
-    :[(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
+  return [(e.clientX-r.left)*sx,(e.clientY-r.top)*sy];
 }
 function cvStart(e){
+  if(isPenOnly() && e.pointerType==='touch') return;   // 펜 전용 모드: 손가락은 그리기 대신 화면 제스처로 넘긴다
   undoStack.push(ctx.getImageData(0,0,canvas.width,canvas.height));
   e.preventDefault(); cvDrawing=true;
   [cvLX,cvLY]=cvPos(e);
+  try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
   setCtx();
   if(!eraser){
     ctx.beginPath(); ctx.arc(cvLX,cvLY,penSize/2,0,Math.PI*2);
@@ -4789,13 +4816,15 @@ function cvDraw(e){
   ctx.beginPath(); ctx.moveTo(cvLX,cvLY); ctx.lineTo(x,y); ctx.stroke();
   cvLX=x; cvLY=y;
 }
-canvas.addEventListener("mousedown",cvStart);
-canvas.addEventListener("mousemove",cvDraw);
-canvas.addEventListener("mouseup",()=>cvDrawing=false);
-canvas.addEventListener("mouseleave",()=>cvDrawing=false);
-canvas.addEventListener("touchstart",cvStart,{passive:false});
-canvas.addEventListener("touchmove",cvDraw,{passive:false});
-canvas.addEventListener("touchend",()=>cvDrawing=false);
+function cvEnd(e){ cvDrawing=false; try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} }
+canvas.classList.add('draw-surface');
+_applyTouchAction(canvas);
+// Pointer Events: 마우스·터치·펜(스타일러스) 통합 처리
+canvas.addEventListener("pointerdown",cvStart);
+canvas.addEventListener("pointermove",cvDraw);
+canvas.addEventListener("pointerup",cvEnd);
+canvas.addEventListener("pointercancel",cvEnd);
+canvas.addEventListener("pointerleave",cvEnd);
 
 document.getElementById("tool-pen").addEventListener("click",()=>{
   eraser=false;

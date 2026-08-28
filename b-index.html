@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.31">
+  <meta name="app-version" content="8.32">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -25,7 +25,11 @@ window._errlog=[];
 })();
 </script>
 <script>
-const VERSION = "8.30";
+/* 버전 문자열은 <meta name="app-version">을 단일 출처로 읽는다.
+   예전에는 여기에 숫자를 따로 적어 두 곳이 어긋날 수 있었고(실제로 meta 8.31 vs VERSION 8.30),
+   그러면 ensureLatestVersion이 자기 자신을 "새 버전"으로 판정해
+   학습지에 들어갈 때마다 새로고침 안내가 떴다. */
+const VERSION = (document.querySelector('meta[name="app-version"]')?.content||"").trim() || "8.32";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
 window.MathJax = {

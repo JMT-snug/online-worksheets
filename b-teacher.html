@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.31">
+<meta name="app-version" content="3.32">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -237,7 +237,8 @@ const FB = {
   messagingSenderId: "404110714320",
   appId:             "1:404110714320:web:cb79c555a383801f3205d5"
 };
-const VERSION = "3.30";
+// 버전 문자열은 <meta name="app-version">을 단일 출처로 읽는다 (index와 동일 규칙 — 헤더 표시가 어긋나던 문제)
+const VERSION = (document.querySelector('meta[name="app-version"]')?.content||"").trim() || "3.32";
 // 🤖 AI 학습 분석용 Apps Script 웹앱 (AI기능_AppsScript.gs, 오류신고 웹앱과는 별개 프로젝트)
 // SECRET 상수와 값이 같아야 함. URL 자체는 비밀번호가 아니라 장난 호출 차단용 토큰으로 보호됨.
 const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec";

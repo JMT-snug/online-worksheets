@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.30">
+<meta name="app-version" content="3.31">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -939,6 +939,12 @@ function renderStudentDetail(uid){
     </tr>`;
   }).join("");
 
+  // AI 학습 분석 — 이 학생이 시작한 학습지들이 걸쳐 있는 대단원 목록(대단원 선택 시 사용)
+  const aiUnitOptions=[...new Set(ordered.map(w=>w.unitId).filter(Boolean))]
+    .map(id=>({id, title:UNIT_MAP[id]?.title||id}))
+    .sort((a,b)=>(""+a.title).localeCompare(""+b.title,"ko"))
+    .map(u=>`<option value="${u.id}">${u.title}</option>`).join("");
+
   // ── 다른 학생으로 바로 이동 (목록과 동일 정렬: 학급→이름) ──
   let navList=[..._slist].sort((a,b)=>
     (""+a.cls).localeCompare(""+b.cls,"ko")||(""+a.name).localeCompare(""+b.name,"ko"));
@@ -971,6 +977,17 @@ function renderStudentDetail(uid){
         <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
         <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
       </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <select id="ai-scope-sel" onchange="_updateAIUnitSelVisibility()"
+          style="padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">
+          <option value="all">전체 학습 기준</option>
+          <option value="unit" ${aiUnitOptions?'':'disabled'}>대단원 선택</option>
+        </select>
+        <select id="ai-unit-sel" style="display:none;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">${aiUnitOptions}</select>
+        <button class="btn" onclick="analyzeStudentWithAI('${uid}')" title="정답률·오답을 바탕으로 학습 상태를 AI가 요약합니다 (참고용)"
+          style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95">🤖 AI 학습 분석</button>
+      </div>
+      <div id="ai-analysis-result" style="display:none;margin-bottom:16px"></div>
       <table class="data-table">
         <thead><tr><th>학습지</th><th>상태</th><th>정답률</th><th style="text-align:center">시도</th><th>문항별 (클릭=상세)</th></tr></thead>
         <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:30px">기록이 없습니다</td></tr>'}</tbody>
@@ -978,6 +995,84 @@ function renderStudentDetail(uid){
     </div>`;
 }
 window.renderStudentDetail=renderStudentDetail;
+
+/* ══════════ 🤖 AI 학습 분석 (학생 단위 — 전체 또는 대단원) ══════════
+   정답률·오답(wrongInputs)을 학습지의 실제 문항 텍스트·정답과 함께 Apps Script
+   웹앱(Gemini 중계)에 보내 학습 상태 요약을 받는다. 참고용 — 최종 판단은 교사가 한다. */
+window._updateAIUnitSelVisibility=function(){
+  const scope=document.getElementById('ai-scope-sel')?.value;
+  const sel=document.getElementById('ai-unit-sel');
+  if(sel) sel.style.display = scope==='unit' ? '' : 'none';
+};
+async function _aiWebAppConfig(){
+  const snap=await getDoc(doc(db,'config','errorReports'));
+  if(!snap.exists()) return null;
+  const d=snap.data();
+  return { url: d.webAppUrl||'', token: d.token||'snug-error-report' };
+}
+const AI_ANALYZE_SKIP_TYPES=new Set(['graph','link','pool_random']);
+window.analyzeStudentWithAI=async function(uid){
+  const scope=document.getElementById('ai-scope-sel')?.value||'all';
+  const unitId=document.getElementById('ai-unit-sel')?.value||'';
+  const resultEl=document.getElementById('ai-analysis-result');
+  if(!resultEl) return;
+  resultEl.style.display='block';
+  resultEl.innerHTML='<div class="card" style="margin-top:0">🤖 분석 중… (몇십 초 걸릴 수 있습니다)</div>';
+
+  const wsMap=allData[uid]||{};
+  const target=WORKSHEETS.filter(ws=>wsMap[ws.id] && (scope!=='unit' || ws.unitId===unitId));
+  if(!target.length){ resultEl.innerHTML='<div class="card" style="margin-top:0">분석할 학습 기록이 없습니다.</div>'; return; }
+
+  const worksheets=target.map(ws=>{
+    const r=wsMap[ws.id];
+    const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
+    const wrongItems=[];
+    (ws.questions||[]).forEach(q=>{
+      if(AI_ANALYZE_SKIP_TYPES.has(q.type)) return;
+      const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
+      const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
+      const correctAns=q.type==='multi'
+        ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
+        : q.answer;
+      wrongItems.push({
+        qText:(q.text||'').replace(/<br\s*\/?>/gi,'\n').slice(0,300),
+        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns),
+      });
+    });
+    return { title: ws.title||'', correctRate: rate, wrongItems };
+  });
+
+  const any=Object.values(wsMap).find(r=>r.studentName)||{};
+  const unitTitle = scope==='unit' ? (UNIT_MAP[unitId]?.title||'') : '';
+
+  try{
+    const cfg=await _aiWebAppConfig();
+    if(!cfg||!cfg.url){
+      resultEl.innerHTML='<div class="card" style="margin-top:0">⚠️ AI 서버가 설정되지 않았습니다.<br>report.html의 [⚙️ 신고 서버 설정]에서 등록한 Apps Script 웹앱 URL이 필요합니다.</div>';
+      return;
+    }
+    const res=await fetch(cfg.url,{
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token:cfg.token, action:'analyzeStudent',
+        studentName: any.studentName||'', scope, unitTitle, worksheets }),
+    });
+    const out=await res.json();
+    if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
+    const a=out.analysis||{};
+    const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${s}</li>`).join('')}</ul>`:'';
+    resultEl.innerHTML=`
+      <div class="card" style="margin-top:0;border-color:#c4b5fd;background:#faf5ff">
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">🤖 AI 학습 분석 (${scope==='unit'?unitTitle:'전체 학습'} 기준) — 참고용입니다, 최종 판단은 선생님이 해주세요.</div>
+        <div style="font-weight:700;margin-bottom:10px">${a.summary||''}</div>
+        ${a.strengths?.length?`<div style="margin-bottom:10px"><b>👍 강점</b>${list(a.strengths)}</div>`:''}
+        ${a.weaknesses?.length?`<div style="margin-bottom:10px"><b>⚠️ 약점</b>${list(a.weaknesses)}</div>`:''}
+        ${a.commonMistakes?.length?`<div style="margin-bottom:10px"><b>🔁 반복되는 오류</b>${list(a.commonMistakes)}</div>`:''}
+        ${a.suggestion?`<div><b>💡 다음 지도 제안</b><div style="margin-top:4px">${a.suggestion}</div></div>`:''}
+      </div>`;
+  }catch(e){
+    resultEl.innerHTML='<div class="card" style="margin-top:0">❌ 분석 실패: '+e.message+'</div>';
+  }
+};
 
 // ── Fix 2: renderOverview - ws.grade/category → wsGrade/wsCategory 함수 사용 ──
 function renderOverview(){

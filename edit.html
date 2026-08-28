@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.1b">
+<meta name="app-version" content="edit-v3.2">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -359,6 +359,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               </div>
               <button class="btn-add-q" onclick="migrateQuestionIds()" title="문항 ID를 q01, q02… 순번으로 정리합니다 (학생 기록도 함께 이동)"
                 style="background:#78350f;color:#fbbf24">🔧 ID 정리</button>
+              <button class="btn-add-q" id="btn-ai-review" onclick="reviewWorksheetWithAI()" title="이 학습지의 문항 전체를 AI로 검토합니다 (오탈자·수식 깨짐·모호한 표현 등 — 참고용, 최종 확인은 직접 해주세요)"
+                style="background:#4c1d95;color:#e9d5ff">🤖 AI 검토</button>
             </div>
           </div>
           <div id="q-list"></div>
@@ -2264,6 +2266,88 @@ window.deleteUnit = async function(unitId, e){
   toast('단원 삭제됨');
 };
 
+/* ══════════ 🤖 AI 검토 (학습지 단위) ══════════
+   학습지의 문항 전체를 한 번에 Apps Script 웹앱(Gemini 중계)에 보내 오탈자·수식 깨짐·
+   모호한 표현 등을 점검한다. 그래프·링크·랜덤풀처럼 정답이 고정 텍스트가 아니거나
+   수동 채점하는 유형은 대상에서 뺀다. 참고용 — 결과를 그대로 신뢰하지 말 것. */
+async function _aiWebAppConfig(){
+  const snap = await getDoc(doc(db,'config','errorReports'));
+  if(!snap.exists()) return null;
+  const d = snap.data();
+  return { url: d.webAppUrl||'', token: d.token||'snug-error-report' };
+}
+function _aiAnswerSummary(q){
+  if(q.type==='multi'){
+    const opts=(q.options||[]).map((o,i)=>`${i+1}.${o}`).join(' / ');
+    const ans=(q.answer||[]).map(i=>i+1).join(',');
+    return `보기: ${opts} / 정답 번호: ${ans}`;
+  }
+  if(q.type==='step3') return (q.steps||[]).map((s,i)=>`${i+1}단계 정답:${s.answer}`).join(' / ');
+  if(q.type==='word') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
+  if(q.type==='equation') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
+  return null;   // graph/link/pool_random 등 — 검토 대상 아님
+}
+window.reviewWorksheetWithAI = async function(){
+  if(!currentWs){ toast('학습지를 선택하세요'); return; }
+  const AI_SKIP_TYPES = new Set(['graph','link','pool_random']);
+  const qs = (currentWs.questions||[])
+    .map((q,i)=>({idx:i, type:q.type, text:(q.text||'').replace(/<br\s*\/?>/gi,'\n'), answer:_aiAnswerSummary(q)}))
+    .filter(q=>!AI_SKIP_TYPES.has(q.type));
+  if(!qs.length){ toast('AI로 검토할 문항이 없습니다 (그래프·링크·랜덤풀 유형은 대상이 아닙니다)'); return; }
+
+  const modal=document.getElementById('ai-review-modal');
+  const body=document.getElementById('ai-review-body');
+  modal.style.display='flex';
+  body.innerHTML='🤖 검토 중… (몇십 초 걸릴 수 있습니다)';
+
+  try{
+    const cfg = await _aiWebAppConfig();
+    if(!cfg || !cfg.url){
+      body.innerHTML='⚠️ AI 서버가 설정되지 않았습니다.<br>report.html의 [⚙️ 신고 서버 설정]에서 등록한 Apps Script 웹앱 URL이 필요합니다 (오류 신고와 같은 웹앱을 씁니다).';
+      return;
+    }
+    const res = await fetch(cfg.url, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token:cfg.token, action:'reviewWorksheet', wsTitle: currentWs.title||'', questions: qs })
+    });
+    const out = await res.json();
+    if(!out || !out.ok) throw new Error(out?.error || '서버 응답 오류');
+
+    const findings = out.findings||[];
+    if(!findings.length){ body.innerHTML='✅ AI가 특별히 짚은 문제가 없습니다.'; return; }
+
+    const sevLabel={high:'🔴 높음', medium:'🟡 보통', low:'⚪ 낮음'};
+    const sevOrder={high:0, medium:1, low:2};
+    findings.sort((a,b)=>(sevOrder[a.severity]??3)-(sevOrder[b.severity]??3));
+    body.innerHTML = findings.map(f=>{
+      const q = qs.find(x=>x.idx===f.idx);
+      return `<div style="border:1px solid var(--rule);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer" onclick="_jumpToQuestion(${f.idx})">
+        <div style="font-size:12px;font-weight:700;margin-bottom:4px">${sevLabel[f.severity]||f.severity} · ${f.idx+1}번 문항 (클릭하면 이동)</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">${(q?.text||'').slice(0,80)}</div>
+        <div style="font-size:13px">${f.issue}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    body.innerHTML = '❌ 검토 실패: '+e.message;
+  }
+};
+/* AI 검토 결과에서 해당 문항으로 이동 (renderQList와 동일한 combinedItems 구성) */
+window._jumpToQuestion = function(qIdx){
+  document.getElementById('ai-review-modal').style.display='none';
+  if(!currentWs) return;
+  const isVocab = currentWs.type==='vocab';
+  const vocabCount = isVocab ? (currentWs.vocab||[]).length : 0;
+  const allItems = isVocab
+    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})), ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
+    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  const combinedIdx = vocabCount + qIdx;
+  selectQuestion(combinedIdx, allItems);
+  setTimeout(()=>{
+    const card=document.querySelector(`.q-card[data-idx="${combinedIdx}"]`);
+    if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 50);
+};
+
 </script>
 
 <!-- 문항 유형 선택 모달 -->
@@ -2321,6 +2405,18 @@ window.deleteUnit = async function(unitId, e){
     <div id="preview-body"></div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="document.getElementById('preview-modal').style.display='none'">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🤖 AI 검토 결과 모달 -->
+<div class="modal-bg" id="ai-review-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="width:min(640px,92vw);max-height:80vh;overflow:auto">
+    <h3>🤖 AI 검토 결과</h3>
+    <div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">AI가 참고용으로 짚어준 항목입니다 — 최종 확인은 직접 해주세요.</div>
+    <div id="ai-review-body">확인 중…</div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('ai-review-modal').style.display='none'">닫기</button>
     </div>
   </div>
 </div>

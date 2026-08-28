@@ -245,10 +245,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <span style="width:1px;height:20px;background:rgba(255,255,255,.25);margin:0 2px"></span>
       <button class="hdr-btn" onclick="migrateWsIds()" title="학습지 ID를 단원·표시 순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)"
         style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 학습지 ID 정리</button>
-      <button class="hdr-btn" onclick="setupAIServer()" title="🤖 AI 검토/분석 기능이 쓰는 Apps Script 웹앱 주소를 지정합니다 (최초 1회)"
-        style="background:#4c1d95;color:#e9d5ff;border:1px solid #6d28d9">⚙️ AI 서버 설정</button>
-      <button class="hdr-btn" onclick="openAIModelPicker()" title="지금 Gemini 서버가 제공하는 모델 목록을 불러와 사용할 모델을 고릅니다"
-        style="background:#4c1d95;color:#e9d5ff;border:1px solid #6d28d9">🧠 AI 모델 선택</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -572,6 +568,10 @@ const FB = {
   appId:"1:404100779359:web:d94e5be4b4f29ae9c55bb0"
 };
 const TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+// 🤖 AI 검토/분석용 Apps Script 웹앱 (AI기능_AppsScript.gs, 오류신고 웹앱과는 별개 프로젝트)
+// SECRET 상수와 값이 같아야 함. URL 자체는 비밀번호가 아니라 장난 호출 차단용 토큰으로 보호됨.
+const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec";
+const AI_WEBAPP_TOKEN = "snug-ai-assist";
 
 const fbApp = initializeApp(FB);
 const auth  = getAuth(fbApp);
@@ -2271,87 +2271,10 @@ window.deleteUnit = async function(unitId, e){
 };
 
 /* ══════════ 🤖 AI 검토 (학습지 단위) ══════════
-   학습지의 문항 전체를 한 번에 Apps Script 웹앱(Gemini 중계)에 보내 오탈자·수식 깨짐·
-   모호한 표현 등을 점검한다. 그래프·링크·랜덤풀처럼 정답이 고정 텍스트가 아니거나
-   수동 채점하는 유형은 대상에서 뺀다. 참고용 — 결과를 그대로 신뢰하지 말 것. */
-async function _aiWebAppConfig(){
-  const snap = await getDoc(doc(db,'config','aiAssist'));
-  if(!snap.exists()) return null;
-  const d = snap.data();
-  return { url: d.webAppUrl||'', token: d.token||'snug-ai-assist' };
-}
-/* AI 기능 전용 Apps Script 웹앱 주소 등록 (오류신고/챗 알림용과는 별개 프로젝트 —
-   AI기능_AppsScript.gs 주석 참고) */
-window.setupAIServer = async function(){
-  let cur='';
-  try{
-    const snap=await getDoc(doc(db,'config','aiAssist'));
-    cur = snap.exists() ? (snap.data().webAppUrl||'') : '';
-  }catch(e){}
-  const url = prompt(
-    'AI 기능용 Apps Script 웹앱 주소를 붙여넣으세요.\n\n'
-    + '· AI기능_AppsScript.gs를 별도 프로젝트로 배포한 뒤 나오는\n'
-    + '  https://script.google.com/macros/s/.../exec 주소입니다.\n'
-    + '· 오류신고/챗 알림용 웹앱과는 다른 주소입니다.\n'
-    + '· 비우고 확인을 누르면 설정을 해제합니다.',
-    cur);
-  if(url===null) return;
-  const clean=url.trim();
-  if(clean && !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(clean)){
-    alert('주소 형식이 올바르지 않습니다.\nhttps://script.google.com/macros/s/…/exec 형태여야 합니다.');
-    return;
-  }
-  try{
-    await setDoc(doc(db,'config','aiAssist'),
-      { webAppUrl:clean, token:'snug-ai-assist', updatedAt:new Date().toISOString(), updatedBy:currentUser?.email||'' },
-      { merge:true });
-    alert(clean ? '✅ AI 서버가 설정되었습니다.' : '설정을 해제했습니다.');
-  }catch(e){ alert('설정 저장 실패: '+e.message); }
-};
-
-/* 지금 Gemini 서버가 제공하는 모델 목록을 불러와 고르게 한다 (모델을 코드에 고정하지 않음) */
-window.openAIModelPicker = async function(){
-  const modal=document.getElementById('ai-model-modal');
-  const body=document.getElementById('ai-model-body');
-  const saveBtn=document.getElementById('ai-model-save-btn');
-  saveBtn.style.display='none';
-  modal.style.display='flex';
-  body.innerHTML='불러오는 중…';
-  try{
-    const cfg=await _aiWebAppConfig();
-    if(!cfg||!cfg.url){ body.innerHTML='⚠️ 먼저 [⚙️ AI 서버 설정]에서 웹앱 주소를 등록하세요.'; return; }
-    const res=await fetch(cfg.url,{
-      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ token:cfg.token, action:'listModels' })
-    });
-    const out=await res.json();
-    if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
-    const models=out.models||[];
-    if(!models.length){ body.innerHTML='사용 가능한 모델이 없습니다.'; return; }
-    body.innerHTML=`<select id="ai-model-sel" style="width:100%;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:inherit">
-      ${models.map(m=>`<option value="${m.id}" ${m.id===out.current?'selected':''}>${m.displayName} (${m.id})</option>`).join('')}
-    </select>
-    <div style="font-size:11px;color:var(--ink3);margin-top:8px">현재 선택: ${out.current||'(없음)'}</div>`;
-    saveBtn.style.display='';
-  }catch(e){
-    body.innerHTML='❌ 목록을 불러오지 못했습니다: '+e.message;
-  }
-};
-window.saveAIModel = async function(){
-  const sel=document.getElementById('ai-model-sel');
-  if(!sel||!sel.value){ toast('모델을 선택하세요'); return; }
-  try{
-    const cfg=await _aiWebAppConfig();
-    const res=await fetch(cfg.url,{
-      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ token:cfg.token, action:'setModel', model: sel.value })
-    });
-    const out=await res.json();
-    if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
-    toast('✅ 모델이 "'+out.model+'"로 설정되었습니다');
-    document.getElementById('ai-model-modal').style.display='none';
-  }catch(e){ alert('저장 실패: '+e.message); }
-};
+   학습지의 문항 전체를 한 번에 Apps Script 웹앱(Gemini 중계, AI_WEBAPP_URL)에 보내
+   오탈자·수식 깨짐·모호한 표현 등을 점검한다. 그래프·링크·랜덤풀처럼 정답이 고정
+   텍스트가 아니거나 수동 채점하는 유형은 대상에서 뺀다. 참고용 — 결과를 그대로 신뢰하지 말 것.
+   (모델 선택·할당량 초과 시 다음 모델로 전환은 전부 Apps Script 쪽에서 자동으로 처리한다.) */
 function _aiAnswerSummary(q){
   if(q.type==='multi'){
     const opts=(q.options||[]).map((o,i)=>`${i+1}.${o}`).join(' / ');
@@ -2377,14 +2300,9 @@ window.reviewWorksheetWithAI = async function(){
   body.innerHTML='🤖 검토 중… (몇십 초 걸릴 수 있습니다)';
 
   try{
-    const cfg = await _aiWebAppConfig();
-    if(!cfg || !cfg.url){
-      body.innerHTML='⚠️ AI 서버가 설정되지 않았습니다.<br>report.html의 [⚙️ 신고 서버 설정]에서 등록한 Apps Script 웹앱 URL이 필요합니다 (오류 신고와 같은 웹앱을 씁니다).';
-      return;
-    }
-    const res = await fetch(cfg.url, {
+    const res = await fetch(AI_WEBAPP_URL, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ token:cfg.token, action:'reviewWorksheet', wsTitle: currentWs.title||'', questions: qs })
+      body: JSON.stringify({ token:AI_WEBAPP_TOKEN, action:'reviewWorksheet', wsTitle: currentWs.title||'', questions: qs })
     });
     const out = await res.json();
     if(!out || !out.ok) throw new Error(out?.error || '서버 응답 오류');
@@ -2493,19 +2411,6 @@ window._jumpToQuestion = function(qIdx){
     <div id="ai-review-body">확인 중…</div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="document.getElementById('ai-review-modal').style.display='none'">닫기</button>
-    </div>
-  </div>
-</div>
-
-<!-- 🧠 AI 모델 선택 모달 -->
-<div class="modal-bg" id="ai-model-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
-  <div class="modal" style="width:min(440px,92vw)">
-    <h3>🧠 AI 모델 선택</h3>
-    <div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">지금 Gemini 서버가 제공하는 모델 목록입니다. 요금제·속도가 모델마다 다르니 무료 한도가 궁금하면 <a href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">AI Studio</a>에서 확인하세요.</div>
-    <div id="ai-model-body">불러오는 중…</div>
-    <div class="modal-actions">
-      <button class="btn-modal-cancel" onclick="document.getElementById('ai-model-modal').style.display='none'">닫기</button>
-      <button class="btn-modal-ok" id="ai-model-save-btn" onclick="saveAIModel()" style="display:none">적용</button>
     </div>
   </div>
 </div>

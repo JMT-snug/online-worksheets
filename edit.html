@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.2">
+<meta name="app-version" content="edit-v3.3">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -131,6 +131,21 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .ans-alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .ans-alt-tag{background:var(--acc-lt);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:12px;display:flex;align-items:center;gap:4px}
 .ans-alt-tag button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:11px;padding:0 2px}
+
+/* 좌표축만 그래프 — 원점 위치 3×3 선택 */
+.g-org-grid{display:grid;grid-template-columns:repeat(3,34px);gap:5px}
+.g-org-btn{position:relative;width:34px;height:34px;padding:0;border:1px solid var(--rule);border-radius:5px;background:#fff;cursor:pointer;color:var(--ink3)}
+.g-org-btn::before,.g-org-btn::after{content:'';position:absolute;background:currentColor;opacity:.35}
+.g-org-btn::before{left:4px;right:4px;height:1px}
+.g-org-btn::after{top:4px;bottom:4px;width:1px}
+.g-org-btn[data-v="t"]::before{top:6px}
+.g-org-btn[data-v="m"]::before{top:16px}
+.g-org-btn[data-v="b"]::before{top:27px}
+.g-org-btn[data-h="l"]::after{left:6px}
+.g-org-btn[data-h="c"]::after{left:16px}
+.g-org-btn[data-h="r"]::after{left:27px}
+.g-org-btn.on{border-color:var(--accent);background:var(--acc-lt);color:var(--accent)}
+.g-org-btn.on::before,.g-org-btn.on::after{opacity:1}
 
 /* 선지 목록 */
 .option-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
@@ -438,6 +453,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
                 <input type="radio" name="graph-grid" value="numberline" id="g-nl" onchange="onGraphGridChange()"> 수직선
               </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="radio" name="graph-grid" value="axisonly" id="g-ax" onchange="onGraphGridChange()"> 좌표축만
+              </label>
             </div>
             <div id="g-coord-settings">
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
@@ -457,6 +475,21 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <input id="g-nlmin" type="number" step="0.1" value="-10" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px"> ~
                 <input id="g-nlmax" type="number" step="0.1" value="10" style="width:56px;padding:3px 6px;border:1px solid var(--rule);border-radius:4px;font-size:12px">
               </div>
+            </div>
+            <div id="g-ax-settings" style="display:none">
+              <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">눈금·격자·좌표 숫자 없이 <b>좌표축만</b> 그립니다. 원점 위치를 고르세요.</div>
+              <div class="g-org-grid">
+                <button type="button" class="g-org-btn" data-org="tl" data-h="l" data-v="t" title="왼쪽 위" onclick="setGraphOrigin('tl')"></button>
+                <button type="button" class="g-org-btn" data-org="tc" data-h="c" data-v="t" title="가운데 위" onclick="setGraphOrigin('tc')"></button>
+                <button type="button" class="g-org-btn" data-org="tr" data-h="r" data-v="t" title="오른쪽 위" onclick="setGraphOrigin('tr')"></button>
+                <button type="button" class="g-org-btn" data-org="ml" data-h="l" data-v="m" title="왼쪽 가운데" onclick="setGraphOrigin('ml')"></button>
+                <button type="button" class="g-org-btn" data-org="mc" data-h="c" data-v="m" title="한가운데" onclick="setGraphOrigin('mc')"></button>
+                <button type="button" class="g-org-btn" data-org="mr" data-h="r" data-v="m" title="오른쪽 가운데" onclick="setGraphOrigin('mr')"></button>
+                <button type="button" class="g-org-btn" data-org="bl" data-h="l" data-v="b" title="왼쪽 아래" onclick="setGraphOrigin('bl')"></button>
+                <button type="button" class="g-org-btn" data-org="bc" data-h="c" data-v="b" title="가운데 아래" onclick="setGraphOrigin('bc')"></button>
+                <button type="button" class="g-org-btn" data-org="br" data-h="r" data-v="b" title="오른쪽 아래" onclick="setGraphOrigin('br')"></button>
+              </div>
+              <div id="g-org-label" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
             </div>
           </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
@@ -1219,16 +1252,17 @@ function showPanel(item){
     } else if(qtype==='graph'){
       // graph 설정 로드
       const gt=item.graphType||'coordinate';
-      document.getElementById(gt==='numberline'?'g-nl':'g-coord').checked=true;
+      document.getElementById(gt==='numberline'?'g-nl':gt==='axisonly'?'g-ax':'g-coord').checked=true;
       onGraphGridChange();
-      if(gt==='coordinate'){
+      setGraphOrigin(item.originPos||'bl');
+      if(gt==='numberline'){
+        document.getElementById('g-nlmin').value=item.nMin??-10;
+        document.getElementById('g-nlmax').value=item.nMax??10;
+      } else if(gt==='coordinate'){
         document.getElementById('g-xmin').value=item.xMin??-5;
         document.getElementById('g-xmax').value=item.xMax??5;
         document.getElementById('g-ymin').value=item.yMin??-5;
         document.getElementById('g-ymax').value=item.yMax??5;
-      } else {
-        document.getElementById('g-nlmin').value=item.nMin??-10;
-        document.getElementById('g-nlmax').value=item.nMax??10;
       }
     } else if(qtype==='step3'){
       // 신규 steps[] 우선, 없으면 기존 step1/2/3에서 변환
@@ -1356,9 +1390,27 @@ window.previewText = function(inputId, previewId){
 // ── 문항 저장 (적용) ──
 
 window.onGraphGridChange=function(){
-  const isCoord=document.getElementById('g-coord').checked;
-  document.getElementById('g-coord-settings').style.display=isCoord?'':'none';
-  document.getElementById('g-nl-settings').style.display=isCoord?'none':'';
+  const gt=curGraphType();
+  document.getElementById('g-coord-settings').style.display=gt==='coordinate'?'':'none';
+  document.getElementById('g-nl-settings').style.display=gt==='numberline'?'':'none';
+  document.getElementById('g-ax-settings').style.display=gt==='axisonly'?'':'none';
+};
+
+/* ── 좌표축만(눈금 없는 좌표평면): 원점 위치 9곳 ── */
+const ORIGIN_LABELS={tl:'왼쪽 위',tc:'가운데 위',tr:'오른쪽 위',
+                     ml:'왼쪽 가운데',mc:'한가운데',mr:'오른쪽 가운데',
+                     bl:'왼쪽 아래',bc:'가운데 아래',br:'오른쪽 아래'};
+let curOriginPos='bl';
+function curGraphType(){
+  if(document.getElementById('g-nl').checked) return 'numberline';
+  if(document.getElementById('g-ax').checked) return 'axisonly';
+  return 'coordinate';
+}
+window.setGraphOrigin=function(pos){
+  curOriginPos=ORIGIN_LABELS[pos]?pos:'bl';
+  document.querySelectorAll('.g-org-btn').forEach(b=>b.classList.toggle('on',b.dataset.org===curOriginPos));
+  const lab=document.getElementById('g-org-label');
+  if(lab) lab.textContent='원점: '+ORIGIN_LABELS[curOriginPos];
 };
 
 
@@ -1431,7 +1483,7 @@ window.saveQuestion = async function(){
   if(type==='graph'){
     const _isVocabG=currentWs.type==='vocab';
     const qIdxS=_isVocabG?selectedQIdx-(currentWs.vocab||[]).length:selectedQIdx;
-    const gt=document.getElementById('g-coord').checked?'coordinate':'numberline';
+    const gt=curGraphType();
     const qData={id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,type:'graph',
       text:document.getElementById('q-text').value.trim(),
       diff:parseInt(document.getElementById('q-diff-sel').value)||1,
@@ -1442,6 +1494,8 @@ window.saveQuestion = async function(){
       qData.xMax=(()=>{const v=parseFloat(document.getElementById('g-xmax').value);return isNaN(v)?5:v;})();
       qData.yMin=(()=>{const v=parseFloat(document.getElementById('g-ymin').value);return isNaN(v)?-5:v;})();
       qData.yMax=(()=>{const v=parseFloat(document.getElementById('g-ymax').value);return isNaN(v)?5:v;})();
+    } else if(gt==='axisonly'){
+      qData.originPos=curOriginPos;
     } else {
       qData.nMin=(()=>{const v=parseFloat(document.getElementById('g-nlmin').value);return isNaN(v)?-10:v;})();
       qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();
@@ -2377,7 +2431,7 @@ window._jumpToQuestion = function(qIdx){
       <div class="type-opt" data-type="graph" onclick="selectTypeOpt(this)">
         <div class="type-icon">📈</div>
         <div class="type-name">그래프 그리기</div>
-        <div class="type-desc">수직선/좌표평면 답안</div>
+        <div class="type-desc">수직선/좌표평면/좌표축 답안</div>
       </div>
       <div class="type-opt" data-type="pool_random" onclick="selectTypeOpt(this)" style="grid-column:1/-1">
         <div class="type-icon">🎲</div>

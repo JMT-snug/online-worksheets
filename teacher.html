@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.32">
+<meta name="app-version" content="3.33">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2273,6 +2273,8 @@ function drawGraphGridForTeacher(canvas, q, W, H){
   const isNL=q.graphType==='numberline';
   if(isNL){
     _drawNumberLineT(ctx,W,H,q.nMin??-10,q.nMax??10);
+  } else if(q.graphType==='axisonly'){
+    drawAxisOnlyPlane(ctx,W,H,q.originPos||'mc');
   } else {
     _drawCoordPlaneT(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
   }
@@ -2315,6 +2317,43 @@ function _drawCoordPlaneT(ctx,W,H,xMin,xMax,yMin,yMax){
   ctx.textAlign='left'; ctx.fillText('x',W-PAD+4,toY(0)+4);
   ctx.textAlign='center'; ctx.fillText('y',toX(0),PAD-6);
 }
+/* ── 좌표축만 있는 좌표평면 (눈금·격자·좌표 숫자 없음) ──
+   원점 위치를 9곳(가로 왼쪽/가운데/오른쪽 × 세로 위/가운데/아래) 중에서 고를 수 있다.
+   예) 'bl'(왼쪽 아래) → 제1사분면만, 'mc'(가운데) → 사분면 전체. */
+const GRAPH_ORIGIN_POS = {
+  tl:[0,0],   tc:[0.5,0],   tr:[1,0],
+  ml:[0,0.5], mc:[0.5,0.5], mr:[1,0.5],
+  bl:[0,1],   bc:[0.5,1],   br:[1,1]
+};
+function drawAxisOnlyPlane(ctx,W,H,originPos){
+  const PAD=32;
+  const p=GRAPH_ORIGIN_POS[originPos]||GRAPH_ORIGIN_POS.mc;
+  const L=PAD, R=W-PAD, T=PAD, B=H-PAD;
+  const ox=L+p[0]*(R-L), oy=T+p[1]*(B-T);
+  // 축
+  ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(L,oy); ctx.lineTo(R,oy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,T); ctx.lineTo(ox,B); ctx.stroke();
+  // 화살표 — 원점에서 실제로 뻗어 있는 방향에만 그린다
+  ctx.fillStyle='#374151';
+  const arw=6, MINLEN=14;
+  if(R-ox>=MINLEN){ ctx.beginPath(); ctx.moveTo(R,oy); ctx.lineTo(R-arw,oy-arw/2); ctx.lineTo(R-arw,oy+arw/2); ctx.fill(); }
+  if(ox-L>=MINLEN){ ctx.beginPath(); ctx.moveTo(L,oy); ctx.lineTo(L+arw,oy-arw/2); ctx.lineTo(L+arw,oy+arw/2); ctx.fill(); }
+  if(oy-T>=MINLEN){ ctx.beginPath(); ctx.moveTo(ox,T); ctx.lineTo(ox-arw/2,T+arw); ctx.lineTo(ox+arw/2,T+arw); ctx.fill(); }
+  if(B-oy>=MINLEN){ ctx.beginPath(); ctx.moveTo(ox,B); ctx.lineTo(ox-arw/2,B-arw); ctx.lineTo(ox+arw/2,B-arw); ctx.fill(); }
+  // 축 이름 — 길게 뻗은 쪽 끝에 붙인다
+  ctx.font='12px sans-serif'; ctx.fillStyle='#374151';
+  if(R-ox>=ox-L){ ctx.textAlign='left';  ctx.fillText('x',R+4,oy+4); }
+  else          { ctx.textAlign='right'; ctx.fillText('x',L-4,oy+4); }
+  ctx.textAlign='center';
+  if(oy-T>=B-oy) ctx.fillText('y',ox,T-6);
+  else           ctx.fillText('y',ox,B+14);
+  // 원점 O — 축·테두리에 겹치지 않게 안쪽으로 뺀다
+  const atLeft=(ox-L)<MINLEN, atBottom=(B-oy)<MINLEN;
+  ctx.textAlign=atLeft?'left':'right';
+  ctx.fillText('O', ox+(atLeft?6:-4), oy+(atBottom?-6:14));
+}
+
 function _drawNumberLineT(ctx,W,H,nMin,nMax){
   const PAD=32; const MID=H/2;
   const range=nMax-nMin;

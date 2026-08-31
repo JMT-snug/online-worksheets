@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.3">
+<meta name="app-version" content="edit-v3.4">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -131,6 +131,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .ans-alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .ans-alt-tag{background:var(--acc-lt);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:12px;display:flex;align-items:center;gap:4px}
 .ans-alt-tag button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:11px;padding:0 2px}
+
+/* 이미지 첨부 버튼 */
+.img-btn{background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.img-btn:hover{background:var(--accent);color:#fff}
 
 /* 좌표축만 그래프 — 원점 위치 3×3 선택 */
 .g-org-grid{display:grid;grid-template-columns:repeat(3,34px);gap:5px}
@@ -432,17 +436,21 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <!-- 이미지 첨부 -->
           <div class="field" id="field-image">
             <label>이미지 <span style="font-weight:400;color:var(--ink3)">(선택)</span></label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <label style="cursor:pointer;background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600">
-                Drive 링크 입력
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+              <button type="button" onclick="armScreenshotPaste()" class="img-btn">📸 스크린샷</button>
+              <button type="button" onclick="pickFromDrive()" class="img-btn">🗂 드라이브에서 선택</button>
+              <label class="img-btn" style="cursor:pointer">📁 파일 선택
                 <input type="file" id="q-img-file" accept="image/*" style="display:none" onchange="previewLocalImage(this)">
               </label>
-              <input id="q-img-link-input" placeholder="drive.google.com/file/d/... 붙여넣기"
+              <button type="button" onclick="clearImage()" style="margin-left:auto;background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
+            </div>
+            <div id="q-img-hint" style="display:none;font-size:12px;line-height:1.6;color:var(--accent);background:var(--acc-lt);border-radius:6px;padding:7px 10px;margin-bottom:6px"></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input id="q-img-link-input" placeholder="drive.google.com/file/d/... 링크 붙여넣기"
                 style="flex:1;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;font-size:12px;font-family:monospace;min-width:0"
                 oninput="importDriveLink(this.value)">
               <button onclick="importDriveLink(document.getElementById('q-img-link-input').value)"
                 style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
-              <button onclick="clearImage()" style="background:var(--red-lt);color:var(--red);border:none;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">✕ 삭제</button>
             </div>
           <div class="field" id="field-graph" style="display:none">
             <label>격자 설정</label>
@@ -661,15 +669,8 @@ document.getElementById('btn-login').onclick = async () => {
   } catch(e){ alert('로그인 오류: '+e.message); }
 };
 
-async function getDriveToken(){
-  if(_googleAccessToken) return _googleAccessToken;
-  const provider = new GoogleAuthProvider();
-  provider.addScope('https://www.googleapis.com/auth/drive.file');
-  const result = await signInWithPopup(auth, provider);
-  const cred = GoogleAuthProvider.credentialFromResult(result);
-  if(cred?.accessToken) _googleAccessToken = cred.accessToken;
-  return _googleAccessToken;
-}
+/* getDriveToken()은 이미지 업로드가 Apps Script 경유로 바뀌면서 쓰이지 않게 되어 걷어냈습니다.
+   로그인 시 요청하는 Drive 스코프는 그대로 두었습니다(다른 기능이 쓸 수 있도록). */
 document.getElementById('btn-logout').onclick = () => signOut(auth);
 
 // ── 데이터 로드 ──
@@ -1947,67 +1948,140 @@ function bustCache(url){
 window.previewLocalImage = function(input){
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('q-img-tag').src = e.target.result;
-    document.getElementById('q-img-preview').style.display = '';
-    document.getElementById('q-img-status').textContent = `선택됨: ${file.name} (${(file.size/1024).toFixed(1)}KB) — Drive 업로드 버튼을 눌러주세요`;
-  };
+  reader.onload = e => attachImage(e.target.result, file.name);
   reader.readAsDataURL(file);
+  input.value = '';   // 같은 파일을 다시 골라도 change가 뜨도록
 };
 
 window.clearImage = function(){
   document.getElementById('q-img-url').value = '';
   document.getElementById('q-img-preview').style.display = 'none';
   document.getElementById('q-img-file').value = '';
+  const link = document.getElementById('q-img-link-input'); if(link) link.value = '';
+  const hint = document.getElementById('q-img-hint');       if(hint) hint.style.display = 'none';
 };
 
 
-window.pickFromDrive = async function(){
-  const folderId = '18RpTc5F9GTsfFuk4s-e6zQtN1YtGOVFw';
-  const modal = document.getElementById('drive-picker-modal');
-  const grid  = document.getElementById('drive-picker-grid');
-  const status= document.getElementById('drive-picker-status');
-  modal.style.display='flex';
-  grid.innerHTML=''; status.textContent='⏳ 파일 목록 불러오는 중...';
+/* ══════════ 문항 이미지 첨부 ══════════
+   📸 스크린샷 붙여넣기 · 🗂 드라이브에서 선택 · 📁 파일 선택 — 세 경로 모두
+   같은 업로드 함수(attachImage)로 모입니다.
+
+   업로드·목록 조회는 오류신고 Apps Script 웹앱을 경유합니다. 웹앱이 소유자 권한으로
+   실행되므로 교사마다 Drive 폴더 권한을 따로 줄 필요가 없고, 브라우저의 drive.file
+   스코프로는 공용 폴더에 쓸 수 없어 403이 나던 문제(README 200~213행)도 피합니다.
+   그래서 예전의 OAuth 직접 업로드(uploadImageToDrive)·직접 목록조회는 걷어냈습니다. */
+
+let _imgWebApp = null, _imgToken = 'snug-error-report';
+async function getImgWebApp(){
+  if(_imgWebApp) return _imgWebApp;
+  const snap = await getDoc(doc(db,'config','errorReports'));
+  const d = snap.exists() ? snap.data() : {};
+  if(!d.webAppUrl) throw new Error('이미지 서버가 설정되지 않았습니다.\nreport.html의 [⚙️ 신고 서버 설정]에서 Apps Script 웹앱 주소를 등록해 주세요.');
+  _imgWebApp = d.webAppUrl;
+  _imgToken  = d.token || _imgToken;
+  return _imgWebApp;
+}
+
+async function callImgWebApp(payload){
+  const url = await getImgWebApp();
+  // text/plain: CORS preflight를 피하려는 것 (AI 검토 호출과 같은 방식)
+  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({ token:_imgToken }, payload)) });
+  const out = await res.json();
+  if(!out || !out.ok) throw new Error(out?.error || '서버 응답 오류');
+  return out;
+}
+
+/** 현재 편집 중인 문항 번호. VOCA형 학습지는 앞에 vocab 개수만큼 밀려 있다.
+    ⚠ 번호는 별도 필드가 아니라 배열 순서라서, 나중에 문항 순서를 바꾸면
+       이미 저장된 파일명의 번호와는 어긋난다(파일명은 첨부 시점 기준). */
+function curQuestionNo(){
+  if(selectedQIdx===null || !currentWs) return '';
+  const off = currentWs.type==='vocab' ? (currentWs.vocab||[]).length : 0;
+  return selectedQIdx - off + 1;
+}
+
+function _imgEsc(t){
+  return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/** 이미지(data URL) 하나를 Drive에 올리고 현재 문항에 첨부한다 */
+async function attachImage(dataUrl, label){
+  if(selectedQIdx===null || !currentWs){ alert('먼저 문항을 선택해 주세요.'); return; }
+  const st   = document.getElementById('q-img-status');
+  const hint = document.getElementById('q-img-hint');
+  if(hint) hint.style.display='none';
+  document.getElementById('q-img-tag').src = dataUrl;          // 올리는 동안 캡처본을 미리 보여준다
+  document.getElementById('q-img-preview').style.display = '';
+  if(st) st.textContent = `${label} 업로드 중…`;
   try{
-    const token = await getDriveToken();
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+(mimeType+contains+'image/')+and+trashed=false&fields=files(id,name,thumbnailLink,mimeType)&pageSize=50`,
-      { headers:{ Authorization:`Bearer ${token}` } }
-    );
-    const data = await res.json();
-    const files = data.files||[];
-    if(!files.length){ status.textContent='이미지 파일이 없습니다.'; return; }
-    status.textContent=`${files.length}개 이미지`;
-    files.forEach(f=>{
-      const card = document.createElement('div');
-      card.style.cssText='cursor:pointer;border:2px solid var(--rule);border-radius:8px;overflow:hidden;transition:border-color .15s';
-      card.onmouseover=()=>card.style.borderColor='var(--accent)';
-      card.onmouseout=()=>card.style.borderColor='var(--rule)';
-      const thumb = f.thumbnailLink
-        ? `<img src="${f.thumbnailLink}" style="width:100%;height:90px;object-fit:cover">`
-        : `<div style="width:100%;height:90px;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:28px">🖼</div>`;
-      card.innerHTML=`${thumb}<div style="padding:4px 6px;font-size:10px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>`;
-      card.onclick=()=>{
-        const url=`https://drive.google.com/uc?export=view&id=${f.id}`;
-        document.getElementById('q-img-url').value=url;
-        document.getElementById('q-img-tag').src=bustCache(url);
-        document.getElementById('q-img-preview').style.display='';
-        document.getElementById('q-img-status').textContent=`✅ ${f.name}`;
-        modal.style.display='none';
-        toast('이미지 선택 완료');
-      };
-      grid.appendChild(card);
-    });
+    const out = await callImgWebApp({ action:'uploadQuestionImage', image:dataUrl,
+      wsTitle: currentWs.title||'', qNo: curQuestionNo() });
+    document.getElementById('q-img-url').value = out.url;
+    document.getElementById('q-img-tag').src   = bustCache(out.url);
+    if(st) st.textContent = `저장됨: ${out.name}`;
+    toast('이미지 첨부됨 — [적용]을 눌러야 문항에 저장됩니다');
   }catch(e){
-    status.textContent='❌ 오류: '+e.message;
-    console.error(e);
+    if(st) st.textContent = '업로드 실패: '+e.message;
+    alert('이미지 업로드 실패\n\n'+e.message);
   }
+}
+
+/** 📸 버튼 — 캡처는 OS 도구가 하고, 돌아와서 Ctrl+V 하면 paste 리스너가 받는다 */
+window.armScreenshotPaste = function(){
+  const hint = document.getElementById('q-img-hint');
+  if(!hint) return;
+  hint.style.display = '';
+  hint.innerHTML = '📸 <b>Win</b>+<b>Shift</b>+<b>S</b> 로 원하는 영역을 캡처한 뒤, 이 화면으로 돌아와 <b>Ctrl</b>+<b>V</b> 를 누르세요.';
 };
 
+/* 클립보드에 이미지가 있을 때만 가로챈다 — 글자 붙여넣기는 그대로 동작한다 */
+document.addEventListener('paste', e => {
+  const items = [...(e.clipboardData?.items || [])].filter(it => it.type.startsWith('image/'));
+  if(!items.length) return;
+  if(selectedQIdx===null || !currentWs) return;
+  const field = document.getElementById('field-image');
+  if(!field || field.style.display === 'none') return;   // 이미지를 넣을 수 없는 문항 유형
+  const file = items[0].getAsFile();
+  if(!file) return;
+  e.preventDefault();
+  const r = new FileReader();
+  r.onload = ev => attachImage(ev.target.result, '스크린샷');
+  r.readAsDataURL(file);
+});
 
+/** 🗂 지정 폴더의 이미지를 그리드로 띄우고, 고르면 첨부한다 */
+window.pickFromDrive = async function(){
+  if(selectedQIdx===null || !currentWs){ alert('먼저 문항을 선택해 주세요.'); return; }
+  const modal  = document.getElementById('drive-picker-modal');
+  const grid   = document.getElementById('drive-picker-grid');
+  const status = document.getElementById('drive-picker-status');
+  modal.style.display='flex'; grid.innerHTML=''; status.textContent='불러오는 중…';
+  try{
+    const out   = await callImgWebApp({ action:'listQuestionImages', limit:60 });
+    const files = out.files || [];
+    if(!files.length){ status.textContent='폴더에 이미지가 없습니다.'; return; }
+    status.textContent = `${files.length}개 (최근 수정순) — 클릭하면 첨부됩니다`;
+    grid.innerHTML = files.map(f => `
+      <div onclick="chooseDriveImage('${f.id}')" title="${_imgEsc(f.name)}&#10;${_imgEsc(f.updated||'')}"
+           style="cursor:pointer;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff">
+        <img src="${f.url}" loading="lazy" style="width:100%;height:90px;object-fit:contain;background:var(--cream);display:block">
+        <div style="font-size:10px;padding:4px 6px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_imgEsc(f.name)}</div>
+      </div>`).join('');
+  }catch(e){ status.textContent = '불러오기 실패: '+e.message; }
+};
 
+window.chooseDriveImage = function(id){
+  const url = 'https://lh3.googleusercontent.com/d/'+id;
+  document.getElementById('q-img-url').value = url;
+  document.getElementById('q-img-tag').src = bustCache(url);
+  document.getElementById('q-img-preview').style.display = '';
+  const st = document.getElementById('q-img-status'); if(st) st.textContent = '드라이브에서 선택됨';
+  document.getElementById('drive-picker-modal').style.display = 'none';
+  toast('이미지 첨부됨 — [적용]을 눌러야 문항에 저장됩니다');
+};
 
+/** 🔗 Drive 공유 링크 붙여넣기 — 파일 ID만 뽑아 표시용 URL로 바꾼다 */
 window.importDriveLink = function(raw){
   if(!raw) return;
   let id='';
@@ -2020,62 +2094,6 @@ window.importDriveLink = function(raw){
   document.getElementById('q-img-preview').style.display='';
   document.getElementById('q-img-status').textContent=`✅ ID: ${id}`;
   toast('이미지 링크 적용');
-};
-
-window.uploadImageToDrive = async function(){
-  const fileInput = document.getElementById('q-img-file');
-  const file = fileInput.files[0];
-  if(!file){ toast('이미지를 먼저 선택하세요'); return; }
-
-  const folderId = document.getElementById('drive-folder-id')?.value?.trim() || '18RpTc5F9GTsfFuk4s-e6zQtN1YtGOVFw';
-
-  const status = document.getElementById('q-img-status');
-  status.textContent = '⏳ Drive 토큰 요청 중...';
-
-  try{
-    const token = await getDriveToken();
-    if(!token) throw new Error('Drive 토큰 획득 실패');
-
-    status.textContent = '⏳ 업로드 중...';
-
-    // 1. 파일 업로드 (multipart)
-    const meta = JSON.stringify({ name: file.name, parents: [folderId] });
-    const body = new FormData();
-    body.append('metadata', new Blob([meta], {type:'application/json'}));
-    body.append('file', file);
-
-    const uploadRes = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
-      { method:'POST', headers:{'Authorization':`Bearer ${token}`}, body }
-    );
-    if(!uploadRes.ok) throw new Error(`업로드 실패: ${uploadRes.status}`);
-    const { id } = await uploadRes.json();
-
-    // 2. 공개 권한 설정
-    status.textContent = '⏳ 공개 설정 중...';
-    await fetch(`https://www.googleapis.com/drive/v3/files/${id}/permissions`, {
-      method:'POST',
-      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
-      body: JSON.stringify({ role:'reader', type:'anyone' })
-    });
-
-    // 3. URL 저장
-    const url = `https://drive.google.com/uc?export=view&id=${id}`;
-    document.getElementById('q-img-url').value = url;
-    document.getElementById('q-img-tag').src = bustCache(url);
-    document.getElementById('q-img-preview').style.display = '';
-    status.textContent = `✅ 업로드 완료: ${file.name}`;
-    toast('이미지 업로드 완료');
-  }catch(e){
-    status.textContent = `❌ 오류: ${e.message}`;
-    toast('업로드 실패: ' + e.message);
-    console.error(e);
-    // 토큰 만료 가능성
-    if(e.message.includes('401') || e.message.includes('403')){
-      _googleAccessToken = null;
-      toast('토큰 만료 — 다시 시도하면 재인증됩니다');
-    }
-  }
 };
 
 
@@ -2473,7 +2491,7 @@ window._jumpToQuestion = function(qIdx){
 <div id="drive-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
   <div style="background:var(--paper);border-radius:14px;padding:20px;width:min(600px,90vw);max-height:80vh;display:flex;flex-direction:column;gap:12px">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span style="font-weight:700;font-size:16px">📂 Drive 이미지 선택</span>
+      <span style="font-weight:700;font-size:16px">🗂 드라이브 이미지 선택 <span style="font-weight:400;font-size:12px;color:var(--ink3)">(문항 이미지 폴더)</span></span>
       <button onclick="document.getElementById('drive-picker-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink3)">✕</button>
     </div>
     <div id="drive-picker-status" style="font-size:12px;color:var(--ink3)">로드 중...</div>

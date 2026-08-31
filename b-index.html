@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.36">
+  <meta name="app-version" content="8.37">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -419,14 +419,22 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   padding:0 12px;font-family:inherit;color:var(--ink);
   background:var(--paper);outline:none;box-sizing:border-box;margin-bottom:8px}
 
-/* ── unit-page 학습지 목록 카드 ── */
+/* ── unit-page 학습지 목록 카드 ──
+   화면 폭에 따라 1~3열로 접힌다(카드 최소 300px). 가로로 채운 뒤 다음 줄로
+   넘어가므로, 순서가 헷갈리지 않도록 카드마다 학습지 ID를 제목 위에 적는다. */
+#ws-list-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:12px;
+  align-items:stretch;
+}
 .ws-list-card{
   background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);
-  padding:14px 20px;margin-bottom:10px;cursor:pointer;
+  padding:14px 16px;cursor:pointer;
   display:grid;
-  grid-template-columns:40px 1fr auto auto;
+  grid-template-columns:40px 1fr auto;
   grid-template-rows:auto auto;
-  align-items:center;gap:0 14px;
+  align-items:center;align-content:start;gap:0 12px;
   transition:box-shadow .15s,transform .15s;
   position:relative;overflow:hidden;
 }
@@ -439,10 +447,17 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
   background:var(--acc-lt)}
 .wslc-body{min-width:0;grid-column:2;grid-row:1}
-.wslc-title{font-size:15px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 학습지 ID — 여러 열로 늘어놓았을 때 어느 것이 몇 번째인지 바로 알 수 있게.
+   편집기·문항 이미지 파일명에 쓰는 ID와 같은 값이다. */
+.wslc-id{font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--ink3);opacity:.8;letter-spacing:.02em;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 열이 좁아지므로 제목은 두 줄까지 접어서 보여준다(한 줄로 자르면 구분이 안 됨) */
+.wslc-title{font-size:15px;font-weight:700;margin-bottom:3px;line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .wslc-meta{font-size:12px;color:var(--ink3)}
 .wslc-icon{grid-column:1;grid-row:1/3;align-self:center;font-size:22px;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.teacher-cls-row{display:flex;flex-wrap:wrap;gap:4px;padding-top:6px;grid-column:2/5;grid-row:2;align-items:center}
+.teacher-cls-row{display:flex;flex-wrap:wrap;gap:4px;padding-top:6px;grid-column:1/4;grid-row:2;align-items:center}
 .cls-tog{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
 .cls-tog:hover{opacity:.8}
 /* 잠금=빨강 / 열림=초록 (두 상태 모두 완료율 따라 왼쪽부터 채움: <30% 없음, 30~50% 1/3, 50~80% 2/3, 80%↑ 전체) */
@@ -472,7 +487,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .part-matrix-name{font-size:11px;font-weight:700;color:#4338ca;min-width:64px}
 .cls-tog.cls-mini{padding:2px 7px;font-size:10px;border-radius:9px}
 .teacher-ws-note{font-size:11px;color:var(--ink3);margin-left:auto;white-space:nowrap}
-.wslc-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrapgrid-column:3;grid-row:1;align-self:center;white-space:nowrap}
+.wslc-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+  grid-column:3;grid-row:1;align-self:start;white-space:nowrap}
 /* 단원 셀 배지 (학습지 수) */
 .unit-ws-badge{position:absolute;top:8px;right:8px;
   font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;
@@ -584,7 +600,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 
 <!-- UNIT PAGE: 단원별 학습지 목록 -->
 <div id="unit-page" class="page">
-  <main style="max-width:680px;margin:0 auto;padding:28px 20px">
+  <main style="max-width:1180px;margin:0 auto;padding:28px 20px">
     <button class="btn-back" id="btn-unit-back" style="margin-bottom:16px">← 단원 목록</button>
     <div class="dash-greet" id="unit-title" style="font-size:20px"></div>
     <div class="dash-sub" id="unit-sub" style="margin-bottom:24px"></div>
@@ -1686,6 +1702,11 @@ window.syncAutoProgress = async function(){
   }
 };
 
+/** 학습지 ID처럼 화면에 그대로 찍는 값의 HTML 이스케이프 */
+function escHtml(t){
+  return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function showUnitPage(unit) {
   window._currentUnit = unit;
   try{ sessionStorage.setItem('lastUnit', JSON.stringify(unit)); }catch(e){}
@@ -1731,6 +1752,7 @@ function showUnitPage(unit) {
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
+          <div class="wslc-id">${escHtml(ws.id||'')}</div>
           <div class="wslc-title">${(window._newGradeWs&&window._newGradeWs.has(ws.id))?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${ws.title}</div>
           <div class="wslc-meta">${ws.type==="vocab"
               ? ((wsProgress[ws.id]?.passCount||0)>=1

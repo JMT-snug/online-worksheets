@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.21">
+<meta name="app-version" content="scoring-v1.22">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1299,39 +1299,35 @@ function drawCoordPlane(ctx,W,H,xMin,xMax,yMin,yMax){
 
 /* ── 좌표축만 있는 좌표평면 (눈금·격자·좌표 숫자 없음) ──
    원점 위치를 9곳(가로 왼쪽/가운데/오른쪽 × 세로 위/가운데/아래) 중에서 고를 수 있다.
-   예) 'bl'(왼쪽 아래) → 제1사분면만, 'mc'(가운데) → 사분면 전체. */
+   화살표는 수학 관례대로 x축은 언제나 오른쪽, y축은 언제나 위를 향한다.
+   원점을 가장자리에 두더라도 반대편에 STUB만큼 자투리 축을 남겨, 음의 방향도
+   조금은 보이게 한다(원점이 딱 모서리에 붙어 축이 잘린 것처럼 보이지 않도록). */
 const GRAPH_ORIGIN_POS = {
   tl:[0,0],   tc:[0.5,0],   tr:[1,0],
   ml:[0,0.5], mc:[0.5,0.5], mr:[1,0.5],
   bl:[0,1],   bc:[0.5,1],   br:[1,1]
 };
 function drawAxisOnlyPlane(ctx,W,H,originPos){
-  const PAD=32;
+  const PAD=32, STUB=18;   // STUB: 원점이 가장자리일 때 반대편에 남기는 자투리 축 길이
   const p=GRAPH_ORIGIN_POS[originPos]||GRAPH_ORIGIN_POS.mc;
   const L=PAD, R=W-PAD, T=PAD, B=H-PAD;
-  const ox=L+p[0]*(R-L), oy=T+p[1]*(B-T);
+  const ox = p[0]===0 ? L+STUB : p[0]===1 ? R-STUB : L+p[0]*(R-L);
+  const oy = p[1]===0 ? T+STUB : p[1]===1 ? B-STUB : T+p[1]*(B-T);
   // 축
   ctx.strokeStyle='#374151'; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(L,oy); ctx.lineTo(R,oy); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox,T); ctx.lineTo(ox,B); ctx.stroke();
-  // 화살표 — 원점에서 실제로 뻗어 있는 방향에만 그린다
+  // 화살표 — x축 오른쪽 끝, y축 위쪽 끝에만
   ctx.fillStyle='#374151';
-  const arw=6, MINLEN=14;
-  if(R-ox>=MINLEN){ ctx.beginPath(); ctx.moveTo(R,oy); ctx.lineTo(R-arw,oy-arw/2); ctx.lineTo(R-arw,oy+arw/2); ctx.fill(); }
-  if(ox-L>=MINLEN){ ctx.beginPath(); ctx.moveTo(L,oy); ctx.lineTo(L+arw,oy-arw/2); ctx.lineTo(L+arw,oy+arw/2); ctx.fill(); }
-  if(oy-T>=MINLEN){ ctx.beginPath(); ctx.moveTo(ox,T); ctx.lineTo(ox-arw/2,T+arw); ctx.lineTo(ox+arw/2,T+arw); ctx.fill(); }
-  if(B-oy>=MINLEN){ ctx.beginPath(); ctx.moveTo(ox,B); ctx.lineTo(ox-arw/2,B-arw); ctx.lineTo(ox+arw/2,B-arw); ctx.fill(); }
-  // 축 이름 — 길게 뻗은 쪽 끝에 붙인다
+  const arw=6;
+  ctx.beginPath(); ctx.moveTo(R,oy); ctx.lineTo(R-arw,oy-arw/2); ctx.lineTo(R-arw,oy+arw/2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ox,T); ctx.lineTo(ox-arw/2,T+arw); ctx.lineTo(ox+arw/2,T+arw); ctx.fill();
+  // 축 이름
   ctx.font='12px sans-serif'; ctx.fillStyle='#374151';
-  if(R-ox>=ox-L){ ctx.textAlign='left';  ctx.fillText('x',R+4,oy+4); }
-  else          { ctx.textAlign='right'; ctx.fillText('x',L-4,oy+4); }
-  ctx.textAlign='center';
-  if(oy-T>=B-oy) ctx.fillText('y',ox,T-6);
-  else           ctx.fillText('y',ox,B+14);
-  // 원점 O — 축·테두리에 겹치지 않게 안쪽으로 뺀다
-  const atLeft=(ox-L)<MINLEN, atBottom=(B-oy)<MINLEN;
-  ctx.textAlign=atLeft?'left':'right';
-  ctx.fillText('O', ox+(atLeft?6:-4), oy+(atBottom?-6:14));
+  ctx.textAlign='left';   ctx.fillText('x',R+4,oy+4);
+  ctx.textAlign='center'; ctx.fillText('y',ox,T-6);
+  // 원점 O — 제3사분면 쪽(왼쪽 아래)에 붙인다
+  ctx.textAlign='right';  ctx.fillText('O',ox-4,oy+14);
 }
 
 function drawNumberLine(ctx,W,H,nMin,nMax){

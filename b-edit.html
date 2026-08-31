@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.5">
+<meta name="app-version" content="edit-v3.6">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -2009,7 +2009,7 @@ async function attachImage(dataUrl, label){
   if(st) st.textContent = `${label} 업로드 중…`;
   try{
     const out = await callImgWebApp({ action:'uploadQuestionImage', image:dataUrl,
-      wsTitle: currentWs.title||'', qNo: curQuestionNo() });
+      wsId: currentWs.id||'', qNo: curQuestionNo() });
     document.getElementById('q-img-url').value = out.url;
     document.getElementById('q-img-tag').src   = bustCache(out.url);
     if(st) st.textContent = `저장됨: ${out.name}`;

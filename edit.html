@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.4">
+<meta name="app-version" content="edit-v3.5">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -1966,27 +1966,20 @@ window.clearImage = function(){
    📸 스크린샷 붙여넣기 · 🗂 드라이브에서 선택 · 📁 파일 선택 — 세 경로 모두
    같은 업로드 함수(attachImage)로 모입니다.
 
-   업로드·목록 조회는 오류신고 Apps Script 웹앱을 경유합니다. 웹앱이 소유자 권한으로
-   실행되므로 교사마다 Drive 폴더 권한을 따로 줄 필요가 없고, 브라우저의 drive.file
-   스코프로는 공용 폴더에 쓸 수 없어 403이 나던 문제(README 200~213행)도 피합니다.
-   그래서 예전의 OAuth 직접 업로드(uploadImageToDrive)·직접 목록조회는 걷어냈습니다. */
+   업로드·목록 조회는 **AI 검토와 같은 Apps Script 프로젝트**(Gemini 분석용)를 씁니다.
+   그 프로젝트의 'attaching image.gs' 파일이 uploadQuestionImage / listQuestionImages
+   액션을 처리하므로, 주소·토큰은 위의 AI_WEBAPP_URL / AI_WEBAPP_TOKEN 을 그대로
+   쓰면 되고 따로 설정할 것이 없습니다. (오류신고 웹앱은 알림 전용이라 건드리지 않습니다.)
 
-let _imgWebApp = null, _imgToken = 'snug-error-report';
-async function getImgWebApp(){
-  if(_imgWebApp) return _imgWebApp;
-  const snap = await getDoc(doc(db,'config','errorReports'));
-  const d = snap.exists() ? snap.data() : {};
-  if(!d.webAppUrl) throw new Error('이미지 서버가 설정되지 않았습니다.\nreport.html의 [⚙️ 신고 서버 설정]에서 Apps Script 웹앱 주소를 등록해 주세요.');
-  _imgWebApp = d.webAppUrl;
-  _imgToken  = d.token || _imgToken;
-  return _imgWebApp;
-}
+   웹앱이 소유자 권한으로 실행되므로 교사마다 Drive 폴더 권한을 따로 줄 필요가 없고,
+   브라우저의 drive.file 스코프로는 공용 폴더에 쓸 수 없어 403이 나던 문제
+   (README 200~213행)도 피합니다. 그래서 예전의 OAuth 직접 업로드
+   (uploadImageToDrive)·직접 목록조회는 걷어냈습니다. */
 
 async function callImgWebApp(payload){
-  const url = await getImgWebApp();
   // text/plain: CORS preflight를 피하려는 것 (AI 검토 호출과 같은 방식)
-  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(Object.assign({ token:_imgToken }, payload)) });
+  const res = await fetch(AI_WEBAPP_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({ token:AI_WEBAPP_TOKEN }, payload)) });
   const out = await res.json();
   if(!out || !out.ok) throw new Error(out?.error || '서버 응답 오류');
   return out;

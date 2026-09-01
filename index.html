@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.38">
+  <meta name="app-version" content="8.39">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1281,24 +1281,75 @@ function qToast(msg){
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2600);
 }
 
+/* ── 교사가 고친 문항을 학생 화면에 실시간 반영 ──
+   정답·채점 유형을 고쳐도 학생이 새로고침해야 반영되던 것을, 파트 잠금과 같은
+   구독(onSnapshot)으로 바로 받는다.
+
+   ⚠️ 지금 보고 있는 문항은 즉시 갈아끼우지 않는다 — 학생이 답을 입력하는 중일 수
+      있어서, 화면을 다시 그리면 입력하던 내용이 날아간다. 대신 바뀐 내용을
+      _pendingQ 에 넣어 두었다가 renderQuestion()이 다음에 돌 때(= 다른 문항으로
+      넘어가거나 그 문항으로 되돌아올 때) 적용한다.
+
+   ⚠️ 문항이 추가·삭제·재배치된 경우는 데이터를 갈아끼우지 않는다 — answered 배열이
+      인덱스 기준이라 순서가 바뀌면 지금까지의 답이 엉뚱한 문항에 붙는다.
+      이때는 새로고침을 안내만 한다. */
+let _pendingQ=null;       // {idx, q} — 지금 보고 있는 문항의 보류된 새 내용
+let _reloadNotified=false; // 구조 변경 안내는 한 번만
+
+function applyLiveQuestions(ws, incoming){
+  if(!Array.isArray(incoming) || !Array.isArray(ws.questions)) return;
+  const cur=ws.questions;
+  // 구조(개수·순서)가 바뀌었으면 건드리지 않는다
+  const sameShape = incoming.length===cur.length
+    && incoming.every((q,i)=>String(q?.id??i)===String(cur[i]?.id??i));
+  if(!sameShape){
+    if(!_reloadNotified){
+      _reloadNotified=true;
+      qToast('📝 학습지가 수정되었어요 — 새로고침하면 반영됩니다');
+    }
+    return;
+  }
+  incoming.forEach((nq,i)=>{
+    if(JSON.stringify(nq)===JSON.stringify(cur[i])) return;   // 그대로면 넘어간다
+    if(i===curQIdx){ _pendingQ={idx:i, q:nq}; return; }        // 보고 있는 문항은 보류
+    cur[i]=nq;
+  });
+}
+
+/** renderQuestion()이 돌기 직전에 보류분을 적용한다 (그 시점엔 다시 그리므로 안전) */
+function flushPendingQ(){
+  if(!_pendingQ || !curWS || !Array.isArray(curWS.questions)) return;
+  const {idx,q}=_pendingQ;
+  if(curWS.questions[idx] && String(curWS.questions[idx].id??idx)===String(q.id??idx)){
+    curWS.questions[idx]=q;
+  }
+  _pendingQ=null;
+}
+
 /* 파트 잠금 실시간 감시: 학습지를 여는 동안 curriculum 문서 구독 */
 let _wsUnsub=null;
-function stopWsWatch(){ if(_wsUnsub){ try{_wsUnsub();}catch(e){} _wsUnsub=null; } try{closePartPop();}catch(e){} }
+function stopWsWatch(){
+  if(_wsUnsub){ try{_wsUnsub();}catch(e){} _wsUnsub=null; }
+  _pendingQ=null;   // 다른 학습지로 넘어갈 때 보류분이 따라가지 않도록 비운다
+  try{closePartPop();}catch(e){}
+}
 function watchWs(ws){
   stopWsWatch();
-  if(!getParts(ws)) return; // 파트 있는 학습지만 감시
+  _reloadNotified=false;   // 학습지를 새로 열 때마다 안내를 다시 받을 수 있게
   _wsUnsub=onSnapshot(doc(db,'curriculum',ws.id),snap=>{
     try{
       if(!snap.exists()||!curWS||curWS.id!==ws.id) return;
       const d=snap.data();
+      applyLiveQuestions(ws, d.questions);   // 교사가 고친 문항·정답·채점 유형 반영
       const beforeOpen=new Set((getParts(ws)||[]).filter(p=>partOpenFor(ws,p.id,user?.email)).map(p=>p.id));
+      const hasParts=!!getParts(ws);
       const changed=JSON.stringify(d.partAllowed||{})!==JSON.stringify(ws.partAllowed||{}) || d.status!==ws.status;
       ws.partAllowed=d.partAllowed||{};
       ws.partUnlocked=d.partUnlocked||{};
       ws.unlockedClasses=d.unlockedClasses||{};
       ws.allowedEmails=d.allowedEmails||[];
       ws.status=d.status;
-      if(!changed) return;
+      if(!changed || !hasParts) return;
       const parts=getParts(ws)||[];
       const newlyOpen=parts.filter(p=>!beforeOpen.has(p.id)&&partOpenFor(ws,p.id,user?.email));
       const newlyLocked=parts.filter(p=>beforeOpen.has(p.id)&&!partOpenFor(ws,p.id,user?.email));
@@ -2484,6 +2535,7 @@ function updateStrip() {
 }
 
 function renderQuestion() {
+  flushPendingQ();   // 교사가 고친 내용이 보류돼 있으면 지금 반영한다
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   // 시험지: 타이머 시작 + 표시
   if(window._examMode){

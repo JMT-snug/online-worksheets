@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.6">
+<meta name="app-version" content="edit-v3.7">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -131,6 +131,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .ans-alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .ans-alt-tag{background:var(--acc-lt);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:12px;display:flex;align-items:center;gap:4px}
 .ans-alt-tag button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:11px;padding:0 2px}
+
+/* 단계형 '등식' 유형 경고 (정답에 = 가 없으면 학생 답이 전부 오답 처리된다) */
+.step-eqwarn{font-size:11px;line-height:1.5;color:#b45309;background:#fef3c7;
+  border:1px solid #fcd34d;border-radius:6px;padding:6px 9px;margin-bottom:6px}
 
 /* 이미지 첨부 버튼 */
 .img-btn{background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -1531,6 +1535,22 @@ window.saveQuestion = async function(){
     const isVocabS=currentWs.type==='vocab';
     const qIdxS=isVocabS?selectedQIdx-currentWs.vocab.length:selectedQIdx;
     if(!editSteps.length){ toast('단계를 1개 이상 추가하세요'); return; }
+    // '등식' 유형인데 정답에 = 가 없으면 학생 답이 전부 오답 처리된다 — 저장 전에 잡아준다
+    const _eqBad = editSteps.map((s,i)=>({s,i}))
+      .filter(({s})=>(s.answerType||'number')==='equation'
+                   && (s.answer??'').toString().trim()
+                   && !(s.answer??'').toString().includes('='));
+    if(_eqBad.length){
+      const _list=_eqBad.map(({s,i})=>`  · ${i+1}단계 — 정답: ${s.answer}`).join('\n');
+      const _msg='⚠️ 답 유형이 \'③ 문자 포함 식 (= 포함)\'인데 정답에 = 가 없는 단계가 있습니다.\n\n'
+        + _list + '\n\n'
+        + '등식 채점은 양변을 = 로 갈라 비교하므로, 이대로 저장하면\n학생이 무엇을 입력해도 오답 처리됩니다.\n\n'
+        + '[확인] 위 단계를 \'② 숫자 값\'으로 바꿔서 저장\n'
+        + '[취소] 저장하지 않고 돌아가서 직접 고치기';
+      if(!confirm(_msg)) return;
+      _eqBad.forEach(({i})=>{ editSteps[i].answerType='number'; });
+      renderSteps();
+    }
     const steps = editSteps.map(s=>{
       const o={ label:(s.label||'').trim(), answerType:s.answerType||'number', hint:(s.hint||'').trim() };
       const av=(s.answer??'').toString().trim();
@@ -2112,6 +2132,24 @@ window.removeStep = function(i){
 window.updateStep = function(i, field, val){
   if(editSteps[i]) editSteps[i][field]=val;
 };
+
+/* 답 유형이 '등식(= 포함)'인데 정답에 = 가 없으면 채점이 성립하지 않는다.
+   eqEquivCheck가 양변을 = 로 갈라 비교하는데 가를 수가 없어 무조건 false가 되고,
+   그 유형에는 숫자/식 폴백이 없어서 학생이 무엇을 써도 오답이 된다. */
+function stepEqWarnText(st){
+  const at=st.answerType||'number';
+  const av=(st.answer??'').toString().trim();
+  if(at!=='equation' || !av || av.includes('=')) return '';
+  return '⚠️ 답 유형이 <b>= 포함</b>인데 정답에 = 가 없습니다 — 이대로 두면 학생 답이 <b>모두 오답</b> 처리됩니다. 숫자 답이면 <b>② 숫자 값</b>으로 바꾸세요.';
+}
+window.updateStepEqWarn = function(i){
+  const el=document.getElementById('step-eqwarn-'+i);
+  const st=editSteps[i];
+  if(!el||!st) return;
+  const t=stepEqWarnText(st);
+  el.innerHTML=t;
+  el.style.display=t?'':'none';
+};
 window.addStepAlt = function(e, i){
   if(e.key!=='Enter') return;
   const inp=e.target; const v=inp.value.trim(); if(!v) return;
@@ -2144,7 +2182,8 @@ function renderSteps(){
         <label style="font-size:11px">답 유형</label>
         <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         <label style="font-size:11px">정답</label>
-        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
+        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value);updateStepEqWarn(${i})" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
+        <div class="step-eqwarn" id="step-eqwarn-${i}" style="display:${stepEqWarnText(s)?'':'none'}">${stepEqWarnText(s)}</div>
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">

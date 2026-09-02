@@ -376,16 +376,26 @@ async function 로그인상태(u) {
   탭(st.끝남 ? 's-log' : 's-home');
 }
 
-/** 랭킹과 이어하기에 쓰는 요약 정보 (게임 상태 전체와 함께 저장한다) */
+/**
+ * 랭킹과 이어하기에 쓰는 요약 정보 (게임 상태 전체와 함께 저장한다)
+ *
+ * ※ 서버에 저장하는 항목 이름만 영문이다.
+ *   Firestore 보안 규칙 언어가 한글 이름을 읽지 못해서(`data.주차` → 문법 오류),
+ *   규칙에서 검사해야 하는 항목은 영문으로 둔다. 화면에 보이는 글자는 모두 한글 그대로다.
+ */
 function 요약(s) {
   const 순 = CG.누적순이익(s);
   return {
-    카페이름: s.카페이름 || '이름 없는 카페',
-    주차: s.주차, 평판: s.평판, 매력도: CG.매력도(s),
-    인테리어: s.인테리어.slice(), 시설: s.시설.slice(), 직원수: s.직원.length,
-    누적순이익: 순.toString(),                        // 분수 그대로 (예: "177/5")
-    순이익값: 순.numerator / 순.denominator,          // 순위를 매기기 위한 수
-    끝남: !!s.끝남
+    cafeName: s.카페이름 || '이름 없는 카페',
+    week: s.주차,
+    reputation: s.평판,
+    charm: CG.매력도(s),
+    decor: s.인테리어.slice(),
+    facilities: s.시설.slice(),
+    staffCount: s.직원.length,
+    profit: 순.toString(),                          // 분수 그대로 (예: "177/5")
+    profitValue: 순.numerator / 순.denominator,     // 순위를 매기기 위한 수
+    finished: !!s.끝남
   };
 }
 
@@ -846,11 +856,11 @@ async function 랭킹그리기() {
     const 나 = r.uid === 사용자.uid;
     return '<tr' + (나 ? ' class="me"' : '') + '>' +
       '<td class="medal">' + (메달[i] || (i + 1)) + '</td>' +
-      '<td class="who">' + esc(r.카페이름 || '이름 없는 카페') +
-        '<small>' + esc(r.이름 || '') + (나 ? ' · 나' : '') + '</small></td>' +
-      '<td>' + (r.끝남 ? '완주' : (r.주차 || 1) + '주차') + '</td>' +
-      '<td style="color:var(--gold)">' + (r.평판 || 1) + '★</td>' +
-      '<td><b>' + 수(String(r.누적순이익 != null ? r.누적순이익 : '0')) + '</b></td></tr>';
+      '<td class="who">' + esc(r.cafeName || '이름 없는 카페') +
+        '<small>' + esc(r.name || '') + (나 ? ' · 나' : '') + '</small></td>' +
+      '<td>' + (r.finished ? '완주' : (r.week || 1) + '주차') + '</td>' +
+      '<td style="color:var(--gold)">' + (r.reputation || 1) + '★</td>' +
+      '<td><b>' + 수(String(r.profit != null ? r.profit : '0')) + '</b></td></tr>';
   }).join('');
 
   const 내순위 = 목록.findIndex(r => r.uid === 사용자.uid);
@@ -953,10 +963,14 @@ function 도움말() {
    cafe_ 를 붙였다). 문서 하나가 학생 한 명이고, 문서 id 는 그 학생의 uid 다.
 
      cafe_students/{uid} = {
-       이름, 카페이름, 주차, 평판, 매력도, 인테리어[], 시설[], 직원수,
-       누적순이익("177/5" 처럼 분수 그대로), 순이익값(순위용 수), 끝남,
-       상태(게임 전체를 담은 JSON 글자), 갱신(시각)
+       name(표시 이름), cafeName(카페 이름), week(주차), reputation(평판), charm(매력도),
+       decor[](인테리어), facilities[](시설), staffCount(직원 수),
+       profit("177/5" 처럼 분수 그대로), profitValue(순위용 수), finished(완주 여부),
+       state(게임 전체를 담은 JSON 글자), updatedAt(시각)
      }
+
+   ※ 항목 이름이 영문인 이유: Firestore 보안 규칙 언어가 한글 이름을 읽지 못한다
+     (`request.resource.data.주차` 는 문법 오류가 난다). 규칙에서 검사할 수 있게 영문으로 둔다.
 
    ※ 이메일은 저장하지 않는다. 랭킹은 같은 학교 학생 누구나 볼 수 있으므로
      남기는 정보를 구글 계정 표시 이름 하나로 최소화했다(배틀과 같은 원칙).
@@ -991,9 +1005,9 @@ window.CafeCloud = {
   저장: async (요약, 상태문자열) => {
     if (!나) return;
     await setDoc(doc(db, 'cafe_students', 나.uid), Object.assign({}, 요약, {
-      이름: 나.이름,
-      상태: 상태문자열,
-      갱신: serverTimestamp()
+      name: 나.이름,
+      state: 상태문자열,
+      updatedAt: serverTimestamp()
     }));
   },
 
@@ -1003,16 +1017,16 @@ window.CafeCloud = {
     const snap = await getDoc(doc(db, 'cafe_students', 나.uid));
     if (!snap.exists()) return null;
     const d = snap.data();
-    return d.상태 ? window.CafeGame.불러오기(d.상태) : null;
+    return d.state ? window.CafeGame.불러오기(d.state) : null;
   },
 
-  /** 누적 순이익이 높은 순서로 가져온다. 게임 상태(상태 필드)는 빼고 넘긴다. */
+  /** 누적 순이익이 높은 순서로 가져온다. 게임 상태(state 필드)는 빼고 넘긴다. */
   랭킹: async (n) => {
-    const q = query(collection(db, 'cafe_students'), orderBy('순이익값', 'desc'), limit(n || 50));
+    const q = query(collection(db, 'cafe_students'), orderBy('profitValue', 'desc'), limit(n || 50));
     const snap = await getDocs(q);
     return snap.docs.map(d => {
       const v = d.data();
-      delete v.상태;
+      delete v.state;
       v.uid = d.id;
       return v;
     });

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.43">
+  <meta name="app-version" content="8.44">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -5157,5 +5157,90 @@ window.addEventListener("resize",()=>{
   if(saved){ try{ctx.putImageData(saved,0,0);}catch(e){} }
 });
 </script>
+<!-- ══════════════════════════════════════════════════════════════
+     ☕ 이스터 에그 — 「카페 타이쿤」으로 가는 숨은 문  (v8.44에서 추가)
+     ══════════════════════════════════════════════════════════════
+     단원 목록 화면에 가끔(기본 18%) 작은 커피잔이 슬쩍 나타났다가 조용히 사라진다.
+     누르면 카페 타이쿤(cafe-tycoon.html)이 새 탭에서 열린다.
+
+     · 학습지를 푸는 화면에서는 절대 나오지 않는다(문제 푸는 걸 방해하지 않으려고).
+     · 로고("수학 학습지+")를 5번 빠르게 누르면 확률과 상관없이 나타난다.
+       수업에서 학생들에게 보여 줄 때 쓰라고 남겨 둔 길이다.
+     · 기존 코드는 전혀 건드리지 않는다. 화면이 바뀌는 것만 지켜보다가 스스로 뜬다.
+     · 끄고 싶으면 아래 등장확률을 0 으로 바꾸면 된다.
+     ══════════════════════════════════════════════════════════════ -->
+<style>
+#cafe-egg{position:fixed;left:16px;bottom:16px;z-index:7900;width:52px;height:52px;border-radius:50%;
+  border:none;cursor:pointer;font-size:26px;line-height:1;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 32% 28%,#fff7ea,#f0dcc0);box-shadow:0 4px 14px rgba(90,60,25,.28);
+  opacity:0;transform:translateY(18px);transition:opacity .5s ease,transform .5s ease}
+#cafe-egg.on{display:flex;opacity:.92;transform:translateY(0);animation:cafe-egg-float 3.2s ease-in-out infinite}
+#cafe-egg:hover{opacity:1}
+#cafe-egg.pop{animation:none;opacity:0;transform:scale(1.4);transition:.35s ease}
+@keyframes cafe-egg-float{0%,100%{margin-bottom:0}50%{margin-bottom:8px}}
+@media (prefers-reduced-motion: reduce){#cafe-egg.on{animation:none}}
+@media (max-width:520px){#cafe-egg{width:46px;height:46px;font-size:22px;left:12px;bottom:64px}}
+</style>
+
+<button id="cafe-egg" title="???" aria-label="숨겨진 곳으로 가는 문">☕</button>
+
+<script>
+(function () {
+  'use strict';
+  var 등장확률 = 18;        // % — 단원 목록 화면에 들어갈 때 이 확률로 나타난다. 0 이면 아예 안 나온다.
+  var 머무는시간 = 22000;   // ms — 이만큼 지나면 조용히 사라진다.
+  var 주소 = 'cafe-tycoon.html';
+
+  var 잔 = document.getElementById('cafe-egg');
+  var 대시 = document.getElementById('dash-page');
+  if (!잔 || !대시) return;
+
+  var 이번에나왔나 = false, 숨김타이머 = null;
+
+  function 보이기() {
+    if (이번에나왔나) return;               // 한 번 켠 뒤에는 새로고침해야 다시 나온다
+    이번에나왔나 = true;
+    잔.classList.add('on');
+    숨김타이머 = setTimeout(숨기기, 머무는시간);
+  }
+  function 숨기기() {
+    clearTimeout(숨김타이머);
+    잔.classList.remove('on');
+  }
+
+  잔.addEventListener('click', function () {
+    clearTimeout(숨김타이머);
+    잔.classList.add('pop');
+    try { localStorage.setItem('cafeEggFound', '1'); } catch (e) {}
+    window.open(주소, '_blank', 'noopener');
+    setTimeout(function () { 잔.classList.remove('on', 'pop'); }, 400);
+  });
+
+  /* ① 단원 목록 화면이 열릴 때 확률을 굴린다.
+        학습지를 푸는 화면으로 들어가면 치운다. */
+  function 굴리기() {
+    if (!대시.classList.contains('active')) return;
+    if (Math.random() * 100 < 등장확률) setTimeout(보이기, 1200 + Math.random() * 2500);
+  }
+  new MutationObserver(function () {
+    if (대시.classList.contains('active')) 굴리기();
+    else 숨기기();
+  }).observe(대시, { attributes: true, attributeFilter: ['class'] });
+  if (대시.classList.contains('active')) 굴리기();
+
+  /* ② 로고를 5번 빠르게 누르면 확률과 상관없이 나타난다 (수업에서 보여 줄 때) */
+  var 누른수 = 0, 누름타이머 = null;
+  var 로고 = document.querySelector('.hdr-center .logo');
+  if (로고) {
+    로고.addEventListener('click', function () {
+      누른수 += 1;
+      clearTimeout(누름타이머);
+      누름타이머 = setTimeout(function () { 누른수 = 0; }, 1500);
+      if (누른수 >= 5) { 누른수 = 0; 이번에나왔나 = false; 보이기(); }
+    });
+  }
+})();
+</script>
+
 </body>
 </html>

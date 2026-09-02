@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.7">
+<meta name="app-version" content="edit-v3.8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -432,7 +432,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           </div>
           <!-- 링크 URL -->
           <div class="field" id="field-link" style="display:none">
-            <label>링크 표시 텍스트</label>
+            <label>링크 버튼 글자 <span style="font-weight:400;color:var(--ink3)">(짧게 — 긴 안내는 위 칸에)</span></label>
             <input id="q-link-label" placeholder="예: GeoGebra 활동 열기" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
             <label style="margin-top:8px;display:block">링크 URL</label>
             <input id="q-link-url" placeholder="https://..." type="url" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
@@ -1294,10 +1294,20 @@ window.onQTypeChange = function(){
 };
 function setQType(type){
   document.getElementById('q-type-sel').value = type;
+  // 링크 문항의 텍스트는 문제가 아니라 '안내문'이므로 라벨·예시를 바꿔 준다
+  const _tl=document.getElementById('field-text')?.querySelector('label');
+  const _ta=document.getElementById('q-text');
+  if(_tl) _tl.innerHTML = type==='link'
+    ? '링크 안내 <span style="font-weight:400;color:var(--ink3)">(선택 · 버튼 위에 표시됩니다)</span>'
+    : '문제 텍스트 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \\(...\\))</span>';
+  if(_ta) _ta.placeholder = type==='link'
+    ? '예: 홀수번 문제에서는 \\(x\\), \\(y\\)의 관계식을 구하고, 짝수번 문제에서는 아래 링크에서 그래프를 그려 개형을 따라 그리세요.'
+    : '예: \\(3x+5=2x-1\\)에서 \\(+5\\)를 이항하면?';
   const show = id => document.getElementById(id).style.display='';
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph']
+  // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph','field-link']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   if(type==='vocab'){
     show('field-vocab');
@@ -1306,7 +1316,7 @@ function setQType(type){
   } else if(type==='step3'){
     show('field-text'); show('field-image'); show('field-step3');
   } else if(type==='link'){
-    show('field-link');
+    show('field-text'); show('field-link');
   } else if(type==='graph'){
     show('field-text'); show('field-image'); show('field-graph');
   } else {
@@ -1520,7 +1530,7 @@ window.saveQuestion = async function(){
       const _linkQ={
         ...currentWs.questions[qIdxL],
         type:'link',
-        text:'',
+        text:document.getElementById('q-text').value.trim(),   // 링크 안내문
         linkLabel:linkLabel||'링크 열기',
         linkUrl
       };

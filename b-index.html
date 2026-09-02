@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.42">
+  <meta name="app-version" content="8.43">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2645,11 +2645,14 @@ function renderQuestion() {
       <div class="q-num">
         ${_qNum}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>${window._examMode&&q.score!=null?` <span style="font-size:11px;font-weight:700;color:#0891b2;background:#cffafe;padding:2px 8px;border-radius:10px;margin-left:6px">${q.score}점</span>`:""}
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':(q.text.includes("=")&&!q.text.includes("일 때")&&!q.text.includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
+        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':q.type==="link"?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">링크</span>':((q.text||"").includes("=")&&!(q.text||"").includes("일 때")&&!(q.text||"").includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
+        // 링크 문항: 안내문이 있으면 문장으로 보여 주고, 없으면 비워 둔다
+        if(q.type==="link") return (q.text||"").trim()
+          ? `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>` : "";
         if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
-        const isSentence = /[가-힣]/.test(q.text);
+        const isSentence = /[가-힣]/.test(q.text||"");
         if(isSentence) return `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>`;
         const _hasEq=q.text.includes("=");
         return `<div class="q-text" style="margin-top:2px">${_hasEq?"다음 일차방정식을 풀어라.":""}</div>

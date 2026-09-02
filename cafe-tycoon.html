@@ -147,6 +147,27 @@ table.log th,table.log td{padding:8px 6px;border-bottom:1px solid var(--line);te
 table.log th:first-child,table.log td:first-child{text-align:left}
 table.log th{color:var(--dim);font-weight:700;font-size:12.5px}
 
+/* ── 카페 그림 (내 카페 모습 · 영업 연출) ── */
+.scene{position:relative;height:250px;border-radius:14px;overflow:hidden;border:1px solid var(--line);
+  background:linear-gradient(#fbf1e2 0 58%, #ecdcc2 58% 60%, #e6d3b6 60% 100%)}
+.scene .wall,.scene .floor{position:absolute;left:0;right:0;display:flex;justify-content:center;gap:10px;padding:0 12px}
+.scene .wall{top:12px;align-items:flex-start}
+.scene .floor{bottom:10px;align-items:flex-end}
+.scene .wall img,.scene .floor img{object-fit:contain;filter:drop-shadow(0 3px 5px rgba(90,60,30,.14))}
+.scene .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--dim);font-size:13.5px;text-align:center;padding:20px;line-height:1.7}
+.scene .guest{position:absolute;bottom:12px;left:0;font-size:32px;line-height:1;pointer-events:none;
+  filter:drop-shadow(0 2px 3px rgba(90,60,30,.2))}
+.scene .guest img{width:44px;height:44px;object-fit:contain}
+.scene .tag{position:absolute;top:10px;left:12px;background:rgba(255,255,255,.9);border:1px solid var(--line);
+  border-radius:20px;padding:4px 12px;font-size:12.5px;font-weight:800;color:var(--dim)}
+.scene .count{position:absolute;top:10px;right:12px;background:rgba(255,255,255,.92);border:1px solid var(--line);
+  border-radius:20px;padding:5px 14px;font-size:14px;font-weight:900}
+.scene .count small{font-weight:600;color:var(--dim)}
+.playbar{height:8px;border-radius:5px;background:#eee3d4;overflow:hidden;margin-top:12px}
+.playbar i{display:block;height:100%;background:var(--green);width:0}
+@media(max-width:520px){ .scene{height:210px} .scene .guest{font-size:26px} }
+
 /* ── 로그인 표시 ── */
 .userchip{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);font-weight:600}
 .userchip img{width:24px;height:24px;border-radius:50%}
@@ -208,6 +229,9 @@ table.rank tr.me td{font-weight:800}
 
 <!-- ── 업무 배정 ───────────────────────────────────────────── -->
 <div class="screen" id="s-assign"></div>
+
+<!-- ── 영업 중 (연출) ──────────────────────────────────────── -->
+<div class="screen" id="s-play"></div>
 
 <!-- ── 영업 결과 ───────────────────────────────────────────── -->
 <div class="screen" id="s-result"></div>
@@ -515,7 +539,8 @@ function 홈그리기() {
 
     '<div class="card"><h3>카페 꾸미기 <span class="sub" style="font-weight:400">매력도 ' + CG.매력도(st) +
       ' · 다음 주 SNS 확률 ' + CG.SNS확률(st) + '%</span></h3>' +
-      (세트.length ? '<div style="margin-bottom:10px">' + 세트.map(s => '<span class="tag set">' + esc(s) + ' 세트 완성!</span>').join(' ') + '</div>' : '') +
+      가게그림(st, '내 카페') +
+      (세트.length ? '<div style="margin:10px 0">' + 세트.map(s => '<span class="tag set">' + esc(s) + ' 세트 완성!</span>').join(' ') + '</div>' : '<div style="height:10px"></div>') +
       인테리어 + '</div>' +
 
     '<div class="card"><h3>시설</h3>' + 시설 + '</div>';
@@ -642,6 +667,119 @@ function 배정그리기() {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   카페 그림 — 산 인테리어를 벽과 바닥에 놓아 준다
+   ══════════════════════════════════════════════════════════════
+   내 카페(홈)와 영업 연출이 같은 그림을 쓴다. 나중에 친구 카페 구경도 이걸 쓰면 된다.
+   ────────────────────────────────────────────────────────────── */
+function 가게그림(상태, 꼬리표) {
+  const 산것 = (상태.인테리어 || []).map(id => CAT.인테리어별[id]).filter(Boolean);
+  const 벽 = 산것.filter(d => d.배치 === '벽');
+  const 바닥 = 산것.filter(d => d.배치 !== '벽');
+  // 물건이 많아지면 작게 그려 한 줄에 들어가게 한다
+  const 높이 = n => (n <= 3 ? 82 : n <= 5 ? 66 : n <= 7 ? 54 : 44);
+  const 줄 = (목록, cls) => '<div class="' + cls + '">' + 목록.map(d =>
+    '<img src="' + esc(CAT.이미지.폴더 + d.이미지) + '" alt="' + esc(d.이름) + '" title="' + esc(d.이름) + '"' +
+    ' style="height:' + 높이(목록.length) + 'px" loading="lazy" onerror="this.remove()">').join('') + '</div>';
+
+  // id 를 붙이지 않는다 — 홈 화면과 영업 연출에 같은 그림이 동시에 있을 수 있어서,
+  // id 가 겹치면 연출이 숨어 있는 홈 쪽 그림에 손님을 그리게 된다.
+  return '<div class="scene">' +
+    (꼬리표 ? '<div class="tag">' + esc(꼬리표) + '</div>' : '') +
+    (산것.length ? 줄(벽, 'wall') + 줄(바닥, 'floor')
+                 : '<div class="empty">아직 텅 빈 카페예요.<br>상점에서 인테리어를 사면 여기에 놓입니다.</div>') +
+    '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   영업 연출 — 손님이 들어왔다 나가는 모습을 보여 준다
+   ══════════════════════════════════════════════════════════════
+   받은 손님은 자리에 앉았다가 오른쪽으로 나가고,
+   못 받은 손님은 들어오다가 표정이 굳어 돌아 나간다(병목을 눈으로 보게 한다).
+   ────────────────────────────────────────────────────────────── */
+let 연출중 = null;      // 진행 중인 연출을 끝내는 함수. 인자가 true면 뒷정리만 하고 다음 화면으로 넘어가지 않는다.
+
+function 연출(log, 끝나면) {
+  if (연출중) 연출중(true);                 // 앞의 연출이 남아 있으면 조용히 걷어낸다
+  const 총시간 = 4200;
+  const 느린거싫음 = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (느린거싫음) { 끝나면(); return; }
+
+  const 받은 = log.받은손님, 놓친 = log.놓친손님, 전체 = 받은 + 놓친;
+  $('s-play').innerHTML =
+    '<h2 class="title">' + log.주차 + '주차 영업 중…</h2>' +
+    '<p class="sub">' + esc(st.카페이름 || '내 카페') + '에 손님이 들어옵니다.</p>' +
+    가게그림({ 인테리어: (log.인테리어 || (st && st.인테리어) || []) }) +
+    '<div class="playbar"><i id="playbar"></i></div>' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:14px">' +
+    '<div style="font-size:14px;color:var(--dim)">받은 손님 <b id="playcount" style="font-size:20px;color:var(--txt)">0</b>명' +
+    (전체 ? ' <span style="color:var(--dim)">/ 찾아온 손님 ' + 전체 + '명</span>' : '') + '</div>' +
+    '<div style="flex:1"></div><button class="btn sec sm" onclick="연출건너뛰기()">건너뛰기 ▶▶</button></div>';
+  화면('s-play');
+
+  const 무대 = $('s-play').querySelector('.scene');
+  const 이모지 = (CAT.원본.손님 && CAT.원본.손님.이모지) || ['🧑'];
+  const 손님그림 = (CAT.원본.손님 && CAT.원본.손님.이미지) || [];
+  const 사람수 = Math.min(14, Math.max(1, 전체));            // 너무 많으면 대표로 몇 명만 걸어다닌다
+  const 성공수 = 전체 ? Math.round(사람수 * 받은 / 전체) : 0;
+  const 간격 = 총시간 * 0.62 / Math.max(1, 사람수);
+
+  const 애니들 = [];
+  for (let i = 0; i < 사람수; i++) 애니들.push(손님하나(무대, i < 성공수, i * 간격, 이모지, 손님그림));
+
+  // 받은 손님 수를 0부터 세어 올린다
+  const 시작 = performance.now();
+  let 프레임 = null;
+  const 세기 = () => {
+    const t = Math.min(1, (performance.now() - 시작) / (총시간 * 0.8));
+    const n = Math.round(받은 * t);
+    const c = $('playcount'), b = $('playbar');
+    if (c) c.textContent = n;
+    if (b) b.style.width = Math.round(t * 100) + '%';
+    if (t < 1) 프레임 = requestAnimationFrame(세기);
+  };
+  프레임 = requestAnimationFrame(세기);
+
+  const 타이머 = setTimeout(() => 연출건너뛰기(), 총시간);
+  연출중 = (뒷정리만) => {
+    clearTimeout(타이머);
+    if (프레임) cancelAnimationFrame(프레임);
+    애니들.forEach(a => { try { a.cancel(); } catch (e) {} });
+    if (무대) 무대.querySelectorAll('.guest').forEach(g => g.remove());
+    연출중 = null;
+    if (!뒷정리만) 끝나면();
+  };
+}
+
+function 연출건너뛰기() { if (연출중) 연출중(false); }
+
+function 손님하나(무대, 성공, 지연, 이모지, 손님그림) {
+  const g = document.createElement('div');
+  g.className = 'guest';
+  g.innerHTML = 손님그림.length
+    ? '<img src="' + esc(CAT.이미지.폴더 + 손님그림[Math.floor(Math.random() * 손님그림.length)]) + '" alt="">'
+    : 이모지[Math.floor(Math.random() * 이모지.length)];
+  무대.appendChild(g);
+
+  const 폭 = 무대.clientWidth || 320;
+  const 자리 = 50 + Math.random() * Math.max(40, 폭 - 150);
+  const 시간 = 1700;
+  const 길 = 성공
+    ? [{ transform: 'translateX(-46px)' },
+       { transform: 'translateX(' + 자리 + 'px)', offset: 0.42 },
+       { transform: 'translateX(' + 자리 + 'px)', offset: 0.72 },
+       { transform: 'translateX(' + (폭 + 46) + 'px)' }]
+    : [{ transform: 'translateX(-46px)' },
+       { transform: 'translateX(80px)', offset: 0.38 },
+       { transform: 'translateX(80px)', offset: 0.58 },
+       { transform: 'translateX(-46px)' }];
+
+  const a = g.animate(길, { duration: 시간, delay: 지연, easing: 'ease-in-out', fill: 'both' });
+  a.onfinish = () => g.remove();
+  if (!성공 && !손님그림.length) setTimeout(() => { if (g.isConnected) g.textContent = '😖'; }, 지연 + 시간 * 0.4);
+  return a;
+}
+
+/* ══════════════════════════════════════════════════════════════
    영업 결과
    ══════════════════════════════════════════════════════════════ */
 function 영업하기() {
@@ -653,16 +791,22 @@ function 영업하기() {
   } else if (p.가능손님 < p.예상손님) {
     if (!confirm('이대로 영업하면 ' + (p.예상손님 - p.가능손님) + '명을 놓칩니다.\n그래도 시작할까요?')) return;
   }
+  const 그때인테리어 = st.인테리어.slice();   // 연출에 쓸 카페 모습 (영업 뒤에도 그대로)
   const log = CG.영업(st, 배정);
+  log.인테리어 = 그때인테리어;
   st._배정 = 배정; 저장();
   클라우드저장(true);              // 한 주가 끝날 때마다 서버에 올린다 (랭킹 갱신 시점)
-  결과그리기(log);
-  화면('s-result');
+  연출(log, function () { 결과그리기(log); 화면('s-result'); });
 }
 
 function 결과그리기(log) {
   수치그리기();
   const 성공 = log.받은손님 >= log.예상손님;
+  // 예전 판에서 저장한 기록에도 안전하게 맞춘다
+  const 매출원 = log.매출원 || log.매출;
+  const 실지급 = log.실지급 || log.급여;
+  const 미지급 = log.미지급 || F(0);
+  const 버림 = !매출원.eq(log.매출);
   const 업무표 = log.업무.map(r => {
     const t = CAT.업무별[r.id];
     const 병목 = log.병목 === r.id && !성공;
@@ -700,8 +844,17 @@ function 결과그리기(log) {
     '<tr><td>손님 1명당 매출<br><span class="sub" style="font-size:12px">(기본 ' +
       (CAT.규칙.손님1명당매출 + st.시설.reduce((a, id) => a + (CAT.시설별[id].매출증가 || 0), 0)) +
       ' × 평판 배수 ' + 분수(CAT.규칙.평판배수[String(log.평판이전)]) + ')</span></td><td>' + 분수(log.단가) + '</td></tr>' +
-    '<tr><td>매출 (' + log.받은손님 + '명 × ' + 분수(log.단가) + ')</td><td class="pos">+' + 분수(log.매출) + '</td></tr>' +
-    '<tr><td>직원 급여</td><td class="neg">−' + 분수(log.급여) + '</td></tr>' +
+    '<tr><td>매출 (' + log.받은손님 + '명 × ' + 분수(log.단가) + ' = ' + 분수(매출원) + ')' +
+      (버림 ? '<br><span class="sub" style="font-size:12px">코인은 0과 자연수만 쓰므로 소수점 아래는 버립니다</span>' : '') +
+      '</td><td class="pos">+' + 분수(log.매출) + '</td></tr>' +
+    '<tr><td>직원 급여' +
+      (미지급.isPos() ? '<br><span class="sub" style="font-size:12px">가진 돈이 모자라 있는 만큼만 줬습니다</span>' : '') +
+      '</td><td class="neg">−' + 분수(실지급) + '</td></tr>' +
+    (미지급.isPos()
+      ? '<tr><td style="color:var(--red)"><b>못 준 급여 (체불)</b>' +
+        '<br><span class="sub" style="font-size:12px">직원들이 실망해 평판이 1 내려갔습니다</span></td>' +
+        '<td class="neg">' + 분수(미지급) + '</td></tr>'
+      : '') +
     '<tr><td><b>이번 주 순이익</b></td><td class="' + (log.순익.isNeg() ? 'neg' : 'pos') + '"><b>' + 분수(log.순익) + '</b></td></tr>' +
     '<tr><td>보유 코인</td><td>' + 분수(log.코인) + '</td></tr>' +
     '</table></div>' +
@@ -927,8 +1080,10 @@ function 도움말() {
     '업무마다 손님 1명당 필요한 업무량이 다릅니다(음료 ' + 수('3/4') + ', 서빙 ' + 수('1/2') + ' …). ' +
     '업무별로 <b>처리량 ÷ 필요 업무량</b>을 하면 그 업무로 받을 수 있는 손님 수가 나오고, ' +
     '그중 <b>가장 작은 값</b>이 이번 주에 실제로 받을 수 있는 손님 수입니다. 이 업무를 <b>병목</b>이라고 불러요.</p>' +
-    '<p><b>3. 평판</b><br>예상 손님을 모두 받으면 평판이 오르고, ' + 수('3/4') + '보다 적게 받으면 내려갑니다. ' +
-    '평판이 높으면 손님 1명당 매출이 올라갑니다.</p>' +
+    '<p><b>3. 평판과 돈</b><br>예상 손님을 모두 받으면 평판이 오르고, ' + 수('3/4') + '보다 적게 받으면 내려갑니다. ' +
+    '평판이 높으면 손님 1명당 매출이 올라갑니다(예: 평판 ★3이면 3 × ' + 수('6/5') + ' = ' + 수('18/5') + ').<br>' +
+    '<b>코인은 0과 자연수만 씁니다.</b> 매출을 분수로 계산한 뒤 소수점 아래는 버립니다. ' +
+    '가진 돈보다 급여가 많으면 있는 만큼만 주고, 못 준 급여가 생기면 직원들이 실망해 평판이 1 내려갑니다.</p>' +
     '<p><b>4. SNS 흥행</b><br>인테리어로 매력도를 올리면 SNS에 오를 확률이 높아집니다. ' +
     '터지면 다음 주 손님이 ' + 수('3/2') + '배가 되는데, <b>손님이 늘어난 배수만큼 업무량도 똑같이 늘어납니다.</b>(정비례) 준비가 안 되어 있으면 오히려 손해예요.</p>' +
     '<p><b>5. 순위</b><br>10주 동안의 <b>누적 순이익 = 매출 − 급여 − 투자</b> 하나로 겨룹니다.</p>' +

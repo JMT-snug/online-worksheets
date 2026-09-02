@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.46">
+  <meta name="app-version" content="8.47">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3011,6 +3011,13 @@ const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
   "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","e":"e","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"(","=":"="};
 function quizKeyHandler(e){
+  /* 화면 위에 떠 있는 다른 입력창(🚨 오류 신고 글상자 등)에 글자를 넣는 중이면
+     문제 답칸으로 가로채지 않는다. 이 처리기는 document 전체의 키를 받기 때문에,
+     막지 않으면 신고 내용으로 친 글자가 정답칸에 들어간다.
+     답 입력칸(#word-input, #s3-inp)은 각자 Enter 를 직접 처리하므로 여기서 빠져도 문제없다. */
+  const _t=e.target;
+  if(_t && (_t.tagName==="TEXTAREA" || _t.isContentEditable ||
+      (_t.tagName==="INPUT" && !/^(button|checkbox|radio|submit|reset|file|image|range|color)$/i.test(_t.type||"text")))) return;
   const q=curWS?.questions[curQIdx];
   // multi 타입: Enter → 제출
   if(q?.type==="multi"){
@@ -5155,6 +5162,11 @@ window.addEventListener("resize",()=>{
   canvas.width=canvas.parentElement.clientWidth||600;
   canvas.height=canvasTargetHeight(); setCtx();
   if(saved){ try{ctx.putImageData(saved,0,0);}catch(e){} }
+  /* 문제 영역 위에 겹쳐 있는 L자 연습장(#problem-canvas)도 새 크기에 맞춰 다시 만든다.
+     이걸 안 하면 캔버스가 옛 크기(px로 박아 둔 style.width/height)를 유지해
+     문제 영역 위에 예전 크기의 테두리가 그대로 남는다. resize 가 연속으로 오므로 잠깐 모아서 한 번만 한다. */
+  clearTimeout(window._pcvResizeT);
+  window._pcvResizeT=setTimeout(()=>{ try{ initProblemCanvas(); }catch(e){ console.warn("[L자 연습장 크기 조정]", e); } }, 120);
 });
 </script>
 <!-- ══════════════════════════════════════════════════════════════
@@ -5212,6 +5224,7 @@ window.addEventListener("resize",()=>{
   if (!잔 || !대시) return;
 
   var 이번에나왔나 = false, 숨김타이머 = null, 굴림타이머 = null;
+  var 굴린적있나 = false, 마지막완료수 = -1;   // 접속당 1번 + 완료가 늘면 한 번 더
 
   /* 완료한 학습지 수 — 단원 목록에 이미 그려진 배지(3/5)의 왼쪽 숫자를 모두 더한다.
      배지가 없으면(아직 안 그려졌거나 완료가 하나도 없으면) 0 을 돌려준다. */
@@ -5258,8 +5271,13 @@ window.addEventListener("resize",()=>{
     if (이번에나왔나 || !대시.classList.contains('active')) return;
     굴림타이머 = setTimeout(function () {
       if (!대시.classList.contains('active')) return;
+      var n = 완료개수();
+      /* 한 번 접속(새로고침)에 한 번만 굴린다.
+         단, 그 사이에 학습지를 새로 끝냈으면 그때 한 번 더 굴린다(끝낸 보람). */
+      if (굴린적있나 && n <= 마지막완료수) return;
+      굴린적있나 = true; 마지막완료수 = n;
       var p = 확률();
-      if (window.console && console.debug) console.debug('[☕] 완료 ' + 완료개수() + '개 → 등장 확률 ' + (Math.round(p * 10) / 10) + '%');
+      if (window.console && console.debug) console.debug('[☕] 완료 ' + n + '개 → 등장 확률 ' + (Math.round(p * 10) / 10) + '%');
       if (Math.random() * 100 < p) 보이기();
     }, 1500 + Math.random() * 2500);
   }

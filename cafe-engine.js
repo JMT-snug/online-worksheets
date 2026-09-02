@@ -162,6 +162,7 @@ function setCatalog(raw) {
     직원유형: [], 직원유형별: {},
     능력표: raw.업무능력표.slice(),
     인테리어: raw.인테리어.slice(), 인테리어별: {},
+    배경: (raw.배경 || []).slice(), 배경별: {}, 기본배경: {},
     세트보너스: raw.세트보너스.slice(),
     시설: raw.시설.slice(), 시설별: {},
     예약미션: [], 예약별: {},
@@ -194,6 +195,17 @@ function setCatalog(raw) {
 
   c.인테리어.forEach(function (d) { c.인테리어별[d.id] = d; });
   c.시설.forEach(function (f) { c.시설별[f.id] = f; });
+
+  // 배경: 종류마다 가격 0 인 것 하나가 처음부터 가지고 있는 기본 배경이다.
+  c.배경.forEach(function (b) {
+    c.배경별[b.id] = b;
+    if (b.가격 === 0 && !c.기본배경[b.종류]) c.기본배경[b.종류] = b.id;
+  });
+  c.배경.forEach(function (b) {
+    if (!c.기본배경[b.종류]) {
+      throw new Error('배경 종류 "' + b.종류 + '" 에 가격 0 인 기본 항목이 없습니다.');
+    }
+  });
 
   (raw.예약미션 || []).forEach(function (m) {
     var o = {
@@ -254,6 +266,12 @@ function newGame(opts) {
     평판: c.규칙.시작평판,
     직원: [],
     인테리어: [],
+    배경보유: Object.keys(c.기본배경).map(function (k) { return c.기본배경[k]; }),
+    배경: (function () {                         // 종류별로 지금 적용 중인 배경
+      var m = {};
+      Object.keys(c.기본배경).forEach(function (k) { m[k] = c.기본배경[k]; });
+      return m;
+    })(),
     시설: [],
     좋아요매력도: 0,           // 친구가 눌러 준 좋아요로 얻는 매력도 (온라인 연결 후 사용)
     누적: { 매출: ZERO, 급여: ZERO, 투자: ZERO },
@@ -397,6 +415,11 @@ function 매력도(st) {
   var c = getCatalog();
   var v = 0;
   st.인테리어.forEach(function (id) { var d = c.인테리어별[id]; if (d) v += d.매력도; });
+  // 배경은 "지금 적용 중인 것"만 매력도에 들어간다 (사 모으는 게 아니라 갈아타는 구조)
+  Object.keys(st.배경 || {}).forEach(function (종류) {
+    var b = c.배경별[st.배경[종류]];
+    if (b) v += b.매력도;
+  });
   c.세트보너스.forEach(function (b) {
     var 세트원 = c.인테리어.filter(function (d) { return d.세트 === b.세트; });
     var 다샀나 = 세트원.length > 0 && 세트원.every(function (d) { return st.인테리어.indexOf(d.id) >= 0; });
@@ -564,6 +587,28 @@ function 인테리어구매(st, id) {
   return { ok: true, 매력도: 매력도(st) };
 }
 
+/** 배경(벽지·바닥)을 산다. 사면 바로 적용된다. */
+function 배경구매(st, id) {
+  var c = getCatalog();
+  var b = c.배경별[id];
+  if (!b) return { ok: false, 이유: '없는 배경입니다.' };
+  if ((st.배경보유 || []).indexOf(id) >= 0) return { ok: false, 이유: '이미 가지고 있습니다.' };
+  if (!지불(st, b.가격)) return { ok: false, 이유: '코인이 모자랍니다. (' + b.가격 + ' 필요)' };
+  st.배경보유.push(id);
+  st.배경[b.종류] = id;
+  return { ok: true, 종류: b.종류, 매력도: 매력도(st) };
+}
+
+/** 이미 산 배경 중에서 골라 바꾼다. 돈은 들지 않는다. */
+function 배경적용(st, id) {
+  var c = getCatalog();
+  var b = c.배경별[id];
+  if (!b) return { ok: false, 이유: '없는 배경입니다.' };
+  if ((st.배경보유 || []).indexOf(id) < 0) return { ok: false, 이유: '아직 사지 않았습니다.' };
+  st.배경[b.종류] = id;
+  return { ok: true, 종류: b.종류, 매력도: 매력도(st) };
+}
+
 function 시설구매(st, id) {
   var c = getCatalog();
   var f = c.시설별[id];
@@ -658,6 +703,7 @@ return {
   손님단가: 손님단가, 주급합: 주급합, 누적순이익: 누적순이익, 능력: 능력,
   고용: 고용, 업그레이드: 업그레이드, 업그레이드가능: 업그레이드가능,
   인테리어구매: 인테리어구매, 시설구매: 시설구매,
+  배경구매: 배경구매, 배경적용: 배경적용,
   저장: 저장, 불러오기: 불러오기, 추천배치: 추천배치
 };
 });

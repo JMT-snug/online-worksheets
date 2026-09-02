@@ -145,6 +145,8 @@ p.sub{margin:0 0 18px;color:var(--dim);font-size:14px}
 .item .desc{font-size:12.5px;color:var(--dim);line-height:1.5;flex:1}
 .item .price{font-weight:900;font-size:15px}
 .item.owned{opacity:.72;border-color:var(--green)}
+.item.now{border-color:var(--green);box-shadow:0 0 0 2px rgba(63,154,107,.18)}
+.bgchip{height:74px;border-radius:10px;border:1px solid var(--line);background-size:cover;background-position:center}
 .tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 7px;border-radius:6px;background:#efe3d2;color:var(--dim)}
 .tag.set{background:#ffe8f0;color:#b3517a}
 
@@ -155,8 +157,10 @@ table.log th:first-child,table.log td:first-child{text-align:left}
 table.log th{color:var(--dim);font-weight:700;font-size:12.5px}
 
 /* ── 카페 그림 (내 카페 모습 · 영업 연출) ── */
-.scene{position:relative;height:250px;border-radius:14px;overflow:hidden;border:1px solid var(--line);
-  background:linear-gradient(#fbf1e2 0 58%, #ecdcc2 58% 60%, #e6d3b6 60% 100%)}
+.scene{position:relative;height:250px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#fbf1e2}
+.scene .bg-wall{position:absolute;left:0;right:0;top:0;height:59%}
+.scene .bg-floor{position:absolute;left:0;right:0;bottom:0;height:41%;
+  box-shadow:inset 0 3px 6px rgba(120,90,55,.13)}
 .scene .wall,.scene .floor{position:absolute;left:0;right:0;display:flex;justify-content:center;gap:10px;padding:0 12px}
 .scene .wall{top:12px;align-items:flex-start}
 .scene .floor{bottom:10px;align-items:flex-end}
@@ -185,6 +189,8 @@ table.rank{width:100%;border-collapse:collapse;font-size:14px}
 table.rank th,table.rank td{padding:10px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
 table.rank th:nth-child(2),table.rank td:nth-child(2){text-align:left;white-space:normal}
 table.rank th{color:var(--dim);font-weight:700;font-size:12.5px}
+table.rank tr:not(:first-child){cursor:pointer}
+table.rank tr:not(:first-child):hover{background:#fff8ec}
 table.rank tr.me{background:#fff6e6}
 table.rank tr.me td{font-weight:800}
 .medal{font-size:16px}
@@ -230,6 +236,9 @@ table.rank tr.me td{font-weight:800}
 
 <!-- ── 랭킹 ────────────────────────────────────────────────── -->
 <div class="screen" id="s-rank"></div>
+
+<!-- ── 친구 카페 구경 ──────────────────────────────────────── -->
+<div class="screen" id="s-friend"></div>
 
 <!-- ── 내 카페 ─────────────────────────────────────────────── -->
 <div class="screen" id="s-home"></div>
@@ -405,6 +414,7 @@ async function 로그인상태(u) {
   저장();
   $('nav').classList.remove('hidden');
   탭(st.끝남 ? 's-log' : 's-home');
+  좋아요반영();                                // 친구들이 눌러 준 좋아요를 매력도에 반영
 }
 
 /**
@@ -422,6 +432,7 @@ function 요약(s) {
     reputation: s.평판,
     charm: CG.매력도(s),
     decor: s.인테리어.slice(),
+    background: Object.assign({}, s.배경),         // 친구 카페 구경에서 벽지·바닥을 그리는 데 쓴다
     facilities: s.시설.slice(),
     staffCount: s.직원.length,
     profit: 순.toString(),                          // 분수 그대로 (예: "177/5")
@@ -682,6 +693,17 @@ function 가게그림(상태, 꼬리표) {
   const 산것 = (상태.인테리어 || []).map(id => CAT.인테리어별[id]).filter(Boolean);
   const 벽 = 산것.filter(d => d.배치 === '벽');
   const 바닥 = 산것.filter(d => d.배치 !== '벽');
+
+  // 배경: 그림이 있으면 그림, 없으면 설정표의 색으로 칠한다
+  const 배경 = 상태.배경 || {};
+  const 칠 = 종류 => {
+    const b = CAT.배경별[배경[종류]] || CAT.배경별[CAT.기본배경[종류]];
+    if (!b) return '';
+    let s = 'background-color:' + b.색 + ';';
+    if (b.이미지) s += 'background-image:url(\'' + esc(CAT.이미지.폴더 + b.이미지) + '\');' +
+                       'background-size:cover;background-position:center;';
+    return s;
+  };
   // 물건이 많아지면 작게 그려 한 줄에 들어가게 한다
   const 높이 = n => (n <= 3 ? 82 : n <= 5 ? 66 : n <= 7 ? 54 : 44);
   const 줄 = (목록, cls) => '<div class="' + cls + '">' + 목록.map(d =>
@@ -691,9 +713,11 @@ function 가게그림(상태, 꼬리표) {
   // id 를 붙이지 않는다 — 홈 화면과 영업 연출에 같은 그림이 동시에 있을 수 있어서,
   // id 가 겹치면 연출이 숨어 있는 홈 쪽 그림에 손님을 그리게 된다.
   return '<div class="scene">' +
+    '<div class="bg-wall" style="' + 칠('벽지') + '"></div>' +
+    '<div class="bg-floor" style="' + 칠('바닥') + '"></div>' +
     (꼬리표 ? '<div class="tag">' + esc(꼬리표) + '</div>' : '') +
     (산것.length ? 줄(벽, 'wall') + 줄(바닥, 'floor')
-                 : '<div class="empty">아직 텅 빈 카페예요.<br>상점에서 인테리어를 사면 여기에 놓입니다.</div>') +
+                 : '<div class="empty">아직 텅 빈 카페예요.<br>상점에서 인테리어와 배경을 사면 여기에 나타납니다.</div>') +
     '</div>';
 }
 
@@ -886,7 +910,7 @@ function 결과그리기(log) {
 function 상점그리기(tab) {
   if (tab) 상점탭 = tab;
   수치그리기();
-  const 탭들 = [['hire', '직원 고용'], ['up', '직원 업그레이드'], ['decor', '인테리어'], ['fac', '카페 시설']];
+  const 탭들 = [['hire', '직원 고용'], ['up', '직원 업그레이드'], ['decor', '인테리어'], ['bg', '벽지·바닥'], ['fac', '카페 시설']];
   let 본문 = '';
 
   if (상점탭 === 'hire') {
@@ -940,6 +964,32 @@ function 상점그리기(tab) {
     (세트.length ? ' <b style="color:var(--green)">(완성: ' + 세트.map(esc).join(', ') + ')</b>' : '') + '</p>';
   }
 
+  if (상점탭 === 'bg') {
+    const 종류들 = ['벽지', '바닥'];
+    본문 = 가게그림(st, '지금 내 카페') +
+      '<p class="sub" style="margin:12px 0 16px">벽지와 바닥은 <b>지금 적용한 것만 매력도에 들어갑니다.</b> ' +
+      '여러 개를 사 두고 그때그때 바꿔 끼울 수 있어요(바꾸는 데는 돈이 들지 않습니다).</p>' +
+      종류들.map(종류 => {
+        const 목록 = CAT.배경.filter(b => b.종류 === 종류);
+        return '<h3 style="margin:18px 0 10px;font-size:16px">' + 종류 + '</h3><div class="grid g3">' +
+          목록.map(b => {
+            const 보유 = (st.배경보유 || []).indexOf(b.id) >= 0;
+            const 지금 = st.배경[종류] === b.id;
+            const 미리 = '<div class="bgchip" style="background-color:' + b.색 +
+              (b.이미지 ? ';background-image:url(\'' + esc(CAT.이미지.폴더 + b.이미지) + '\')' : '') + '"></div>';
+            return '<div class="item' + (지금 ? ' now' : (보유 ? ' owned' : '')) + '">' + 미리 +
+              '<div class="nm">' + esc(b.이름) + '</div>' +
+              '<div class="desc">매력도 +' + b.매력도 + '</div>' +
+              (지금 ? '<div class="price" style="color:var(--green)">적용 중</div>'
+                    : 보유 ? '<button class="btn sec sm" onclick="사기(\'bguse\',\'' + b.id + '\')">이걸로 바꾸기</button>'
+                           : '<div style="display:flex;align-items:center;gap:6px"><span class="price">' + b.가격 + '코인</span>' +
+                             '<div style="flex:1"></div><button class="btn sm" ' + (st.코인.lt(F(b.가격)) ? 'disabled' : '') +
+                             ' onclick="사기(\'bg\',\'' + b.id + '\')">구매</button></div>') +
+              '</div>';
+          }).join('') + '</div>';
+      }).join('');
+  }
+
   if (상점탭 === 'fac') {
     본문 = '<div class="grid g2">' + CAT.시설.map(f => {
       const 보유 = st.시설.indexOf(f.id) >= 0;
@@ -969,9 +1019,11 @@ function 사기(종류, id) {
   if (종류 === 'hire') r = CG.고용(st, id);
   if (종류 === 'up') r = CG.업그레이드(st, id);
   if (종류 === 'decor') r = CG.인테리어구매(st, id);
+  if (종류 === 'bg') r = CG.배경구매(st, id);
+  if (종류 === 'bguse') r = CG.배경적용(st, id);
   if (종류 === 'fac') r = CG.시설구매(st, id);
   if (!r.ok) { 알림(r.이유); return; }
-  알림('구매했습니다.');
+  알림(종류 === 'bguse' ? '바꿨습니다.' : '구매했습니다.');
   if (종류 === 'fac' && r.여는업무) 알림('새 업무가 열렸습니다: ' + CAT.업무별[r.여는업무].이름);
   배정정리();
   st._배정 = 배정; 저장(); 클라우드저장();
@@ -1011,10 +1063,11 @@ async function 랭킹그리기() {
     return;
   }
 
+  랭킹목록 = 목록;                                  // 친구 카페 구경에서 다시 쓴다
   const 메달 = ['🥇', '🥈', '🥉'];
   const 행 = 목록.map((r, i) => {
     const 나 = r.uid === 사용자.uid;
-    return '<tr' + (나 ? ' class="me"' : '') + '>' +
+    return '<tr' + (나 ? ' class="me"' : '') + ' onclick="친구카페(\'' + esc(r.uid) + '\')" title="카페 구경하기">' +
       '<td class="medal">' + (메달[i] || (i + 1)) + '</td>' +
       '<td class="who">' + esc(r.cafeName || '이름 없는 카페') +
         '<small>' + esc(r.name || '') + (나 ? ' · 나' : '') + '</small></td>' +
@@ -1026,10 +1079,95 @@ async function 랭킹그리기() {
   const 내순위 = 목록.findIndex(r => r.uid === 사용자.uid);
   box.innerHTML = 머리 +
     '<div class="card"><table class="rank">' +
-    '<tr><th>순위</th><th>카페</th><th>진행</th><th>평판</th><th>누적 순이익</th></tr>' + 행 + '</table></div>' +
+    '<tr><th>순위</th><th>카페</th><th>진행</th><th>평판</th><th>누적 순이익</th></tr>' + 행 + '</table>' +
+    '<p class="sub" style="margin:12px 0 0">줄을 누르면 그 친구의 카페를 구경할 수 있습니다.</p></div>' +
     (내순위 < 0 ? '<p class="sub">아직 50위 안에 들지 못했습니다. 순이익을 더 쌓아 보세요.</p>'
                 : '<p class="sub">내 순위: ' + (내순위 + 1) + '등</p>') +
     '<button class="btn sec sm" onclick="랭킹그리기()">새로고침</button>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   친구 카페 구경
+   ══════════════════════════════════════════════════════════════
+   보여 주는 것: 카페 이름·표시 이름·평판·매력도·꾸민 모습(인테리어와 벽지·바닥).
+   보여 주지 않는 것: 매출·직원 배치 같은 경영 속사정.
+   좋아요는 한 친구당 하루 1번만 누를 수 있고, 받은 사람의 매력도에 보너스가 된다.
+   ────────────────────────────────────────────────────────────── */
+let 랭킹목록 = [];
+const 좋아요최대 = 5;   // 좋아요로 얻을 수 있는 매력도 상한
+
+function 친구카페(uid) {
+  const r = 랭킹목록.filter(x => x.uid === uid)[0];
+  if (!r) { 알림('카페 정보를 찾지 못했습니다.'); return; }
+  const 나 = 사용자 && uid === 사용자.uid;
+  const 세트 = CAT.세트보너스.filter(b => {
+    const 원 = CAT.인테리어.filter(d => d.세트 === b.세트);
+    return 원.length && 원.every(d => (r.decor || []).indexOf(d.id) >= 0);
+  }).map(b => b.세트);
+
+  const 배경이름 = 종류 => {
+    const b = CAT.배경별[(r.background || {})[종류]] || CAT.배경별[CAT.기본배경[종류]];
+    return b ? b.이름 : '-';
+  };
+
+  $('s-friend').innerHTML =
+    '<button class="btn sec sm" onclick="탭(\'s-rank\')">← 랭킹으로</button>' +
+    '<h2 class="title" style="margin-top:14px">' + esc(r.cafeName || '이름 없는 카페') + '</h2>' +
+    '<p class="sub">' + esc(r.name || '') + '님의 카페' + (나 ? ' (내 카페)' : '') + '</p>' +
+    가게그림({ 인테리어: r.decor || [], 배경: r.background || {} }, 나 ? '내 카페' : '구경 중') +
+    '<div class="card" style="margin-top:14px"><h3>이 카페는</h3>' +
+    '<table class="money">' +
+    '<tr><td>평판</td><td style="color:var(--gold)">' + 별(r.reputation || 1) + '</td></tr>' +
+    '<tr><td>매력도</td><td>' + (r.charm || 0) + '</td></tr>' +
+    '<tr><td>벽지 · 바닥</td><td>' + esc(배경이름('벽지')) + ' · ' + esc(배경이름('바닥')) + '</td></tr>' +
+    '<tr><td>꾸민 물건</td><td>' + (r.decor || []).length + '개</td></tr>' +
+    (세트.length ? '<tr><td>완성한 세트</td><td>' + 세트.map(esc).join(', ') + '</td></tr>' : '') +
+    '</table>' +
+    '<p class="sub" style="margin:12px 0 0">매출이나 직원 배치 같은 경영 속사정은 보이지 않습니다.</p></div>' +
+
+    ((r.decor || []).length
+      ? '<div class="card"><h3>놓인 물건</h3><div class="grid g3">' +
+        (r.decor || []).map(id => {
+          const d = CAT.인테리어별[id];
+          if (!d) return '';
+          return '<div>' + 그림(d.이미지, d.이름) +
+            '<div style="text-align:center;font-size:12.5px;font-weight:700;margin-top:5px">' + esc(d.이름) + '</div></div>';
+        }).join('') + '</div></div>'
+      : '') +
+
+    (나 ? '<p class="sub">내 카페에는 좋아요를 누를 수 없어요.</p>'
+        : '<button class="btn big" id="btn-like" onclick="좋아요누르기(\'' + esc(uid) + '\')">❤️ 좋아요</button>' +
+          '<p class="sub" style="margin-top:10px">한 친구당 <b>하루 한 번</b> 누를 수 있고, 받은 사람의 매력도가 올라갑니다.</p>');
+  화면('s-friend');
+}
+
+async function 좋아요누르기(uid) {
+  const b = $('btn-like');
+  if (!window.CafeCloud || !window.CafeCloud.좋아요) { 알림('좋아요 기능을 쓸 수 없습니다.'); return; }
+  if (b) { b.disabled = true; b.textContent = '보내는 중…'; }
+  try {
+    const r = await window.CafeCloud.좋아요(uid);
+    if (r.이미) { 알림('오늘은 이미 눌렀어요. 내일 다시 눌러 주세요.'); if (b) b.textContent = '❤️ 오늘은 눌렀어요'; }
+    else { 알림('좋아요를 보냈습니다!'); if (b) b.textContent = '❤️ 좋아요를 보냈어요'; }
+  } catch (e) {
+    console.warn('[좋아요 실패]', e);
+    알림('좋아요를 보내지 못했습니다. (' + (e.code || e.message) + ')');
+    if (b) { b.disabled = false; b.textContent = '❤️ 좋아요'; }
+  }
+}
+
+/** 내가 받은 좋아요를 세어 매력도에 반영한다 (로그인할 때 한 번) */
+async function 좋아요반영() {
+  if (!사용자 || !st || !window.CafeCloud || !window.CafeCloud.받은좋아요) return;
+  try {
+    const n = await window.CafeCloud.받은좋아요();
+    const 보너스 = Math.min(좋아요최대, n);
+    if (st.좋아요매력도 !== 보너스) {
+      st.좋아요매력도 = 보너스;
+      저장(); 클라우드저장();
+      if (보너스 > 0) 알림('친구들이 좋아요를 눌러 줬어요! 매력도 +' + 보너스);
+    }
+  } catch (e) { console.warn('[좋아요 읽기 실패]', e); }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1180,6 +1318,31 @@ window.CafeCloud = {
     if (!snap.exists()) return null;
     const d = snap.data();
     return d.state ? window.CafeGame.불러오기(d.state) : null;
+  },
+
+  /**
+   * 친구 카페에 좋아요를 누른다.
+   *   cafe_likes/{받는 사람 uid}/from/{누른 사람 uid} = { date:'2026-09-02', name:'...' }
+   * 문서 id 가 누른 사람이라 한 사람이 아무리 여러 번 눌러도 문서는 하나다.
+   * 매력도는 "좋아요를 준 사람 수"로 세므로 연타해도 소용이 없다.
+   * 같은 날 두 번 누르는 것은 아래에서 막는다.
+   */
+  좋아요: async (받는uid) => {
+    if (!나) throw new Error('로그인이 필요합니다.');
+    if (받는uid === 나.uid) return { 이미: true };
+    const 오늘 = new Date().toISOString().slice(0, 10);
+    const ref = doc(db, 'cafe_likes', 받는uid, 'from', 나.uid);
+    const 먼저 = await getDoc(ref);
+    if (먼저.exists() && 먼저.data().date === 오늘) return { 이미: true };
+    await setDoc(ref, { date: 오늘, name: 나.이름 });
+    return { 이미: false };
+  },
+
+  /** 내가 받은 좋아요가 몇 사람한테서 왔는지 센다. */
+  받은좋아요: async () => {
+    if (!나) return 0;
+    const snap = await getDocs(collection(db, 'cafe_likes', 나.uid, 'from'));
+    return snap.size;
   },
 
   /** 누적 순이익이 높은 순서로 가져온다. 게임 상태(state 필드)는 빼고 넘긴다. */

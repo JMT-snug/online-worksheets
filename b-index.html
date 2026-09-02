@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.44">
+  <meta name="app-version" content="8.45">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -5160,14 +5160,26 @@ window.addEventListener("resize",()=>{
 <!-- ══════════════════════════════════════════════════════════════
      ☕ 이스터 에그 — 「카페 타이쿤」으로 가는 숨은 문  (v8.44에서 추가)
      ══════════════════════════════════════════════════════════════
-     단원 목록 화면에 가끔(기본 18%) 작은 커피잔이 슬쩍 나타났다가 조용히 사라진다.
+     단원 목록 화면에 가끔 작은 커피잔이 슬쩍 나타났다가 조용히 사라진다.
      누르면 카페 타이쿤(cafe-tycoon.html)이 새 탭에서 열린다.
 
-     · 학습지를 푸는 화면에서는 절대 나오지 않는다(문제 푸는 걸 방해하지 않으려고).
-     · 로고("수학 학습지+")를 5번 빠르게 누르면 확률과 상관없이 나타난다.
-       수업에서 학생들에게 보여 줄 때 쓰라고 남겨 둔 길이다.
-     · 기존 코드는 전혀 건드리지 않는다. 화면이 바뀌는 것만 지켜보다가 스스로 뜬다.
-     · 끄고 싶으면 아래 등장확률을 0 으로 바꾸면 된다.
+     ■ 나타날 확률 (v8.45)
+       기본 10% + 완료한 학습지 1개당 1%
+       예) 아직 없음 → 10%,  5개 완료 → 15%,  20개 완료 → 30%
+       열심히 한 학생일수록 자주 만나게 된다.
+
+     ■ 완료 개수는 어떻게 세나
+       단원 목록의 단원마다 붙는 배지(`3/5` 꼴, .unit-ws-badge)의 왼쪽 숫자를 모두 더한다.
+       index 의 주 스크립트가 type="module" 이라 밖에서 wsProgress 를 읽을 수 없어서,
+       이미 화면에 그려진 값을 그대로 센다. 기존 코드를 건드리지 않기 위한 선택이다.
+       배지를 못 찾으면 그냥 기본 확률만 쓴다(게임이 멈추거나 오류가 나지 않는다).
+
+     ■ 그 밖에
+       · 학습지를 푸는 화면에서는 절대 나오지 않는다(문제 푸는 걸 방해하지 않으려고).
+       · 로고("수학 학습지+")를 1.5초 안에 5번 누르면 확률과 상관없이 나타난다.
+         수업에서 학생들에게 보여 줄 때 쓰라고 남겨 둔 길이다.
+       · 기존 코드는 전혀 건드리지 않는다. 화면이 바뀌는 것만 지켜보다가 스스로 뜬다.
+       · 끄고 싶으면 아래 기본확률과 학습지당보너스를 둘 다 0 으로 바꾸면 된다.
      ══════════════════════════════════════════════════════════════ -->
 <style>
 #cafe-egg{position:fixed;left:16px;bottom:16px;z-index:7900;width:52px;height:52px;border-radius:50%;
@@ -5187,15 +5199,35 @@ window.addEventListener("resize",()=>{
 <script>
 (function () {
   'use strict';
-  var 등장확률 = 18;        // % — 단원 목록 화면에 들어갈 때 이 확률로 나타난다. 0 이면 아예 안 나온다.
-  var 머무는시간 = 22000;   // ms — 이만큼 지나면 조용히 사라진다.
+  var 기본확률 = 10;        // % — 완료한 학습지가 하나도 없을 때의 확률
+  var 학습지당보너스 = 1;   // % — 완료한 학습지 1개마다 이만큼 더해진다
+  var 최대확률 = 100;       // % — 더 드물게 하고 싶으면 이 값을 낮춘다 (예: 40)
+  var 머무는시간 = 22000;   // ms — 이만큼 지나면 조용히 사라진다
   var 주소 = 'cafe-tycoon.html';
 
   var 잔 = document.getElementById('cafe-egg');
   var 대시 = document.getElementById('dash-page');
   if (!잔 || !대시) return;
 
-  var 이번에나왔나 = false, 숨김타이머 = null;
+  var 이번에나왔나 = false, 숨김타이머 = null, 굴림타이머 = null;
+
+  /* 완료한 학습지 수 — 단원 목록에 이미 그려진 배지(3/5)의 왼쪽 숫자를 모두 더한다.
+     배지가 없으면(아직 안 그려졌거나 완료가 하나도 없으면) 0 을 돌려준다. */
+  function 완료개수() {
+    var 합 = 0;
+    try {
+      var 배지들 = 대시.querySelectorAll('.unit-ws-badge');
+      for (var i = 0; i < 배지들.length; i++) {
+        var m = String(배지들[i].textContent || '').match(/(\d+)\s*\/\s*(\d+)/);
+        if (m) 합 += parseInt(m[1], 10) || 0;
+      }
+    } catch (e) { return 0; }
+    return 합;
+  }
+
+  function 확률() {
+    return Math.min(최대확률, 기본확률 + 완료개수() * 학습지당보너스);
+  }
 
   function 보이기() {
     if (이번에나왔나) return;               // 한 번 켠 뒤에는 새로고침해야 다시 나온다
@@ -5216,17 +5248,24 @@ window.addEventListener("resize",()=>{
     setTimeout(function () { 잔.classList.remove('on', 'pop'); }, 400);
   });
 
-  /* ① 단원 목록 화면이 열릴 때 확률을 굴린다.
+  /* ① 단원 목록 화면이 열리면 잠시 뒤에 확률을 굴린다.
+        (단원 배지가 다 그려진 뒤에 세야 완료 개수가 정확하다)
         학습지를 푸는 화면으로 들어가면 치운다. */
-  function 굴리기() {
-    if (!대시.classList.contains('active')) return;
-    if (Math.random() * 100 < 등장확률) setTimeout(보이기, 1200 + Math.random() * 2500);
+  function 굴리기예약() {
+    clearTimeout(굴림타이머);
+    if (이번에나왔나 || !대시.classList.contains('active')) return;
+    굴림타이머 = setTimeout(function () {
+      if (!대시.classList.contains('active')) return;
+      var p = 확률();
+      if (window.console && console.debug) console.debug('[☕] 완료 ' + 완료개수() + '개 → 등장 확률 ' + p + '%');
+      if (Math.random() * 100 < p) 보이기();
+    }, 1500 + Math.random() * 2500);
   }
   new MutationObserver(function () {
-    if (대시.classList.contains('active')) 굴리기();
-    else 숨기기();
+    if (대시.classList.contains('active')) 굴리기예약();
+    else { clearTimeout(굴림타이머); 숨기기(); }
   }).observe(대시, { attributes: true, attributeFilter: ['class'] });
-  if (대시.classList.contains('active')) 굴리기();
+  if (대시.classList.contains('active')) 굴리기예약();
 
   /* ② 로고를 5번 빠르게 누르면 확률과 상관없이 나타난다 (수업에서 보여 줄 때) */
   var 누른수 = 0, 누름타이머 = null;

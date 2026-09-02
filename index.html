@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.40">
+  <meta name="app-version" content="8.41">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -95,8 +95,35 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 #hdr-pen-only.active{background:#4c1d95;border-color:#8b5cf6;color:#e9d5ff}
 
 /* ── 🚨 오류 신고 ── */
-#bugrep-fab{position:fixed;right:14px;bottom:14px;z-index:8000;display:none;align-items:center;gap:5px;padding:9px 14px;border-radius:22px;border:none;background:#111827;color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.8;transition:opacity .15s,transform .15s}
-#bugrep-fab:hover{opacity:1;transform:translateY(-1px)}
+/* 🚨 오류 신고 · 💾 필기 저장 — 화면 오른쪽 아래에 나란히.
+   연습장을 가리지 않도록 quiz-shell 아래쪽에 --fab-space 만큼 자리를 비워 두고,
+   연습장 높이도 그만큼 빼서 계산한다(canvasTargetHeight). */
+:root{--fab-space:58px}
+/* 가로 방향 안내 — 세로로 든 터치 기기에서만 뜬다 */
+#rotate-hint{display:none}
+@media (orientation:portrait) and (pointer:coarse){
+  #rotate-hint{display:flex;position:fixed;inset:0;z-index:9500;background:#111827;color:#fff;
+    align-items:center;justify-content:center;padding:24px;text-align:center}
+  #rotate-hint.rh-off{display:none}
+}
+#rotate-hint .rh-box{max-width:320px}
+#rotate-hint .rh-icon{font-size:48px;margin-bottom:14px}
+#rotate-hint .rh-title{font-size:19px;font-weight:800;margin-bottom:8px}
+#rotate-hint .rh-sub{font-size:13px;line-height:1.6;opacity:.75;margin-bottom:20px}
+#rotate-hint button{display:block;width:100%;margin:8px 0 0;padding:11px 14px;border-radius:10px;
+  border:none;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+#rotate-hint .rh-lock{background:#2563eb;color:#fff}
+#rotate-hint .rh-skip{background:transparent;color:#9ca3af;font-weight:600;text-decoration:underline}
+#fab-dock{position:fixed;right:14px;bottom:12px;z-index:8000;display:none;align-items:center;gap:8px}
+#fab-dock button{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:20px;border:none;
+  font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;
+  box-shadow:0 3px 12px rgba(0,0,0,.22);opacity:.85;transition:opacity .15s,transform .15s}
+#fab-dock button:hover{opacity:1;transform:translateY(-1px)}
+#bugrep-fab{background:#111827;color:#fff}
+#save-note-fab{background:#2563eb;color:#fff;display:none}
+@media(max-width:520px){
+  #fab-dock button{padding:6px 10px;font-size:11px}
+}
 #bugrep-overlay{position:fixed;inset:0;z-index:9000;cursor:crosshair;background:rgba(59,130,246,.05)}
 #bugrep-banner{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:9001;background:#111827;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap}
 #bugrep-mark{position:fixed;z-index:9002;width:56px;height:56px;border:3px solid #ef4444;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(239,68,68,.25)}
@@ -171,7 +198,14 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 
 /* QUIZ PAGE */
 #quiz-page.active{display:block!important;background:var(--cream);min-height:calc(100vh - 52px)}
-#quiz-page>.quiz-shell{max-width:1100px;margin:0 auto;padding:20px 20px}
+#quiz-page>.quiz-shell{max-width:1100px;margin:0 auto;padding:20px 20px calc(var(--fab-space) + 4px)}
+/* 10인치급 이상에서는 화면 폭을 가득 쓴다.
+   ⚠️ 브라우저는 물리적 인치를 알려주지 않는다 — 가로 CSS 폭으로 어림한다.
+      10인치 태블릿 가로가 대체로 1024px인데 스크롤바를 빼면 1008px쯤으로 잡히므로
+      기준을 1000px로 두어 그 기기들이 빠지지 않게 했다. */
+@media (min-width:1000px){
+  #quiz-page>.quiz-shell{max-width:none;width:calc(100vw - 32px)}
+}
 .quiz-topbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .btn-back{padding:6px 14px;border-radius:6px;font-size:13px;background:var(--paper);border:1.5px solid var(--rule);color:var(--ink2);cursor:pointer;font-family:inherit;white-space:nowrap}
 .btn-back:hover{background:var(--rule)}
@@ -561,7 +595,23 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 </header>
 
 <!-- 오류 신고 플로팅 버튼 (로그인 시 표시, 캡처에서는 제외됨) -->
-<button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 오류 신고</button>
+<!-- 세로로 들고 있으면 가로로 돌리도록 안내 (터치 기기에서만).
+     브라우저는 전체화면이 아니면 방향을 강제로 고정할 수 없어서,
+     안내를 덮어 씌우고 원하면 [전체화면으로 가로 고정]을 누르게 한다. -->
+<div id="rotate-hint">
+  <div class="rh-box">
+    <div class="rh-icon">📱↻</div>
+    <div class="rh-title">가로로 돌려 주세요</div>
+    <div class="rh-sub">문제와 연습장을 나란히 보려면 가로 화면이 필요해요.</div>
+    <button class="rh-lock" onclick="lockLandscape()">⛶ 전체화면으로 가로 고정</button>
+    <button class="rh-skip" onclick="document.getElementById('rotate-hint').classList.add('rh-off')">이대로 계속하기</button>
+  </div>
+</div>
+
+<div id="fab-dock">
+  <button id="save-note-fab" onclick="saveCanvasImage()" title="지금 연습장 필기를 이미지 파일로 저장">💾 필기 저장</button>
+  <button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 오류 신고</button>
+</div>
 
 <!-- LOGIN -->
 <div id="login-page" class="page active">
@@ -661,7 +711,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <div class="divider-v"></div>
           <button class="btn-back" id="btn-clear-cv" style="font-size:14px;padding:4px 8px" title="전체 지우기">🗑</button>
           <button class="btn-back" onclick="undoCanvas()" style="font-size:14px;padding:4px 8px" title="실행취소 (한 획 되돌리기)">↩</button>
-          <button class="btn-back" onclick="saveCanvasImage()" style="font-size:14px;padding:4px 8px" title="지금 연습장 필기를 이미지 파일로 저장">💾</button>
           <div class="divider-v"></div>
           <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto">
             <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
@@ -794,9 +843,31 @@ function recordAnswer(idx, val, tokens){
 }
 
 /* ── PAGE SWITCH ── */
+/** 전체화면으로 들어가야만 방향 고정이 허용된다 (브라우저 정책).
+    지원하지 않는 기기에서는 조용히 넘어가고 안내만 닫는다. */
+window.lockLandscape = async function(){
+  try{
+    if(document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    if(screen.orientation?.lock) await screen.orientation.lock('landscape');
+  }catch(e){
+    console.log('[가로 고정] 이 기기에서는 지원되지 않습니다:', e.message);
+  }
+  document.getElementById('rotate-hint')?.classList.add('rh-off');
+};
+
+/** 💾 필기 저장은 연습장이 있는 퀴즈 화면에서만 보인다 */
+function updateFabDock(){
+  const btn=document.getElementById("save-note-fab");
+  if(!btn) return;
+  const onQuiz=document.getElementById("quiz-page")?.classList.contains("active");
+  btn.style.display = onQuiz ? "inline-flex" : "none";
+}
+window.updateFabDock=updateFabDock;
+
 function showPage(id) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.getElementById(id).classList.add("active");
+  updateFabDock();
   window.scrollTo(0,0);
   // 새로고침 복원용 상태 저장
   try{ sessionStorage.setItem('lastPage', id); }catch(e){}
@@ -962,8 +1033,9 @@ onAuthStateChanged(auth, async u => {
 function updateHeader(u) {
   const hi = document.getElementById("hdr-user");
   const manual = document.getElementById("hdr-manual");
-  const bug = document.getElementById("bugrep-fab");
-  if(bug) bug.style.display = u ? "inline-flex" : "none"; // 오류 신고: 로그인한 모든 사용자
+  const dock = document.getElementById("fab-dock");
+  if(dock) dock.style.display = u ? "flex" : "none"; // 오류 신고: 로그인한 모든 사용자
+  updateFabDock();
   if (!u) { hi.style.display = "none"; if(manual) manual.style.display = "none"; return; }
   hi.style.display = "flex";
   const av = document.getElementById("hdr-avatar");
@@ -4461,11 +4533,25 @@ function initProblemCanvas(){
   }
 }
 
+/** 연습장 높이 — 좌우 2단으로 보이는 화면(721px~)에서는 남는 세로를 가득 채운다.
+    화면 밖으로 넘치지 않게 맞춰야 오른쪽 아래 버튼이 연습장을 덮지 않는다.
+    한 단으로 접히는 좁은 화면(~720px)은 스크롤해서 쓰므로 종전대로 520 고정. */
+function canvasTargetHeight(){
+  if(window.innerWidth<=720) return 520;
+  // 캔버스 위쪽 모서리가 화면 어디쯤인지 — 자기 rect 하나면 충분하다
+  // (offsetTop을 더하면 offsetParent가 body라 위치를 두 번 세게 된다)
+  const top=canvas.getBoundingClientRect().top;
+  if(!isFinite(top)) return 520;
+  const fab=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--fab-space'))||58;
+  const avail=window.innerHeight - top - fab - 12;
+  return Math.max(230, Math.round(avail));
+}
+
 function initCanvas(){
   // quiz-page가 보이는 상태에서만 호출
   const w=canvas.parentElement.clientWidth||600;
   canvas.width=w;
-  canvas.height=520;
+  canvas.height=canvasTargetHeight();
   ctx.globalCompositeOperation="source-over";
   setCtx();
 }
@@ -5029,7 +5115,7 @@ window.addEventListener("resize",()=>{
   saveCanvasState();
   const saved=canvasStore[curQIdx];
   canvas.width=canvas.parentElement.clientWidth||600;
-  canvas.height=520; setCtx();
+  canvas.height=canvasTargetHeight(); setCtx();
   if(saved){ try{ctx.putImageData(saved,0,0);}catch(e){} }
 });
 </script>

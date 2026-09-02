@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.41">
+  <meta name="app-version" content="8.42">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -4924,32 +4924,67 @@ function canvasFileName(){
   return parts.join(' ').replace(/[\\/:*?"<>|]/g,'_').replace(/\s+/g,' ').trim().slice(0,120) || '연습장';
 }
 
-window.saveCanvasImage = function(){
-  try{
-    const out=document.createElement('canvas');
-    out.width=canvas.width; out.height=canvas.height;
-    const o=out.getContext('2d');
-    // 화면과 같은 줄노트 배경 (CSS: 28px 간격, 27~28px 위치에 #e5e0d5 선)
-    o.fillStyle='#fffef9'; o.fillRect(0,0,out.width,out.height);
-    o.strokeStyle='#e5e0d5'; o.lineWidth=1;
-    for(let y=27.5; y<out.height; y+=28){
-      o.beginPath(); o.moveTo(0,y); o.lineTo(out.width,y); o.stroke();
-    }
-    o.drawImage(canvas,0,0);
+/** 연습장 캔버스만 줄노트 배경 위에 얹어 그린다 (문제 캡처가 안 될 때의 폴백) */
+function composeNoteOnly(){
+  const out=document.createElement('canvas');
+  out.width=canvas.width; out.height=canvas.height;
+  const o=out.getContext('2d');
+  o.fillStyle='#fffef9'; o.fillRect(0,0,out.width,out.height);
+  o.strokeStyle='#e5e0d5'; o.lineWidth=1;
+  for(let y=27.5; y<out.height; y+=28){ o.beginPath(); o.moveTo(0,y); o.lineTo(out.width,y); o.stroke(); }
+  o.drawImage(canvas,0,0);
+  return out;
+}
 
-    const name=canvasFileName()+'.png';
-    out.toBlob(blob=>{
-      if(!blob){ qToast('저장에 실패했어요'); return; }
+function downloadCanvas(cv, name){
+  return new Promise(res=>{
+    cv.toBlob(blob=>{
+      if(!blob) return res(false);
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');
       a.href=url; a.download=name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
-      qToast('💾 '+name+' 저장했어요');
+      res(true);
     },'image/png');
+  });
+}
+
+/* 문제와 연습장을 함께 담는다 (답 입력칸은 뺀다).
+   .quiz-cols 를 html2canvas 로 찍으면 문제 카드 + 문제 위 L자 필기 + 오른쪽 연습장이
+   한 장에 담긴다. 연습장의 줄노트 배경은 CSS 그라디언트인데 html2canvas가 그려 준다(확인함).
+   ⚠️ 문항에 넣은 Drive 이미지는 CORS 때문에 비어 나올 수 있다(오류신고 캡처와 같은 한계).
+      캡처가 통째로 실패하면 연습장만이라도 저장한다. */
+window.saveCanvasImage = async function(){
+  const btn=document.getElementById('save-note-fab');
+  const label=btn?btn.textContent:'';
+  const name=canvasFileName()+'.png';
+  if(btn){ btn.disabled=true; btn.textContent='저장 중…'; }
+  try{
+    const root=document.querySelector('.quiz-cols');
+    const ready=root ? await _loadH2C() : false;
+    if(ready && window.html2canvas){
+      const shot=await html2canvas(root,{
+        backgroundColor:'#faf8f5', useCORS:true, logging:false, scale:2,
+        ignoreElements:el=>{
+          const id=String(el.id||'');
+          if(id==='fab-dock' || id==='rotate-hint') return true;          // 화면 위 버튼·안내
+          return !!(el.classList && el.classList.contains('math-input-card')); // 답 입력칸
+        }
+      });
+      if(await downloadCanvas(shot, name)){ qToast('💾 '+name+' 저장했어요'); return; }
+    }
+    // 폴백: 연습장만
+    if(await downloadCanvas(composeNoteOnly(), name)) qToast('💾 연습장만 저장했어요');
+    else qToast('저장에 실패했어요');
   }catch(e){
-    console.error('[연습장 저장]',e);
-    qToast('저장에 실패했어요');
+    console.error('[필기 저장]',e);
+    try{
+      if(await downloadCanvas(composeNoteOnly(), name)) qToast('💾 연습장만 저장했어요');
+      else qToast('저장에 실패했어요');
+    }catch(_){ qToast('저장에 실패했어요'); }
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=label; }
   }
 };
 

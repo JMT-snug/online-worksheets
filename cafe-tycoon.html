@@ -38,10 +38,17 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .btn.sm{padding:7px 13px;font-size:13px;border-radius:8px}
 .btn.big{padding:15px 30px;font-size:17px;border-radius:12px}
 
-/* ── 분수 표기 ── */
-.fr{display:inline-flex;flex-direction:column;vertical-align:-.45em;line-height:1.05;text-align:center;margin:0 2px}
-.fr i{font-style:normal;border-bottom:1.6px solid currentColor;padding:0 3px}
-.fr b{font-weight:600;padding:0 3px}
+/* ── 분수 표기 ──
+   가로줄이 글자 한가운데 오도록 vertical-align:middle 을 쓴다.
+   (예전처럼 -0.45em 으로 내리면 분모가 줄 아래로 삐져나와 줄 간격이 어긋난다.)
+   분수가 들어가는 줄은 line-height 를 1.9 이상 줘야 위아래 줄과 겹치지 않는다. */
+.fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;
+  line-height:1.04;text-align:center;margin:0 .12em;font-size:.86em;position:relative;top:-.04em}
+.fr i{font-style:normal;border-bottom:1.4px solid currentColor;padding:0 .3em}
+.fr b{font-weight:600;padding:0 .3em}
+/* 분수가 나오는 곳은 줄 간격을 넉넉히 */
+.money td,.taskrow .detail,.taskrow .need,.forecast .eq,.forecast p,
+table.log td,table.rank td,.chip .q,.modal p{line-height:1.95}
 
 /* ── 헤더 ── */
 header{

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.34">
+<meta name="app-version" content="3.35">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -173,6 +173,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
       <a href="index.html" class="hdr-btn">학습지</a>
       <a href="scoring.html" class="hdr-btn">채점</a>
       <a href="edit.html" class="hdr-btn">편집</a>
+      <a href="qna.html" class="hdr-btn" id="hdr-qna-link" style="display:none" title="학생 질문 답변">질문</a>
       <a href="report.html" class="hdr-btn" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
     </div>
     <div class="hdr-sep"></div>
@@ -343,6 +344,7 @@ onAuthStateChanged(auth,async u=>{
   tUser=u;
   scopedTeacher=!BASE_TEACHER_EMAILS.includes(u.email); // 담당 교사 = 담당 학급 학생만 조회
   { const rl=document.getElementById("hdr-report-link"); if(rl) rl.style.display=BASE_TEACHER_EMAILS.includes(u.email)?"inline-flex":"none"; } // 신고 목록: 기본 교사 전용
+  { const ql=document.getElementById("hdr-qna-link"); if(ql) ql.style.display="inline-flex"; }   // 질문 답변: 이 화면에 온 교사는 모두
   document.getElementById("t-name").textContent=u.displayName||u.email;
   showGate(false);
   await loadCurriculum();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="report-v1.1">
+<meta name="app-version" content="report-v1.2">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오류 신고 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -103,7 +103,8 @@ details.rep-log pre .l-warn{color:#fde68a}
 
 <div id="app">
   <div class="pg-title">🚨 오류 신고 목록</div>
-  <div class="pg-sub">index의 🚨 오류 신고 버튼으로 접수된 신고입니다. 스크린샷의 빨간 원이 신고자가 클릭한 오류 위치입니다.</div>
+  <div class="pg-sub">index의 🚨 오류 신고 버튼으로 접수된 신고입니다. 스크린샷의 빨간 원이 신고자가 클릭한 오류 위치입니다.<br>
+    <b>수정 완료</b>로 표시하면 Drive에 있는 스크린샷을 지웁니다 — 신고 기록과 글은 그대로 남습니다.</div>
   <div class="tabs" id="tabs"></div>
   <div id="rep-list"><div class="loading">불러오는 중…</div></div>
 </div>
@@ -206,7 +207,9 @@ function render(){
            <div class="rep-noshot" style="display:none">🖼 Drive 이미지 미리보기를 불러오지 못했습니다 — 아래 <b>Drive 사본</b> 링크로 열어 보세요.</div>`
         : (r.screenshot
           ? `<img class="rep-shot" src="${r.screenshot}" alt="신고 스크린샷" onclick="this.classList.toggle('zoom')">`
-          : `<div class="rep-noshot">📷 스크린샷 없음 ${r.screenshotNote?`(${esc(r.screenshotNote)})`:'(캡처 실패 또는 미지원 환경)'}</div>`)}
+          : `<div class="rep-noshot">📷 ${r.shotDeletedAt
+                ? '수정 완료 처리하면서 스크린샷을 지웠습니다 ('+esc(fmtTime(r.shotDeletedAt))+')'
+                : '스크린샷 없음 '+(r.screenshotNote?'('+esc(r.screenshotNote)+')':'(캡처 실패 또는 미지원 환경)')}</div>`)}
       <details class="rep-log"><summary>🖥 콘솔 로그 ${logs.length}건</summary><pre>${logHtml}</pre></details>
       <div class="rep-meta" style="word-break:break-all">${esc(r.userAgent||'')}</div>
       <div class="rep-foot">
@@ -270,14 +273,41 @@ window.testReportServer = async function(){
   finally{ if(btn){ btn.disabled=false; btn.textContent='🔍 서버 확인'; } }
 };
 
+/* Drive 파일 삭제는 브라우저가 직접 못 한다 — 신고 수신 Apps Script 웹앱에 맡긴다 */
+async function deleteShot(fileId){
+  try{
+    const snap=await getDoc(doc(db,"config","errorReports"));
+    const cfg=snap.exists()?snap.data():{};
+    if(!cfg.webAppUrl) return false;
+    await fetch(cfg.webAppUrl,{
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({token:cfg.token||"snug-error-report", action:"deleteScreenshot", fileId})
+    });
+    return true;
+  }catch(e){ console.warn("[스크린샷 삭제]",e.message); return false; }
+}
+
 window.setStatus=async function(id,status){
   try{
+    const r0=reports.find(x=>x.id===id);
+    // 수정 완료 → Drive 스크린샷 정리 (신고 글·기록은 남긴다)
+    let shotFields={};
+    if(status==="fixed" && r0?.driveFileId){
+      await deleteShot(r0.driveFileId);
+      shotFields={driveFileId:null, driveUrl:null, shotDeletedAt:new Date().toISOString()};
+    }
     await updateDoc(doc(db,"error_reports",id),
       status==="fixed"
-        ? {status:"fixed", fixedAt:new Date().toISOString(), fixedBy:tUser.email}
+        ? {status:"fixed", fixedAt:new Date().toISOString(), fixedBy:tUser.email, ...shotFields}
         : {status:"open", fixedAt:null, fixedBy:null});
     const r=reports.find(x=>x.id===id);
-    if(r){ r.status=status; if(status==="fixed"){ r.fixedAt=new Date().toISOString(); r.fixedBy=tUser.email; } }
+    if(r){
+      r.status=status;
+      if(status==="fixed"){
+        r.fixedAt=new Date().toISOString(); r.fixedBy=tUser.email;
+        if(shotFields.shotDeletedAt){ r.driveFileId=null; r.driveUrl=null; r.shotDeletedAt=shotFields.shotDeletedAt; }
+      }
+    }
     render();
   }catch(e){ alert("상태 변경 실패: "+e.message); }
 };
@@ -285,6 +315,8 @@ window.setStatus=async function(id,status){
 window.delReport=async function(id){
   if(!confirm("이 신고를 삭제할까요? 되돌릴 수 없습니다.")) return;
   try{
+    const r0=reports.find(x=>x.id===id);
+    if(r0?.driveFileId) await deleteShot(r0.driveFileId);
     await deleteDoc(doc(db,"error_reports",id));
     reports=reports.filter(x=>x.id!==id);
     render();

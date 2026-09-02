@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="app-version" content="qna-v1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>질문 답변 · 수학 학습지+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#111827;--ink2:#374151;--ink3:#9ca3af;--paper:#fff;--cream:#faf9f6;--rule:#e5e7eb;
+  --accent:#2563eb;--acc-lt:#eff6ff;--red:#dc2626;--green:#16a34a;--r:12px;
+}
+*{box-sizing:border-box}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6;margin:0}
+
+header{position:sticky;top:0;z-index:100;background:var(--ink);height:52px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 20px;gap:12px}
+.hdr-left{justify-self:start}
+.hdr-center{display:flex;gap:8px;align-items:center;justify-self:center;white-space:nowrap}
+.hdr-right{display:flex;gap:6px;align-items:center;justify-self:end}
+.logo{font-weight:900;font-size:17px;color:#fff;letter-spacing:-.5px}
+.logo em{color:#60a5fa;font-style:normal}
+.hdr-ver{font-size:10px;color:rgba(255,255,255,.45);font-family:monospace}
+.hdr-btn{padding:4px 11px;border-radius:5px;font-size:12px;font-family:inherit;cursor:pointer;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
+.hdr-btn:hover{background:rgba(255,255,255,.18)}
+#hdr-name{font-size:12px;color:rgba(255,255,255,.65)}
+
+#auth-gate{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 52px)}
+.gate-card{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:40px 48px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+.gate-card h2{margin:0 0 6px}
+.gate-card p{color:var(--ink3);margin:0 0 20px;font-size:13px}
+.btn-login{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+
+#app{display:none;max-width:900px;margin:0 auto;padding:24px 16px 80px}
+.pg-title{font-size:20px;font-weight:900;margin-bottom:4px}
+.pg-sub{font-size:13px;color:var(--ink3);margin-bottom:16px}
+.live{font-size:12px;color:var(--green);font-weight:700;margin-left:6px}
+
+.q-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.q-card.done{opacity:.5}
+.q-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.pill{display:inline-block;border-radius:10px;padding:1px 10px;font-size:11px;font-weight:800;background:#fef3c7;color:#b45309}
+.q-time{font-size:12px;color:var(--ink3)}
+.q-who{font-size:13px;font-weight:800;color:var(--ink2)}
+.q-where{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
+.q-text{font-size:14px;margin:6px 0;white-space:pre-wrap;word-break:break-word}
+.q-text.empty{color:var(--ink3);font-style:italic}
+.q-shot{max-width:100%;max-height:320px;border:1px solid var(--rule);border-radius:8px;cursor:zoom-in;display:block;margin:8px 0;background:var(--cream)}
+.q-shot.zoom{max-height:none;cursor:zoom-out}
+.q-noshot{font-size:12px;color:var(--ink3);background:var(--cream);border:1px dashed var(--rule);border-radius:8px;padding:10px;margin:8px 0}
+.q-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.btn{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink2);text-decoration:none;display:inline-flex;align-items:center}
+.btn.done{background:var(--green);border-color:var(--green);color:#fff}
+.btn.done:disabled{opacity:.6;cursor:default}
+.btn:hover{filter:brightness(.97)}
+.empty-msg{text-align:center;color:var(--ink3);padding:60px 0;font-size:15px}
+.loading{text-align:center;color:var(--ink3);padding:40px 0}
+.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-left"><a href="index.html" class="hdr-btn">← 학습지</a></div>
+  <div class="hdr-center">
+    <span class="logo">수학 학습지<em>+</em></span>
+    <span class="hdr-ver" id="hdr-version"></span>
+  </div>
+  <div class="hdr-right" id="hdr-user" style="display:none">
+    <a href="teacher.html" class="hdr-btn">관리</a>
+    <a href="scoring.html" class="hdr-btn">채점</a>
+    <a href="report.html" class="hdr-btn">신고</a>
+    <span id="hdr-name"></span>
+    <button class="hdr-btn" id="btn-logout">로그아웃</button>
+  </div>
+</header>
+
+<div id="auth-gate">
+  <div class="gate-card">
+    <h2>❓ 질문 답변</h2>
+    <p>교사 계정으로 로그인하세요.</p>
+    <button class="btn-login" id="btn-login">Google 로그인</button>
+  </div>
+</div>
+
+<div id="app">
+  <div class="pg-title">❓ 학생 질문<span class="live" id="live-badge" style="display:none">● 실시간</span></div>
+  <div class="pg-sub">학습지의 ❓ 질문하기로 들어온 질문입니다. <b>답변 완료</b>를 누르면 목록에서 사라지고 스크린샷도 Drive에서 지워집니다. (누가 언제 무엇을 물었는지는 <b>질문_기록</b> 시트에 남습니다.)</div>
+  <div id="q-list"><div class="loading">불러오는 중…</div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, deleteDoc, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const FB = {
+  apiKey:"AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
+  authDomain:"online-worksheets.firebaseapp.com",
+  projectId:"online-worksheets",
+  storageBucket:"online-worksheets.firebasestorage.app",
+  messagingSenderId:"404110714320",
+  appId:"1:404110714320:web:cb79c555a383801f3205d5"
+};
+const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
+
+const fbApp = initializeApp(FB);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+let tUser=null, questions=[], unsub=null;
+
+document.getElementById("hdr-version").textContent=document.querySelector('meta[name="app-version"]').content;
+document.getElementById("btn-login").addEventListener("click", async ()=>{
+  try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){ alert("로그인 오류: "+e.message); }
+});
+document.getElementById("btn-logout").addEventListener("click", ()=>signOut(auth));
+
+/* 기본 교사 + config/teachers 에 등록된 담당 교사 (Firestore 규칙의 isTeacher 와 같은 기준) */
+async function isTeacherEmail(email){
+  if(BASE_TEACHER_EMAILS.includes(email)) return true;
+  try{
+    const snap=await getDoc(doc(db,"config","teachers"));
+    const list=(snap.exists() ? snap.data().emails : []) || [];
+    return list.includes(email);
+  }catch(e){ return false; }
+}
+
+onAuthStateChanged(auth, async u=>{
+  if(unsub){ try{unsub();}catch(e){} unsub=null; }
+  if(!u){ showGate(true); return; }
+  if(!(await isTeacherEmail(u.email))){ alert("교사 계정만 접속할 수 있습니다."); await signOut(auth); return; }
+  tUser=u;
+  document.getElementById("hdr-user").style.display="flex";
+  document.getElementById("hdr-name").textContent=u.displayName||u.email;
+  showGate(false);
+  watchQuestions();
+});
+
+function showGate(on){
+  document.getElementById("auth-gate").style.display=on?"flex":"none";
+  document.getElementById("app").style.display=on?"none":"block";
+}
+
+/* 질문은 수업 중에 들어오므로 새로고침 없이 바로 뜨게 실시간 구독한다 */
+function watchQuestions(){
+  unsub=onSnapshot(collection(db,"questions"), snap=>{
+    questions=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+    document.getElementById("live-badge").style.display="inline";
+    render();
+  }, err=>{
+    document.getElementById("q-list").innerHTML=
+      `<div class="warn">질문을 불러오지 못했습니다: ${esc(err.message)}<br>
+       Firestore 규칙에 <code>questions</code> 블록이 게시됐는지 확인해 주세요.</div>`;
+  });
+}
+
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fmtTime(iso){
+  if(!iso) return "";
+  const d=new Date(iso); if(isNaN(d)) return String(iso);
+  const now=new Date();
+  const sameDay=d.toDateString()===now.toDateString();
+  const hm=d.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
+  return sameDay ? `오늘 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`;
+}
+
+function render(){
+  const el=document.getElementById("q-list");
+  if(!questions.length){
+    el.innerHTML=`<div class="empty-msg">기다리는 질문이 없습니다. 🎉</div>`;
+    return;
+  }
+  el.innerHTML=questions.map(q=>{
+    const where=[q.unitTitle,q.wsTitle,(q.qNo!=null?q.qNo+"번":"")].filter(Boolean).map(esc).join(" · ");
+    const shot=q.driveFileId
+      ? `<img class="q-shot" src="https://drive.google.com/thumbnail?id=${esc(q.driveFileId)}&sz=w1600"
+             alt="학생 필기" onclick="this.classList.toggle('zoom')"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+         <div class="q-noshot" style="display:none">🖼 미리보기를 불러오지 못했습니다 — 아래 <b>원본 보기</b>로 열어 주세요.</div>`
+      : `<div class="q-noshot">📷 스크린샷 없음</div>`;
+    return `<div class="q-card" id="qc-${esc(q.id)}">
+      <div class="q-head">
+        <span class="pill">❓ 기다리는 중</span>
+        <span class="q-who">${esc(q.name||q.email||"(미상)")}</span>
+        <span class="q-time">${esc(fmtTime(q.createdAt))}</span>
+      </div>
+      ${where?`<div class="q-where">📄 ${where}</div>`:""}
+      <div class="q-text ${q.text?"":"empty"}">${q.text?esc(q.text):"(질문 글 없이 보냈습니다 — 필기를 봐 주세요)"}</div>
+      ${shot}
+      <div class="q-foot">
+        <button class="btn done" onclick="finishQ('${esc(q.id)}')">✅ 답변 완료</button>
+        ${q.driveUrl?`<a class="btn" href="${esc(q.driveUrl)}" target="_blank" rel="noopener">☁️ 원본 보기</a>`:""}
+        ${q.wsId?`<a class="btn" href="index.html" title="학습지로 이동">📘 학습지 열기</a>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* 답변 완료 — 스크린샷을 Drive에서 지우고 질문 문서도 지운다.
+   기록(질문_기록 시트)은 남으므로 어느 문항에서 질문이 많은지는 나중에도 볼 수 있다. */
+window.finishQ=async function(id){
+  const q=questions.find(x=>x.id===id);
+  if(!q) return;
+  const btn=document.querySelector(`#qc-${CSS.escape(id)} .btn.done`);
+  if(btn){ btn.disabled=true; btn.textContent="정리 중…"; }
+  try{
+    if(q.driveFileId) await deleteShot(q.driveFileId);   // 실패해도 아래는 진행한다
+    await deleteDoc(doc(db,"questions",id));
+    // onSnapshot 이 목록을 다시 그리지만, 반응이 늦을 때를 대비해 카드를 먼저 지운다
+    document.getElementById("qc-"+id)?.remove();
+  }catch(e){
+    alert("처리 실패: "+e.message);
+    if(btn){ btn.disabled=false; btn.textContent="✅ 답변 완료"; }
+  }
+};
+
+/* Drive 파일 삭제는 브라우저가 직접 못 한다 — 오류신고 Apps Script 웹앱에 맡긴다 */
+async function deleteShot(fileId){
+  try{
+    const snap=await getDoc(doc(db,"config","errorReports"));
+    const cfg=snap.exists()?snap.data():{};
+    if(!cfg.webAppUrl) return;   // 서버 미설정이면 문서만 지운다
+    await fetch(cfg.webAppUrl,{
+      method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({token:cfg.token||"snug-error-report", action:"deleteScreenshot", fileId})
+    });
+  }catch(e){ console.warn("[스크린샷 삭제]",e.message); }
+}
+</script>
+</body>
+</html>

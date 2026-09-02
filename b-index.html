@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.47">
+  <meta name="app-version" content="8.48">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -121,6 +121,30 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 #fab-dock button:hover{opacity:1;transform:translateY(-1px)}
 #bugrep-fab{background:#111827;color:#fff}
 #save-note-fab{background:#2563eb;color:#fff;display:none}
+#ask-fab{background:#7c3aed;color:#fff;display:none}
+
+/* ❓ 질문하기 창 */
+#ask-modal{display:none;position:fixed;inset:0;z-index:9200;background:rgba(17,24,39,.55);
+  align-items:center;justify-content:center;padding:20px}
+#ask-modal.on{display:flex}
+.ask-box{background:var(--paper);border-radius:16px;width:min(94vw,460px);max-height:88vh;
+  overflow:auto;padding:20px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.ask-title{font-size:17px;font-weight:800;margin-bottom:4px}
+.ask-where{font-size:12px;color:var(--ink3);margin-bottom:12px}
+.ask-hint{background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px 14px;
+  font-size:14px;line-height:1.7;color:#92400e;margin-bottom:14px}
+.ask-msg{font-size:14px;line-height:1.7;margin-bottom:14px}
+.ask-msg b{color:var(--accent)}
+.ask-ta{width:100%;height:76px;border:1.5px solid var(--rule);border-radius:9px;padding:9px 11px;
+  font-family:inherit;font-size:14px;resize:none;box-sizing:border-box;background:var(--cream)}
+.ask-ta:focus{outline:none;border-color:var(--accent);background:var(--paper)}
+.ask-quota{font-size:12px;color:var(--ink3);margin-top:8px}
+.ask-btns{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.ask-btns button{flex:1;min-width:120px;padding:11px 14px;border-radius:9px;border:none;
+  font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.ask-go{background:#7c3aed;color:#fff}
+.ask-go:disabled{opacity:.55;cursor:default}
+.ask-sub{background:var(--cream);border:1.5px solid var(--rule)!important;color:var(--ink2)}
 @media(max-width:520px){
   #fab-dock button{padding:6px 10px;font-size:11px}
 }
@@ -581,6 +605,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
       <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
       <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
+      <a href="qna.html" class="hdr-btn hdr-teacher" id="hdr-qna-link" style="display:none" title="학생 질문 답변">질문</a>
       <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
     </div>
     <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
@@ -608,7 +633,17 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </div>
 </div>
 
+<!-- ❓ 질문하기 -->
+<div id="ask-modal" onclick="if(event.target===this)closeAsk()">
+  <div class="ask-box">
+    <div class="ask-title" id="ask-title">❓ 질문하기</div>
+    <div class="ask-where" id="ask-where"></div>
+    <div id="ask-body"></div>
+  </div>
+</div>
+
 <div id="fab-dock">
+  <button id="ask-fab" onclick="openAsk()" title="풀다가 막히면 선생님께 물어보세요">❓ 질문하기</button>
   <button id="save-note-fab" onclick="saveCanvasImage()" title="지금 연습장 필기를 이미지 파일로 저장">💾 필기 저장</button>
   <button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 오류 신고</button>
 </div>
@@ -855,12 +890,226 @@ window.lockLandscape = async function(){
   document.getElementById('rotate-hint')?.classList.add('rh-off');
 };
 
+/* ══════════ ❓ 질문하기 ══════════
+   흐름: 힌트가 있으면 먼저 보여 주고(필기 유무와 상관없이),
+        그 다음 필기를 확인해서 — 아직 아무것도 안 썼으면 더 해보라고 하고,
+        썼으면 문제+연습장을 찍어 선생님께 보낸다.
+   하루 횟수 제한은 서버(Apps Script)가 시트로 센다 — 여기 숫자는 안내용이다. */
+const ASK_MIN_INK = 250;      // 이 정도 픽셀은 그려야 "풀어 봤다"로 본다 (실수로 톡 찍은 것 제외)
+let _askQuota = null;         // {used, limit}
+
+/** 지금 문항의 힌트 (단계형은 지금 단계의 힌트) */
+function askHintOf(q){
+  if(!q) return '';
+  if(q.type==='step3'){
+    try{
+      const st=getS3State(q.id), steps=getSteps(q);
+      return String(steps[(st?.curStep||1)-1]?.hint||'').trim();
+    }catch(e){ return ''; }
+  }
+  return String(q.hint||'').trim();
+}
+
+/** 두 연습장에 그려진 획의 양 (알파값이 있는 픽셀 수) */
+function askInkAmount(){
+  let n=0;
+  const count=cv=>{
+    if(!cv || !cv.width || !cv.height) return 0;
+    try{
+      const d=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,cv.width,cv.height).data;
+      let c=0;
+      for(let i=3;i<d.length;i+=4) if(d[i]>16) c++;
+      return c;
+    }catch(e){ return 0; }
+  };
+  n+=count(canvas);                                      // 오른쪽 큰 연습장
+  n+=count(document.getElementById('problem-canvas'));   // 문제 위 L자 연습장
+  return n;
+}
+
+function askWhereText(){
+  const unit=(window._currentUnit?.title||'').trim();
+  const ws=(curWS?.title||'').trim();
+  const realN=(curWS?.questions||[]).slice(0,curQIdx).filter(q=>q.type!=='link').length+1;
+  return [unit, ws, realN+'번'].filter(Boolean).join(' · ');
+}
+function askQNo(){
+  return (curWS?.questions||[]).slice(0,curQIdx).filter(q=>q.type!=='link').length+1;
+}
+
+window.closeAsk=function(){ document.getElementById('ask-modal')?.classList.remove('on'); };
+
+window.openAsk=function(){
+  const q=curWS?.questions?.[curQIdx];
+  if(!q) return;
+  document.getElementById('ask-where').textContent=askWhereText();
+  document.getElementById('ask-modal').classList.add('on');
+  const hint=askHintOf(q);
+  if(hint) askShowHint(hint); else askShowNext();
+  refreshAskQuota();
+};
+
+/** 1단계: 힌트 (필기가 없어도 보여 준다) */
+function askShowHint(hint){
+  document.getElementById('ask-title').textContent='💡 힌트';
+  document.getElementById('ask-body').innerHTML=
+    `<div class="ask-hint">${fracText(hint)}</div>
+     <div class="ask-btns">
+       <button class="ask-sub" onclick="closeAsk()">이해했어요</button>
+       <button class="ask-go" onclick="askShowNext()">그래도 모르겠어요 →</button>
+     </div>`;
+  requestAnimationFrame(()=>renderMath(document.getElementById('ask-body')));
+}
+
+/** 2단계: 필기 확인 → 질문 쓰기 또는 "조금 더 해보기" */
+window.askShowNext=function(){
+  const ink=askInkAmount();
+  const title=document.getElementById('ask-title');
+  const body=document.getElementById('ask-body');
+  if(ink < ASK_MIN_INK){
+    title.textContent='✍️ 조금만 더 해볼까요?';
+    body.innerHTML=
+      `<div class="ask-msg">아직 <b>연습장에 푼 흔적이 없어요</b>.<br>
+        아는 것부터 적어 보면 막힌 곳이 어디인지 또렷해집니다.<br><br>
+        조금 써 본 뒤에 다시 눌러 주세요 — 그때는 선생님께 보낼 수 있어요.</div>
+       <div class="ask-btns"><button class="ask-go" onclick="closeAsk()">알겠어요</button></div>`;
+    return;
+  }
+  title.textContent='❓ 선생님께 질문하기';
+  body.innerHTML=
+    `<div class="ask-msg">지금 <b>문제와 연습장</b>을 그대로 찍어서 보냅니다.<br>
+      어디가 막혔는지 한 줄 적어 주면 더 좋아요.</div>
+     <textarea class="ask-ta" id="ask-text" maxlength="300"
+       placeholder="예: 기울기까지는 구했는데 y절편을 모르겠어요 (안 써도 보낼 수 있어요)"></textarea>
+     <div class="ask-quota" id="ask-quota"></div>
+     <div class="ask-btns">
+       <button class="ask-sub" onclick="closeAsk()">닫기</button>
+       <button class="ask-go" id="ask-send" onclick="sendAsk()">선생님께 보내기</button>
+     </div>`;
+  paintAskQuota();
+};
+
+/** 남은 질문 횟수 — 서버가 최종 판정하지만 미리 보여 준다 */
+async function refreshAskQuota(){
+  try{
+    const out=await callAskServer({action:'askQuestionQuota', email:user?.email||''});
+    if(out && typeof out.used==='number') _askQuota={used:out.used, limit:out.limit};
+  }catch(e){ /* 못 가져와도 보내기는 서버가 막는다 */ }
+  paintAskQuota();
+}
+function paintAskQuota(){
+  const el=document.getElementById('ask-quota');
+  if(!el) return;
+  if(!_askQuota){ el.textContent=''; return; }
+  const left=Math.max(0,_askQuota.limit-_askQuota.used);
+  el.textContent=`오늘 질문 ${_askQuota.used}/${_askQuota.limit}개 — ${left?`${left}개 더 보낼 수 있어요`:'오늘은 다 썼어요'}`;
+  const btn=document.getElementById('ask-send');
+  if(btn && !left){ btn.disabled=true; btn.textContent='내일 다시 물어봐요'; }
+}
+
+/** 질문 서버(오류신고 Apps Script 웹앱) 호출 */
+async function callAskServer(payload){
+  const snap=await getDoc(doc(db,'config','errorReports'));
+  const cfg=snap.exists()?snap.data():{};
+  if(!cfg.webAppUrl) throw new Error('질문 서버가 설정되지 않았습니다');
+  const res=await fetch(cfg.webAppUrl,{
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(Object.assign({token:cfg.token||'snug-error-report'}, payload))
+  });
+  return await res.json();
+}
+
+/** 3단계: 보내기 */
+window.sendAsk=async function(){
+  const btn=document.getElementById('ask-send');
+  const text=(document.getElementById('ask-text')?.value||'').trim();
+  if(btn){ btn.disabled=true; btn.textContent='보내는 중…'; }
+  try{
+    const image=await askCapture();
+    const q=curWS?.questions?.[curQIdx];
+    const payload={
+      action:'askQuestion',
+      email:user?.email||'', name:user?.displayName||'',
+      unitTitle:(window._currentUnit?.title||''), wsId:curWS?.id||'', wsTitle:curWS?.title||'',
+      qId:q?.id||'', qNo:askQNo(), text, image
+    };
+    const out=await callAskServer(payload);
+    if(out && out.quota){
+      _askQuota={used:out.used, limit:out.limit};
+      document.getElementById('ask-title').textContent='🌙 오늘은 다 썼어요';
+      document.getElementById('ask-body').innerHTML=
+        `<div class="ask-msg">오늘 질문 <b>${out.limit}개</b>를 모두 보냈어요.<br>
+          내일 다시 물어보거나, 교무실로 찾아와 주세요!</div>
+         <div class="ask-btns"><button class="ask-go" onclick="closeAsk()">알겠어요</button></div>`;
+      return;
+    }
+    if(!out || !out.ok) throw new Error(out?.error||'전송 실패');
+    _askQuota={used:out.used, limit:out.limit};
+
+    // 교사 화면(qna.html)이 읽을 질문 문서
+    try{
+      await setDoc(doc(collection(db,'questions')),{
+        createdAt:new Date().toISOString(), status:'open',
+        email:payload.email, name:payload.name,
+        unitTitle:payload.unitTitle, wsId:payload.wsId, wsTitle:payload.wsTitle,
+        qId:payload.qId, qNo:payload.qNo, text:payload.text,
+        driveFileId:out.fileId||null, driveUrl:out.fileUrl||null,
+        version:(typeof VERSION!=='undefined'?VERSION:'')
+      });
+    }catch(e){ console.warn('[질문 기록]',e.message); }   // 챗은 이미 갔으므로 흐름은 막지 않는다
+
+    document.getElementById('ask-title').textContent='📨 보냈어요!';
+    document.getElementById('ask-body').innerHTML=
+      `<div class="ask-msg">선생님께 질문을 보냈어요.<br>
+        답을 기다리는 동안 <b>다음 문제</b>를 풀어 볼까요?</div>
+       <div class="ask-quota">오늘 질문 ${out.used}/${out.limit}개</div>
+       <div class="ask-btns"><button class="ask-go" onclick="closeAsk()">확인</button></div>`;
+  }catch(e){
+    console.error('[질문하기]',e);
+    if(btn){ btn.disabled=false; btn.textContent='선생님께 보내기'; }
+    alert('질문을 보내지 못했어요.\n\n'+e.message);
+  }
+};
+
+/** 문제 + 연습장 캡처 (💾 저장과 같은 방식, 답 입력칸 제외) — 용량을 줄여 JPEG로 */
+async function askCapture(){
+  const root=document.querySelector('.quiz-cols');
+  if(!root || !(await _loadH2C()) || !window.html2canvas) return '';
+  const shot=await html2canvas(root,{
+    backgroundColor:'#faf8f5', useCORS:true, logging:false, scale:1.5,
+    ignoreElements:el=>{
+      const id=String(el.id||'');
+      if(id==='fab-dock' || id==='rotate-hint' || id==='ask-modal') return true;
+      return !!(el.classList && el.classList.contains('math-input-card'));
+    }
+  });
+  // 너무 크면 챗·시트 전송이 버거우므로 품질을 낮춰 가며 맞춘다 (오류신고와 같은 방식)
+  const limit=900000;
+  let q=0.8, d=shot.toDataURL('image/jpeg',q);
+  while(d.length>limit && q>0.35){ q-=0.1; d=shot.toDataURL('image/jpeg',q); }
+  if(d.length>limit){
+    const c=document.createElement('canvas');
+    c.width=Math.round(shot.width/2); c.height=Math.round(shot.height/2);
+    c.getContext('2d').drawImage(shot,0,0,c.width,c.height);
+    d=c.toDataURL('image/jpeg',0.6);
+  }
+  return d;
+}
+
 /** 💾 필기 저장은 연습장이 있는 퀴즈 화면에서만 보인다 */
 function updateFabDock(){
-  const btn=document.getElementById("save-note-fab");
-  if(!btn) return;
   const onQuiz=document.getElementById("quiz-page")?.classList.contains("active");
-  btn.style.display = onQuiz ? "inline-flex" : "none";
+  const btn=document.getElementById("save-note-fab");
+  if(btn) btn.style.display = onQuiz ? "inline-flex" : "none";
+
+  /* ❓ 질문하기 — 시험지에서는 숨긴다(시험 중 질문은 부정행위 소지),
+     링크 문항은 풀 것이 없으므로 숨긴다. */
+  const ask=document.getElementById("ask-fab");
+  if(ask){
+    const q=curWS?.questions?.[curQIdx];
+    const show = onQuiz && !window._examMode && q && q.type!=='link';
+    ask.style.display = show ? "inline-flex" : "none";
+  }
 }
 window.updateFabDock=updateFabDock;
 
@@ -1048,6 +1297,7 @@ function updateHeader(u) {
   const isBase = BASE_TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-sync-progress").style.display= (isT && isBase) ? "inline-flex" : "none"; // 진도 동기화는 기본 교사 전용
   document.getElementById("hdr-report-link").style.display = isBase ? "inline-flex" : "none"; // 오류 신고 목록은 기본 교사 전용
+  { const ql=document.getElementById("hdr-qna-link"); if(ql) ql.style.display = isT ? "inline-flex" : "none"; } // 질문 답변은 담당 교사도
   // 매뉴얼 버튼: 학생 → 학생용, 담당 교사 → 교사용 (기본 교사는 진도 동기화 버튼 자리 유지)
   if(manual){
     if(isBase){ manual.style.display = "none"; }
@@ -2609,6 +2859,7 @@ function updateStrip() {
 
 function renderQuestion() {
   flushPendingQ();   // 교사가 고친 내용이 보류돼 있으면 지금 반영한다
+  setTimeout(updateFabDock,0);   // 링크 문항·시험지에서 ❓ 를 숨기고 보이기
   const q=curWS.questions[curQIdx], len=curWS.questions.length;
   // 시험지: 타이머 시작 + 표시
   if(window._examMode){

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.8">
+<meta name="app-version" content="edit-v3.9">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -436,6 +436,12 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <input id="q-link-label" placeholder="예: GeoGebra 활동 열기" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
             <label style="margin-top:8px;display:block">링크 URL</label>
             <input id="q-link-url" placeholder="https://..." type="url" style="width:100%;padding:7px;border:1px solid var(--rule);border-radius:6px;font-size:14px">
+          </div>
+          <!-- 힌트 (❓ 질문하기에서 먼저 보여 준다) -->
+          <div class="field" id="field-hint" style="display:none">
+            <label>💡 힌트 <span style="font-weight:400;color:var(--ink3)">(선택 · 학생이 ❓ 질문하기를 누르면 먼저 보여 줍니다)</span></label>
+            <textarea id="q-hint" rows="2" autocapitalize="off" autocorrect="off" spellcheck="false"
+              placeholder="예: 기울기는 x가 1 늘 때 y가 얼마나 변하는지 보면 돼요."></textarea>
           </div>
           <!-- 이미지 첨부 -->
           <div class="field" id="field-image">
@@ -1220,6 +1226,7 @@ function showPanel(item){
       _qsc.style.display=currentWs?.type==='exam'?'':'none';
     }
     document.getElementById('q-text').value = (item.text||'');
+    const _qh=document.getElementById('q-hint'); if(_qh) _qh.value = (item.hint||'');
     // 링크 타입 필드 로드
     document.getElementById('q-link-label').value = item.linkLabel||'';
     const fmEl=document.getElementById('q-factor-mode');
@@ -1307,7 +1314,7 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph','field-link']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph','field-link','field-hint']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   if(type==='vocab'){
     show('field-vocab');
@@ -1318,9 +1325,9 @@ function setQType(type){
   } else if(type==='link'){
     show('field-text'); show('field-link');
   } else if(type==='graph'){
-    show('field-text'); show('field-image'); show('field-graph');
+    show('field-text'); show('field-image'); show('field-graph'); show('field-hint');
   } else {
-    show('field-text'); show('field-image');
+    show('field-text'); show('field-image'); show('field-hint');
     if(type==='word_text') show('field-ans-text');
     else if(type==='word_expr') show('field-ans-expr');
     else if(type==='equation') show('field-ans-num');
@@ -1489,6 +1496,20 @@ window.pasteQuestion = async function(){
   }catch(e){ toast('붙여넣기 실패: '+e.message); console.error(e); }
 };
 
+/** 힌트 칸의 값 (없거나 안 쓰는 유형이면 빈 문자열) */
+function _hintVal(){
+  const el=document.getElementById('q-hint');
+  const f=document.getElementById('field-hint');
+  if(!el || !f || f.style.display==='none') return '';
+  return el.value.trim();
+}
+/** 문항 객체에 힌트를 넣거나(값 있음) 지운다(비움) */
+function _withHint(q){
+  const h=_hintVal();
+  if(h) q.hint=h; else delete q.hint;
+  return q;
+}
+
 window.saveQuestion = async function(){
   const _qScore=parseFloat(document.getElementById('q-score')?.value);
   console.log('[saveQuestion] 시작', {selectedQIdx, _qScore, currentWsType:currentWs?.type, qScoreRaw:document.getElementById('q-score')?.value});
@@ -1516,7 +1537,7 @@ window.saveQuestion = async function(){
       qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();
     }
     if(currentWs.questions[qIdxS]?.partStart) qData.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
-    currentWs.questions[qIdxS]=_addScore(qData);
+    currentWs.questions[qIdxS]=_addScore(_withHint(qData));
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
   if(type==='link'){
@@ -1658,7 +1679,7 @@ window.saveQuestion = async function(){
       q.options=opts; q.answer=ans;
     }
     if(qIdx >= 0 && qIdx < currentWs.questions.length){
-      _addScore(q);
+      _addScore(_withHint(q));
       currentWs.questions[qIdx] = q;
     }
   }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.35">
+<meta name="app-version" content="3.36">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -430,6 +430,16 @@ async function loadAll(){
     });
   }catch(e){ console.error("Firestore 오류:",e); }
   buildSidebar();
+  /* index 의 헤더 '관리' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지 화면을 바로 연다.
+     (scoring.html·edit.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
+     renderWS 가 아니라 navigate 를 쓴다 — 사이드바 선택 표시까지 함께 맞춰 준다. */
+  try{
+    const urlWsId=new URLSearchParams(location.search).get('ws');
+    if(urlWsId){
+      if(WORKSHEETS.find(w=>w.id===urlWsId)){ navigate(urlWsId); return; }
+      console.warn('[주소로 받은 학습지를 찾지 못함]', urlWsId);
+    }
+  }catch(e){ console.warn('[주소 학습지 열기 실패]', e); }
   // 새로고침 후 직전 학습지 복원
   try{
     const lastWsId=sessionStorage.getItem('teacher_lastWsId');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.25">
+<meta name="app-version" content="scoring-v1.26">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -410,8 +410,28 @@ onAuthStateChanged(auth, async u => {
   await loadAllRecords();
   buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
   refreshFilterOptions();    // 네 목록을 서로 반응하도록 채움
-  restoreState();
+  // 주소로 학습지를 지정해 왔으면(index 헤더의 '채점' 버튼) 그것을 우선한다
+  if(!applyWsFromUrl()) restoreState();
 });
+
+/* index 의 헤더 '채점' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지를 골라 둔다.
+   (teacher.html·edit.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
+   문항까지는 못 고른다 — 어느 문항을 채점할지는 여기서 사람이 정하는 것이라
+   sel-q 는 비워 두고 목록만 그 학습지 것으로 좁혀 준다. */
+function applyWsFromUrl(){
+  const wsId=new URLSearchParams(location.search).get('ws');
+  if(!wsId) return false;
+  const sel=document.getElementById('sel-ws');
+  const has=sel && [...sel.options].some(o=>o.value===wsId);
+  if(!has){
+    // 그래프 답안이 하나도 없는 학습지는 애초에 목록에 뜨지 않는다 — 그 사정을 알려 준다
+    toast('이 학습지는 채점할 그래프 답안이 없습니다');   // 이 화면의 toast 는 인자가 하나뿐이다
+    return false;
+  }
+  sel.value=wsId;
+  onWsChange();
+  return true;
+}
 
 async function loadCurriculum(){
   try{

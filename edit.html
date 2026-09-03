@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.11">
+<meta name="app-version" content="edit-v3.12">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -713,10 +713,18 @@ async function loadAll(){
     renderSidebar();
     // 새로고침 후 직전 학습지/문항 복원
     try{
-      const lastWsId=sessionStorage.getItem('edit_lastWsId');
-      const lastQIdx=sessionStorage.getItem('edit_lastQIdx');
+      /* index 의 헤더 '편집' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지를 바로 연다.
+         (teacher.html·scoring.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
+         주소로 온 학습지가 직전에 보던 것보다 우선이고, 문항 번호는 다른 학습지일 수 있으므로
+         주소로 왔을 때는 복원하지 않는다. */
+      const urlWsId=new URLSearchParams(location.search).get('ws');
+      const fromUrl = !!(urlWsId && worksheets.find(w=>w.id===urlWsId));
+      const lastWsId=fromUrl ? urlWsId : sessionStorage.getItem('edit_lastWsId');
+      const lastQIdx=fromUrl ? null : sessionStorage.getItem('edit_lastQIdx');
+      if(urlWsId && !fromUrl) toast('주소로 받은 학습지를 찾지 못했습니다: '+urlWsId, 4000);
       if(lastWsId && worksheets.find(w=>w.id===lastWsId)){
         await window.selectWs(lastWsId);
+        if(fromUrl) revealWsInSidebar(lastWsId);
         if(lastQIdx!==null && lastQIdx!==''){
           const idx=parseInt(lastQIdx);
           // selectQuestion에 필요한 allItems 재구성
@@ -793,6 +801,19 @@ function renderSidebar(){
       block.querySelector('.unit-wsList').classList.add('open');
     }
   });
+}
+
+/* 주소(?ws=)로 들어온 학습지를 사이드바에서 보이게 한다 — 단원은 기본이 접힘이라
+   selectWs 만으로는 고른 학습지가 화면에 안 보인다. .active 표시는 selectWs 가 한다. */
+function revealWsInSidebar(wsId){
+  const item=document.querySelector(`.ws-item[data-wsid="${wsId}"]`);
+  if(!item) return;
+  const list=item.closest('.unit-wsList');
+  if(list && !list.classList.contains('open')){
+    list.classList.add('open');
+    list.previousElementSibling?.querySelector('.unit-toggle')?.classList.add('open');
+  }
+  try{ item.scrollIntoView({block:'center'}); }catch(e){ item.scrollIntoView(); }
 }
 
 window.toggleUnit = function(el){

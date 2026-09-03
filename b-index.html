@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.49">
+  <meta name="app-version" content="8.50">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -96,9 +96,9 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 
 /* ── 🚨 오류 신고 ── */
 /* 🚨 오류 신고 · 💾 필기 저장 — 화면 오른쪽 아래에 나란히.
-   연습장을 가리지 않도록 quiz-shell 아래쪽에 --fab-space 만큼 자리를 비워 두고,
-   연습장 높이도 그만큼 빼서 계산한다(canvasTargetHeight). */
-:root{--fab-space:58px}
+   학습지 화면에서는 도구 모음이 대신하므로 이 버튼이 연습장을 가릴 일이 없다.
+   (v8.49까지는 이 버튼 자리를 비워 두느라 캔버스 아래에 빈 띠가 생겼다) */
+:root{--fab-space:58px}   /* 학습지 밖 화면에서 🚨 버튼이 놓이는 자리 */
 /* 가로 방향 안내 — 세로로 든 터치 기기에서만 뜬다 */
 #rotate-hint{display:none}
 @media (orientation:portrait) and (pointer:coarse){
@@ -221,7 +221,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 
 /* QUIZ PAGE */
 #quiz-page.active{display:block!important;background:var(--cream);min-height:calc(100vh - 52px)}
-#quiz-page>.quiz-shell{max-width:1100px;margin:0 auto;padding:20px 20px calc(var(--fab-space) + 4px)}
+#quiz-page>.quiz-shell{max-width:1100px;margin:0 auto;padding:20px 20px 16px}
 /* 10인치급 이상에서는 화면 폭을 가득 쓴다.
    ⚠️ 브라우저는 물리적 인치를 알려주지 않는다 — 가로 CSS 폭으로 어림한다.
       10인치 태블릿 가로가 대체로 1024px인데 스크롤바를 빼면 1008px쯤으로 잡히므로
@@ -4716,7 +4716,8 @@ let cvPointerId=null;
    (예전에는 캔버스마다 따로 쌓아, 한 번 누르면 둘 다 동시에 되돌아갔다)
    스냅샷이 커서 20개까지만 들고 있는다. */
 const HIST_MAX=20;
-let _hist=[], _redo=[];   // [{k:'main'|'prob', d:ImageData}]
+let _hist=[], _redo=[];   // [{k:'main'|'prob', d:ImageData, s:단계번호}]
+let _step=0;              // 한 번의 실행취소로 되돌릴 묶음 (전체 지우기는 두 캔버스가 한 묶음)
 
 function _histCv(k){
   const cv = k==='prob' ? document.getElementById('problem-canvas') : canvas;
@@ -4728,9 +4729,11 @@ function _snap(k){
   try{ return t.c.getImageData(0,0,t.cv.width,t.cv.height); }catch(e){ return null; }
 }
 /** 획을 긋기 직전에 부른다 — 되돌리기 이력은 여기서 버려진다(새 갈래가 생겼으므로) */
-function histPush(k){
+/** sameStep=true 면 바로 앞 항목과 한 묶음이 되어 실행취소 한 번에 함께 되돌아간다 */
+function histPush(k, sameStep){
   const d=_snap(k); if(!d) return;
-  _hist.push({k,d});
+  if(!sameStep) _step++;
+  _hist.push({k, d, s:_step});
   if(_hist.length>HIST_MAX) _hist.shift();
   _redo.length=0;
   updateHistBtns();
@@ -4760,23 +4763,29 @@ let undoStack=[]; // (예전 이름 — 아래 호환용으로만 남겨 둔다)
 let canvasStore={}; // key: qIdx, value: ImageData
 
 window.undoCanvas=function(){
-  const e=_hist.pop();
-  if(!e){ updateHistBtns(); return; }
-  const now=_snap(e.k);                  // 지금 모습을 되돌리기 쪽에 넣어 둔다
-  if(now) _redo.push({k:e.k, d:now});
-  _apply(e);
+  if(!_hist.length){ updateHistBtns(); return; }
+  const s=_hist[_hist.length-1].s;
+  while(_hist.length && _hist[_hist.length-1].s===s){   // 같은 묶음은 한꺼번에
+    const e=_hist.pop();
+    const now=_snap(e.k);                // 지금 모습을 되돌리기 쪽에 넣어 둔다
+    if(now) _redo.push({k:e.k, d:now, s:e.s});
+    _apply(e);
+  }
   updateHistBtns();
 };
 
 window.redoCanvas=function(){
-  const e=_redo.pop();
-  if(!e){ updateHistBtns(); return; }
-  const now=_snap(e.k);
-  if(now) _hist.push({k:e.k, d:now});
-  _apply(e);
+  if(!_redo.length){ updateHistBtns(); return; }
+  const s=_redo[_redo.length-1].s;
+  while(_redo.length && _redo[_redo.length-1].s===s){
+    const e=_redo.pop();
+    const now=_snap(e.k);
+    if(now) _hist.push({k:e.k, d:now, s:e.s});
+    _apply(e);
+  }
   updateHistBtns();
 };
-function resetUndoStack(){ undoStack=[]; _hist=[]; _redo=[]; updateHistBtns(); }
+function resetUndoStack(){ undoStack=[]; _hist=[]; _redo=[]; _step=0; updateHistBtns(); }
 
 // 문제 영역 캔버스 (L자 연습장) 관련
 let _pCanvasStore = {};  // qIdx → ImageData
@@ -4877,8 +4886,8 @@ function canvasTargetHeight(){
   // (offsetTop을 더하면 offsetParent가 body라 위치를 두 번 세게 된다)
   const top=canvas.getBoundingClientRect().top;
   if(!isFinite(top)) return 520;
-  const fab=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--fab-space'))||58;
-  const avail=window.innerHeight - top - fab - 12;
+  // 도구 모음으로 버튼을 옮겼으므로 아래에 자리를 비워 둘 필요가 없다 (숨 쉴 틈만 남긴다)
+  const avail=window.innerHeight - top - 16;
   return Math.max(230, Math.round(avail));
 }
 
@@ -5399,7 +5408,7 @@ function clearCanvas(){
   // 지우기 전 모습을 이력에 남겨, 실수로 눌러도 실행취소로 되살릴 수 있게 한다
   histPush('main');
   const _pc=document.getElementById('problem-canvas');
-  if(_pc) histPush('prob');
+  if(_pc) histPush('prob', true);   // 두 캔버스를 한 묶음으로 → 실행취소 한 번에 되살아난다
   // 오른쪽 큰 캔버스 지우기
   ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -5485,24 +5494,33 @@ document.getElementById("tool-eraser").addEventListener("click",()=>{
   document.getElementById("tool-pen").classList.remove("active"); setCtx();
 });
 
-/* 색을 고르면 팝업을 닫고 펜으로 돌아온다 */
-function pickPenColor(color, el){
+/* 색을 고르면 펜으로 돌아온다. close=false 면 팝업을 열어 둔다(색을 끄는 중). */
+function pickPenColor(color, el, close){
   eraser=false; penColor=color;
   document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
   document.querySelector('.swatch-custom')?.classList.remove('active');
   el?.classList.add("active");
   document.getElementById("tool-pen").classList.add("active");
   document.getElementById("tool-eraser").classList.remove("active");
-  setCtx(); penPopOpen(false);
+  setCtx();
+  if(close!==false) penPopOpen(false);
 }
+const _customSw=()=>document.querySelector('.swatch-custom');
+// 끄는 동안: 색만 바꾸고 팝업은 열어 둔다 (닫으면 색 고르개까지 닫힌다)
 document.getElementById("pen-custom")?.addEventListener("input", e=>{
-  pickPenColor(e.target.value, e.target.closest('.swatch-custom'));
+  pickPenColor(e.target.value, _customSw(), false);
+});
+// 다 고른 뒤: 팝업을 닫는다
+document.getElementById("pen-custom")?.addEventListener("change", e=>{
+  pickPenColor(e.target.value, _customSw(), true);
 });
 /* 팝업 밖을 누르면 닫는다 (도구 모음 안 클릭은 각 버튼이 알아서 처리) */
 document.addEventListener('pointerdown', e=>{
   const p=document.getElementById('pen-pop');
   if(!p || !p.classList.contains('on')) return;
   if(p.contains(e.target) || e.target.closest('#tool-pen')) return;
+  // 색 고르개(운영체제 창)가 떠 있는 동안에는 닫지 않는다
+  if(document.activeElement && document.activeElement.id==='pen-custom') return;
   penPopOpen(false);
 }, true);
 document.querySelectorAll(".color-swatch").forEach(sw=>{

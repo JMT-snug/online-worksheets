@@ -3,9 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.10">
+<meta name="app-version" content="edit-v3.11">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
+<script>
+/* 구분자와 매크로는 index.html·scoring.html과 반드시 같게 유지할 것 —
+   한쪽에만 있으면 편집기 미리보기와 학생 화면이 달라진다.
+   \sslash(평행 ⫽)는 stmaryrd 패키지 명령이라 MathJax 기본에는 없어 직접 정의한다.
+   startup은 일부러 지정하지 않는다 — 이 페이지는 MathJax 자동 렌더에 기대고 있다. */
+window.MathJax = {
+  tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]'],['$$','$$']],
+         macros: { sslash: '\\mathbin{/\\mkern-5mu/}' } }
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <style>
 :root{
@@ -1340,7 +1350,10 @@ function setQType(type){
 function renderOptions(opts, answers){
   const list = document.getElementById('options-list');
   list.innerHTML = '';
-  const toDisplay = s => (s||'').replace(/\\\\/g,'\\').replace(/\\\(/g,'\(').replace(/\\\)/g,'\)');
+  /* 학생 화면 index.html 의 fracText() 와 같은 정규화 — 이중 백슬래시만 단일로 되돌린다.
+     예전에는 여기에 .replace(/\\\(/g,'\(') 가 더 있었는데, JS 에서 '\(' 는 '(' 이라
+     \(3x=2x-6\) 가 (3x=2x-6) 으로 바뀌어 구분자가 사라졌다 → 선지 미리보기가 늘 맨 텍스트로 나왔다. */
+  const toDisplay = s => (s||'').replace(/\\\\/g,'\\');
   opts.forEach((opt,i)=>{
     const row = document.createElement('div');
     row.className='option-row';
@@ -1365,7 +1378,7 @@ window.updateOptPreview = function(i){
   const val = document.getElementById(`opt-${i}`)?.value || '';
   const prev = document.getElementById(`opt-prev-${i}`);
   if(!prev) return;
-  const disp = val.replace(/\\\\/g,'\\').replace(/\\\(/g,'\(').replace(/\\\)/g,'\)');
+  const disp = val.replace(/\\\\/g,'\\');   // toDisplay 와 같은 정규화 (구분자를 지우지 않는다)
   prev.innerHTML = disp || '미리보기';
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([prev]).catch(()=>{});
 };
@@ -2209,8 +2222,9 @@ function renderSteps(){
           <span style="font-size:12px;font-weight:700;color:${color}">📌 ${i+1}단계</span>
           <button onclick="removeStep(${i})" style="background:var(--red-lt);color:var(--red);border:none;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">단계 삭제</button>
         </div>
-        <label style="font-size:11px">단계 지시문</label>
-        <input value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'label',this.value)" placeholder="예: 방정식을 세우시오." style="margin-bottom:6px">
+        <label style="font-size:11px">단계 지시문 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \\(...\\))</span></label>
+        <input value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'label',this.value);updateStepPreview(${i})" placeholder="예: \\(3x=2x-6\\) 을 푸시오." style="margin-bottom:6px">
+        <div class="latex-preview" id="step-prev-${i}" style="min-height:28px;text-align:left;padding:6px 10px;font-size:13px;margin:0 0 6px">${stepDisplay(s.label)||'미리보기'}</div>
         <label style="font-size:11px">답 유형</label>
         <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         <label style="font-size:11px">정답</label>
@@ -2224,8 +2238,22 @@ function renderSteps(){
         <input value="${(s.hint||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'hint',this.value)" placeholder="힌트">
       </div>`;
   }).join('');
+  // 단계 지시문 미리보기를 한 번에 렌더 (선지 미리보기와 같은 방식)
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([c]).catch(()=>{});
 }
 window.renderSteps=renderSteps;
+
+/* 단계 지시문 미리보기 — 선지의 toDisplay 와 같은 정규화(이중 백슬래시만 단일로).
+   updateStep 은 상태만 바꾸고 다시 그리지 않으므로, 입력 중 포커스를 잃지 않는다. */
+function stepDisplay(s){
+  return (s||'').replace(/\\\\/g,'\\').replace(/<br\s*\/?>\s*\n/gi,'<br>').replace(/\n/g,'<br>');
+}
+window.updateStepPreview = function(i){
+  const prev=document.getElementById('step-prev-'+i);
+  if(!prev) return;
+  prev.innerHTML = stepDisplay(editSteps[i]?.label) || '미리보기';
+  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([prev]).catch(()=>{});
+};
 
 
 // ── 랜덤 풀 헬퍼 ──

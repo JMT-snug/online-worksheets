@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.53">
+  <meta name="app-version" content="8.54">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -32,8 +32,13 @@ window._errlog=[];
 const VERSION = (document.querySelector('meta[name="app-version"]')?.content||"").trim() || "8.32";
 document.addEventListener("DOMContentLoaded",()=>{const v=document.getElementById("hdr-version");if(v)v.textContent="v"+VERSION;}); // v[시스템변경].[오류수정] (학습지 추가/수정은 edit.html에서 Firestore로 관리)
 
+/* macros: MathJax 기본에 없는 명령을 추가한다. 세 파일(index·edit·scoring)의 목록을 같게 유지할 것 —
+   한쪽에만 있으면 편집기 미리보기와 학생 화면이 달라진다.
+   \sslash(평행 ⫽)는 LaTeX 기본이 아니라 stmaryrd 패키지 명령이라 MathJax에는 없어서,
+   슬래시 두 개를 겹쳐 같은 모양으로 직접 정의한다. */
 window.MathJax = {
-  tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]']] },
+  tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]'],['$$','$$']],
+         macros: { sslash: '\\mathbin{/\\mkern-5mu/}' } },
   options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] },
   startup: { typeset: false }
 };

@@ -3,11 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.24">
+<meta name="app-version" content="scoring-v1.25">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script>
+/* 구분자와 매크로는 index.html·edit.html과 반드시 같게 유지할 것 —
+   한쪽에만 있으면 채점 화면과 학생 화면이 달라진다.
+   \sslash(평행 ⫽)는 stmaryrd 패키지 명령이라 MathJax 기본에는 없어 직접 정의한다.
+   startup은 일부러 지정하지 않는다 — 이 페이지는 MathJax 자동 렌더에 기대고 있다. */
+window.MathJax = {
+  tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]'],['$$','$$']],
+         macros: { sslash: '\\mathbin{/\\mkern-5mu/}' } }
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 <style>
 :root {

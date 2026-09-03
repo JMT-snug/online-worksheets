@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.12">
+<meta name="app-version" content="edit-v3.13">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -658,6 +658,7 @@ let units = [];          // [{id, title, grade, order, ...}]
 let worksheets = [];     // [{id, unitId, title, ...}]
 let currentWsId = null;  // 현재 편집 중인 학습지
 let currentWs = null;    // 현재 학습지 객체
+let _wsRestoredOnce = false; // ?ws=/직전 학습지 복원은 최초 1회만 — saveToFirestore가 목록 새로고침용으로 loadAll()을 다시 부를 때 재실행되면 방금 저장한 학습지를 두고 주소의 학습지로 도로 튐
 let selectedQIdx = null; // 현재 선택된 문항 인덱스
 let altAnswers = [];     // 대안 정답 배열
 let poolCorrect = [], poolWrong = []; // 랜덤 풀
@@ -711,31 +712,36 @@ async function loadAll(){
     worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
 
     renderSidebar();
-    // 새로고침 후 직전 학습지/문항 복원
-    try{
-      /* index 의 헤더 '편집' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지를 바로 연다.
-         (teacher.html·scoring.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
-         주소로 온 학습지가 직전에 보던 것보다 우선이고, 문항 번호는 다른 학습지일 수 있으므로
-         주소로 왔을 때는 복원하지 않는다. */
-      const urlWsId=new URLSearchParams(location.search).get('ws');
-      const fromUrl = !!(urlWsId && worksheets.find(w=>w.id===urlWsId));
-      const lastWsId=fromUrl ? urlWsId : sessionStorage.getItem('edit_lastWsId');
-      const lastQIdx=fromUrl ? null : sessionStorage.getItem('edit_lastQIdx');
-      if(urlWsId && !fromUrl) toast('주소로 받은 학습지를 찾지 못했습니다: '+urlWsId, 4000);
-      if(lastWsId && worksheets.find(w=>w.id===lastWsId)){
-        await window.selectWs(lastWsId);
-        if(fromUrl) revealWsInSidebar(lastWsId);
-        if(lastQIdx!==null && lastQIdx!==''){
-          const idx=parseInt(lastQIdx);
-          // selectQuestion에 필요한 allItems 재구성
-          const allItems = currentWs?.type==='vocab'
-            ? [...(currentWs.vocab||[]).map((v,i)=>({...v,_type:'vocab',_idx:i})),
-               ...(currentWs.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}))]
-            : (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
-          if(idx>=0 && idx<allItems.length) selectQuestion(idx, allItems);
+    // 새로고침 후 직전 학습지/문항 복원 — 페이지가 로드될 때 딱 1번만. saveToFirestore가 목록을
+    // 새로고침하려고 loadAll()을 다시 부르는 경우에는 건드리지 않는다(주소의 ?ws=는 그대로 남아
+    // 있어서, 매번 다시 돌면 방금 저장한 학습지 대신 처음 열었던 학습지로 계속 튄다).
+    if(!_wsRestoredOnce){
+      _wsRestoredOnce = true;
+      try{
+        /* index 의 헤더 '편집' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지를 바로 연다.
+           (teacher.html·scoring.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
+           주소로 온 학습지가 직전에 보던 것보다 우선이고, 문항 번호는 다른 학습지일 수 있으므로
+           주소로 왔을 때는 복원하지 않는다. */
+        const urlWsId=new URLSearchParams(location.search).get('ws');
+        const fromUrl = !!(urlWsId && worksheets.find(w=>w.id===urlWsId));
+        const lastWsId=fromUrl ? urlWsId : sessionStorage.getItem('edit_lastWsId');
+        const lastQIdx=fromUrl ? null : sessionStorage.getItem('edit_lastQIdx');
+        if(urlWsId && !fromUrl) toast('주소로 받은 학습지를 찾지 못했습니다: '+urlWsId, 4000);
+        if(lastWsId && worksheets.find(w=>w.id===lastWsId)){
+          await window.selectWs(lastWsId);
+          if(fromUrl) revealWsInSidebar(lastWsId);
+          if(lastQIdx!==null && lastQIdx!==''){
+            const idx=parseInt(lastQIdx);
+            // selectQuestion에 필요한 allItems 재구성
+            const allItems = currentWs?.type==='vocab'
+              ? [...(currentWs.vocab||[]).map((v,i)=>({...v,_type:'vocab',_idx:i})),
+                 ...(currentWs.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}))]
+              : (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
+            if(idx>=0 && idx<allItems.length) selectQuestion(idx, allItems);
+          }
         }
-      }
-    }catch(e){ console.warn('[복원 실패]',e); }
+      }catch(e){ console.warn('[복원 실패]',e); }
+    }
     const status = units.length===0 && worksheets.length===0
       ? '⚠ 데이터 없음 — JS 마이그레이션 버튼을 눌러주세요'
       : `${units.length}개 단원, ${worksheets.length}개 학습지`;

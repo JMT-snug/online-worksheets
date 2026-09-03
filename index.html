@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.48">
+  <meta name="app-version" content="8.49">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -120,8 +120,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   box-shadow:0 3px 12px rgba(0,0,0,.22);opacity:.85;transition:opacity .15s,transform .15s}
 #fab-dock button:hover{opacity:1;transform:translateY(-1px)}
 #bugrep-fab{background:#111827;color:#fff}
-#save-note-fab{background:#2563eb;color:#fff;display:none}
-#ask-fab{background:#7c3aed;color:#fff;display:none}
+/* 저장·질문 버튼은 v8.49에서 연습장 도구 모음으로 옮겼다 (여기엔 신고만 남는다) */
 
 /* ❓ 질문하기 창 */
 #ask-modal{display:none;position:fixed;inset:0;z-index:9200;background:rgba(17,24,39,.55);
@@ -334,7 +333,24 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .canvas-toolbar-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
 .tool-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--rule);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;padding:0}
 .tool-btn.active{background:var(--acc-lt);border-color:var(--accent)}
-.color-swatch{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;flex-shrink:0}
+.color-swatch{width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;flex-shrink:0}
+/* 도구 모음 버튼 — 아이콘만 / 아이콘+글자 */
+.tb-ico{font-size:17px;padding:2px 9px;line-height:1.2}
+.tb-txt{font-size:12px;padding:4px 9px;white-space:nowrap}
+.tb-ico:disabled{opacity:.35;cursor:default}
+/* 펜 색 고르기 — 도구 모음 바로 아래에 얹힌다 */
+#pen-pop{display:none;position:absolute;z-index:60;top:38px;left:8px;
+  background:var(--paper);border:1px solid var(--rule);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);padding:8px;gap:6px;
+  grid-template-columns:repeat(5,24px)}
+#pen-pop.on{display:grid}
+.swatch-custom{width:24px;height:24px;border-radius:50%;overflow:hidden;cursor:pointer;
+  position:relative;flex-shrink:0;border:2px solid var(--rule);
+  background:conic-gradient(#ef4444,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6,#ec4899,#ef4444)}
+.swatch-custom.active{border-color:var(--ink)}
+.swatch-custom input{position:absolute;inset:-6px;width:200%;height:200%;border:none;padding:0;
+  opacity:0;cursor:pointer}
+.canvas-card{position:relative}
 .color-swatch.active{border-color:var(--ink)}
 .stroke-slider{-webkit-appearance:none;appearance:none;width:60px;height:4px;border-radius:2px;background:var(--rule);outline:none;cursor:pointer}
 .stroke-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);cursor:pointer}
@@ -642,9 +658,9 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </div>
 </div>
 
+<!-- 학습지 화면 밖(단원 목록 등)에서 쓰는 오류 신고 버튼.
+     학습지 화면에서는 연습장 도구 모음의 [🚨 신고]가 대신한다. -->
 <div id="fab-dock">
-  <button id="ask-fab" onclick="openAsk()" title="풀다가 막히면 선생님께 물어보세요">❓ 질문하기</button>
-  <button id="save-note-fab" onclick="saveCanvasImage()" title="지금 연습장 필기를 이미지 파일로 저장">💾 필기 저장</button>
   <button id="bugrep-fab" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 오류 신고</button>
 </div>
 
@@ -734,18 +750,12 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
             </svg>
           </button>
           <div class="divider-v"></div>
-                    <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917" title="검정"></span>
-          <span class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="빨강"></span>
-          <span class="color-swatch" data-color="#f97316" style="background:#f97316" title="주황"></span>
-          <span class="color-swatch" data-color="#eab308" style="background:#eab308" title="노랑"></span>
-          <span class="color-swatch" data-color="#22c55e" style="background:#22c55e" title="초록"></span>
-          <span class="color-swatch" data-color="#06b6d4" style="background:#06b6d4" title="하늘"></span>
-          <span class="color-swatch" data-color="#3b82f6" style="background:#3b82f6" title="파랑"></span>
-          <span class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="보라"></span>
-          <span class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="핑크"></span>
+          <button class="btn-back tb-ico" id="btn-undo" onclick="undoCanvas()" title="실행취소 (한 획 되돌리기)">↶</button>
+          <button class="btn-back tb-ico" id="btn-redo" onclick="redoCanvas()" title="되돌리기 (취소한 것 다시)">↷</button>
           <div class="divider-v"></div>
-          <button class="btn-back" id="btn-clear-cv" style="font-size:14px;padding:4px 8px" title="전체 지우기">🗑</button>
-          <button class="btn-back" onclick="undoCanvas()" style="font-size:14px;padding:4px 8px" title="실행취소 (한 획 되돌리기)">↩</button>
+          <button class="btn-back tb-txt" id="tb-save" onclick="saveCanvasImage()" title="지금 연습장 필기를 이미지 파일로 저장">💾 저장</button>
+          <button class="btn-back tb-txt" id="tb-ask" onclick="openAsk()" title="풀다가 막히면 선생님께 물어보세요">❓ 질문</button>
+          <button class="btn-back tb-txt" onclick="startBugReport()" title="화면에 문제가 있으면 눌러서 신고하세요">🚨 신고</button>
           <div class="divider-v"></div>
           <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-left:auto">
             <button class="btn-back" id="cv-prev-btn" onclick="canvasPrev()" style="font-size:12px;padding:2px 7px" title="이전 문제 연습장 보기">◀</button>
@@ -753,6 +763,21 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
             <button class="btn-back" id="cv-now-btn" onclick="canvasGoToNow()" style="font-size:10px;display:none;padding:2px 5px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="현재 문제 연습장으로">↩</button>
             <button class="btn-back" id="cv-next-btn" style="font-size:12px;padding:2px 7px" title="다음 문제 연습장 보기">▶</button>
           </div>
+        </div>
+        <!-- 펜을 다시 누르면 열리는 색 고르기 -->
+        <div id="pen-pop">
+        <span class="color-swatch active" data-color="#1c1917" style="background:#1c1917" title="검정"></span>
+        <span class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="빨강"></span>
+        <span class="color-swatch" data-color="#f97316" style="background:#f97316" title="주황"></span>
+        <span class="color-swatch" data-color="#eab308" style="background:#eab308" title="노랑"></span>
+        <span class="color-swatch" data-color="#22c55e" style="background:#22c55e" title="초록"></span>
+        <span class="color-swatch" data-color="#06b6d4" style="background:#06b6d4" title="하늘"></span>
+        <span class="color-swatch" data-color="#3b82f6" style="background:#3b82f6" title="파랑"></span>
+        <span class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="보라"></span>
+        <span class="color-swatch" data-color="#ec4899" style="background:#ec4899" title="핑크"></span>
+          <label class="swatch-custom" title="원하는 색 고르기">
+            <input type="color" id="pen-custom" value="#7c3aed">
+          </label>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -1099,17 +1124,20 @@ async function askCapture(){
 /** 💾 필기 저장은 연습장이 있는 퀴즈 화면에서만 보인다 */
 function updateFabDock(){
   const onQuiz=document.getElementById("quiz-page")?.classList.contains("active");
-  const btn=document.getElementById("save-note-fab");
-  if(btn) btn.style.display = onQuiz ? "inline-flex" : "none";
+  // 학습지 화면에서는 도구 모음에 [🚨 신고]가 있으므로 떠 있는 버튼을 감춘다
+  const dock=document.getElementById("fab-dock");
+  if(dock && dock.style.display!=="none") dock.style.opacity = onQuiz ? "0" : "1";
+  if(dock) dock.style.pointerEvents = onQuiz ? "none" : "auto";
 
-  /* ❓ 질문하기 — 시험지에서는 숨긴다(시험 중 질문은 부정행위 소지),
+  /* ❓ 질문 — 시험지에서는 숨긴다(시험 중 질문은 부정행위 소지),
      링크 문항은 풀 것이 없으므로 숨긴다. */
-  const ask=document.getElementById("ask-fab");
+  const ask=document.getElementById("tb-ask");
   if(ask){
     const q=curWS?.questions?.[curQIdx];
-    const show = onQuiz && !window._examMode && q && q.type!=='link';
+    const show = !window._examMode && q && q.type!=='link';
     ask.style.display = show ? "inline-flex" : "none";
   }
+  updateHistBtns();
 }
 window.updateFabDock=updateFabDock;
 
@@ -4684,20 +4712,71 @@ let cvDrawing=false, penColor="#1c1917", penSize=3, eraser=false, cvLX=0, cvLY=0
    두 번째 접촉이 새 획을 시작해 엉뚱한 선이 그어지던 것을 막는다.
    먼저 닿은 포인터가 떨어질 때까지 나머지는 통째로 무시한다. */
 let cvPointerId=null;
-let undoStack=[]; // 획 시작 전 스냅샷 배열
+/* 획 이력 — 오른쪽 큰 연습장과 문제 위 L자 연습장을 한 줄로 모아 시간 순서대로 되돌린다.
+   (예전에는 캔버스마다 따로 쌓아, 한 번 누르면 둘 다 동시에 되돌아갔다)
+   스냅샷이 커서 20개까지만 들고 있는다. */
+const HIST_MAX=20;
+let _hist=[], _redo=[];   // [{k:'main'|'prob', d:ImageData}]
+
+function _histCv(k){
+  const cv = k==='prob' ? document.getElementById('problem-canvas') : canvas;
+  if(!cv || !cv.width || !cv.height) return null;
+  return { cv, c: cv.getContext('2d', {willReadFrequently:true}) };
+}
+function _snap(k){
+  const t=_histCv(k); if(!t) return null;
+  try{ return t.c.getImageData(0,0,t.cv.width,t.cv.height); }catch(e){ return null; }
+}
+/** 획을 긋기 직전에 부른다 — 되돌리기 이력은 여기서 버려진다(새 갈래가 생겼으므로) */
+function histPush(k){
+  const d=_snap(k); if(!d) return;
+  _hist.push({k,d});
+  if(_hist.length>HIST_MAX) _hist.shift();
+  _redo.length=0;
+  updateHistBtns();
+}
+function _apply(e){
+  const t=_histCv(e.k); if(!t) return false;
+  try{
+    t.c.globalCompositeOperation='source-over';
+    t.c.putImageData(e.d,0,0);
+  }catch(err){ return false; }
+  // 되돌린 결과를 저장해 두어야 문제를 옮겼다 돌아와도 남는다
+  try{
+    if(e.k==='prob') _pCanvasStore[curQIdx]=t.c.getImageData(0,0,t.cv.width,t.cv.height);
+    else canvasStore[canvasViewIdx]=t.c.getImageData(0,0,t.cv.width,t.cv.height);
+  }catch(err){}
+  setCtx();
+  return true;
+}
+function updateHistBtns(){
+  const u=document.getElementById('btn-undo'), r=document.getElementById('btn-redo');
+  if(u) u.disabled=!_hist.length;
+  if(r) r.disabled=!_redo.length;
+}
+window.updateHistBtns=updateHistBtns;
+
+let undoStack=[]; // (예전 이름 — 아래 호환용으로만 남겨 둔다)
 let canvasStore={}; // key: qIdx, value: ImageData
 
 window.undoCanvas=function(){
-  // 오른쪽 큰 캔버스 undo
-  if(undoStack.length>0){ ctx.putImageData(undoStack.pop(),0,0); }
-  // 문제 영역 캔버스 undo
-  const pCv=document.getElementById('problem-canvas');
-  if(pCv && pCv._undo && pCv._undo.length>0){
-    pCv.getContext('2d').putImageData(pCv._undo.pop(),0,0);
-    try{ _pCanvasStore[curQIdx]=pCv.getContext('2d').getImageData(0,0,pCv.width,pCv.height); }catch(e){}
-  }
+  const e=_hist.pop();
+  if(!e){ updateHistBtns(); return; }
+  const now=_snap(e.k);                  // 지금 모습을 되돌리기 쪽에 넣어 둔다
+  if(now) _redo.push({k:e.k, d:now});
+  _apply(e);
+  updateHistBtns();
 };
-function resetUndoStack(){ undoStack=[]; }
+
+window.redoCanvas=function(){
+  const e=_redo.pop();
+  if(!e){ updateHistBtns(); return; }
+  const now=_snap(e.k);
+  if(now) _hist.push({k:e.k, d:now});
+  _apply(e);
+  updateHistBtns();
+};
+function resetUndoStack(){ undoStack=[]; _hist=[]; _redo=[]; updateHistBtns(); }
 
 // 문제 영역 캔버스 (L자 연습장) 관련
 let _pCanvasStore = {};  // qIdx → ImageData
@@ -4745,12 +4824,7 @@ function initProblemCanvas(){
       [lx,ly]=pos(e);
       try{ cv.setPointerCapture(e.pointerId); }catch(_){}
       const c=cv.getContext('2d');
-      // 획 시작 전 스냅샷 저장 (undo용)
-      try{
-        if(!cv._undo) cv._undo=[];
-        cv._undo.push(c.getImageData(0,0,cv.width,cv.height));
-        if(cv._undo.length>30) cv._undo.shift();  // 메모리 보호
-      }catch(e){}
+      histPush('prob');   // 획 시작 전 스냅샷 (실행취소·되돌리기 공용 이력)
       c.lineCap='round'; c.lineJoin='round';
       if(eraser){
         c.globalCompositeOperation='destination-out';
@@ -5217,7 +5291,7 @@ function downloadCanvas(cv, name){
    ⚠️ 문항에 넣은 Drive 이미지는 CORS 때문에 비어 나올 수 있다(오류신고 캡처와 같은 한계).
       캡처가 통째로 실패하면 연습장만이라도 저장한다. */
 window.saveCanvasImage = async function(){
-  const btn=document.getElementById('save-note-fab');
+  const btn=document.getElementById('tb-save');
   const label=btn?btn.textContent:'';
   const name=canvasFileName()+'.png';
   if(btn){ btn.disabled=true; btn.textContent='저장 중…'; }
@@ -5322,6 +5396,10 @@ function restoreCanvasState(idx){
 }
 
 function clearCanvas(){
+  // 지우기 전 모습을 이력에 남겨, 실수로 눌러도 실행취소로 되살릴 수 있게 한다
+  histPush('main');
+  const _pc=document.getElementById('problem-canvas');
+  if(_pc) histPush('prob');
   // 오른쪽 큰 캔버스 지우기
   ctx.globalCompositeOperation="source-over";
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -5330,11 +5408,7 @@ function clearCanvas(){
   const pCv=document.getElementById('problem-canvas');
   if(pCv){
     const pCtx=pCv.getContext('2d');
-    // 직전 상태 저장 후 지우기 (undo로 복원 가능)
-    try{
-      if(!pCv._undo) pCv._undo=[];
-      pCv._undo.push(pCtx.getImageData(0,0,pCv.width,pCv.height));
-    }catch(e){}
+    // 지우기 전 모습은 위에서 histPush('prob') 로 이미 남겼다
     pCtx.globalCompositeOperation='source-over';
     pCtx.clearRect(0,0,pCv.width,pCv.height);
     delete _pCanvasStore[curQIdx];
@@ -5350,7 +5424,7 @@ function cvStart(e){
   if(isPenOnly() && e.pointerType==='touch') return;   // 펜 전용 모드: 손가락은 그리기 대신 화면 제스처로 넘긴다
   if(cvPointerId!==null) return;                        // 이미 다른 손가락·펜이 그리는 중 → 무시
   cvPointerId=e.pointerId;
-  undoStack.push(ctx.getImageData(0,0,canvas.width,canvas.height));
+  histPush('main');
   e.preventDefault(); cvDrawing=true;
   [cvLX,cvLY]=cvPos(e);
   try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
@@ -5381,27 +5455,58 @@ canvas.addEventListener("pointerup",cvEnd);
 canvas.addEventListener("pointercancel",cvEnd);
 canvas.addEventListener("pointerleave",cvEnd);
 
+/* 펜·지우개는 "고르기"와 "한 번 더 누르기"가 다른 일을 한다.
+   · 펜   : 안 골라져 있으면 고르기 / 이미 골라져 있으면 색 고르기 열기
+   · 지우개: 안 골라져 있으면 고르기 / 이미 골라져 있으면 전체 지우기(확인 후) */
+function penPopOpen(on){
+  const p=document.getElementById('pen-pop');
+  if(p) p.classList.toggle('on', !!on);
+}
+window.penPopOpen=penPopOpen;
+
 document.getElementById("tool-pen").addEventListener("click",()=>{
+  const wasPen = !eraser;
   eraser=false;
   document.getElementById("tool-pen").classList.add("active");
-  document.getElementById("tool-eraser").classList.remove("active"); setCtx();
+  document.getElementById("tool-eraser").classList.remove("active");
+  setCtx();
+  penPopOpen(wasPen && !document.getElementById('pen-pop')?.classList.contains('on'));
 });
+
 document.getElementById("tool-eraser").addEventListener("click",()=>{
+  const wasEraser = eraser;
+  penPopOpen(false);
+  if(wasEraser){
+    if(confirm('연습장에 쓴 것을 전부 지울까요?\n\n(실행취소 ↶ 로 되살릴 수 있어요)')) clearCanvas();
+    return;
+  }
   eraser=true;
   document.getElementById("tool-eraser").classList.add("active");
   document.getElementById("tool-pen").classList.remove("active"); setCtx();
 });
-document.getElementById("btn-clear-cv")?.addEventListener("click",()=>{
-  clearCanvas();
+
+/* 색을 고르면 팝업을 닫고 펜으로 돌아온다 */
+function pickPenColor(color, el){
+  eraser=false; penColor=color;
+  document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
+  document.querySelector('.swatch-custom')?.classList.remove('active');
+  el?.classList.add("active");
+  document.getElementById("tool-pen").classList.add("active");
+  document.getElementById("tool-eraser").classList.remove("active");
+  setCtx(); penPopOpen(false);
+}
+document.getElementById("pen-custom")?.addEventListener("input", e=>{
+  pickPenColor(e.target.value, e.target.closest('.swatch-custom'));
 });
+/* 팝업 밖을 누르면 닫는다 (도구 모음 안 클릭은 각 버튼이 알아서 처리) */
+document.addEventListener('pointerdown', e=>{
+  const p=document.getElementById('pen-pop');
+  if(!p || !p.classList.contains('on')) return;
+  if(p.contains(e.target) || e.target.closest('#tool-pen')) return;
+  penPopOpen(false);
+}, true);
 document.querySelectorAll(".color-swatch").forEach(sw=>{
-  sw.addEventListener("click",()=>{
-    eraser=false; penColor=sw.dataset.color;
-    document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("active"));
-    sw.classList.add("active");
-    document.getElementById("tool-pen").classList.add("active");
-    document.getElementById("tool-eraser").classList.remove("active"); setCtx();
-  });
+  sw.addEventListener("click",()=>pickPenColor(sw.dataset.color, sw));
 });
 document.getElementById("stroke-size")?.addEventListener("input",e=>{
   penSize=parseInt(e.target.value); setCtx();

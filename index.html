@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.50">
+  <meta name="app-version" content="8.51">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -348,9 +348,15 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   position:relative;flex-shrink:0;border:2px solid var(--rule);
   background:conic-gradient(#ef4444,#eab308,#22c55e,#06b6d4,#3b82f6,#8b5cf6,#ec4899,#ef4444)}
 .swatch-custom.active{border-color:var(--ink)}
+.pen-ok{grid-column:1/-1;margin-top:4px;padding:7px 0;border:none;border-radius:7px;
+  background:var(--accent);color:#fff;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .swatch-custom input{position:absolute;inset:-6px;width:200%;height:200%;border:none;padding:0;
   opacity:0;cursor:pointer}
-.canvas-card{position:relative}
+/* ⚠️ .canvas-card 에 position 을 다시 주지 말 것 — 위에서 sticky(top:72px)로 잡아 두었다.
+   relative 로 덮으면 top:72px 이 '고정 임계값'이 아니라 '아래로 72px 밀기'가 되어
+   연습장이 문제 카드보다 72px 내려간다(v8.49~v8.50에서 실제로 그랬다).
+   sticky 도 절대 위치 자식(#pen-pop)의 기준이 되므로 덮어쓸 필요가 없다. */
+.pen-pop-anchor{}
 .color-swatch.active{border-color:var(--ink)}
 .stroke-slider{-webkit-appearance:none;appearance:none;width:60px;height:4px;border-radius:2px;background:var(--rule);outline:none;cursor:pointer}
 .stroke-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ink);cursor:pointer}
@@ -778,6 +784,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
           <label class="swatch-custom" title="원하는 색 고르기">
             <input type="color" id="pen-custom" value="#7c3aed">
           </label>
+          <button type="button" class="pen-ok" onclick="penPopOpen(false)">확인</button>
         </div>
         <canvas id="draw-canvas" height="520"></canvas>
       </div>
@@ -1083,8 +1090,12 @@ window.sendAsk=async function(){
       });
     }catch(e){ console.warn('[질문 기록]',e.message); }   // 챗은 이미 갔으므로 흐름은 막지 않는다
 
-    document.getElementById('ask-title').textContent='📨 보냈어요!';
+    const _warn = out.notified===false
+      ? '<div class="ask-msg" style="color:#b45309">⚠️ 질문은 저장됐지만 <b>선생님 알림이 전송되지 않았습니다</b>. 선생님께 직접 말씀해 주세요.</div>'
+      : '';
+    document.getElementById('ask-title').textContent = out.notified===false ? '📨 저장했어요' : '📨 보냈어요!';
     document.getElementById('ask-body').innerHTML=
+      _warn +
       `<div class="ask-msg">선생님께 질문을 보냈어요.<br>
         답을 기다리는 동안 <b>다음 문제</b>를 풀어 볼까요?</div>
        <div class="ask-quota">오늘 질문 ${out.used}/${out.limit}개</div>
@@ -1905,11 +1916,15 @@ window.sendBugReport=async function(){
         body: JSON.stringify({ ...base, token:window._errToken, image:_canvasToJpeg(canvas,1400,1500000) })
       });
       const out=await res.json();
-      if(out && out.ok){ driveFileId=out.fileId||null; driveUrl=out.fileUrl||null; }
+      if(out && out.ok){
+        driveFileId=out.fileId||null; driveUrl=out.fileUrl||null;
+        // 저장은 됐는데 채팅 알림만 실패한 경우도 알려 준다 (예전에는 조용히 넘어갔다)
+        if(out.notified===false) shotNote='선생님 알림 전송 실패 (신고는 저장됨)';
+      }
       else throw new Error(out?.error||'서버 응답 오류');
     }catch(e){
       console.warn('[오류신고] 신고 서버 전송 실패 → Firestore 저장:',e.message);
-      shotNote='신고 서버 전송 실패';
+      shotNote='신고 서버 전송 실패: '+e.message;
     }
   }
   if(canvas && !driveUrl){
@@ -1921,7 +1936,9 @@ window.sendBugReport=async function(){
   try{
     await setDoc(doc(collection(db,'error_reports')), { ...base, screenshot:shot, screenshotNote:shotNote, driveFileId, driveUrl });
     _bugCleanup();
-    alert('🚨 신고가 접수되었습니다. 감사합니다!');
+    alert(shotNote
+      ? '🚨 신고가 저장되었습니다.\n\n다만 선생님께 바로 알림이 가지 않았습니다:\n'+shotNote+'\n\n급한 문제면 선생님께 직접 말씀해 주세요.'
+      : '🚨 신고가 접수되었습니다. 감사합니다!');
   }catch(e){ _bugCleanup(); alert('신고 저장에 실패했습니다: '+e.message); }
 };
 
@@ -5510,9 +5527,9 @@ const _customSw=()=>document.querySelector('.swatch-custom');
 document.getElementById("pen-custom")?.addEventListener("input", e=>{
   pickPenColor(e.target.value, _customSw(), false);
 });
-// 다 고른 뒤: 팝업을 닫는다
+// 다 고른 뒤에도 닫지 않는다 — 계속 조정할 수 있게 두고, [확인] 을 눌러야 닫힌다
 document.getElementById("pen-custom")?.addEventListener("change", e=>{
-  pickPenColor(e.target.value, _customSw(), true);
+  pickPenColor(e.target.value, _customSw(), false);
 });
 /* 팝업 밖을 누르면 닫는다 (도구 모음 안 클릭은 각 버튼이 알아서 처리) */
 document.addEventListener('pointerdown', e=>{

@@ -602,10 +602,10 @@ function 홈그리기() {
     const 다음 = CG.업그레이드가능(st, s.id);
     return '<div class="staff"><div class="top">' + 그림(t.이미지, t.이름, 'small') +
       '<div><div class="nm">' + esc(s.이름) + '</div>' +
-      '<div class="meta">업무능력 ' + CG.능력(st, s).toString() + ' · 레벨 ' + s.레벨 +
+      '<div class="meta">업무능력 ' + 수(CG.능력(st, s).toString()) + ' · 레벨 ' + s.레벨 +
       ' · 주급 ' + t.주급 + '</div></div></div>' +
       '<div class="meta" style="font-size:12.5px;color:var(--dim)">' + esc(t.설명) + '</div>' +
-      (다음 ? '<div class="meta" style="margin-top:6px">다음 레벨 업무능력 ' + 다음.업무능력 + ' · ' + 다음.비용 + '코인</div>' : '') +
+      (다음 ? '<div class="meta" style="margin-top:6px">다음 레벨 업무능력 ' + 수(다음.업무능력.toString()) + ' · ' + 다음.비용 + '코인</div>' : '') +
       '</div>';
   }).join('');
 
@@ -662,6 +662,10 @@ function 배정정리() {
 function 업무토글(직원id, 업무id) {
   const cur = 배정[직원id] || [];
   const i = cur.indexOf(업무id);
+  if (i < 0 && cur.length >= CAT.규칙.직원당최대업무) {
+    알림('한 사람에게는 업무를 최대 ' + CAT.규칙.직원당최대업무 + '가지까지만 맡길 수 있어요.');
+    return;
+  }
   if (i >= 0) cur.splice(i, 1); else cur.push(업무id);
   배정[직원id] = cur;
   st._배정 = 배정; 저장();
@@ -669,8 +673,17 @@ function 업무토글(직원id, 업무id) {
 }
 
 function 추천배치누르기() {
+  const 값 = CAT.규칙.계산.추천배치비용;
+  if (값 === null) return;
+  if (값 > 0) {
+    if (st.코인.lt(F(값))) { 알림('코인이 모자랍니다. (' + 값 + ' 필요)'); return; }
+    if (!confirm('추천 배치를 보면 ' + 값 + '코인을 냅니다.\n' +
+                 '직접 계산해서 예측을 맞히면 오히려 코인을 받을 수 있어요.\n그래도 볼까요?')) return;
+    st.코인 = st.코인.sub(F(값));
+    st.누적.투자 = st.누적.투자.add(F(값));
+  }
   const r = CG.추천배치(st, 25);
-  배정 = r.배정; st._배정 = 배정; 저장();
+  배정 = r.배정; st._배정 = 배정; 저장(); 클라우드저장();
   배정그리기();
   알림('최대 ' + r.가능손님 + '명까지 받을 수 있는 배치입니다.');
 }
@@ -719,48 +732,62 @@ function 배정그리기() {
     }).join('');
     return '<div class="staff"><div class="top">' + 그림(t.이미지, t.이름, 'small') +
       '<div><div class="nm">' + esc(s.이름) + '</div>' +
-      '<div class="meta">업무능력 ' + CG.능력(st, s).toString() + ' · 맡은 업무 ' + n + '가지' +
+      '<div class="meta">업무능력 ' + 수(CG.능력(st, s).toString()) + ' · 맡은 업무 ' + n + '가지' +
       (n ? ' → 업무 하나당 ' + 수(CG.능력(st, s).div(F(n)).toString()) : '') + '</div></div></div>' +
       '<div class="chips">' + chips + '</div>' +
       (n === 0 ? '<div class="warn">아무 업무도 맡지 않았어요.</div>' : '') + '</div>';
   }).join('');
 
   // 막대 눈금: 예상 손님과 업무별 가능 손님 중 가장 큰 값에 맞춘다 (업무끼리 길이를 비교할 수 있게)
+  const 숨김 = !!CAT.규칙.계산.업무별가능손님숨김;   // 보통 모드: 답은 감추고 처리량까지만
   const 최대 = Math.max(p.예상손님, 1, ...p.업무.map(r => r.가능손님정수));
   const 업무들 = p.업무.map((r, i) => {
     const t = CAT.업무별[r.id];
     const 병목 = p.병목 === r.id && p.가능손님 < p.예상손님;
     const w = Math.min(100, Math.round(r.가능손님정수 / 최대 * 100));
-    return '<div class="taskrow' + (병목 ? ' bottleneck' : '') + '" id="tr' + i + '">' +
+    return '<div class="taskrow' + (!숨김 && 병목 ? ' bottleneck' : '') + '" id="tr' + i + '">' +
       '<div class="hd" onclick="document.getElementById(\'tr' + i + '\').classList.toggle(\'open\')">' +
       업무아이콘(t) + '<span class="nm" style="color:' + t.색 + '">' + esc(r.이름) + '</span>' +
       '<span class="need">손님 1명당 ' + 수(r.필요.toString()) + '</span>' +
-      (병목 ? '<span class="badge">병목</span>' : '') +
-      '<span class="cnt">' + r.가능손님정수 + '명 가능</span><span style="color:var(--dim);font-size:12px">▾</span></div>' +
-      '<div class="bar"><i style="width:' + w + '%;background:' + t.색 + '"></i></div>' +
+      (숨김 ? '' : (병목 ? '<span class="badge">병목</span>' : '')) +
+      (숨김
+        ? '<span class="cnt">처리량 ' + 수(r.처리량.toString()) + '</span>'
+        : '<span class="cnt">' + r.가능손님정수 + '명 가능</span>') +
+      '<span style="color:var(--dim);font-size:12px">▾</span></div>' +
+      (숨김 ? '' : '<div class="bar"><i style="width:' + w + '%;background:' + t.색 + '"></i></div>') +
       '<div class="detail">' +
       (r.식.담당.length ? r.식.담당.map(x => '<div>' + 수(esc(x)) + '</div>').join('') : '<div>맡은 직원이 없습니다.</div>') +
       (r.식.합계 ? '<div>합계 ' + 수(r.식.합계) + '</div>' : '') +
-      '<div class="fin">받을 수 있는 손님 = 처리량 ÷ 필요 업무량 = ' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div>' +
+      (숨김
+        ? '<div class="fin">받을 수 있는 손님 = ' + 수(r.처리량.toString()) + ' ÷ ' + 수(r.필요.toString()) + ' = <b>?</b></div>'
+        : '<div class="fin">받을 수 있는 손님 = 처리량 ÷ 필요 업무량 = ' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div>') +
       '</div></div>';
   }).join('');
 
   const 부족 = p.가능손님 < p.예상손님;
   $('s-assign').innerHTML =
     '<h2 class="title">' + st.주차 + '주차 업무 배정</h2>' +
-    '<p class="sub">직원을 눌러 맡길 업무를 고르세요. <b>업무를 여러 가지 맡길수록 업무 하나당 처리량은 줄어듭니다.</b></p>' +
+    '<p class="sub">직원을 눌러 맡길 업무를 고르세요. <b>업무를 여러 가지 맡길수록 업무 하나당 처리량은 줄어듭니다.</b>' +
+      ' 한 사람에게는 최대 ' + CAT.규칙.직원당최대업무 + '가지까지 맡길 수 있어요.</p>' +
     예보HTML() +
     '<div class="card"><h3>직원 배치</h3><div class="grid g2">' + 직원들 + '</div>' +
     '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">' +
-    '<button class="btn sec sm" onclick="추천배치누르기()">🔎 추천 배치 보기</button>' +
+    (CAT.규칙.계산.추천배치비용 === null ? '' :
+      '<button class="btn sec sm" onclick="추천배치누르기()">🔎 추천 배치 보기' +
+      (CAT.규칙.계산.추천배치비용 > 0 ? ' (' + CAT.규칙.계산.추천배치비용 + '코인)' : '') + '</button>') +
     '<button class="btn sec sm" onclick="탭(\'s-shop\')">🛒 상점에서 보강하기</button></div></div>' +
 
     '<div class="card"><h3>업무별 받을 수 있는 손님 <span class="sub" style="font-weight:400">(눌러서 계산식 펼치기)</span></h3>' +
     업무들 +
     '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-    '<div><div style="font-size:13px;color:var(--dim)">이번 주 받을 수 있는 손님</div>' +
-    '<div style="font-size:26px;font-weight:900;color:' + (부족 ? 'var(--red)' : 'var(--green)') + '">' + p.가능손님 + '명</div>' +
-    '<div style="font-size:13px;color:var(--dim)">' + (st.예보.숨김 ? '예약 손님 수는 스스로 계산하세요' : '예상 손님 ' + p.예상손님 + '명') + '</div></div>' +
+    (숨김
+      ? '<div><div style="font-size:13px;color:var(--dim)">이번 주 받을 수 있는 손님</div>' +
+        '<div style="font-size:26px;font-weight:900">?</div>' +
+        '<div style="font-size:13px;color:var(--dim)">' +
+        (st.예보.숨김 ? '예약 손님 수부터 직접 구해야 해요' : '예상 손님 ' + p.예상손님 + '명') + '</div></div>'
+      : '<div><div style="font-size:13px;color:var(--dim)">이번 주 받을 수 있는 손님</div>' +
+        '<div style="font-size:26px;font-weight:900;color:' + (부족 ? 'var(--red)' : 'var(--green)') + '">' + p.가능손님 + '명</div>' +
+        '<div style="font-size:13px;color:var(--dim)">' + (st.예보.숨김 ? '예약 손님 수는 스스로 계산하세요' : '예상 손님 ' + p.예상손님 + '명') + '</div></div>') +
     '<div style="flex:1"></div>' +
     '<button class="btn big green" onclick="영업하기()">영업 시작 ▶</button></div></div>';
 }
@@ -896,15 +923,59 @@ function 손님하나(무대, 성공, 지연, 이모지, 손님그림) {
    ══════════════════════════════════════════════════════════════ */
 function 영업하기() {
   const p = CG.계획(st, 배정);
+  const 숨김 = !!CAT.규칙.계산.업무별가능손님숨김;
+
   if (p.빈업무.length) {
     if (!confirm('아무도 맡지 않은 업무가 있어요. 이대로면 손님을 한 명도 받을 수 없습니다.\n그래도 영업을 시작할까요?')) return;
-  } else if (st.예보.숨김) {
-    if (!confirm('예약 손님 수를 계산해 보셨나요?\n이대로 영업을 시작할까요?')) return;
-  } else if (p.가능손님 < p.예상손님) {
-    if (!confirm('이대로 영업하면 ' + (p.예상손님 - p.가능손님) + '명을 놓칩니다.\n그래도 시작할까요?')) return;
+  } else if (!숨김) {
+    // 답이 화면에 보이는 설정일 때만 미리 알려 준다 (감춘 설정에서는 힌트가 되어 버린다)
+    if (st.예보.숨김) {
+      if (!confirm('예약 손님 수를 계산해 보셨나요?\n이대로 영업을 시작할까요?')) return;
+    } else if (p.가능손님 < p.예상손님) {
+      if (!confirm('이대로 영업하면 ' + (p.예상손님 - p.가능손님) + '명을 놓칩니다.\n그래도 시작할까요?')) return;
+    }
   }
+
+  if (CAT.규칙.계산.예측입력) 예측묻기(예측 => 실제영업(예측));
+  else 실제영업(null);
+}
+
+/* 영업 전에 "이번 주에 몇 명 받게 될까?" 를 스스로 계산해 넣게 한다.
+   업무별 처리량은 화면에 있으니, 처리량 ÷ 손님 1명당 업무량 을 해서 가장 작은 값을 찾고
+   예상 손님과 견주어 보면 답이 나온다. 맞히면 보너스 코인. */
+function 예측묻기(다음) {
+  const box = document.createElement('div');
+  box.className = 'modal';
+  box.innerHTML = '<div class="box">' +
+    '<h3>영업 시작 전에</h3>' +
+    '<p style="margin:0 0 6px">이번 주에 손님을 <b>몇 명</b> 받게 될까요?</p>' +
+    '<p class="sub" style="margin:0 0 14px">업무마다 <b>처리량 ÷ 손님 1명당 업무량</b> 을 구해 보세요. ' +
+    '그중 <b>가장 작은 값</b>이 이번 주에 받을 수 있는 손님 수예요.' +
+    (st.예보.숨김 ? '' : '<br>찾아올 손님보다 많이 받을 수는 없어요.') + '</p>' +
+    '<input id="예측칸" type="number" inputmode="numeric" min="0" max="999" placeholder="예: 16"' +
+    ' style="width:100%;padding:12px;font-size:18px;font-weight:800;font-family:inherit;' +
+    'border:1.5px solid var(--line2);border-radius:10px;text-align:center">' +
+    '<p class="sub" style="margin:10px 0 0">맞히면 보너스 <b>' + CAT.규칙.계산.예측보너스 + '코인</b>을 받아요. ' +
+    '틀려도 영업은 그대로 진행됩니다.</p>' +
+    '<div class="row">' +
+    '<button class="btn sec" id="예측건너">모르겠어요 (그냥 시작)</button>' +
+    '<button class="btn" id="예측확인">영업 시작 ▶</button></div></div>';
+  document.body.appendChild(box);
+
+  const 칸 = box.querySelector('#예측칸');
+  setTimeout(() => { try { 칸.focus(); } catch (e) {} }, 50);
+  const 닫기 = 값 => { box.remove(); 다음(값); };
+  box.querySelector('#예측건너').onclick = () => 닫기(null);
+  box.querySelector('#예측확인').onclick = () => {
+    const v = parseInt(칸.value, 10);
+    닫기(Number.isFinite(v) && v >= 0 ? v : null);
+  };
+  칸.addEventListener('keydown', e => { if (e.key === 'Enter') box.querySelector('#예측확인').click(); });
+}
+
+function 실제영업(예측) {
   const 그때인테리어 = st.인테리어.slice();   // 연출에 쓸 카페 모습 (영업 뒤에도 그대로)
-  const log = CG.영업(st, 배정);
+  const log = CG.영업(st, 배정, undefined, 예측);
   log.인테리어 = 그때인테리어;
   st._배정 = 배정; 저장();
   클라우드저장(true);              // 한 주가 끝날 때마다 서버에 올린다 (랭킹 갱신 시점)
@@ -927,7 +998,9 @@ function 결과그리기(log) {
       (병목 ? '<span class="badge">여기가 부족했어요</span>' : '') +
       '<span class="cnt">' + r.가능손님정수 + '명</span></div>' +
       '<div class="detail" style="display:block">' +
-      '<div class="fin">' + 수(r.식.손님) + '</div></div></div>';
+      (r.식.담당 && r.식.담당.length ? r.식.담당.map(x => '<div>' + 수(esc(x)) + '</div>').join('') : '') +
+      (r.식.합계 ? '<div>합계 ' + 수(r.식.합계) + '</div>' : '') +
+      '<div class="fin">' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div></div></div>';
   }).join('');
 
   const 미션 = log.미션 ? (function () {
@@ -950,6 +1023,16 @@ function 결과그리기(log) {
     (log.놓친손님 ? '<div class="cap" style="color:var(--red);font-weight:700;margin-top:6px">' +
       조사(esc(log.병목이름), '이', '가') + ' 모자라 ' + log.놓친손님 + '명을 돌려보냈어요</div>' : '') +
     '</div>' +
+    (log.예측 === null || log.예측 === undefined ? '' :
+      '<div class="card" style="border-color:' + (log.예측맞음 ? 'var(--green)' : 'var(--line2)') + '">' +
+      '<h3>' + (log.예측맞음 ? '🎯 예측 적중!' : '🎯 예측 확인') + '</h3>' +
+      '<table class="money">' +
+      '<tr><td>내가 예측한 손님</td><td>' + log.예측 + '명</td></tr>' +
+      '<tr><td>실제로 받은 손님</td><td>' + log.받은손님 + '명</td></tr>' +
+      (log.예측맞음
+        ? '<tr><td><b>보너스</b></td><td class="pos"><b>+' + 분수(log.보너스) + '코인</b></td></tr>'
+        : '<tr><td colspan="2" class="sub">아래 업무별 계산식을 펼쳐 보면 어디서 어긋났는지 알 수 있어요.</td></tr>') +
+      '</table></div>') +
     미션 +
     '<div class="card"><h3>업무별 처리 결과</h3>' + 업무표 + '</div>' +
     '<div class="card"><h3>이번 주 정산</h3><table class="money">' +
@@ -968,6 +1051,8 @@ function 결과그리기(log) {
         '<td class="neg">' + 분수(미지급) + '</td></tr>'
       : '') +
     '<tr><td><b>이번 주 순이익</b></td><td class="' + (log.순익.isNeg() ? 'neg' : 'pos') + '"><b>' + 분수(log.순익) + '</b></td></tr>' +
+    (log.보너스 && log.보너스.isPos()
+      ? '<tr><td>🎯 예측 적중 보너스</td><td class="pos">+' + 분수(log.보너스) + '</td></tr>' : '') +
     '<tr><td>보유 코인</td><td>' + 분수(log.코인) + '</td></tr>' +
     '</table></div>' +
     '<div class="card"><h3>평판과 소문</h3>' +
@@ -1016,9 +1101,9 @@ function 상점그리기(tab) {
       const 다음 = CG.업그레이드가능(st, s.id);
       return '<div class="item"><div style="display:flex;gap:10px;align-items:center">' + 그림(t.이미지, t.이름, 'small') +
         '<div><div class="nm">' + esc(s.이름) + '</div><div class="desc">레벨 ' + s.레벨 +
-        ' · 업무능력 ' + CG.능력(st, s).toString() + '</div></div></div>' +
+        ' · 업무능력 ' + 수(CG.능력(st, s).toString()) + '</div></div></div>' +
         (다음
-          ? '<div class="desc">업그레이드하면 업무능력 <b>' + 다음.업무능력 + '</b> (주급은 그대로 ' + t.주급 + ')</div>' +
+          ? '<div class="desc">업그레이드하면 업무능력 <b>' + 수(다음.업무능력.toString()) + '</b> (주급은 그대로 ' + t.주급 + ')</div>' +
             '<div style="display:flex;align-items:center;gap:8px"><span class="price">' + 다음.비용 + '코인</span><div style="flex:1"></div>' +
             '<button class="btn sm" ' + (st.코인.lt(F(다음.비용)) ? 'disabled' : '') +
             ' onclick="사기(\'up\',\'' + s.id + '\')">업그레이드</button></div>'
@@ -1305,7 +1390,14 @@ function 도움말() {
     '<p><b>2. 손님 1명을 받으려면 열린 업무를 모두 처리해야 해요.</b><br>' +
     '업무마다 손님 1명당 필요한 업무량이 다릅니다(음료 ' + 수('3/4') + ', 서빙 ' + 수('1/2') + ' …). ' +
     '업무별로 <b>처리량 ÷ 필요 업무량</b>을 하면 그 업무로 받을 수 있는 손님 수가 나오고, ' +
-    '그중 <b>가장 작은 값</b>이 이번 주에 실제로 받을 수 있는 손님 수입니다. 이 업무를 <b>병목</b>이라고 불러요.</p>' +
+    '그중 <b>가장 작은 값</b>이 이번 주에 실제로 받을 수 있는 손님 수입니다. 이 업무를 <b>병목</b>이라고 불러요.<br>' +
+    '<b>이 계산은 게임이 대신 해 주지 않습니다.</b> 배정 화면에는 업무별 <b>처리량</b>까지만 나오니, ' +
+    '나누는 건 직접 해 보세요.</p>' +
+    '<p><b>2-2. 영업 전에 예측하기</b><br>' +
+    '[영업 시작]을 누르면 <b>이번 주에 몇 명 받게 될지</b> 먼저 물어봅니다. ' +
+    '맞히면 보너스 <b>' + CAT.규칙.계산.예측보너스 + '코인</b>을 받아요. 틀려도 영업은 그대로 진행되고, ' +
+    '결과 화면에서 업무별 계산식을 모두 보여 주니 어디서 어긋났는지 확인할 수 있습니다.<br>' +
+    '한 사람에게는 업무를 <b>최대 ' + CAT.규칙.직원당최대업무 + '가지</b>까지만 맡길 수 있어요.</p>' +
     '<p><b>3. 평판과 돈</b><br>예상 손님을 모두 받으면 평판이 오르고, ' + 수('3/4') + '보다 적게 받으면 내려갑니다. ' +
     '평판이 높으면 손님 1명당 매출이 올라갑니다(예: 평판 ★3이면 3 × ' + 수('6/5') + ' = ' + 수('18/5') + ').<br>' +
     '<b>코인은 0과 자연수만 씁니다.</b> 매출을 분수로 계산한 뒤 소수점 아래는 버립니다. ' +

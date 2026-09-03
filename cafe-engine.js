@@ -146,9 +146,16 @@ function setCatalog(raw) {
       시작평판: r.시작평판,
       시작직원: r.시작직원.slice(),
       최대직원수: r.최대직원수 || 6,
+      직원당최대업무: r.직원당최대업무 || 99,
       손님1명당매출: r.손님1명당매출,
       평판배수: {},
       만족기준: Fraction.parse(r.만족기준),
+      계산: {
+        업무별가능손님숨김: !!(r.계산 && r.계산.업무별가능손님숨김),
+        예측입력: !!(r.계산 && r.계산.예측입력),
+        예측보너스: (r.계산 && r.계산.예측보너스) || 0,
+        추천배치비용: (r.계산 && r.계산.추천배치비용 !== undefined) ? r.계산.추천배치비용 : 0
+      },
       주차별손님: r.주차별손님.slice(),
       SNS: {
         기본확률: r.SNS.기본확률,
@@ -160,7 +167,9 @@ function setCatalog(raw) {
     },
     업무: [], 업무별: {},
     직원유형: [], 직원유형별: {},
-    능력표: raw.업무능력표.slice(),
+    능력표: raw.업무능력표.map(function (r) {
+      return { 레벨: r.레벨, 업무능력: Fraction.parse(r.업무능력), 비용: r.비용 };
+    }),
     인테리어: raw.인테리어.slice(), 인테리어별: {},
     배경: (raw.배경 || []).slice(), 배경별: {}, 기본배경: {},
     세트보너스: raw.세트보너스.slice(),
@@ -244,7 +253,7 @@ function 능력(st, 직원) {
   var c = getCatalog();
   var row = c.능력표[직원.레벨 - 1];
   if (!row) throw new Error('없는 레벨입니다: ' + 직원.레벨);
-  return F(row.업무능력);
+  return row.업무능력.clone();          // 분수일 수 있다 (예: 29/2)
 }
 
 function 직원추가(st, 유형id) {
@@ -274,7 +283,7 @@ function newGame(opts) {
     })(),
     시설: [],
     좋아요매력도: 0,           // 친구가 눌러 준 좋아요로 얻는 매력도 (온라인 연결 후 사용)
-    누적: { 매출: ZERO, 급여: ZERO, 투자: ZERO },
+    누적: { 매출: ZERO, 급여: ZERO, 투자: ZERO, 보너스: ZERO },
     기록: [],
     다음주배수: null,
     예보: null,
@@ -331,6 +340,9 @@ function 유효배정(st, 배정, 직원) {
   var ts = (배정 && 배정[직원.id]) || [];
   var out = [];
   ts.forEach(function (id) { if (열린.indexOf(id) >= 0 && out.indexOf(id) < 0) out.push(id); });
+  // 한 사람에게 몰아줄 수 있는 업무 수 상한 (넘치면 앞에서부터 자른다 — 화면에서 미리 막지만 안전장치)
+  var 상한 = getCatalog().규칙.직원당최대업무;
+  if (out.length > 상한) out = out.slice(0, 상한);
   return out;
 }
 
@@ -463,13 +475,15 @@ function 주급합(st) {
   return st.직원.reduce(function (a, s) { return a.add(F(c.직원유형별[s.유형].주급)); }, ZERO);
 }
 
-function 누적순이익(st) { return st.누적.매출.sub(st.누적.급여).sub(st.누적.투자); }
+function 누적순이익(st) {
+  return st.누적.매출.add(st.누적.보너스 || ZERO).sub(st.누적.급여).sub(st.누적.투자);
+}
 
 /**
  * 이번 주 영업을 실행한다. state 를 다음 주로 넘기고, 이번 주 기록을 돌려준다.
  * rng 는 0 이상 1 미만의 수를 돌려주는 함수(기본 Math.random). 검사할 때 고정할 수 있다.
  */
-function 영업(st, 배정, rng) {
+function 영업(st, 배정, rng, 예측) {
   if (st.끝남) throw new Error('시즌이 이미 끝났습니다.');
   var c = getCatalog();
   rng = rng || Math.random;
@@ -498,6 +512,17 @@ function 영업(st, 배정, rng) {
   st.누적.매출 = st.누적.매출.add(매출);
   st.누적.급여 = st.누적.급여.add(실지급);
 
+  /* 예측 보너스 — 영업 전에 "몇 명 받게 될까"를 스스로 계산해 맞히면 코인을 준다.
+     매출이 아니라 따로 쌓아 두어야 어디서 온 돈인지 화면에 나눠 보여 줄 수 있다.
+     누적 순이익 = 매출 + 보너스 − 급여 − 투자 이므로 코인과 어긋나지 않는다. */
+  var 예측맞음 = (예측 !== undefined && 예측 !== null && Number(예측) === 받은);
+  var 보너스 = F(예측맞음 ? (c.규칙.계산.예측보너스 || 0) : 0);
+  if (보너스.isPos()) {
+    st.코인 = st.코인.add(보너스);
+    if (!st.누적.보너스) st.누적.보너스 = ZERO;
+    st.누적.보너스 = st.누적.보너스.add(보너스);
+  }
+
   // 평판: 예상 손님을 다 받으면 ↑, 만족기준(3/4)보다 적게 받으면 ↓
   var 이전평판 = st.평판, 평가;
   if (예상 > 0 && 받은 >= 예상)                                     { 평가 = '만족'; st.평판 = Math.min(5, st.평판 + 1); }
@@ -519,6 +544,8 @@ function 영업(st, 배정, rng) {
     업무: p.업무.map(function (r) {
       return { id: r.id, 이름: r.이름, 처리량: r.처리량, 가능손님: r.가능손님, 가능손님정수: r.가능손님정수, 식: r.식 };
     }),
+    예측: (예측 === undefined || 예측 === null) ? null : Number(예측),
+    예측맞음: 예측맞음, 보너스: 보너스,
     단가: 단가, 매출원: 매출원, 매출: 매출,
     급여: 급여, 실지급: 실지급, 미지급: 미지급, 순익: 순익,
     코인: st.코인, 평판이전: 이전평판, 평판이후: st.평판, 평가: 평가,
@@ -653,6 +680,7 @@ function 불러오기(text) {
 function 추천배치(st, 시도, rng) {
   시도 = 시도 || 40;
   rng = rng || Math.random;
+  var 상한 = getCatalog().규칙.직원당최대업무;
   var 열린 = 열린업무(st).map(function (t) { return t.id; });
   if (!열린.length || !st.직원.length) return { 배정: {}, 가능손님: 0 };
 
@@ -666,6 +694,7 @@ function 추천배치(st, 시도, rng) {
       if (i === 0) a[s.id] = [열린[idx % 열린.length]];
       else {
         var pick = 열린.filter(function () { return rng() < 0.5; });
+        if (pick.length > 상한) pick = pick.slice(0, 상한);
         a[s.id] = pick.length ? pick : [열린[Math.floor(rng() * 열린.length)]];
       }
     });
@@ -677,7 +706,7 @@ function 추천배치(st, 시도, rng) {
           var sid = st.직원[si].id, tid = 열린[ti];
           var cur = a[sid], has = cur.indexOf(tid) >= 0;
           var next = has ? cur.filter(function (x) { return x !== tid; }) : cur.concat([tid]);
-          if (!next.length) continue;
+          if (!next.length || next.length > 상한) continue;
           var trial = {};
           Object.keys(a).forEach(function (k) { trial[k] = a[k]; });
           trial[sid] = next;

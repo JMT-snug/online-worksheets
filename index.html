@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.58">
+  <meta name="app-version" content="8.59">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1860,17 +1860,32 @@ window.togglePartLock=async function(wsId, partId, clsName){
    확인은 report.html(기본 교사 전용)에서. Storage 버킷이 없어 스크린샷은 JPEG data URL로
    문서에 직접 저장 — Firestore 문서 1MB 제한에 맞춰 700KB 이하로 자동 압축 ── */
 let _bugPt=null;
-function _bugCleanup(){ ['bugrep-overlay','bugrep-banner','bugrep-mark','bugrep-form'].forEach(id=>document.getElementById(id)?.remove()); document.removeEventListener('keydown',_bugEsc); }
+/* _bugPt 는 문서 좌표(스크롤 포함)로 저장한다 — 클릭 시점의 clientX/Y(뷰포트 좌표)만 저장해 두면,
+   신고 폼을 채우는 동안 페이지가 스크롤될 때 마커(position:fixed)와 실제 캡처 화면(html2canvas가
+   전송 시점의 scrollX/Y로 찍음)이 서로 다른 스크롤 기준을 쓰게 되어, 저장되는 스크린샷에서
+   동그라미가 실제로 클릭한 곳과 다른 위치(주로 아래쪽)에 찍히는 문제가 있었다
+   (실제 신고: 화면에서는 정확한 위치였는데 전송된 스크린샷은 동그라미가 오류보다 아래쪽에 있음).
+   문서 좌표로 저장해 두고, 화면에 그릴 때마다 "그 순간의" scrollX/Y를 빼서 뷰포트 좌표로 다시
+   계산하면 스크롤이 얼마나 됐든 항상 같은 문서 위치를 가리킨다. */
+function _bugMarkPos(){
+  const mk=document.getElementById('bugrep-mark');
+  if(!mk||!_bugPt) return;
+  mk.style.left=(_bugPt.x-window.scrollX)+'px';
+  mk.style.top=(_bugPt.y-window.scrollY)+'px';
+}
+function _bugCleanup(){ ['bugrep-overlay','bugrep-banner','bugrep-mark','bugrep-form'].forEach(id=>document.getElementById(id)?.remove()); document.removeEventListener('keydown',_bugEsc); window.removeEventListener('scroll',_bugMarkPos); }
 function _bugEsc(e){ if(e.key==='Escape') _bugCleanup(); }
 window.startBugReport=function(){
   if(document.getElementById('bugrep-overlay')||document.getElementById('bugrep-form')) return;
   const ov=document.createElement('div'); ov.id='bugrep-overlay';
   const bn=document.createElement('div'); bn.id='bugrep-banner'; bn.textContent='🚨 오류가 있는 곳을 클릭해 주세요 (ESC 취소)';
   ov.onclick=(e)=>{
-    _bugPt={x:e.clientX,y:e.clientY};
+    _bugPt={x:e.clientX+window.scrollX,y:e.clientY+window.scrollY}; // 문서 좌표로 저장
     ov.remove(); bn.remove();
-    const mk=document.createElement('div'); mk.id='bugrep-mark'; mk.style.left=_bugPt.x+'px'; mk.style.top=_bugPt.y+'px';
+    const mk=document.createElement('div'); mk.id='bugrep-mark';
     document.body.appendChild(mk);
+    _bugMarkPos();
+    window.addEventListener('scroll',_bugMarkPos,{passive:true}); // 폼 작성 중 스크롤돼도 표시가 같은 곳을 계속 가리키게
     const f=document.createElement('div'); f.id='bugrep-form';
     f.innerHTML=`<div style="font-weight:800;margin-bottom:8px">🚨 오류 신고</div>
       <textarea id="bugrep-desc" placeholder="어떤 오류인지 간단히 적어 주세요 (선택)"></textarea>
@@ -1920,21 +1935,26 @@ function _canvasToJpeg(canvas, maxW, limit){
 window.sendBugReport=async function(){
   const btn=document.getElementById('bugrep-send'); if(btn){ btn.disabled=true; btn.textContent='캡처 중…'; }
   const desc=(document.getElementById('bugrep-desc')?.value||'').trim();
-  const pt=_bugPt||{x:0,y:0};
+  const pt=_bugPt||{x:0,y:0};  // 문서 좌표(스크롤 포함) — 클릭 시점 저장
 
   // 1) 화면 캡처 + 클릭 위치 표시
   let canvas=null;
   try{
     if(await _loadH2C()){
+      // html2canvas 호출과 같은 시점의 scrollX/Y를 한 번만 읽어 캡처 영역과 원 좌표 변환에 똑같이 쓴다
+      // (신고 폼을 채우는 동안 스크롤됐어도, 문서 좌표 pt를 "지금" 스크롤 기준으로 뷰포트 좌표로
+      // 다시 바꿔야 캡처된 이미지 위에 정확한 자리에 원이 그려진다).
+      const capX=scrollX, capY=scrollY;
       canvas=await html2canvas(document.body,{
-        x:scrollX, y:scrollY, width:innerWidth, height:innerHeight,
+        x:capX, y:capY, width:innerWidth, height:innerHeight,
         windowWidth:innerWidth, windowHeight:innerHeight,
         useCORS:true, logging:false,
         ignoreElements:el=>String(el.id||'').startsWith('bugrep') // 신고 UI는 캡처 제외
       });
       const r=canvas.width/innerWidth, ctx=canvas.getContext('2d');
+      const vx=pt.x-capX, vy=pt.y-capY; // 문서 좌표 → 캡처 시점 뷰포트 좌표
       ctx.strokeStyle='#ef4444'; ctx.lineWidth=4*r;
-      ctx.beginPath(); ctx.arc(pt.x*r,pt.y*r,28*r,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(vx*r,vy*r,28*r,0,Math.PI*2); ctx.stroke();
     }
   }catch(e){ console.warn('[오류신고] 캡처 실패:',e.message); } // 캡처 실패해도 신고는 저장
 
@@ -2378,8 +2398,9 @@ function fracText(text){
       if(/<[a-zA-Z]/.test(t2)) return mergeLaTeX(mathStyle(t2));
       // 한글 없는 순수 수식 줄 (화살표/기호로 시작하면 제외)
       if(!/[가-힣]/.test(t2) && !/^[→⟹∴·]/.test(t2)){
-        // 이미 \( 있으면 이중 래핑 방지
-        if(t2.includes('\\(')) return mergeLaTeX(mathStyle(t2));
+        // 이미 \( 나 $ 로 구분자가 있으면 이중 래핑 방지 (MathJax 설정에 $...$ 도 inlineMath로 등록돼 있음 —
+        // 이중 래핑하면 \($a$\) 처럼 되어 안쪽 $ 가 그대로 텍스트로 남는다. 아래 한글 줄 분기도 동일)
+        if(t2.includes('\\(') || t2.includes('$')) return mergeLaTeX(mathStyle(t2));
         const lm = t2.match(/^(\([0-9]\)\s*)([\s\S]*)$/);
         if(lm){
           let expr = lm[2].replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
@@ -2415,7 +2436,10 @@ function fracText(text){
       // 숫자+단위(km, m, cm, %, 등)만으로 이루어진 prefix는 LaTeX 미적용
       // 예: "800원" → prefix="800", "50 km" → prefix="50 km" → 폰트 불일치 방지
       const numUnitOnly = /^[\d\s.,]+(km|cm|mm|m|g|kg|%)?$/i.test(prefix);
-      if(prefix && !numUnitOnly && !/[가-힣]/.test(prefix) && !prefix.includes('\\(')){
+      // prefix가 이미 \(...\) 나 $...$ 로 구분자를 갖고 있으면 다시 \(...\) 로 감싸지 않는다 —
+      // 감싸면 \($a$\) 가 되어 MathJax가 안쪽 $ 를 못 풀고 그대로 텍스트로 남긴다
+      // (실제 신고: 단계형 새끼문제가 "$a$와 ..."로 시작하면 $ 기호가 안 없어짐).
+      if(prefix && !numUnitOnly && !/[가-힣]/.test(prefix) && !prefix.includes('\\(') && !prefix.includes('$')){
         let expr=prefix.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
         expr=expr.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
         return `\\(${expr}\\)`+mathStyle(rest);

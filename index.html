@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.57">
+  <meta name="app-version" content="8.58">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1454,9 +1454,16 @@ function makeUnitItem(unit) {
   item.className = "ws-item" + (!prog.hasSheets?" empty":"");
   item.style.borderLeftColor = prog.hasSheets ? gc : "var(--rule)";
 
+  /* .unit-ws-badge 와 .ws-status 는 같은 자리(top:8~9px;right:8~9px)에 겹쳐 그려진다.
+     진행이 조금이라도 있으면(done>0) 아래의 ws-status(완료/부분 진행)가 항상 함께 떠서, 파란
+     badge가 그 뒤로 비쳐 보였다(실제 신고: 「좌표평면과 그래프」 완료 표시에서 파란 진도율·초록
+     완료 버튼이 겹쳐 보임). badge 자체를 지우지 않고 visibility만 숨긴 것은, 카페 이스터 에그의
+     완료개수() [~5844줄, .unit-ws-badge 텍스트의 왼쪽 숫자를 모두 더함]가 이 배지를 그대로
+     읽기 때문 — DOM에서 아예 없애면 완료한 단원의 학습지 수가 그 합계에서 빠진다. */
   let badge = "";
   if(prog.total>0) {
-    badge = `<span class="unit-ws-badge">${prog.done}/${prog.total}</span>`;
+    const hideBadge = prog.done>0; // ws-status가 대신 뜨는 경우 — 텍스트는 유지, 화면에만 안 보이게
+    badge = `<span class="unit-ws-badge"${hideBadge?' style="visibility:hidden"':''}>${prog.done}/${prog.total}</span>`;
   }
 
   let statusHtml = "";

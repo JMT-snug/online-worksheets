@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.59">
+  <meta name="app-version" content="8.60">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2375,10 +2375,20 @@ const mathVars = s => s;
    - 한글 포함 → 줄별 처리 (한글줄=mathStyle, 수식줄=LaTeX)
    - HTML 포함 → mathStyle만 적용
 */
+/* 수식 구분자(\(...\)·\[...\]·$$...$$·$...$) 안에서만 backtick(`)을 반칸 공백(\,, 1/6em)으로 바꾼다.
+   구분자 밖(일반 한글 문장 등)의 backtick은 MathJax가 안 보는 영역이라 건드리지 않는다 —
+   건드리면 렌더 안 된 "\," 글자가 그대로 찍힌다. */
+function _bqSpace(text){
+  if(!text || text.indexOf('`')===-1) return text;
+  return text.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g,
+    m => m.includes('`') ? m.replace(/`/g,'\\,') : m);
+}
 function fracText(text){
   if(!text) return text;
   // LaTeX 정규화: 모든 이중 백슬래시 → 단일 (\\frac, \\(, \\) 등)
   text = text.replace(/\\\\/g,'\\');
+  // backtick 치환은 단일 백슬래시로 정규화된 뒤에 해야 \(...\) 구분자를 정확히 찾는다
+  text = _bqSpace(text);
   // 중복 줄바꿈 정리: <br> 주변 \n 제거 (저장된 <br>\n 중복 방지)
   text = text.replace(/<br\s*\/?>\s*\n/gi,'<br>');
   text = text.replace(/\n\s*<br\s*\/?>/gi,'<br>');

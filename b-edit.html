@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.13">
+<meta name="app-version" content="edit-v3.14">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -414,8 +414,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <label>문항 유형</label>
             <select id="q-type-sel" onchange="onQTypeChange()">
               <option value="word_text">① 한글 용어</option>
-              <option value="word_expr">③ 문자 포함 식</option>
               <option value="equation">② 숫자 값</option>
+              <option value="word_expr">③ 문자 포함 식 (x, y 등 문자·= 포함 가능)</option>
               <option value="multi">객관식</option>
               <option value="vocab">VOCA 용어</option>
               <option value="link">링크(다음 문항)</option>
@@ -1696,10 +1696,23 @@ window.saveQuestion = async function(){
       const imgUrl4=document.getElementById('q-img-url').value.trim(); if(imgUrl4) q.imageUrl=imgUrl4; else delete q.imageUrl;
       q.answer=document.getElementById('q-ans-expr').value.trim();
     } else if(type==='equation'){
+      const ansVal = document.getElementById('q-ans-num').value.trim();
+      /* "② 숫자 값"은 채점할 때 이 값 하나를 숫자로만 비교한다(evalAnswer).
+         "y=30/x" 처럼 문자와 =가 든 관계식을 여기 넣으면 항상 NaN 비교가 되어
+         학생이 뭘 입력해도 무조건 오답 처리된다 — 새로고침으로도 못 고치는 채점 오류
+         (실제 신고: 「반비례」 학습지 14번, 정답 y=30/x가 계속 오답 처리됨).
+         문자·= 가 섞인 답은 저장을 막고 "③ 문자 포함 식"으로 안내한다. */
+      const _bareAns = ansVal.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'');
+      if(/=|[a-zA-Z]/.test(_bareAns)){
+        alert(`「② 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))만 채점할 수 있어요.\n\n`
+          + `지금 입력한 "${ansVal}"처럼 문자(x, y 등)나 =가 들어간 관계식·방정식은 이 유형으로는 채점이 안 됩니다`
+          + `(학생이 뭘 입력해도 무조건 오답 처리돼요).\n\n`
+          + `문항 유형을 「③ 문자 포함 식」으로 바꾸고 정답을 다시 입력해 주세요.`);
+        return;
+      }
       q.type='equation';
       q.text=text;
       const imgUrl2=document.getElementById('q-img-url').value.trim(); if(imgUrl2) q.imageUrl=imgUrl2; else delete q.imageUrl;
-      const ansVal = document.getElementById('q-ans-num').value.trim();
       // 분수(예: 8/3, -1/4), 무리수(예: Math.sqrt(2)) 또는 정수
       if(/^-?\d+\/\d+$/.test(ansVal)){
         // 정수 분수: "8/3" 그대로 저장, 채점 시 evalAnswer로 처리

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.23">
+<meta name="app-version" content="edit-v3.24">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1135,9 +1135,13 @@ window.migrateWsIds = async function(){
       for(const col of ['records','results']){
         for(const [uid,byWs] of Object.entries(recs[col]||{})){
           const rec=byWs[ws._tmpId]; if(!rec) continue;
-          await bw.set(doc(db,col,uid,'worksheets',newId),rec);
+          // 기록 안의 worksheetId도 새 ID로 맞춘다 — 안 맞추면 문서 ID와 필드 값이 어긋난 채
+          // 쌓인다(실제로 ws-u1-06-08 기록 46건이 worksheetId:"ws-u1-05-10"인 채였다).
+          // 지금은 이 필드를 읽는 코드가 없지만, 나중에 기록의 출처를 되짚을 때 필요하다.
+          const moved={...rec, worksheetId:newId};
+          await bw.set(doc(db,col,uid,'worksheets',newId),moved);
           await bw.delete(doc(db,col,uid,'worksheets',ws._tmpId));
-          byWs[newId]=rec; delete byWs[ws._tmpId];
+          byWs[newId]=moved; delete byWs[ws._tmpId];
         }
       }
       if(currentWsId===ws.id) currentWsId=newId;

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.60">
+  <meta name="app-version" content="8.62">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -98,6 +98,36 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .hdr-btn:hover{background:rgba(255,255,255,.18)}
 .hdr-teacher{background:var(--accent);border-color:var(--accent)}
 #hdr-pen-only.active{background:#4c1d95;border-color:#8b5cf6;color:#e9d5ff}
+/* 헤더는 grid(1fr auto 1fr) 라 왼쪽 칸이 오른쪽 칸과 같은 너비로 묶인다. 여기에 버튼이
+   하나 늘면서 태블릿 폭(768px)에서 글자가 세로로 접혔다("펜 전용" → "펜 전/용").
+   ~900px 에서는 "답칸 커서:" 를 감춰 「⌨️ 엔터만」 으로만 보이게 해 자리를 만든다
+   (버튼이 무슨 뜻인지는 title 툴팁과 학생용 매뉴얼에 적어 뒀다). */
+@media(max-width:900px){
+  #hdr-ans-focus .afx-long{display:none}
+  /* 글자는 접지 않는다. 대신 칸이 좁아질 수 있게 풀어(min-width:0) 넘치면 이 칸 안에서만
+     가로로 밀어 보게 한다 — 페이지 자체가 좌우로 스크롤되지는 않는다. */
+  .hdr-left{min-width:0;overflow-x:auto;scrollbar-width:none}
+  .hdr-left::-webkit-scrollbar{display:none}
+  .hdr-left .hdr-btn{white-space:nowrap;flex-shrink:0}
+}
+@media(max-width:520px){
+  /* 좌우를 같은 1fr 로 나누면 오른쪽(이름·로그아웃)이 자리를 못 얻어 왼쪽 버튼 위로 겹쳐
+     그려진다. 오른쪽 내용 너비를 먼저 챙겨 주고, 남는 자리를 왼쪽이 쓰게 바꾼다. */
+  header{padding:0 10px;gap:6px;grid-template-columns:1fr auto}
+  /* 가운데 「수학 학습지+」 로고는 이 폭에서 접는다 — 버튼 자리를 만드는 게 우선이다.
+     (버전 문자열은 로그인 화면 카드에도 찍히고, 오류 신고에는 자동으로 담긴다) */
+  .hdr-center{display:none}
+  .hdr-left{gap:4px}
+  .hdr-left .hdr-btn{padding:4px 6px;font-size:11px}
+  .hdr-right .hdr-btn{white-space:nowrap}
+}
+
+/* 필기 캔버스 — 길게 누르기가 오른쪽 클릭(상황 메뉴)이나 복사 말풍선으로 새는 것을 막는다.
+   touch-action:none 은 스크롤·확대만 막을 뿐 길게 누르기는 그대로 살아 있어서,
+   점을 찍으려고 한 자리에 머무르면 메뉴가 뜨고 그 순간 pointercancel 이 날아와 획까지 끊겼다.
+   메뉴 자체는 아래 contextmenu 처리기에서 막고, 여기서는 아이패드의 "길게 눌러 복사"
+   말풍선과 글자 선택을 막는다. 둘 다 있어야 완전히 잡힌다. */
+.draw-surface{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 
 /* ── 🚨 오류 신고 ── */
 /* 🚨 오류 신고 · 💾 필기 저장 — 화면 오른쪽 아래에 나란히.
@@ -628,6 +658,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <a class="hdr-btn" id="hdr-manual" style="display:none" target="_blank" rel="noopener" title="사용 방법 안내">📖 매뉴얼</a>
     <button class="hdr-btn" id="hdr-pen-only" onclick="togglePenOnlyMode()"
       title="켜면 연습장에서 손가락으로는 그려지지 않고 화면이 위아래로 움직입니다(필기 중 손바닥 오터치 방지). 펜이 고장났으면 꺼 주세요.">✏️ 펜 전용</button>
+    <button class="hdr-btn" id="hdr-ans-focus" onclick="cycleAnsFocusMode()">⌨️ <span class="afx-long">답칸 커서: </span><span id="hdr-ans-focus-state">엔터만</span></button>
   </div>
   <div class="hdr-center">
     <div class="logo" style="margin:0">수학 학습지<em>+</em></div>
@@ -804,42 +835,6 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 </div>
 
 
-<!-- VOCAB QUIZ -->
-<div id="quiz-vocab-page" class="page">
-  <div style="max-width:560px;margin:0 auto;padding:16px 20px 40px;position:relative">
-    <div class="quiz-topbar">
-      <button class="btn-back" onclick="leaveVocabQuiz()">← 목록</button>
-      <span class="quiz-ws-title" id="vq-title"></span>
-      <span id="vq-streak" style="font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap">🔥 0 / 50</span>
-    </div>
-    <div style="height:6px;background:var(--rule);border-radius:3px;margin-bottom:4px;overflow:hidden">
-      <div id="vq-time-bar" style="height:100%;width:100%;background:var(--accent);border-radius:3px;transition:width 1s linear"></div>
-    </div>
-    <div style="text-align:right;margin-bottom:16px;font-size:12px;color:var(--ink3)">
-      <span id="vq-time-num" style="font-size:18px;font-weight:700;font-family:monospace;color:var(--ink)">10</span>초
-    </div>
-    <div style="background:var(--paper);border:1.5px solid var(--rule);border-radius:12px;padding:20px 24px;min-height:110px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px">
-      <span id="vq-mode-badge" style="font-size:11px;font-weight:600;color:var(--accent);background:var(--acc-lt);padding:2px 10px;border-radius:20px;align-self:flex-start"></span>
-      <div id="vq-question" style="line-height:1.6;word-break:keep-all"></div>
-    </div>
-    <div id="vq-choices" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
-    <!-- 완료 오버레이 -->
-    <div id="vq-complete" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);align-items:center;justify-content:center;z-index:999">
-      <div style="background:var(--paper);border-radius:16px;padding:40px 32px;text-align:center;max-width:300px;width:90%">
-        <div style="font-size:52px;margin-bottom:12px">🎉</div>
-        <div style="font-size:20px;font-weight:700;margin-bottom:6px">50연속 정답!</div>
-        <div style="font-size:14px;color:var(--ink2);margin-bottom:24px">용어를 완벽히 익혔어요.</div>
-        <div style="display:flex;gap:10px;justify-content:center">
-          <button class="btn-back" style="padding:10px 18px"
-            onclick="vqStreak=0;document.getElementById('vq-complete').style.display='none';vqNextQ()">다시 도전</button>
-          <button class="btn-back" style="padding:10px 18px;background:var(--accent);color:#fff;border-color:var(--accent)"
-            onclick="document.getElementById('vq-complete').style.display='none';leaveVocabQuiz()">← 목록</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- RESULT -->
 <div id="result-page" class="page">
   <main>
@@ -864,7 +859,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, orderBy, updateDoc, onSnapshot}
+import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, orderBy, updateDoc, onSnapshot, increment}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage, ref, uploadString, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -1165,11 +1160,8 @@ window.updateFabDock=updateFabDock;
 
 /* 헤더의 관리·채점·편집 링크에 지금 보고 있는 학습지를 실어 준다.
    학습지를 풀다가 넘어가면 그 학습지 화면이 바로 열리고, 목록·대시보드에서는 예전처럼 첫 화면이 열린다.
-   받는 쪽(teacher/scoring/edit)은 ?ws= 를 읽어 해당 학습지를 연다 — 셋 다 같은 이름을 쓸 것.
-   학습지 id 는 sessionStorage('lastQuizWsId') 를 먼저 본다 — 일반 퀴즈(startQuiz)와 용어 퀴즈
-   (startVocabQuiz)가 모두 여기에 적기 때문이다. curWS 는 용어 퀴즈에서 갱신되지 않아,
-   일반 학습지를 풀고 나서 용어 학습지에 들어가면 앞의 학습지를 가리킨다(그래서 뒤에 둔다). */
-const WS_LINK_PAGES = ['quiz-page','quiz-vocab-page','result-page'];
+   받는 쪽(teacher/scoring/edit)은 ?ws= 를 읽어 해당 학습지를 연다 — 셋 다 같은 이름을 쓸 것. */
+const WS_LINK_PAGES = ['quiz-page','result-page'];
 function updateTeacherLinks(pageId){
   let wsId = '';
   if(WS_LINK_PAGES.includes(pageId)){
@@ -1306,6 +1298,7 @@ async function loadCurriculum(){
     WORKSHEETS = wSnap.docs
       .map(d=>({...d.data()}))
       .filter(ws=>['published','draft','locked'].includes(ws.status)||!ws.status) // published 또는 status 없는 것
+      .filter(ws=>ws.type!=='vocab') // VOCA 학습지는 더 이상 지원하지 않음 (데이터는 Firestore에 보존)
       .sort((a,b)=>(a.order??99)-(b.order??99));
     // questions 없는 경우 빈 배열 보정
     WORKSHEETS.forEach(ws=>{ if(!ws.questions) ws.questions=[]; if(!ws.vocab) ws.vocab=[]; });
@@ -1341,7 +1334,7 @@ onAuthStateChanged(auth, async u => {
       if(lastQuizWsId){
         const ws=WORKSHEETS.find(w=>w.id===lastQuizWsId);
         if(ws){
-          if(ws.type==='vocab') startVocabQuiz(ws);
+          if(ws.type==='review') startReviewQuiz(ws);
           else startQuiz(ws);
           return;
         }
@@ -1391,20 +1384,14 @@ async function loadDash() {
   wsProgress = {};
   try {
     for (const ws of WORKSHEETS) {
-      if (ws.type!=="vocab" && !ws.questions?.length) continue;
+      if (ws.type!=="review" && !ws.questions?.length) continue;
       try {
         // records: 통합 진도/결과
         const snap = await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
         if (snap.exists()){
           const d=snap.data();
-          wsProgress[ws.id] = (d.isComplete||d.passed) ? d : {...d, _inProgress:true};
+          wsProgress[ws.id] = (d.isComplete||d.passed||d.completions) ? d : {...d, _inProgress:true};
           console.log("[진도읽기]", ws.id, (d.isComplete||d.passed)?"완료":"진행중", (d.answeredCount||0)+"/"+(d.totalCount||"?"));
-        } else if(ws.type==="vocab"){
-          // 구 데이터: results 컬렉션 폴백
-          try{
-            const vSnap=await getDoc(doc(db,"results",user.email,"worksheets",ws.id));
-            if(vSnap.exists()) wsProgress[ws.id]=vSnap.data();
-          }catch(e2){}
         }
       } catch(inner){ /* 개별 문서 오류 무시 */ }
     }
@@ -1423,20 +1410,19 @@ const CAT_COLOR = {
   "자료와 가능성":{bar:"#9d174d", text:"#9d174d"},
 };
 
-/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (VOCA·시험지 제외) */
+/* 진도율 대상 여부: 일반 학습지 + 진도율 반영 ON만 (복습 학습지·시험지 제외) */
 const countsForProgress = ws => {
   if(!ws) return false;
-  if(ws.type==="vocab" || ws.type==="exam") return false;
-  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.type==="review" || ws.type==="exam") return false;
   if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
   return true;
 };
 
 /* 단원의 진도 요약 계산 */
 function unitProgress(unit) {
-  // vocab 포함 전체 학습지 (hasSheets/표시용 개수 판단)
+  // 복습 학습지 포함 전체 학습지 (hasSheets/표시용 개수 판단)
   const allSheets = WORKSHEETS.filter(ws=>ws.unitId===unit.id &&
-    (ws.type==="vocab" || (ws.questions?.length??0)>0));
+    (ws.type==="review" || (ws.questions?.length??0)>0));
   const hasSheets = allSheets.length>0;
   // 진도율은 일반 학습지(진도율 반영 ON)만 집계
   const progSheets = allSheets.filter(countsForProgress);
@@ -1766,7 +1752,7 @@ function watchWs(ws){
         let target=-1;
         ws.questions.forEach((q,i)=>{ if(target<0&&!qLockedFor(ws,i,user?.email)&&!answered[i]) target=i; });
         if(target<0) ws.questions.forEach((q,i)=>{ if(target<0&&!qLockedFor(ws,i,user?.email)) target=i; });
-        if(target>=0){ curQIdx=target; renderQuestion(); }
+        if(target>=0){ setNextFocus(false); curQIdx=target; renderQuestion(); }
       }
     }catch(e){ console.warn('[watchWs]',e); }
   },err=>console.warn('[watchWs 오류]',err.message));
@@ -2208,9 +2194,9 @@ function showUnitPage(unit) {
   } else {
     sheets.forEach(ws => {
       const prog  = wsProgress[ws.id];
-      const done   = !!(prog?.isComplete || (ws.type==="vocab" && prog?.passed));
-      const inProg = !!(prog && !prog.isComplete && !(ws.type==="vocab" && prog?.passed));
-      const empty = ws.type==="vocab" ? false : ws.questions.length === 0;
+      const done   = !!(prog?.isComplete);
+      const inProg = !!(prog && !prog.isComplete && ws.type!=="review");
+      const empty = ws.type==="review" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
       const isDraft  = ws.status === "draft";
       const isLocked = ws.status === "locked";
@@ -2220,9 +2206,13 @@ function showUnitPage(unit) {
       let badgeHtml = "";
       const tPrev = isTeacher ? ' · 교사 미리보기' : '';
       const unlockedCnt = isLocked ? Object.values(ws.unlockedClasses||{}).filter(Boolean).length : 0;
+      const reviewCompletions = ws.type==="review" ? (prog?.completions||0) : 0;
       if(isLocked && isBlocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금</span>`;
       else if(isLocked && isTeacher) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금${unlockedCnt?` · ${unlockedCnt}반 해제`:''}${tPrev}</span>`;
       else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중${tPrev}</span>`;
+      else if(ws.type==="review") badgeHtml = reviewCompletions>0
+        ? `<span class="wslc-badge s-done">✅ ${reviewCompletions}회 완료</span>`
+        : `<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">🔁 복습 가능</span>`;
       else if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
       else if(inProg)  badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
       else if(empty)   badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
@@ -2236,10 +2226,10 @@ function showUnitPage(unit) {
         <div class="wslc-body">
           <div class="wslc-id">${escHtml(ws.id||'')}</div>
           <div class="wslc-title">${(window._newGradeWs&&window._newGradeWs.has(ws.id))?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${ws.title}</div>
-          <div class="wslc-meta">${ws.type==="vocab"
-              ? ((wsProgress[ws.id]?.passCount||0)>=1
-                  ? `✅ ${wsProgress[ws.id].passCount}회 PASS`
-                  : "미완료")
+          <div class="wslc-meta">${ws.type==="review"
+              ? (reviewCompletions>0
+                  ? `🔁 ${reviewCompletions}회 완료 · 평균 정답률 ${prog.sumTotal?Math.round((prog.sumCorrect||0)/prog.sumTotal*100):0}%`
+                  : "🔁 무작위 10문제 복습 (매번 새로 출제)")
               : ws.type==="exam"
               ? `📝 시험지 · ${ws.questions.length}문항${ws.timeLimit?` · ${ws.timeLimit}분`:''}${done?' · 완료':inProg?` · 진행 중`:''}`
               : ws.questions.length+"문제"+(done?` · 완료`:inProg?` · ${prog.answeredCount||0}/${prog.totalCount||ws.questions.length} 정답`:"")}
@@ -2308,7 +2298,7 @@ function showUnitPage(unit) {
         }
         card.appendChild(row);
       }
-      if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="vocab" ? startVocabQuiz(ws) : startQuiz(ws));
+      if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="review" ? startReviewQuiz(ws) : startQuiz(ws));
       grid.appendChild(card);
     });
   }
@@ -2513,7 +2503,7 @@ function toggleRandom(){
    저장 경로: progress/{uid}/worksheets/{wsId}
    트리거: 10분 주기 / 이탈 / 완료
 */
-let _progressTimer=null, _wsIsCompleted=false;
+let _progressTimer=null, _wsIsCompleted=false, _reviewAttemptSaved=false;
 
 async function saveWorksheet(isComplete=false){
   if(!curWS||!user) return;
@@ -2526,6 +2516,34 @@ async function saveWorksheet(isComplete=false){
   if(curWS.type==='exam' || window._examMode || window._examEnded){ return; }
   if(isTeacherAcct()){ console.log('[교사 미리보기] 채점 결과 저장 안 함'); return; }
   if(!_wsDataLoaded) { console.log('[저장 차단] 데이터 로드 전'); return; }  // 로드 전 저장 차단
+  // ★ 단원별 복습 학습지는 여기서 문항별로 저장하지 않는다 ★
+  // 접속마다 다른 문항 10개를 무작위로 뽑으므로 perQuestion을 남겨도 다음 접속엔 의미가 없다.
+  // 대신 10문제를 모두 맞혀 끝냈을 때(=isComplete) 완료 횟수·정답률 누적치만 한 번 갱신한다.
+  if(curWS.type==='review'){
+    const _tot=curWS.questions.length;
+    const _ansCnt=answered.filter(v=>v===true).length;
+    if(!isComplete && _tot>0 && _ansCnt>=_tot) isComplete=true;
+    if(isComplete && !_reviewAttemptSaved){
+      _reviewAttemptSaved=true; _wsIsCompleted=true;
+      const firstTry=curWS.questions.reduce((s,q,i)=>s+((attempts[i]||0)===0?1:0),0);
+      const nowISO=new Date().toISOString();
+      // 목록 화면(단원 카드)이 새로고침 없이도 방금 완료한 결과를 보여주도록 로컬 캐시도 갱신
+      const _prevProg=wsProgress[curWS.id]||{};
+      wsProgress[curWS.id]={
+        completions:(_prevProg.completions||0)+1,
+        sumCorrect:(_prevProg.sumCorrect||0)+firstTry,
+        sumTotal:(_prevProg.sumTotal||0)+_tot,
+        completedAt:nowISO,
+      };
+      setDoc(doc(db,"records",user.email,"worksheets",curWS.id),{
+        type:'review', worksheetTitle:curWS.title, unitId:curWS._reviewBase?.unitId||curWS.unitId||null,
+        studentEmail:user.email, studentName:user.displayName||"",
+        completions:increment(1), sumCorrect:increment(firstTry), sumTotal:increment(_tot),
+        completedAt:nowISO, lastUpdated:nowISO,
+      },{merge:true}).catch(e=>console.warn('[복습 완료 저장 실패]',e.message));
+    }
+    return;
+  }
   if(_wsIsCompleted && !isComplete) return; // 이미 완료된 학습지에 false 저장 차단
   if(isComplete) _wsIsCompleted=true;
   try{
@@ -2658,13 +2676,46 @@ async function ensureLatestVersion(){
   }catch(e){ return true; }                   // 오프라인 등 → 막지 않음
 }
 
+/* ── 단원별 복습 학습지 ──
+   문항을 직접 담지 않고, 같은 단원(unitId)의 일반 학습지 중 이 학생의 학급에
+   잠금이 풀려 있는 것에서 그래프·링크를 뺀 문항을 모아 매번 무작위 10개를 뽑는다.
+   접속 시점에 curriculum 전체를 다시 읽어오므로, 잠금 해제·학습지 추가가
+   따로 손대지 않아도 다음 접속(또는 '다시 풀기')에 바로 반영된다. */
+async function startReviewQuiz(ws){
+  if(wsBlockedFor(ws, user?.email)){
+    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
+    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
+  }
+  let sourceDocs;
+  try{
+    const snap=await getDocs(collection(db,'curriculum'));
+    sourceDocs=snap.docs.map(d=>({...d.data()}));
+  }catch(e){ sourceDocs=WORKSHEETS; } // 오프라인 등 실패 시 로그인 때 읽어 둔 캐시로 대체
+  const pool=[];
+  sourceDocs.filter(w=>w.unitId===ws.unitId && w.type==='regular')
+    .forEach(src=>{
+      if(wsBlockedFor(src, user?.email)) return; // 학급에 잠금 해제된 학습지에서만 추출
+      (src.questions||[]).forEach(q=>{
+        if(q.type==='graph'||q.type==='link') return; // 그래프(수동채점)·링크(안내문)는 제외
+        const {partStart, ...rest}=q; // 파트 마커는 원본 학습지 것이므로 떼어낸다
+        pool.push({...rest, id:`${src.id}__${q.id}`});
+      });
+    });
+  if(!pool.length){
+    alert('아직 복습할 수 있는 문항이 없습니다.\n(학급에 해제된 학습지가 없거나, 문항이 없습니다)');
+    return;
+  }
+  const sample=shuffleArr(pool).slice(0, Math.min(10,pool.length));
+  startQuiz({...ws, questions:sample, vocab:[], _reviewBase:ws});
+}
+
 let _activeWsId=null;
 async function startQuiz(ws) {
   if(wsBlockedFor(ws, user?.email)){ // 새로고침 복원·알림 바로가기 경로 포함 차단
     try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
     alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
   }
-  _activeWsId=ws.id; _wsIsCompleted=false;
+  _activeWsId=ws.id; _wsIsCompleted=false; _reviewAttemptSaved=false;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   // 구버전 탭이면 여기서 새로고침 (reload 후 lastQuizWsId로 이 학습지에 자동 재진입)
   if(!(await ensureLatestVersion())) return;
@@ -2803,6 +2854,7 @@ async function startQuiz(ws) {
   document.getElementById("quiz-ws-title").textContent=ws.title;
   // 링크 제외 문항 수 캐싱
   curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
+  setNextFocus(false);   // 학습지를 눌러서 들어온 것 → 엔터가 아니다
   buildStrip(); renderQuestion();
   requestAnimationFrame(()=>{ initCanvas(); });
   document.addEventListener("keydown", quizKeyHandler);
@@ -3117,7 +3169,8 @@ function renderQuestion() {
             ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
           </div>
         </div>`;
-      requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
+      // 커서를 둘지는 「⌨️ 답칸 커서」 설정이 정한다 (setNextFocus 주석 참고)
+      if(_ansFocusNext) requestAnimationFrame(()=>document.getElementById("word-input")?.focus());
     }
     setTimeout(()=>renderMath(panel),50);
   } else {
@@ -3380,6 +3433,64 @@ function qTokensToNum(){
   try{ return Function('"use strict";return ('+s+')')(); } catch(e){ return NaN; }
 }
 
+/* ══════════ ⌨️ 답칸 커서 (새 문제·새 단계로 갔을 때 정답 입력칸에 커서를 둘지) ══════════
+   태블릿에서는 입력칸에 커서가 들어가는 순간 팝업 키보드가 올라와 연습장을 덮는다.
+   그래서 기기·세션 단위 설정으로 localStorage 에 기억해 둔다(펜 전용 모드와 같은 방식).
+
+   세 가지 중 하나:
+     always … 새 문제로 가면 언제나 커서를 둔다 (v8.60 까지의 동작)
+     enter  … 앞 문제를 맞히고 **물리 키보드의 엔터**로 넘어왔을 때만 둔다  ← 기본값
+     never  … 두지 않는다. 학생이 입력칸을 직접 눌러야 한다
+
+   ⚠️ 이 설정이 실제로 영향을 주는 곳은 **진짜 입력칸이 있는 문항뿐**이다 —
+      한글 답 문항(#word-input) 과 단계형의 텍스트 단계(#s3-inp). 수식·숫자 문항은
+      ans-display 라는 <div> 에 앱이 직접 그린 키패드라 원래 팝업 키보드가 뜨지 않고,
+      물리 키보드도 quizKeyHandler 가 document 전체에서 받으므로 커서가 필요 없다.
+
+   ⚠️ 'enter' 는 **진짜 엔터 키를 눌렀을 때만** 참이다. 화면 키패드의 ⏎ 버튼을 눌러
+      넘어간 경우는 아니다 — 물리 키보드가 없는 태블릿에서는 'enter' 가 사실상
+      '커서 두지 않음'으로 동작해야 팝업 키보드가 뜨지 않는다. 그게 이 설정의 목적이다.
+
+   ⚠️ 상태를 "엔터가 눌렸다"는 플래그로 들고 있으면 새 나간다 — 엔터로 채점했는데
+      오답이라 안 넘어간 경우, 플래그가 남아 있다가 나중에 마우스로 옮긴 문제에서
+      엉뚱하게 커서를 잡는다. 그래서 **이동이 일어나는 지점마다 setNextFocus(byEnter) 로
+      값을 다시 정해** 두고, 그리는 쪽은 _ansFocusNext 만 읽는다. */
+const ANS_FOCUS_MODES=['always','enter','never'];
+const ANS_FOCUS_LABEL={always:'항상', enter:'엔터만', never:'끔'};
+const ANS_FOCUS_TITLE={
+  always:'새 문제로 가면 언제나 정답 입력칸에 커서를 둡니다 (태블릿에서는 팝업 키보드가 바로 올라옵니다).\n※ 글자로 답하는 문항에만 해당합니다 — 수식·숫자 문항은 원래 팝업 키보드가 뜨지 않습니다.',
+  enter :'앞 문제를 맞히고 키보드의 엔터로 넘어왔을 때만 정답 입력칸에 커서를 둡니다. 눌러서 옮긴 경우에는 두지 않습니다.\n※ 글자로 답하는 문항에만 해당합니다 — 수식·숫자 문항은 원래 팝업 키보드가 뜨지 않습니다.',
+  never :'정답 입력칸에 커서를 두지 않습니다. 답을 쓰려면 입력칸을 직접 누르세요 (팝업 키보드가 저절로 올라오지 않습니다).\n※ 글자로 답하는 문항에만 해당합니다 — 수식·숫자 문항은 원래 팝업 키보드가 뜨지 않습니다.'
+};
+let _ansFocusMode='enter';
+try{ const _v=localStorage.getItem('ansFocusMode'); if(ANS_FOCUS_MODES.includes(_v)) _ansFocusMode=_v; }catch(e){}
+let _ansFocusNext=false;     // 이번에 그리는 답칸에 커서를 둘까 (이동할 때마다 다시 정한다)
+
+/* 문제·단계가 바뀌는 지점마다 호출한다. byEnter 는 "진짜 엔터 키로 넘어왔는가". */
+function setNextFocus(byEnter){
+  _ansFocusNext = _ansFocusMode==='always' ? true
+                : _ansFocusMode==='never'  ? false
+                : !!byEnter;
+}
+function updateAnsFocusBtn(){
+  const st=document.getElementById('hdr-ans-focus-state');
+  if(st) st.textContent=ANS_FOCUS_LABEL[_ansFocusMode];
+  const btn=document.getElementById('hdr-ans-focus');
+  if(btn) btn.title=ANS_FOCUS_TITLE[_ansFocusMode];
+}
+window.cycleAnsFocusMode=function(){
+  const i=ANS_FOCUS_MODES.indexOf(_ansFocusMode);
+  _ansFocusMode=ANS_FOCUS_MODES[(i+1)%ANS_FOCUS_MODES.length];
+  try{ localStorage.setItem('ansFocusMode', _ansFocusMode); }catch(e){}
+  updateAnsFocusBtn();
+  qToast('⌨️ 답칸 커서: '+ANS_FOCUS_LABEL[_ansFocusMode]+' — '+(
+    _ansFocusMode==='always' ? '새 문제로 가면 늘 답칸에 커서를 둡니다'
+    : _ansFocusMode==='enter' ? '엔터로 넘어왔을 때만 답칸에 커서를 둡니다'
+    : '답칸을 직접 눌러야 글자를 쓸 수 있습니다'));
+};
+document.addEventListener('DOMContentLoaded', updateAnsFocusBtn);
+updateAnsFocusBtn();   // 모듈은 DOMContentLoaded 전에 실행되지만 헤더는 이미 파싱돼 있다
+
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
@@ -3399,7 +3510,7 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(allAnswered()) finishQuiz(); else goNextUnanswered();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
       } else { window.submitMulti(); }
     }
     return;
@@ -3420,8 +3531,8 @@ function quizKeyHandler(e){
       else if(v==="ENTER"){
         if(answered[curQIdx]){
           const isLast=curQIdx===curWS.questions.length-1;
-          if(allAnswered()) finishQuiz(); else goNextUnanswered();
-        } else submitStep3(st.curStep);
+          if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
+        } else submitStep3(st.curStep,true);
       } else qInput(v);
       return;
     }
@@ -3431,9 +3542,9 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(allAnswered()) finishQuiz(); else goNextUnanswered();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
       } else {
-        submitStep3(st.curStep);
+        submitStep3(st.curStep,true);
       }
     }
     return;
@@ -3444,7 +3555,7 @@ function quizKeyHandler(e){
       e.preventDefault();
       if(answered[curQIdx]){
         const isLast=curQIdx===curWS.questions.length-1;
-        if(allAnswered()) finishQuiz(); else goNextUnanswered();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
       } else { submitQAns(); }
     }
     return;
@@ -3462,7 +3573,7 @@ function quizKeyHandler(e){
       else if(v==="ENTER"){
         if(answered[curQIdx]){
           const isLast=curQIdx===curWS.questions.length-1;
-          if(allAnswered()) finishQuiz(); else goNextUnanswered();
+          if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
         } else submitQAns();
       } else qInput(v);
     } else {
@@ -3470,7 +3581,7 @@ function quizKeyHandler(e){
       if((e.key==="Enter"||e.code==="NumpadEnter") && answered[curQIdx]){
         e.preventDefault();
         const isLast=curQIdx===curWS.questions.length-1;
-        if(allAnswered()) finishQuiz(); else goNextUnanswered();
+        if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
       }
     }
     return;
@@ -3485,7 +3596,7 @@ function quizKeyHandler(e){
   else if(v==="ENTER"){
     if(answered[curQIdx]){
       const isLast=curQIdx===curWS.questions.length-1;
-      if(allAnswered()) finishQuiz(); else goNextUnanswered();
+      if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
     } else {
       submitQAns();
     }
@@ -3978,9 +4089,10 @@ function renderStep3Body(q){
     body.innerHTML=labelHtml+hintHtml+`
       <input type="text" id="s3-inp" class="word-inp-full" placeholder="예: 21, 2년 후, 24cm"
         autocomplete="off" autocapitalize="off" spellcheck="false"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitStep3(${st.curStep});}">
+        onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitStep3(${st.curStep},true);}">
       <div class="feedback-strip" id="s3-fb"></div>`;
-    setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
+    // 커서를 둘지는 「⌨️ 답칸 커서」 설정이 정한다 (setNextFocus 주석 참고)
+    if(_ansFocusNext) setTimeout(()=>document.getElementById("s3-inp")?.focus(),50);
   }
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([body]).catch(()=>{});
 }
@@ -4001,22 +4113,25 @@ function renderStep3Body(q){
    학생들은 '엔터=채점, 엔터=다음'이 습관이라 대기(700ms) 중에 두 번째 엔터가 들어온다.
    이때 예전에는 ① 키패드 단계면 아직 비어 있는 다음 단계를 채점해 ❌가 번쩍이고
    ② 텍스트 단계면 남아 있던 입력창이 이전 단계를 다시 채점했다. */
-function s3AdvanceNow(q){
+function s3AdvanceNow(q, byEnter){
   const st=getS3State(q.id);
   if(!st.advTimer) return false;
   clearTimeout(st.advTimer); st.advTimer=null;
+  setNextFocus(byEnter);
   renderStep3Q(q,document.getElementById("quiz-left-panel"));
   return true;
 }
 
-function submitStep3(stepNum){
+/* byEnter: 진짜 엔터 키로 제출했는가 — 다음 단계 답칸에 커서를 둘지 판정에 쓴다.
+   화면 키패드의 ⏎ 버튼(onclick)에서 부르면 undefined(=엔터 아님)가 된다. */
+function submitStep3(stepNum, byEnter){
   const q=curWS.questions[curQIdx];
   if(q.type!=="step3") return;
   // 시험지 모드: 시험지에서는 step3 사용 비권장이나 안전 처리
   if(window._examMode && !window._examEnded){
     return submitExamAns(q);
   }
-  if(s3AdvanceNow(q)) return;   // 다음 단계 대기 중이면 채점 대신 '다음 단계로'
+  if(s3AdvanceNow(q,byEnter)) return;   // 다음 단계 대기 중이면 채점 대신 '다음 단계로'
   const steps=getSteps(q);
   const st=getS3State(q.id);
   const i=stepNum-1;
@@ -4072,6 +4187,7 @@ function submitStep3(stepNum){
       st.advTimer=setTimeout(()=>{
         st.advTimer=null;
         if(curWS?.questions[curQIdx]?.id!==q.id) return;   // 그 사이 다른 문제로 갔으면 무시
+        setNextFocus(byEnter);   // 엔터로 채점해서 넘어온 단계인지 그대로 물려준다
         renderStep3Q(q,document.getElementById("quiz-left-panel"));
       },700);
     } else {
@@ -4087,6 +4203,9 @@ function submitStep3(stepNum){
         </button>`;
       // 탭 ✓ 갱신 렌더를 먼저 하고 피드백을 넣는다
       // (예전 순서는 피드백을 채운 뒤 렌더해서 '다음 문제 →' 버튼이 곧바로 지워졌다)
+      // 이 렌더는 '새 단계로 이동'이 아니라 탭만 갱신하는 것이므로 커서를 잡지 않는다
+      // (아래에서 곧바로 disabled·blur 하는 입력칸을 다시 붙잡으면 안 된다)
+      setNextFocus(false);
       renderStep3Q(q,document.getElementById("quiz-left-panel"));
       const fbDone=document.getElementById("s3-fb");
       if(fbDone){ fbDone.className="feedback-strip show fb-correct"; fbDone.innerHTML=doneHtml; }
@@ -4109,6 +4228,7 @@ function submitStep3(stepNum){
 function goStep3(n, qid){
   const st=getS3State(qid);
   if(n>1 && !st.done[n-2]) return; // 이전 단계 완료 전 잠금
+  setNextFocus(false);   // 단계 탭을 눌러서 온 것 → 엔터가 아니다
   st.curStep=n;
   const panel=document.getElementById("quiz-left-panel");
   const q=curWS.questions[curQIdx];
@@ -4670,8 +4790,11 @@ function allAnswered(){
 }
 window.allAnswered=allAnswered;
 
-/* 다음 미완료 문항으로 이동 (없으면 결과) */
-function goNextUnanswered(){
+/* 다음 미완료 문항으로 이동 (없으면 결과)
+   byEnter: 진짜 엔터 키로 넘어왔는가 — 「⌨️ 답칸 커서: 엔터만」 판정에 쓴다.
+   피드백 띠의 '다음 문제 →' 버튼처럼 onclick 에서 부르면 undefined(=누른 것)가 된다. */
+function goNextUnanswered(byEnter){
+  setNextFocus(byEnter);
   saveCanvasState();
   const n=curWS.questions.length;
   for(let off=1;off<=n;off++){
@@ -4684,11 +4807,12 @@ function goNextUnanswered(){
 window.goNextUnanswered=goNextUnanswered;
 
 /* 정답 후 다음 문제로 */
-function nextQ(){
+function nextQ(byEnter){
+  setNextFocus(byEnter);
   saveCanvasState();
   let n=curQIdx+1;
   while(n<curWS.questions.length && qLockedFor(curWS,n,user?.email)) n++; // 잠긴 파트 건너뜀
-  if(n>=curWS.questions.length){ goNextUnanswered(); return; }
+  if(n>=curWS.questions.length){ goNextUnanswered(byEnter); return; }
   curQIdx=n;
   renderQuestion();
 }
@@ -4728,6 +4852,7 @@ function goToQ(idx){
   if(idx<0||idx>=curWS.questions.length) return;
   if(idx===curQIdx) return;
   if(qLockedFor(curWS,idx,user?.email)){ qToast('🔒 아직 열리지 않은 파트입니다'); return; }
+  setNextFocus(false);   // 진행도 칸을 눌러서 온 것 → 엔터가 아니다
   saveCanvasState();
   curQIdx=idx;
   renderQuestion();
@@ -4739,6 +4864,7 @@ function moveQ(dir){
   let next=curQIdx+dir;
   while(next>=0 && next<curWS.questions.length && qLockedFor(curWS,next,user?.email)) next+=dir; // 잠긴 파트 건너뜀
   if(next<0||next>=curWS.questions.length) return;
+  setNextFocus(false);   // ◀ 이전 / 다음 ▶ 을 눌러서 온 것 → 엔터가 아니다
   saveCanvasState();
   curQIdx=next;
   renderQuestion();
@@ -4772,7 +4898,9 @@ document.getElementById("btn-retry").addEventListener("click",()=>{
   _stopExamTimer();
   _stopProgressTimer();
   document.removeEventListener("visibilitychange", _onVisibilityChange);
-  startQuiz(curWS);
+  // 복습 학습지는 같은 10문제를 반복하지 않고 매번 새로 무작위 추출한다
+  if(curWS?.type==='review' && curWS._reviewBase) startReviewQuiz(curWS._reviewBase);
+  else startQuiz(curWS);
 });
 document.getElementById("btn-home").addEventListener("click",()=>{
   document.removeEventListener("keydown", quizKeyHandler);
@@ -4837,6 +4965,16 @@ let _penOnlyMode = false;
 try{ _penOnlyMode = localStorage.getItem('penOnlyMode')==='1'; }catch(e){}
 function isPenOnly(){ return _penOnlyMode; }
 function _applyTouchAction(cv){ if(cv) cv.style.touchAction = 'none'; }
+
+/* ══════════ 길게 누르기가 오른쪽 클릭이 되던 것 막기 ══════════
+   점 하나를 찍으려고 한 자리에 잠깐 머무르면 브라우저가 "길게 누르기 = 오른쪽 클릭"으로
+   보고 상황 메뉴를 띄웠다. 메뉴가 뜨는 순간 pointercancel 이 날아와 그리던 획까지 끊긴다.
+   touch-action:none 은 스크롤·확대만 막을 뿐 이건 못 막는다 — contextmenu 를 직접 막아야 한다.
+   (글자 선택·복사 말풍선은 .draw-surface 의 -webkit-touch-callout 쪽에서 함께 막는다.)
+   연습장 밖에서는 예전대로 오른쪽 클릭이 된다 — 문제 글자를 복사하거나 이미지를 저장할 수 있어야 한다. */
+document.addEventListener('contextmenu', e=>{
+  if(e.target?.closest?.('.draw-surface')) e.preventDefault();
+}, {capture:true});
 
 /* ══════════ 손가락 터치 규칙 (두 연습장 공통) ══════════
    ① 펜 전용 모드 — 손가락은 그리지 않고 화면을 굴린다. 연습장 위에서도 굴러간다.
@@ -5147,346 +5285,6 @@ function setCtx(){
   }
 }
 
-/* ══════════════════════════════════════════
-   용어 학습 퀴즈 엔진
-══════════════════════════════════════════ */
-let vqWS=null, vqStreak=0, vqTimer=null, vqTimeLeft=0;
-const VQ_TARGET=50, VQ_TIME=10;
-
-async function startVocabQuiz(ws){
-  if(wsBlockedFor(ws, user?.email)){
-    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
-    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
-  }
-  vqWS=ws; vqStreak=0;
-  try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
-  // 구버전 탭이면 여기서 새로고침 (reload 후 자동 재진입)
-  if(!(await ensureLatestVersion())) return;
-  document.getElementById('vq-complete').style.display='none';
-  showPage('quiz-vocab-page');
-  document.getElementById('vq-title').textContent=ws.title;
-  vqNextQ();
-}
-
-function vqNextQ(){
-  clearInterval(vqTimer);
-  const vocab     = vqWS.vocab || [];
-  const extras    = vqWS.extras || [];
-  const questions = vqWS.questions || [];
-
-  // 출제 가능한 questions: multi 또는 pool_random
-  const playableQs = questions.filter(q=>
-    (q.type==='multi'       && q.options?.length>=2) ||
-    (q.type==='pool_random' && q.correct_pool?.length>=1 && q.wrong_pool?.length>=3)
-  );
-
-  // 출제 풀: vocab×2(양방향) + extras + playableQs
-  const vocabW = vocab.length * 2;
-  const total  = vocabW + extras.length + playableQs.length;
-  const r      = Math.random() * total;
-  const useExtra    = extras.length    > 0 && r >= vocabW && r < vocabW + extras.length;
-  const useQuestion = playableQs.length > 0 && r >= vocabW + extras.length;
-
-  let badgeText, qText, qStyle, correct, choices;
-
-  if(useQuestion){
-    const q = playableQs[Math.floor(Math.random()*playableQs.length)];
-    if(q.type==='pool_random'){
-      badgeText = q.badge || '찾기';
-      qText     = q.question || '맞는 것은?';
-      qStyle    = 'normal';
-      const cPool = shuffleArr([...(q.correct_pool||[])]);
-      const wPool = shuffleArr([...(q.wrong_pool||[])]);
-      correct   = cPool[0];
-      choices   = shuffleArr([correct, ...wPool.slice(0,3)]);
-    } else {
-      // multi
-      const diffLabel = q.diff===3?'★★★':q.diff===2?'★★':'★';
-      badgeText = diffLabel;
-      qText     = q.text || '';
-      qStyle    = 'normal';
-      correct   = q.options[q.answer[0]];
-      choices   = shuffleArr([...q.options]);
-    }
-
-  } else if(useExtra){
-    const et  = extras[Math.floor(Math.random()*extras.length)].type;
-    const gen = vqGenExtra(et);
-    if(!gen || !gen.correct){ // fallback
-      vqNextQ(); return;
-    }
-    badgeText = gen.badge; qText = gen.q;
-    qStyle    = 'normal'; correct = gen.correct; choices = gen.choices;
-
-  } else {
-    // vocab 양방향
-    if(!vocab.length){ console.warn('vocab 없음'); return; }
-    const idx      = Math.floor(Math.random()*vocab.length);
-    const item     = vocab[idx];
-    const termMode = Math.random()<0.5;
-    badgeText = termMode ? '용어 → 뜻' : '뜻 → 용어';
-    qText     = termMode ? item.term : item.def;
-    qStyle    = termMode ? 'term' : 'def';
-    correct   = termMode ? item.def : item.term;
-    const wrongs = shuffleArr(vocab.filter((_,i)=>i!==idx)).slice(0,3).map(v=>termMode?v.def:v.term);
-    choices   = shuffleArr([correct,...wrongs]);
-  }
-
-  document.getElementById('vq-mode-badge').textContent = badgeText;
-  const qEl = document.getElementById('vq-question');
-  qEl.innerHTML = qText;
-  if(window.MathJax?.typesetPromise) MathJax.typesetPromise([qEl]).catch(()=>{});
-  qEl.style.cssText = qStyle==='term'
-    ? 'font-size:1.8rem;font-weight:700;line-height:1.4;word-break:keep-all'
-    : 'font-size:1rem;font-weight:500;line-height:1.6;word-break:keep-all';
-
-  document.getElementById('vq-streak').textContent = `🔥 ${vqStreak} / ${VQ_TARGET}`;
-
-  const box = document.getElementById('vq-choices');
-  box.innerHTML = '';
-  choices.forEach(ch=>{
-    const btn=document.createElement('button');
-    btn.className='vq-choice';
-    btn.dataset.val=ch;
-    btn.innerHTML=vqFormatMath(ch);
-    btn.onclick=()=>vqAnswer(ch, correct);
-    box.appendChild(btn);
-  });
-  const vqPage=document.getElementById('quiz-vocab-page');
-  if(vqPage) setTimeout(()=>renderMath(vqPage),30);
-
-  vqTimeLeft=VQ_TIME; vqTick();
-  vqTimer=setInterval(()=>{
-    vqTimeLeft--; vqTick();
-    if(vqTimeLeft<=0){ clearInterval(vqTimer); vqTimeout(correct); }
-  },1000);
-}
-
-function vqTick(){
-  const n=document.getElementById('vq-time-num');
-  const bar=document.getElementById('vq-time-bar');
-  if(n){ n.textContent=vqTimeLeft; n.style.color=vqTimeLeft<=3?'var(--red)':'var(--ink)'; }
-  if(bar){ bar.style.transition=vqTimeLeft===VQ_TIME?'none':'width 1s linear'; bar.style.width=(vqTimeLeft/VQ_TIME*100)+'%'; }
-}
-
-function vqHighlight(correct, wrong){
-  const correctStr = String(correct), wrongStr = wrong!=null ? String(wrong) : null;
-  document.querySelectorAll('.vq-choice').forEach(btn=>{
-    btn.disabled=true;
-    const val=String(btn.dataset.val??btn.textContent);
-    if(val===correctStr){ btn.style.background='#d1fae5'; btn.style.borderColor='#10b981'; btn.style.color='#065f46'; }
-    else if(wrongStr!=null && val===wrongStr){ btn.style.background='var(--red-lt)'; btn.style.borderColor='var(--red)'; btn.style.color='var(--red)'; }
-  });
-}
-
-function vqAnswer(selected, correct){
-  clearInterval(vqTimer);
-  const ok=selected===correct;
-  vqHighlight(correct, ok ? null : selected);
-  if(ok){
-    vqStreak++;
-    if(vqStreak>=VQ_TARGET){ setTimeout(async ()=>{
-      try{
-        const prevCount=(wsProgress[vqWS.id]?.passCount||0);
-        const newCount=prevCount+1;
-        const _vqTs=new Date().toISOString();
-        const _vqData={
-          passed:true, passCount:newCount,
-          completedAt:_vqTs, isComplete:true,
-          worksheetId:vqWS.id, worksheetTitle:vqWS.title,
-          studentEmail:user.email, studentName:user.displayName||"",
-          answeredCount:VQ_TARGET, totalCount:VQ_TARGET, totalAttempts:0,
-          lastUpdated:_vqTs,
-        };
-        if(!isTeacherAcct()) await setDoc(doc(db,"records",user.email,"worksheets",vqWS.id), _vqData);
-        wsProgress[vqWS.id]={..._vqData};
-      }catch(e){ console.warn("VOCA 저장 실패:",e.message); }
-      const pc=document.getElementById('vq-pass-count');
-      if(pc){ const n=(wsProgress[vqWS.id]?.passCount||0); pc.textContent=`${n}회 통과! 용어를 완벽히 익혔어요.`; }
-      document.getElementById('vq-complete').style.display='flex';
-    },700); }
-    else setTimeout(vqNextQ, 700);
-  } else {
-    vqStreak=0;
-    setTimeout(vqNextQ, 1500);
-  }
-}
-
-function vqTimeout(correct){
-  vqStreak=0;
-  vqHighlight(correct, null);
-  setTimeout(vqNextQ, 1500);
-}
-
-function leaveVocabQuiz(){
-  clearInterval(vqTimer);
-  try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
-  showPage('unit-page');
-}
-window.leaveVocabQuiz=leaveVocabQuiz;
-window.startVocabQuiz=startVocabQuiz;
-
-
-
-/* ── 소인수분해 특수 문항 풀 ── */
-const VQ_PRIMES_POOL    = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47];
-const VQ_NONPRIMES_POOL = [1,4,6,8,9,10,12,14,15,16,18,20,21,22,24,25];
-const VQ_FACTOR_DATA = [
-  { n:12,  divs:[1,2,3,4,6,12],            primes:[2,3],   fp:true,fnp:false },
-  { n:18,  divs:[1,2,3,6,9,18],            primes:[2,3],   fp:true,fnp:false },
-  { n:20,  divs:[1,2,4,5,10,20],           primes:[2,5],   fp:true,fnp:false },
-  { n:28,  divs:[1,2,4,7,14,28],           primes:[2,7],   fp:true,fnp:false },
-  { n:30,  divs:[1,2,3,5,6,10,15,30],      primes:[2,3,5], fp:true,fnp:true  },
-  { n:42,  divs:[1,2,3,6,7,14,21,42],      primes:[2,3,7], fp:true,fnp:true  },
-  { n:60,  divs:[1,2,3,4,5,6,10,12,15,20,30,60], primes:[2,3,5], fp:true,fnp:true },
-  { n:70,  divs:[1,2,5,7,10,14,35,70],     primes:[2,5,7], fp:true,fnp:true  },
-];
-
-function vqGenExtra(type){
-  const pick = arr => arr[Math.floor(Math.random()*arr.length)];
-  let badge, q, correct, choices;
-
-  if(type==='find_prime'){
-    badge   = '소수 찾기';
-    q       = '소수인 것은?';
-    correct = pick(shuffleArr(VQ_PRIMES_POOL));
-    choices = shuffleArr([correct, ...shuffleArr(VQ_NONPRIMES_POOL).slice(0,3)]);
-
-  } else if(type==='find_non_prime'){
-    badge   = '소수가 아닌 것 찾기';
-    q       = '소수가 아닌 것은?';
-    correct = pick(shuffleArr(VQ_NONPRIMES_POOL));
-    choices = shuffleArr([correct, ...shuffleArr(VQ_PRIMES_POOL).slice(0,3)]);
-
-  } else if(type==='find_prime_factor'){
-    badge        = '소인수 찾기';
-    const entry  = pick(shuffleArr(VQ_FACTOR_DATA.filter(d=>d.fp)));
-    correct      = pick(shuffleArr(entry.primes));
-    const others = shuffleArr(entry.divs.filter(d=>!VQ_PRIMES_POOL.includes(d))).slice(0,3);
-    choices      = shuffleArr([correct, ...others]);
-    q            = `${entry.n}의 소인수인 것은?`;
-
-  } else if(type==='find_non_prime_factor'){
-    badge          = '소인수가 아닌 것 찾기';
-    const entry    = pick(shuffleArr(VQ_FACTOR_DATA.filter(d=>d.fnp)));
-    const nonPrimes= entry.divs.filter(d=>!VQ_PRIMES_POOL.includes(d));
-    correct        = pick(shuffleArr(nonPrimes));
-    choices        = shuffleArr([correct, ...shuffleArr(entry.primes).slice(0,3)]);
-    q              = `${entry.n}의 소인수가 아닌 것은?`;
-
-  } else if(type==='find_positive'){
-    badge   = '양수 찾기';
-    q       = '양수인 것은?';
-    correct = pick(shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_POS_FRAC]));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_NEG_FRAC,...VQ_RAT_ZERO]).slice(0,3)]);
-
-  } else if(type==='find_negative'){
-    badge   = '음수 찾기';
-    q       = '음수인 것은?';
-    correct = pick(shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_NEG_FRAC]));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_POS_FRAC,...VQ_RAT_ZERO]).slice(0,3)]);
-
-  } else if(type==='find_pos_int'){
-    badge   = '양의 정수 찾기';
-    q       = '양의 정수인 것은?';
-    correct = pick(shuffleArr(VQ_RAT_POS_INT));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_NEG_INT,...VQ_RAT_ZERO,...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]).slice(0,3)]);
-
-  } else if(type==='find_neg_int'){
-    badge   = '음의 정수 찾기';
-    q       = '음의 정수인 것은?';
-    correct = pick(shuffleArr(VQ_RAT_NEG_INT));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_ZERO,...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]).slice(0,3)]);
-
-  } else if(type==='find_non_int_rat'){
-    badge   = '정수가 아닌 유리수 찾기';
-    q       = '정수가 아닌 유리수인 것은?';
-    correct = pick(shuffleArr([...VQ_RAT_POS_FRAC,...VQ_RAT_NEG_FRAC]));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_RAT_POS_INT,...VQ_RAT_NEG_INT,...VQ_RAT_ZERO]).slice(0,3)]);
-
-  } else if(type==='find_poly'){
-    badge   = '다항식 찾기';
-    q       = '다항식인 것은?';
-    correct = pick(shuffleArr([...VQ_POLY_DEG1,...VQ_POLY_DEG2,...VQ_POLY_DEG3,...VQ_POLY_DEG4]));
-    choices = shuffleArr([correct,...shuffleArr(VQ_RAT_EXPR).slice(0,3)]);
-
-  } else if(type==='find_non_poly'){
-    badge   = '다항식이 아닌 식 찾기';
-    q       = '다항식이 아닌 것은?';
-    correct = pick(shuffleArr(VQ_RAT_EXPR));
-    choices = shuffleArr([correct,...shuffleArr([...VQ_POLY_DEG1,...VQ_POLY_DEG2,...VQ_POLY_DEG3]).slice(0,3)]);
-
-  } else if(type==='find_deg1'){
-    badge   = '일차식 찾기';
-    q       = '일차식(1차식)인 것은?';
-    correct = pick(shuffleArr(VQ_POLY_DEG1));
-    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG3)), pick(shuffleArr(VQ_POLY_DEG4))]);
-
-  } else if(type==='find_deg2'){
-    badge   = '이차식 찾기';
-    q       = '이차식(2차식)인 것은?';
-    correct = pick(shuffleArr(VQ_POLY_DEG2));
-    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG3)), pick(shuffleArr(VQ_POLY_DEG4))]);
-
-  } else if(type==='find_deg3'){
-    badge   = '삼차식 찾기';
-    q       = '삼차식(3차식)인 것은?';
-    correct = pick(shuffleArr(VQ_POLY_DEG3));
-    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG4))]);
-
-  } else if(type==='find_deg4'){
-    badge   = '사차식 찾기';
-    q       = '사차식(4차식)인 것은?';
-    correct = pick(shuffleArr(VQ_POLY_DEG4));
-    choices = shuffleArr([correct, pick(shuffleArr(VQ_POLY_DEG1)), pick(shuffleArr(VQ_POLY_DEG2)), pick(shuffleArr(VQ_POLY_DEG3))]);
-  }
-  return {badge, q, correct, choices};
-}
-
-
-/* ── 정수와 유리수 특수 문항 풀 ── */
-const VQ_RAT_POS_INT  = ["1","2","3","4","5","6","7","8","9","10"];
-const VQ_RAT_NEG_INT  = ["-1","-2","-3","-4","-5","-6","-7","-8","-9","-10"];
-const VQ_RAT_ZERO     = ["0"];
-const VQ_RAT_POS_FRAC = ["1/2","3/4","2/3","1/3","5/2","3/2","4/3","7/4"];
-const VQ_RAT_NEG_FRAC = ["-1/2","-3/4","-2/3","-1/3","-5/2","-3/2","-4/3","-7/4"];
-
-
-
-/* ── VOCA 수식 표시 변환 ── */
-const VQ_MATH_MAP={
-  // 유리식 (비다항식)
-  "1/x":"\\frac{1}{x}","3/x":"\\frac{3}{x}",
-  "(x+1)/x":"\\frac{x+1}{x}","2/(x-1)":"\\frac{2}{x-1}",
-  "x/(x+2)":"\\frac{x}{x+2}","(2x+1)/x":"\\frac{2x+1}{x}",
-  "1/(x+3)":"\\frac{1}{x+3}","x/(x²+1)":"\\frac{x}{x^2+1}",
-  // 양의 분수
-  "1/2":"\\frac{1}{2}","3/4":"\\frac{3}{4}","2/3":"\\frac{2}{3}",
-  "1/3":"\\frac{1}{3}","5/2":"\\frac{5}{2}","3/2":"\\frac{3}{2}",
-  "4/3":"\\frac{4}{3}","7/4":"\\frac{7}{4}",
-  // 음의 분수
-  "-1/2":"-\\frac{1}{2}","-3/4":"-\\frac{3}{4}","-2/3":"-\\frac{2}{3}",
-  "-1/3":"-\\frac{1}{3}","-5/2":"-\\frac{5}{2}","-3/2":"-\\frac{3}{2}",
-  "-4/3":"-\\frac{4}{3}","-7/4":"-\\frac{7}{4}",
-};
-
-function vqFormatMath(s){
-  if(s===null||s===undefined||s==='') return s;
-  s = String(s);  // 숫자 등 비문자열 → 문자열 변환
-  if(/[가-힣]/.test(s)) return s;                     // 한국어: 그대로
-  if(/^[-−]?\d+$/.test(s.trim())) return s;          // 정수: 그대로
-  if(s.trim().startsWith('\\(')) return s;           // 이미 LaTeX: 그대로
-  const mapped=VQ_MATH_MAP[s];
-  let t=mapped||s.replace(/²/g,'^2').replace(/³/g,'^3').replace(/⁴/g,'^4');
-  return '\\('+t+'\\)';
-}
-
-/* ── 문자와 식 특수 문항 풀 ── */
-const VQ_POLY_DEG1 = ["3x+2","2x-5","-x+4","x+7","-3x-1","5x","-2x+3","4x-1"];
-const VQ_POLY_DEG2 = ["x²+3x-1","2x²-4","x²+x+1","-x²+5","3x²-2x+1","x²-9","-2x²+x+3"];
-const VQ_POLY_DEG3 = ["x³-2x+1","2x³+x²-3","x³+x-4","-x³+2x²+1","3x³-x","-x³+4"];
-const VQ_POLY_DEG4 = ["x⁴+x²+1","2x⁴-3x+1","x⁴-x³+2","-x⁴+3x²-5","x⁴+4"];
-const VQ_RAT_EXPR  = ["1/x","3/x","(x+1)/x","2/(x-1)","x/(x+2)","(2x+1)/x","1/(x+3)","x/(x²+1)"];
 
 /* ── 연습장 필기를 이미지 파일로 저장 ──
    캔버스에는 획만 들어 있고 줄노트 배경은 CSS(background-image)라 toDataURL에 안 담긴다.

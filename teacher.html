@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.37">
+<meta name="app-version" content="3.39">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -370,6 +370,7 @@ async function loadCurriculum(){
     const unitOrder={};
     units.forEach((u,i)=>unitOrder[u.id]=u.order??i);
     const sheets=wSnap.docs.map(d=>({...d.data()}))
+      .filter(w=>w.type!=='vocab') // VOCA 학습지는 더 이상 지원하지 않음 (데이터는 Firestore에 보존)
       .sort((a,b)=>{
         const ua=unitOrder[a.unitId]??999;
         const ub=unitOrder[b.unitId]??999;
@@ -654,10 +655,17 @@ window.renderStudents=renderStudents;
 function countsForProgressWs(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   if(!ws) return false;
-  if(ws.type==="vocab" || ws.type==="exam") return false;
-  if(Array.isArray(ws.vocab) && ws.vocab.length) return false; // type 미설정 구 VOCA 방어
+  if(ws.type==="review" || ws.type==="exam") return false;
   if(ws.includeInProgress===false) return false;               // 진도율 반영 OFF
   return true;
+}
+
+/* 단원별 복습 학습지 결과 표시: 완료 횟수 + 누적 정답률 (개별 문항 기록은 남기지 않음) */
+function reviewStatsHtml(r){
+  const n=r?.completions||0;
+  const avg=r?.sumTotal?Math.round((r.sumCorrect||0)/r.sumTotal*100):null;
+  return `<span style="color:var(--accent);font-weight:700">✅ ${n}회 완료</span>`
+    + (avg!=null?`<br><span style="font-size:11px;color:var(--ink3)">평균 정답률 ${avg}%</span>`:'');
 }
 
 function studentList(){
@@ -961,8 +969,8 @@ function renderStudentDetail(uid){
     return `<tr>
       <td><strong>${ws.title||"-"}</strong><br><span style="font-size:11px;color:var(--ink3)">${unit}</span></td>
       <td style="font-size:12px">${statusBadge}<br><span style="font-size:11px;color:var(--ink3)">${ts}</span></td>
-      <td>${ws.type==='exam'?examCountsHtml(ws,r):(rate!=null?rateBar(rate):'-')}</td>
-      <td style="text-align:center"><span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span></td>
+      <td>${ws.type==='review'?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):(rate!=null?rateBar(rate):'-')}</td>
+      <td style="text-align:center">${ws.type==='review'?'<span style="color:var(--ink3);font-size:12px">-</span>':`<span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span>`}</td>
       <td style="min-width:200px">${perQCells(r,uid,ws.id)}</td>
     </tr>`;
   }).join("");
@@ -1123,8 +1131,10 @@ function renderOverview(){
       const cat=wsCategory(ws)||"-";
       const recs=Object.values(allData).map(d=>d[ws.id]).filter(r=>isRecDone(r));
       const done=recs.length;
-      const isVocaWs=ws.type==="vocab";
-      const avgR=isVocaWs?null:(done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0);
+      const isReviewWs=ws.type==="review";
+      const avgR=isReviewWs
+        ? (done?Math.round(recs.reduce((s,r)=>s+(r.sumTotal?r.sumCorrect/r.sumTotal*100:0),0)/done):0)
+        : (done?Math.round(recs.reduce((s,r)=>s+(r.correctRate||0),0)/done):0);
       const avgT=done?(recs.reduce((s,r)=>s+getAttempts(r),0)/done).toFixed(1):"-";
       const gc=g===1?'#1e40af':g===2?'#166534':'#991b1b';
       const gb=g===1?'#dbeafe':g===2?'#dcfce7':'#fee2e2';
@@ -1648,6 +1658,7 @@ window.renderWSTable=function(wsId){
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
   }
   const isVoca=ws?.type==="vocab";
+  const isReview=ws?.type==="review";
   const doneRows=done.map(r=>{
     const ts=formatDate(r.completedAt||r.lastUpdated);
     const rate=r.correctRate??Math.round((r.answeredCount||0)/(r.totalCount||1)*100);
@@ -1662,8 +1673,8 @@ window.renderWSTable=function(wsId){
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:ws.type==='exam'?examCountsHtml(ws,r):rateBar(rate)}</td>
-      <td>${isVoca?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
+      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:isReview?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):rateBar(rate)}</td>
+      <td>${(isVoca||isReview)?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
       <td><button onclick="deleteStudentRec('${wsId}','${r.uid}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;font-weight:600">🗑 삭제</button></td>
@@ -2471,7 +2482,11 @@ window.showQDetail=function(key){
         <canvas id="graph-grid-canvas" style="display:block;width:100%;background:#fff"></canvas>
         <img src="${d.v.drawing}" id="graph-student-img" style="position:absolute;inset:0;width:100%;height:100%">
         ${d.v.teacherDrawing?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">`:''}
-        <canvas id="teacher-draw-canvas" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;opacity:0.9"></canvas>
+        <!-- oncontextmenu·touch-callout: 한 자리를 오래 누르면 브라우저가 "길게 누르기 = 오른쪽 클릭"으로
+             보고 상황 메뉴를 띄우면서 pointercancel 로 그리던 획까지 끊었다(점을 찍을 때 자주 났다).
+             touch-action:none 은 스크롤·확대만 막을 뿐 이건 못 막는다. index 와 같은 처리다. -->
+        <canvas id="teacher-draw-canvas" oncontextmenu="return false"
+          style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;opacity:0.9;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"></canvas>
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
         <button id="td-pen-btn" class="btn-back" style="font-size:12px;background:#fee2e2;border-color:var(--red);color:var(--red)">🖊 펜</button>

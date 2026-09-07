@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.15">
+<meta name="app-version" content="edit-v3.16">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -124,7 +124,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .badge-equation{background:#ede9fe;color:#5b21b6}
 .badge-multi{background:#dcfce7;color:#14532d}
 .badge-auto{background:#f3e8ff;color:#6b21a8}
-.badge-vocab{background:#dbeafe;color:#1e3a8a}
 .q-text-preview{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px}
 .q-actions{display:flex;gap:4px;flex-shrink:0}
 .q-btn{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:14px;padding:4px;border-radius:4px}
@@ -174,11 +173,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .btn-rm-opt:hover{color:var(--red)}
 .btn-add-opt{background:none;border:1px dashed var(--rule);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink3);width:100%;margin-top:4px}
 .btn-add-opt:hover{border-color:var(--accent);color:var(--accent)}
-
-/* vocab */
-.vocab-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.vocab-row input{flex:1;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;background:var(--cream)}
-.vocab-row input:focus{border-color:var(--accent);background:#fff;outline:none}
 
 /* 저장/삭제 버튼 */
 .panel-actions{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
@@ -234,8 +228,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .prev-opt{border:1px solid var(--rule);border-radius:6px;padding:7px 10px;font-size:13px}
 .prev-opt.correct{border-color:var(--green);background:var(--grn-lt);font-weight:600}
 .prev-ans{font-size:13px;color:var(--ink2);background:var(--cream);border-radius:6px;padding:6px 10px;margin-top:4px}
-.prev-vocab-pair{display:flex;gap:8px;font-size:13px}
-.prev-vocab-term{font-weight:700;min-width:80px}
 
 /* ── 단원 삭제 버튼 ── */
 .unit-hdr .unit-del{display:none;background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px;border-radius:4px;margin-left:auto}
@@ -352,7 +344,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <span class="meta-label">유형</span>
               <select class="meta-select" id="ws-type" onchange="onWsTypeChange()">
                 <option value="regular">일반 학습지</option>
-                <option value="vocab">VOCA 학습지</option>
+                <option value="review">🔁 단원별 복습 학습지</option>
                 <option value="exam">📝 시험지</option>
               </select>
               <select class="meta-select" id="ws-time-limit" style="max-width:110px;display:none" title="시험지 시간 제한">
@@ -417,7 +409,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <option value="equation">② 숫자 값</option>
               <option value="word_expr">③ 문자 포함 식 (x, y 등 문자·= 포함 가능)</option>
               <option value="multi">객관식</option>
-              <option value="vocab">VOCA 용어</option>
               <option value="link">링크(다음 문항)</option>
               <option value="graph">그래프 그리기</option>
               <option value="step3">④ 단계형</option>
@@ -567,14 +558,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <button class="btn-add-opt" onclick="addOption()">＋ 선지 추가</button>
           </div>
 
-          <!-- VOCA 용어 -->
-          <div id="field-vocab" class="field" style="display:none">
-            <label>용어</label>
-            <input id="q-vocab-term" placeholder="예: 등식">
-            <label style="margin-top:8px;display:block">정의</label>
-            <textarea id="q-vocab-def" rows="2" placeholder="예: 등호(=)를 사용하여 두 수나 식이 같음을 나타낸 식" style="margin-top:4px"></textarea>
-          </div>
-
           <!-- 랜덤 풀 -->
           <div id="field-pool" class="field" style="display:none">
             <label>배지 텍스트</label>
@@ -706,9 +689,10 @@ async function loadAll(){
     const uSnap = await getDocs(query(collection(db,'units'), orderBy('order')));
     units = uSnap.docs.map(d=>({id:d.id,...d.data()}));
 
-    // worksheets (curriculum)
+    // worksheets (curriculum) — VOCA 학습지는 더 이상 지원하지 않아 목록에서 제외한다
+    // (Firestore 데이터 자체는 보존, 편집기에서만 숨김)
     const wSnap = await getDocs(collection(db,'curriculum'));
-    worksheets = wSnap.docs.map(d=>({id:d.id,...d.data()}));
+    worksheets = wSnap.docs.map(d=>({id:d.id,...d.data()})).filter(w=>w.type!=='vocab');
     worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
 
     renderSidebar();
@@ -733,10 +717,7 @@ async function loadAll(){
           if(lastQIdx!==null && lastQIdx!==''){
             const idx=parseInt(lastQIdx);
             // selectQuestion에 필요한 allItems 재구성
-            const allItems = currentWs?.type==='vocab'
-              ? [...(currentWs.vocab||[]).map((v,i)=>({...v,_type:'vocab',_idx:i})),
-                 ...(currentWs.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}))]
-              : (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
+            const allItems = (currentWs?.questions||[]).map((q,i)=>({...q,_type:'q',_idx:i}));
             if(idx>=0 && idx<allItems.length) selectQuestion(idx, allItems);
           }
         }
@@ -839,6 +820,12 @@ window.selectWs = async function(wsId){
   const snap = await getDoc(doc(db,'curriculum',wsId));
   if(!snap.exists()){ toast('학습지를 찾을 수 없습니다'); return; }
   currentWs = {id:wsId, ...snap.data()};
+  if(currentWs.type==='vocab'){
+    toast('VOCA 학습지는 더 이상 지원되지 않습니다 (데이터는 보존되어 있습니다)', 4000);
+    currentWsId = null; currentWs = null;
+    document.querySelectorAll('.ws-item').forEach(el=>el.classList.remove('active'));
+    return;
+  }
   // questions가 없으면 vocab 기반
   if(!currentWs.questions) currentWs.questions = [];
   if(!currentWs.vocab)     currentWs.vocab = [];
@@ -884,7 +871,7 @@ function renderEditor(){
   uSel.innerHTML = units.map(u=>`<option value="${u.id}" ${u.id===currentWs.unitId?'selected':''}>${u.grade}학년 ${u.title}</option>`).join('');
 
   // 유형
-  const wType = currentWs.type==='vocab'?'vocab':(currentWs.type==='exam'?'exam':'regular');
+  const wType = currentWs.type==='review'?'review':(currentWs.type==='exam'?'exam':'regular');
   document.getElementById('ws-type').value = wType;
   // 시험지 시간 제한 + 점수 필드 표시
   const _tl=document.getElementById('ws-time-limit');
@@ -900,20 +887,15 @@ function renderEditor(){
   // 문항 제목
   // VOCA 타입이면 두 버튼
   const addArea = document.getElementById('add-q-area');
-  if(wType==='vocab'){
-    addArea.innerHTML=`
-      <button class="btn-add-q" onclick="addVocabItem()" style="background:#1d4ed8">＋ 용어 추가</button>
-      <button class="btn-add-q" onclick="addQuestionItem()" style="background:#15803d">＋ 연습 문항 추가</button>
-      <button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d" title="복사한 문항 붙여넣기">📥 붙여넣기</button>`;
+  if(wType==='review'){
+    addArea.innerHTML=`<span style="font-size:12px;color:var(--ink3)">이 학습지는 문항을 직접 추가하지 않습니다 — 같은 단원의 다른 학습지에서 자동으로 무작위 추출됩니다.</span>`;
   } else {
     addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button><button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d;margin-left:6px" title="복사한 문항 붙여넣기">📥 붙여넣기</button>';
     document.getElementById('btn-add-q').onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
   }
-  const extrasCount = (currentWs.extras||[]).filter(e=>e.type&&!['vocab'].includes(e.type)).length;
   document.getElementById('q-list-title').textContent =
-    wType==='vocab'
-      ? `용어 목록 (${currentWs.vocab.length}개) + 연습 문항 (${currentWs.questions.length}개)` +
-        (extrasCount ? ` + 자동생성 (${extrasCount}개)` : '')
+    wType==='review'
+      ? '복습 학습지 — 문항 자동 추출'
       : `문항 목록 (${currentWs.questions.length}개)`;
 
   renderQList();
@@ -933,7 +915,7 @@ window.toggleMetaCard = function(force){
 function updateMetaSummary(){
   const el=document.getElementById('meta-summary'); if(!el) return;
   if(!currentWs){ el.textContent=''; return; }
-  const t={regular:'일반',vocab:'VOCA',exam:'📝 시험지'}[currentWs.type||'regular']||'일반';
+  const t={regular:'일반',review:'🔁 복습',exam:'📝 시험지'}[currentWs.type||'regular']||'일반';
   const st={published:'공개',locked:'잠금',draft:'준비 중'}[currentWs.status]||currentWs.status||'';
   el.textContent = `${currentWs.title||'(제목 없음)'} · ${t}${st?' · '+st:''} · ${currentWs.id||''}`;
 }
@@ -1064,11 +1046,7 @@ function renderQList(){
   const list = document.getElementById('q-list');
   list.innerHTML = '';
 
-  const isVocab = currentWs.type==='vocab';
-  const allItems = isVocab
-    ? [...currentWs.vocab.map((v,i)=>({...v, _type:'vocab', _idx:i})),
-       ...currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}))]
-    : currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}));
+  const allItems = currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}));
 
   // extras (자동생성 유형) 추가
   const extras = (currentWs.extras||[]).filter(e=>e.type&&e.type!=='vocab');
@@ -1076,13 +1054,15 @@ function renderQList(){
   const combinedItems = [...allItems, ...extraItems];
 
   if(!combinedItems.length){
-    list.innerHTML = '<div class="empty">문항이 없습니다.<br>오른쪽 위 [+ 문항 추가]를 눌러주세요.</div>';
+    list.innerHTML = currentWs.type==='review'
+      ? '<div class="empty">이 학습지는 문항을 직접 추가하지 않습니다.<br>같은 단원의 다른 학습지 문항 중 무작위 10개가 학생이 접속할 때마다 자동으로 출제됩니다.<br>(그래프·링크 문항은 제외)</div>'
+      : '<div class="empty">문항이 없습니다.<br>오른쪽 위 [+ 문항 추가]를 눌러주세요.</div>';
     return;
   }
 
   combinedItems.forEach((item, i) => {
     // 파트 구분선 (일반/시험지 학습지의 questions 항목에만)
-    if(!isVocab && item._type==='q' && item.partStart && item.partStart.id){
+    if(item._type==='q' && item.partStart && item.partStart.id){
       const dv=document.createElement('div');
       dv.className='part-divider';
       dv.innerHTML=`<span class="pd-name">🧩 ${item.partStart.name||'파트'}</span>
@@ -1097,18 +1077,15 @@ function renderQList(){
     card.draggable = true;
     card.dataset.idx = i;
 
-    const isVocabItem = item._type==='vocab';
     const isExtraItem = item._type==='extra';
-    const _rawType = isVocabItem ? 'vocab' : isExtraItem ? 'auto' : (item.type||'word');
+    const _rawType = isExtraItem ? 'auto' : (item.type||'word');
     // word 타입은 answerType으로 세분화 (word_text/word_expr 구분)
     const badge = _rawType==='word'
       ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
       : _rawType;
-    const badgeClass = {vocab:'badge-vocab',word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
-    const badgeLabel = {vocab:'VOCA',word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',graph:'📈그래프',word:'용어'}[badge]||'계산';
-    const preview = isVocabItem
-      ? `${item.term} : ${item.def}`
-      : (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
+    const badgeClass = {word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
+    const badgeLabel = {word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',graph:'📈그래프',word:'용어'}[badge]||'계산';
+    const preview = (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
 
     card.innerHTML = `
       <span class="q-drag">⣿</span>
@@ -1118,7 +1095,7 @@ function renderQList(){
         <div class="q-text-preview">${preview}</div>
       </div>
       <div class="q-actions">
-        ${(!isVocab && !isVocabItem && !isExtraItem && !item.partStart) ? `<button class="q-btn" onclick="event.stopPropagation();addPartStart(${item._idx})" title="이 문항부터 새 파트 시작">🧩</button>` : ''}
+        ${(!isExtraItem && !item.partStart) ? `<button class="q-btn" onclick="event.stopPropagation();addPartStart(${item._idx})" title="이 문항부터 새 파트 시작">🧩</button>` : ''}
         ${isExtraItem ? '' : `<button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>`}
       </div>`;
 
@@ -1138,7 +1115,7 @@ function renderQList(){
       const to   = i;
       if(from===to) return;
       if(isExtraItem || combinedItems[from]?._type==='extra'){ toast('자동생성 문항은 순서 변경이 불가합니다'); return; }
-      moveItem(from, to, isVocab, allItems);
+      moveItem(from, to, allItems);
     });
 
     list.appendChild(card);
@@ -1171,16 +1148,12 @@ window.removePartStart=function(qIdx){
 };
 
 // ── 문항 이동 (드래그앤드롭) ──
-function moveItem(from, to, isVocab, allItems){
-  const vocabCount = isVocab ? currentWs.vocab.length : 0;
+function moveItem(from, to, allItems){
   const fromItem = allItems[from];
   const toItem   = allItems[to];
 
-  // 같은 배열 내에서만 이동 (vocab↔questions 교차 이동 불가)
-  if(fromItem._type !== toItem._type){ toast('같은 유형 내에서만 이동할 수 있습니다'); return; }
-
   // splice로 인해 이동 구간 안의 다른 항목들도 위치가 밀린다. 지금 편집 패널에 열려 있는
-  // 항목(selectedQIdx)이 이번에 이동한 배열(vocab 또는 questions) 안에 있다면, 그 항목의
+  // 항목(selectedQIdx)이 이번에 이동한 배열 안에 있다면, 그 항목의
   // 새 위치로 selectedQIdx를 다시 계산해야 한다 — 예전엔 무조건 selectedQIdx=to로 덮어써서
   // 드래그와 무관한 문항이 열려 있던 패널이 엉뚱한 문항을 가리키게 됐고, 그 상태로
   // [적용]을 누르면 원래 열려 있던 문항 내용이 방금 옮긴 다른 문항 자리를 덮어썼다.
@@ -1189,23 +1162,15 @@ function moveItem(from, to, isVocab, allItems){
   let newSelected = selectedQIdx;
   if(selectedQIdx!==null){
     const selItem = allItems[selectedQIdx];
-    if(selItem && selItem._type===fromItem._type){
-      const offset = (fromItem._type==='q' && isVocab) ? vocabCount : 0;
-      newSelected = offset + (selectedQIdx===from ? toItem._idx : remap(selItem._idx, fromItem._idx, toItem._idx));
+    if(selItem){
+      newSelected = selectedQIdx===from ? toItem._idx : remap(selItem._idx, fromItem._idx, toItem._idx);
     }
   }
 
-  if(fromItem._type==='vocab'){
-    const arr = [...currentWs.vocab];
-    const [moved] = arr.splice(fromItem._idx, 1);
-    arr.splice(toItem._idx, 0, moved);
-    currentWs.vocab = arr;
-  } else {
-    const arr = [...currentWs.questions];
-    const [moved] = arr.splice(fromItem._idx, 1);
-    arr.splice(toItem._idx, 0, moved);
-    currentWs.questions = arr;
-  }
+  const arr = [...currentWs.questions];
+  const [moved] = arr.splice(fromItem._idx, 1);
+  arr.splice(toItem._idx, 0, moved);
+  currentWs.questions = arr;
   selectedQIdx = newSelected;
   renderQList();
 }
@@ -1222,15 +1187,11 @@ function selectQuestion(idx, allItems){
 function showPanel(item){
   document.getElementById('panel-empty').style.display='none';
   document.getElementById('panel-editor').style.display='block';
-  document.getElementById('panel-title').textContent = item._type==='vocab' ? 'VOCA 용어 편집' : '문항 편집';
+  document.getElementById('panel-title').textContent = '문항 편집';
 
   altAnswers = []; poolCorrect=[]; poolWrong=[];
 
-  if(item._type==='vocab'){
-    setQType('vocab');
-    document.getElementById('q-vocab-term').value = item.term||'';
-    document.getElementById('q-vocab-def').value  = item.def||'';
-  } else {
+  {
     // 저장된 type → UI 유형 매핑
     let qtype;
     if(item.type==='word'){
@@ -1352,11 +1313,9 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-vocab','field-pool','field-image','field-step3','field-graph','field-link','field-hint']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
-  if(type==='vocab'){
-    show('field-vocab');
-  } else if(type==='pool_random'){
+  if(type==='pool_random'){
     show('field-pool');
   } else if(type==='step3'){
     show('field-text'); show('field-image'); show('field-step3');
@@ -1496,6 +1455,19 @@ window.onWsTypeChange=function(){
   // 점수 입력 필드 표시 토글
   const _qsc=document.getElementById('q-score');
   if(_qsc) _qsc.style.display=t==='exam'?'':'none';
+  // 복습 학습지: 문항을 직접 추가하지 않음 — 안내문으로 교체
+  const addArea=document.getElementById('add-q-area');
+  if(addArea){
+    if(t==='review'){
+      addArea.innerHTML='<span style="font-size:12px;color:var(--ink3)">이 학습지는 문항을 직접 추가하지 않습니다 — 같은 단원의 다른 학습지에서 자동으로 무작위 추출됩니다.</span>';
+    } else {
+      addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button><button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d;margin-left:6px" title="복사한 문항 붙여넣기">📥 붙여넣기</button>';
+      document.getElementById('btn-add-q').onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
+    }
+  }
+  const _qlt=document.getElementById('q-list-title');
+  if(_qlt && currentWs) _qlt.textContent = t==='review' ? '복습 학습지 — 문항 자동 추출' : `문항 목록 (${(currentWs.questions||[]).length}개)`;
+  if(typeof renderQList==='function') renderQList();
   if(typeof renderSidebar==='function') renderSidebar();
 };
 
@@ -1503,14 +1475,7 @@ window.onWsTypeChange=function(){
 // ── 문항 복사/붙여넣기 ──
 window.copyQuestion = function(){
   if(selectedQIdx===null||!currentWs){ toast('문항을 선택하세요'); return; }
-  const isVocab = currentWs.type==='vocab';
-  const idx = isVocab ? selectedQIdx - (currentWs.vocab?.length||0) : selectedQIdx;
-  let item;
-  if(isVocab && selectedQIdx < (currentWs.vocab?.length||0)){
-    item = {...currentWs.vocab[selectedQIdx], _isVocab:true};
-  } else {
-    item = currentWs.questions[idx];
-  }
+  const item = currentWs.questions[selectedQIdx];
   if(!item){ toast('복사할 문항이 없습니다'); return; }
   try{
     const data = {type:'__ws_question_clipboard__', item: JSON.parse(JSON.stringify(item))};
@@ -1527,18 +1492,10 @@ window.pasteQuestion = async function(){
     const data = JSON.parse(raw);
     if(data.type !== '__ws_question_clipboard__'){ toast('잘못된 복사 데이터'); return; }
     const item = JSON.parse(JSON.stringify(data.item));
-    const isVocabItem = !!item._isVocab;
-    delete item._isVocab;
     // 새 ID 부여
     item.id = `q${Date.now()}`;
-    if(isVocabItem){
-      if(currentWs.type !== 'vocab'){ toast('VOCA 학습지에만 붙여넣을 수 있습니다'); return; }
-      if(!currentWs.vocab) currentWs.vocab=[];
-      currentWs.vocab.push(item);
-    } else {
-      if(!currentWs.questions) currentWs.questions=[];
-      currentWs.questions.push(item);
-    }
+    if(!currentWs.questions) currentWs.questions=[];
+    currentWs.questions.push(item);
     await saveToFirestore(currentWs.status||'draft', true);
     renderSidebar();
     toast('📥 붙여넣기 완료');
@@ -1566,8 +1523,7 @@ window.saveQuestion = async function(){
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='graph'){
-    const _isVocabG=currentWs.type==='vocab';
-    const qIdxS=_isVocabG?selectedQIdx-(currentWs.vocab||[]).length:selectedQIdx;
+    const qIdxS=selectedQIdx;
     const gt=curGraphType();
     const qData={id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,type:'graph',
       text:document.getElementById('q-text').value.trim(),
@@ -1593,9 +1549,7 @@ window.saveQuestion = async function(){
     const linkLabel=document.getElementById('q-link-label').value.trim();
     const linkUrl=document.getElementById('q-link-url').value.trim();
     if(!linkUrl){ toast('URL을 입력하세요'); return; }
-    const isVocabL=currentWs.type==='vocab';
-    const vocabCntL=(currentWs.vocab||[]).length;
-    const qIdxL=isVocabL?selectedQIdx-vocabCntL:selectedQIdx;
+    const qIdxL=selectedQIdx;
     if(qIdxL>=0 && qIdxL<currentWs.questions.length){
       const _linkQ={
         ...currentWs.questions[qIdxL],
@@ -1612,8 +1566,7 @@ window.saveQuestion = async function(){
     return;
   }
   if(type==='step3'){
-    const isVocabS=currentWs.type==='vocab';
-    const qIdxS=isVocabS?selectedQIdx-currentWs.vocab.length:selectedQIdx;
+    const qIdxS=selectedQIdx;
     if(!editSteps.length){ toast('단계를 1개 이상 추가하세요'); return; }
     // '등식' 유형인데 정답에 = 가 없으면 학생 답이 전부 오답 처리된다 — 저장 전에 잡아준다
     const _eqBad = editSteps.map((s,i)=>({s,i}))
@@ -1652,8 +1605,7 @@ window.saveQuestion = async function(){
   if(type==='pool_random'){
     if(!poolCorrect.length){ toast('정답 풀을 1개 이상 추가하세요'); return; }
     if(poolWrong.length<3){ toast('오답 풀을 최소 3개 추가하세요'); return; }
-    const isVocab2=currentWs.type==='vocab';
-    const qIdx2=isVocab2?selectedQIdx-currentWs.vocab.length:selectedQIdx;
+    const qIdx2=selectedQIdx;
     const _psPool=currentWs.questions[qIdx2]?.partStart; // 파트 마커 보존
     currentWs.questions[qIdx2]={
       id:currentWs.questions[qIdx2]?.id||`q${Date.now()}`,
@@ -1671,20 +1623,9 @@ window.saveQuestion = async function(){
   }
   const diff = parseInt(document.getElementById('q-diff-sel').value);
 
-  // vocab 배열 + questions 배열 결합 기준 인덱스 계산
-  const isVocab = currentWs.type==='vocab';
-  const vocabCount = isVocab ? currentWs.vocab.length : 0;
-
-  if(type==='vocab'){
-    // vocab 항목 수정
-    const vIdx = selectedQIdx;
-    currentWs.vocab[vIdx] = {
-      term: document.getElementById('q-vocab-term').value.trim(),
-      def:  document.getElementById('q-vocab-def').value.trim(),
-    };
-  } else {
+  {
     // questions 항목 수정
-    const qIdx = isVocab ? selectedQIdx - vocabCount : selectedQIdx;
+    const qIdx = selectedQIdx;
     const raw = document.getElementById('q-text').value;
     // <br> 태그를 줄바꿈으로 통일 (중복 빈 줄 방지), 백슬래시는 그대로
     const text = raw.replace(/<br\s*\/?>\n?/gi, '\n');
@@ -1755,17 +1696,11 @@ window.saveQuestion = async function(){
 // ── 문항 삭제 ──
 window.deleteItemAt = function(idx){
   if(!confirm('삭제하시겠습니까?')) return;
-  const isVocab = currentWs.type==='vocab';
-  const vocabCount = isVocab ? currentWs.vocab.length : 0;
-  if(isVocab && idx < vocabCount) currentWs.vocab.splice(idx,1);
-  else {
-    const qIdx = isVocab ? idx-vocabCount : idx;
-    // 파트 시작 문항 삭제 시: 마커를 다음 문항으로 이동 (파트 실종 방지)
-    const ps = currentWs.questions[qIdx]?.partStart;
-    currentWs.questions.splice(qIdx, 1);
-    const nextQ = currentWs.questions[qIdx];
-    if(ps && nextQ && !nextQ.partStart) nextQ.partStart = ps;
-  }
+  // 파트 시작 문항 삭제 시: 마커를 다음 문항으로 이동 (파트 실종 방지)
+  const ps = currentWs.questions[idx]?.partStart;
+  currentWs.questions.splice(idx, 1);
+  const nextQ = currentWs.questions[idx];
+  if(ps && nextQ && !nextQ.partStart) nextQ.partStart = ps;
   selectedQIdx = null;
   document.getElementById('panel-empty').style.display='block';
   document.getElementById('panel-editor').style.display='none';
@@ -1773,17 +1708,6 @@ window.deleteItemAt = function(idx){
 };
 window.deleteQuestion = function(){
   if(selectedQIdx!==null) deleteItemAt(selectedQIdx);
-};
-
-// ── 문항 추가 ──
-window.addVocabItem = function(){
-  if(!currentWs) return;
-  currentWs.vocab.push({term:'새 용어',def:'정의'});
-  const allItems=[...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
-    ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))];
-  selectedQIdx = currentWs.vocab.length - 1;
-  renderQList();
-  showPanel(allItems[selectedQIdx]);
 };
 
 // 일반 학습지용 초기 바인딩 (renderEditor에서 재설정됨)
@@ -1973,7 +1897,7 @@ async function saveToFirestore(status, silent=false){
     title: document.getElementById('ws-title').value.trim(),
     unitId: document.getElementById('ws-unit').value,
     grade: parseInt(document.getElementById('ws-grade').value)||1,
-      type: ['vocab','exam','regular'].includes(document.getElementById('ws-type').value)?document.getElementById('ws-type').value:'regular',
+      type: ['review','exam','regular'].includes(document.getElementById('ws-type').value)?document.getElementById('ws-type').value:'regular',
     timeLimit: parseInt(document.getElementById('ws-time-limit')?.value)||0,
     includeInProgress: (document.getElementById('ws-type').value==='regular')
       ? (document.getElementById('ws-include-progress')?.checked !== false)
@@ -2098,13 +2022,12 @@ async function callImgWebApp(payload){
   return out;
 }
 
-/** 현재 편집 중인 문항 번호. VOCA형 학습지는 앞에 vocab 개수만큼 밀려 있다.
+/** 현재 편집 중인 문항 번호.
     ⚠ 번호는 별도 필드가 아니라 배열 순서라서, 나중에 문항 순서를 바꾸면
        이미 저장된 파일명의 번호와는 어긋난다(파일명은 첨부 시점 기준). */
 function curQuestionNo(){
   if(selectedQIdx===null || !currentWs) return '';
-  const off = currentWs.type==='vocab' ? (currentWs.vocab||[]).length : 0;
-  return selectedQIdx - off + 1;
+  return selectedQIdx + 1;
 }
 
 function _imgEsc(t){
@@ -2335,7 +2258,6 @@ function toast(msg, dur=2500){
 window.toast=toast;
 
 // ── 문항 유형 선택 모달 ──
-let _addingForVocabWs = false;
 window.selectTypeOpt = function(el){
   document.querySelectorAll('.type-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
@@ -2362,11 +2284,7 @@ function _doAddQuestion(type){
   else if(type==='graph'){ newQ.type='graph'; newQ.graphType='coordinate'; newQ.xMin=-5; newQ.xMax=5; newQ.yMin=-5; newQ.yMax=5; }
   else if(type==='pool_random'){ newQ.type='pool_random'; newQ.badge=''; newQ.question=''; newQ.correct_pool=[]; newQ.wrong_pool=[]; }
   currentWs.questions.push(newQ);
-  const isVocab = currentWs.type==='vocab';
-  const allItems = isVocab
-    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})),
-       ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
-    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  const allItems = currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
   selectedQIdx = allItems.length - 1;
   renderQList();
   showPanel(allItems[selectedQIdx]);
@@ -2383,24 +2301,11 @@ function renderPreview(){
   const ws = currentWs;
   document.getElementById('preview-title').textContent = `미리보기 — ${ws.title||'제목 없음'}`;
   const body = document.getElementById('preview-body');
-  const isVocab = ws.type==='vocab';
   let html = '';
   let num = 1;
 
-  // vocab 항목
-  if(isVocab && ws.vocab?.length){
-    html += `<div style="margin-bottom:12px;font-size:13px;font-weight:700;color:var(--ink3)">VOCA 용어 (${ws.vocab.length}개)</div>`;
-    ws.vocab.forEach(v=>{
-      html += `<div class="prev-q"><div class="prev-vocab-pair">
-        <span class="prev-vocab-term">${v.term}</span>
-        <span style="color:var(--ink3)">→</span>
-        <span>${v.def}</span></div></div>`;
-    });
-  }
-
   // questions
   if(ws.questions?.length){
-    if(isVocab) html += `<div style="margin:12px 0 8px;font-size:13px;font-weight:700;color:var(--ink3)">연습 문항 (${ws.questions.length}개)</div>`;
     ws.questions.forEach(q=>{
       const typeLabel = {word:'용어',equation:'방정식',multi:'객관식'}[q.type]||q.type;
       const badgeCls = {word:'badge-word',equation:'badge-equation',multi:'badge-multi'}[q.type]||'badge-word';
@@ -2541,12 +2446,8 @@ window.reviewWorksheetWithAI = async function(){
 window._jumpToQuestion = function(qIdx){
   document.getElementById('ai-review-modal').style.display='none';
   if(!currentWs) return;
-  const isVocab = currentWs.type==='vocab';
-  const vocabCount = isVocab ? (currentWs.vocab||[]).length : 0;
-  const allItems = isVocab
-    ? [...currentWs.vocab.map((v,i)=>({...v,_type:'vocab',_idx:i})), ...currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}))]
-    : currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
-  const combinedIdx = vocabCount + qIdx;
+  const allItems = currentWs.questions.map((q,i)=>({...q,_type:'q',_idx:i}));
+  const combinedIdx = qIdx;
   selectQuestion(combinedIdx, allItems);
   setTimeout(()=>{
     const card=document.querySelector(`.q-card[data-idx="${combinedIdx}"]`);

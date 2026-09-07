@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.18">
+<meta name="app-version" content="edit-v3.19">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -270,6 +270,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
       <span style="width:1px;height:20px;background:rgba(255,255,255,.25);margin:0 2px"></span>
       <button class="hdr-btn" onclick="migrateWsIds()" title="학습지 ID를 단원·표시 순서에 맞춰 ws-단원-번호 형식으로 정리합니다 (학생 기록도 함께 이동)"
         style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 학습지 ID 정리</button>
+      <button class="hdr-btn" onclick="migrateUnitIds()" title="단원 ID를 학년·표시 순서에 맞춰 u학년-번호 형식으로 정리합니다 (그 단원을 쓰는 학습지의 unitId도 함께 옮김)"
+        style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 단원 ID 정리</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -326,15 +328,15 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
             <div class="meta-row">
               <span class="meta-label">제목</span>
-              <input class="meta-input" id="ws-title" placeholder="학습지 제목">
+              <input class="meta-input" id="ws-title" placeholder="학습지 제목" onblur="saveMetaField()">
             </div>
             <div class="meta-row">
               <span class="meta-label">단원</span>
-              <select class="meta-select" id="ws-unit"></select>
+              <select class="meta-select" id="ws-unit" onchange="saveMetaField()"></select>
             </div>
             <div class="meta-row">
               <span class="meta-label">학년</span>
-              <select class="meta-select" id="ws-grade" style="max-width:100px">
+              <select class="meta-select" id="ws-grade" style="max-width:100px" onchange="saveMetaField()">
                 <option value="1">1학년</option>
                 <option value="2">2학년</option>
                 <option value="3">3학년</option>
@@ -355,7 +357,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <option value="35">35분</option><option value="40">40분</option>
                 <option value="45">45분</option>
               </select>
-              <select class="meta-select" id="ws-diff" style="max-width:100px">
+              <select class="meta-select" id="ws-diff" style="max-width:100px" onchange="saveMetaField()">
                 <option value="1">★ 기본</option>
                 <option value="2">★★ 중급</option>
                 <option value="3">★★★ 고급</option>
@@ -1047,6 +1049,65 @@ window.migrateWsIds = async function(){
   }
   alert(`✅ 학습지 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
     + '\n\n※ 잠금·진도 데이터는 학습지 ID 기준이라, 필요하면 index에서 📊 진도 동기화를 다시 실행하세요.');
+  await loadAll();
+  if(currentWsId) selectWs(currentWsId);
+};
+
+/* ══════════ 단원 ID 정리 ══════════
+   "＋ 단원 추가"로 만든 단원은 ID가 u{학년}-{타임스탬프} 형식이라 지저분하다.
+   학년·표시 순서 기준으로 u{학년}-{01,02,…} 형식으로 정리하고, 그 단원을 쓰던
+   학습지들의 unitId 필드도 새 단원 ID로 함께 옮긴다.
+   ⚠ 학습지 ID 문자열 자체(예: ws-u1-…-01)는 안 바뀐다 — 필요하면 이 작업 뒤에
+      "🔧 학습지 ID 정리"를 이어서 돌려 맞추면 된다(학생 기록 이동 포함). */
+window.migrateUnitIds = async function(){
+  const byGrade={};
+  units.forEach(u=>{ (byGrade[u.grade||1]=byGrade[u.grade||1]||[]).push(u); });
+  const changes=[];
+  for(const [grade,list] of Object.entries(byGrade)){
+    list.sort((a,b)=>(a.order??99)-(b.order??99));
+    list.forEach((u,i)=>{
+      const newId=`u${grade}-${String(i+1).padStart(2,'0')}`;
+      if(u.id!==newId) changes.push({unit:u,newId});
+    });
+  }
+  if(!changes.length){ alert('모든 단원 ID가 학년·순서와 일치합니다.'); return; }
+  const preview=changes.map(({unit,newId})=>{
+    const cnt=worksheets.filter(w=>w.unitId===unit.id).length;
+    return `• ${unit.id} → ${newId}  (${unit.title}, 학습지 ${cnt}개)`;
+  }).join('\n');
+  if(!confirm(`단원 ID를 학년·표시 순서 기준으로 바꿉니다.\n그 단원을 쓰는 학습지들의 unitId도 함께 옮깁니다.\n(학습지 ID 문자열 자체는 안 바뀝니다 — 필요하면 이 작업 후 "🔧 학습지 ID 정리"도 실행하세요.)\n\n${preview}\n\n진행할까요?`)) return;
+
+  // 이름 충돌(A→B, B→C를 동시에 하는 경우) 방지 — 임시 ID로 옮긴 뒤 최종 ID로 이동
+  const tempPfx='u-tmp-'+Date.now()+'-';
+  const errors=[]; let ok=0;
+  for(const {unit} of changes){
+    try{
+      const tmpId=tempPfx+unit.id;
+      const {_tmpId:_, ...uData}=unit;
+      await setDoc(doc(db,'units',tmpId),{...uData,id:tmpId});
+      await deleteDoc(doc(db,'units',unit.id));
+      for(const ws of worksheets.filter(w=>w.unitId===unit.id)){
+        await updateDoc(doc(db,'curriculum',ws.id),{unitId:tmpId});
+        ws.unitId=tmpId;
+      }
+      unit._tmpId=tmpId;
+    }catch(e){ errors.push(`1단계 ${unit.id}: ${e.message}`); }
+  }
+  for(const {unit,newId} of changes){
+    if(!unit._tmpId) continue;
+    try{
+      const {_tmpId:_, ...uData}=unit;
+      await setDoc(doc(db,'units',newId),{...uData,id:newId});
+      await deleteDoc(doc(db,'units',unit._tmpId));
+      for(const ws of worksheets.filter(w=>w.unitId===unit._tmpId)){
+        await updateDoc(doc(db,'curriculum',ws.id),{unitId:newId});
+        ws.unitId=newId;
+      }
+      unit.id=newId; delete unit._tmpId; ok++;
+    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
+  }
+  alert(`✅ 단원 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
+    + '\n\n※ 학습지 ID 문자열 안의 옛 단원 ID는 자동으로는 안 바뀝니다. 맞추려면 "🔧 학습지 ID 정리"를 이어서 실행하세요.');
   await loadAll();
   if(currentWsId) selectWs(currentWsId);
 };
@@ -1900,6 +1961,17 @@ window.cleanupTempWs=async function(){
   window.location.reload(); // 전체 새로고침
 };
 
+
+/* 제목/단원/학년/난이도 칸은 [발행]·[잠금] 버튼이나 문항 편집처럼 따로 저장을
+   트리거하는 동작이 없으면 그냥 다른 학습지로 넘어갈 때 조용히 사라졌다 —
+   특히 "단원"을 바꿔도 저장이 안 돼서 학습지가 안 옮겨진 것처럼 보이던 원인.
+   이제 이 칸들이 바뀌면(select는 onchange, 제목은 onblur) 바로 저장한다. */
+window.saveMetaField = async function(){
+  if(!currentWs || !currentWsId) return;
+  const unitChanged = document.getElementById('ws-unit').value !== currentWs.unitId;
+  await saveToFirestore(currentWs.status||'draft', true);
+  if(unitChanged) revealWsInSidebar(currentWsId); // 옮겨간 단원을 펼쳐서 보여준다
+};
 
 async function saveToFirestore(status, silent=false){
   if(!currentWs){ toast('학습지를 선택하세요'); return; }

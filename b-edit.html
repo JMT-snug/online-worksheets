@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.20">
+<meta name="app-version" content="edit-v3.21">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -991,6 +991,27 @@ window.migrateQuestionIds = async function(){
    새로고침하면 작업이 중간에 끊겨 일부가 임시 ID(ws-tmp-…)에 걸린 채로 남았다
    (실제 사고: 2026-09-07). 이제 화면 우측 아래에 계속 갱신되는 진행 상태 박스를
    띄워서 "아직 하고 있다"는 걸 보여주고, 시작할 때 끊긴 임시 문서도 먼저 정리한다. */
+/* setDoc/updateDoc/deleteDoc을 하나씩 await로 순서대로 불러도, Firestore 클라이언트가
+   서버 응답을 기다리지 않고 다음 쓰기를 스트림에 먼저 밀어 넣는 경우가 있어(특히 여러 문서를
+   빠르게 잇달아 쓸 때) 큐가 꽉 차면 "Write stream exhausted maximum allowed queued writes"
+   오류가 난다(실제 사고: 2026-09-07, 학습지 32개 정리 중). writeBatch로 여러 건을 한 번에
+   커밋하면 요청 수 자체가 크게 줄어 이 문제를 피할 수 있다(한도 500건보다 넉넉히 낮은
+   300건마다 커밋). */
+function _makeBatcher(){
+  let batch=writeBatch(db), count=0;
+  const flush=async()=>{
+    if(count===0) return;
+    await batch.commit();
+    batch=writeBatch(db); count=0;
+  };
+  return {
+    set:async(ref,data)=>{ batch.set(ref,data); count++; if(count>=300) await flush(); },
+    update:async(ref,data)=>{ batch.update(ref,data); count++; if(count>=300) await flush(); },
+    delete:async(ref)=>{ batch.delete(ref); count++; if(count>=300) await flush(); },
+    flush,
+  };
+}
+
 function _migrateStatusBox(){
   const el=document.createElement('div');
   el.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:300px;line-height:1.6';
@@ -1010,21 +1031,21 @@ async function _recoverStuckWsMigration(status){
   const snap=await getDocs(collection(db,'curriculum'));
   const allIds=new Set(snap.docs.map(d=>d.id));
   const stray=snap.docs.filter(d=>/^ws-tmp-\d+-.+$/.test(d.id));
-  if(!stray.length) return;
-  status.log(`⚠ 끊긴 정리 작업 흔적 ${stray.length}개 확인 중…`);
-  for(const d of stray){
-    const origId=d.id.replace(/^ws-tmp-\d+-/,'');
-    if(!allIds.has(origId)) continue; // 원본이 없으면 그대로 둔다(정상 항목으로 이어서 처리됨)
-    try{
-      await deleteDoc(doc(db,'curriculum',d.id));
-      const recSnap=await getDocs(collectionGroup(db,'worksheets'));
-      for(const rd of recSnap.docs){
-        if(rd.id===d.id && (rd.ref.path.startsWith('records/')||rd.ref.path.startsWith('results/'))){
-          await deleteDoc(rd.ref);
-        }
+  const dupes=stray.filter(d=>allIds.has(d.id.replace(/^ws-tmp-\d+-/,'')));
+  if(!dupes.length) return;
+  status.log(`⚠ 끊긴 정리 작업 흔적 ${dupes.length}개 정리 중…`);
+  const recSnap=await getDocs(collectionGroup(db,'worksheets'));
+  const bw=_makeBatcher();
+  for(const d of dupes){
+    // 원본(원래ID)이 아직 살아 있다 = 1단계(삭제 전) 도중 끊긴 것 → 임시 사본은 중복이니 지운다
+    await bw.delete(doc(db,'curriculum',d.id));
+    for(const rd of recSnap.docs){
+      if(rd.id===d.id && (rd.ref.path.startsWith('records/')||rd.ref.path.startsWith('results/'))){
+        await bw.delete(rd.ref);
       }
-    }catch(e){ console.warn('[끊긴 임시문서 정리 실패]', d.id, e.message); }
+    }
   }
+  await bw.flush();
 }
 
 window.migrateWsIds = async function(){
@@ -1059,47 +1080,56 @@ window.migrateWsIds = async function(){
   try{ recs=await loadStudentRecords(); }
   catch(e){ st.remove(); alert('학생 기록을 읽지 못해 중단합니다: '+e.message); return; }
 
-  // 이름 충돌(A→B, B→C)을 피하려고 임시 ID로 옮긴 뒤 최종 ID로 이동하는 2단계 방식
+  // 이름 충돌(A→B, B→C)을 피하려고 임시 ID로 옮긴 뒤 최종 ID로 이동하는 2단계 방식.
+  // 개별 setDoc/deleteDoc을 수백 번 부르면 쓰기 스트림이 막히므로(위 _makeBatcher 주석
+  // 참고) writeBatch로 모아서 커밋한다. bw.set/bw.delete는 300건마다 자동으로 중간
+  // 커밋을 하므로, 그 중간 커밋이 실패할 수도 있어 루프 전체를 try로 감싼다 — 어느
+  // 항목에서 끊기든 상태 박스를 지우고 결과를 알려준 뒤 함수가 끝나게 하기 위함.
   const tempPfx='ws-tmp-'+Date.now()+'-';
   const errors=[]; let ok=0; let i=0;
-  for(const {ws} of changes){
-    i++; st.log(`1/2단계: ${ws.title||ws.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
-    try{
+  try{
+    const bw=_makeBatcher();
+    for(const {ws} of changes){
+      i++; st.log(`1/2단계: ${ws.title||ws.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
       const tmpId=tempPfx+ws.id;
       const {_tmpId:_, ...wsData}=ws;
-      await setDoc(doc(db,'curriculum',tmpId),{...wsData,id:tmpId});
-      await deleteDoc(doc(db,'curriculum',ws.id));
+      await bw.set(doc(db,'curriculum',tmpId),{...wsData,id:tmpId});
+      await bw.delete(doc(db,'curriculum',ws.id));
       for(const col of ['records','results']){
         for(const [uid,byWs] of Object.entries(recs[col]||{})){
           const rec=byWs[ws.id]; if(!rec) continue;
-          await setDoc(doc(db,col,uid,'worksheets',tmpId),rec);
-          await deleteDoc(doc(db,col,uid,'worksheets',ws.id));
+          await bw.set(doc(db,col,uid,'worksheets',tmpId),rec);
+          await bw.delete(doc(db,col,uid,'worksheets',ws.id));
           byWs[tmpId]=rec; delete byWs[ws.id];
         }
       }
       ws._tmpId=tmpId;
-    }catch(e){ errors.push(`1단계 ${ws.id}: ${e.message}`); }
-  }
+    }
+    await bw.flush();
+  }catch(e){ errors.push(`1단계 중단(${i}/${changes.length}번째 근처): ${e.message}`); }
+
   i=0;
-  for(const {ws,newId} of changes){
-    if(!ws._tmpId) continue;
-    i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
-    try{
+  try{
+    const bw=_makeBatcher();
+    for(const {ws,newId} of changes){
+      if(!ws._tmpId) continue;
+      i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
       const {_tmpId:_, ...wsData}=ws;
-      await setDoc(doc(db,'curriculum',newId),{...wsData,id:newId});
-      await deleteDoc(doc(db,'curriculum',ws._tmpId));
+      await bw.set(doc(db,'curriculum',newId),{...wsData,id:newId});
+      await bw.delete(doc(db,'curriculum',ws._tmpId));
       for(const col of ['records','results']){
         for(const [uid,byWs] of Object.entries(recs[col]||{})){
           const rec=byWs[ws._tmpId]; if(!rec) continue;
-          await setDoc(doc(db,col,uid,'worksheets',newId),rec);
-          await deleteDoc(doc(db,col,uid,'worksheets',ws._tmpId));
+          await bw.set(doc(db,col,uid,'worksheets',newId),rec);
+          await bw.delete(doc(db,col,uid,'worksheets',ws._tmpId));
           byWs[newId]=rec; delete byWs[ws._tmpId];
         }
       }
       if(currentWsId===ws.id) currentWsId=newId;
       ws.id=newId; delete ws._tmpId; ok++;
-    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
-  }
+    }
+    await bw.flush();
+  }catch(e){ errors.push(`2단계 중단(${i}/${changes.length}번째 근처): ${e.message} — 이 학습지 이후는 임시 ID에 남아 있을 수 있음, "🔧 학습지 ID 정리"를 다시 실행하세요`); }
   st.remove();
   alert(`✅ 학습지 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
     + '\n\n※ 잠금·진도 데이터는 학습지 ID 기준이라, 필요하면 index에서 📊 진도 동기화를 다시 실행하세요.');
@@ -1132,38 +1162,45 @@ window.migrateUnitIds = async function(){
   if(!confirm(`단원 ID를 학년·표시 순서 기준으로 바꿉니다.\n그 단원을 쓰는 학습지들의 unitId도 함께 옮깁니다.\n(학습지 ID 문자열 자체는 안 바뀝니다 — 필요하면 이 작업 후 "🔧 학습지 ID 정리"도 실행하세요.)\n끝날 때까지 이 화면을 벗어나거나 새로고침하지 마세요.\n\n${preview}\n\n진행할까요?`)) return;
 
   const st=_migrateStatusBox();
-  // 이름 충돌(A→B, B→C를 동시에 하는 경우) 방지 — 임시 ID로 옮긴 뒤 최종 ID로 이동
+  // 이름 충돌(A→B, B→C를 동시에 하는 경우) 방지 — 임시 ID로 옮긴 뒤 최종 ID로 이동.
+  // writeBatch로 모아 커밋한다(개별 setDoc/updateDoc/deleteDoc을 잇달아 부르면
+  // 쓰기 스트림이 막히는 문제 — _makeBatcher 주석 참고).
   const tempPfx='u-tmp-'+Date.now()+'-';
   const errors=[]; let ok=0; let i=0;
-  for(const {unit} of changes){
-    i++; st.log(`1/2단계: ${unit.title||unit.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
-    try{
+  try{
+    const bw=_makeBatcher();
+    for(const {unit} of changes){
+      i++; st.log(`1/2단계: ${unit.title||unit.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
       const tmpId=tempPfx+unit.id;
       const {_tmpId:_, ...uData}=unit;
-      await setDoc(doc(db,'units',tmpId),{...uData,id:tmpId});
-      await deleteDoc(doc(db,'units',unit.id));
+      await bw.set(doc(db,'units',tmpId),{...uData,id:tmpId});
+      await bw.delete(doc(db,'units',unit.id));
       for(const ws of worksheets.filter(w=>w.unitId===unit.id)){
-        await updateDoc(doc(db,'curriculum',ws.id),{unitId:tmpId});
+        await bw.update(doc(db,'curriculum',ws.id),{unitId:tmpId});
         ws.unitId=tmpId;
       }
       unit._tmpId=tmpId;
-    }catch(e){ errors.push(`1단계 ${unit.id}: ${e.message}`); }
-  }
+    }
+    await bw.flush();
+  }catch(e){ errors.push(`1단계 중단(${i}/${changes.length}번째 근처): ${e.message}`); }
+
   i=0;
-  for(const {unit,newId} of changes){
-    if(!unit._tmpId) continue;
-    i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
-    try{
+  try{
+    const bw=_makeBatcher();
+    for(const {unit,newId} of changes){
+      if(!unit._tmpId) continue;
+      i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
       const {_tmpId:_, ...uData}=unit;
-      await setDoc(doc(db,'units',newId),{...uData,id:newId});
-      await deleteDoc(doc(db,'units',unit._tmpId));
+      await bw.set(doc(db,'units',newId),{...uData,id:newId});
+      await bw.delete(doc(db,'units',unit._tmpId));
       for(const ws of worksheets.filter(w=>w.unitId===unit._tmpId)){
-        await updateDoc(doc(db,'curriculum',ws.id),{unitId:newId});
+        await bw.update(doc(db,'curriculum',ws.id),{unitId:newId});
         ws.unitId=newId;
       }
       unit.id=newId; delete unit._tmpId; ok++;
-    }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
-  }
+    }
+    await bw.flush();
+  }catch(e){ errors.push(`2단계 중단(${i}/${changes.length}번째 근처): ${e.message} — "🔧 단원 ID 정리"를 다시 실행하세요`); }
   st.remove();
   alert(`✅ 단원 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
     + '\n\n※ 학습지 ID 문자열 안의 옛 단원 ID는 자동으로는 안 바뀝니다. 맞추려면 "🔧 학습지 ID 정리"를 이어서 실행하세요.');

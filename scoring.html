@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.26">
+<meta name="app-version" content="scoring-v1.27">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -312,7 +312,11 @@ body.mode-feedback .f-q{display:none}
             <canvas id="grid-canvas"></canvas>
             <img id="stu-drawing" style="position:absolute;top:0;left:0;width:100%">
             <img id="teacher-drawing" style="position:absolute;top:0;left:0;width:100%;pointer-events:none">
-            <canvas id="teacher-canvas" style="position:absolute;top:0;left:0;width:100%;touch-action:none;cursor:crosshair"></canvas>
+            <!-- oncontextmenu·touch-callout: 한 자리를 오래 누르면 브라우저가 "길게 누르기 = 오른쪽 클릭"으로
+                 보고 상황 메뉴를 띄우면서 pointercancel 로 그리던 획까지 끊었다(점을 찍을 때 자주 났다).
+                 touch-action:none 은 스크롤·확대만 막을 뿐 이건 못 막는다. index 와 같은 처리다. -->
+            <canvas id="teacher-canvas" oncontextmenu="return false"
+              style="position:absolute;top:0;left:0;width:100%;touch-action:none;cursor:crosshair;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none"></canvas>
           </div>
 
           <div class="grade-actions">
@@ -1304,7 +1308,20 @@ function drawRefGrid(q){
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
   if(isNL){ drawNumberLine(ctx,W,H,q.nMin??-10,q.nMax??10); }
   else if(q.graphType==='axisonly'){ drawAxisOnlyPlane(ctx,W,H,q.originPos||'mc'); }
+  else if(q.graphType==='construction'){ drawConstructionBg(ctx,W,H,q.imageUrl); }
   else { drawCoordPlane(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5); }
+}
+
+/* 작도(자·컴퍼스) 배경 — index.html과 동일: 격자·눈금 없는 빈 화면, 경계만 옅게 표시.
+   이미지(imageUrl)가 있으면 그 위에 깔아 준다. */
+function drawConstructionBg(ctx,W,H,imageUrl){
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
+  ctx.strokeRect(0.5,0.5,W-1,H-1);
+  if(imageUrl){
+    const img=new Image();
+    img.onload=()=>{ ctx.drawImage(img,0,0,W,H); ctx.strokeRect(0.5,0.5,W-1,H-1); };
+    img.src=imageUrl;
+  }
 }
 
 function drawCoordPlane(ctx,W,H,xMin,xMax,yMin,yMax){
@@ -1430,6 +1447,7 @@ function showStudent(idx){
   gCtx.fillStyle='#fff'; gCtx.fillRect(0,0,W,H);
   if(isNL){ drawNumberLine(gCtx,W,H,q.nMin??-10,q.nMax??10); }
   else if(q.graphType==='axisonly'){ drawAxisOnlyPlane(gCtx,W,H,q.originPos||'mc'); }
+  else if(q.graphType==='construction'){ drawConstructionBg(gCtx,W,H,q.imageUrl); }
   else { drawCoordPlane(gCtx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5); }
 
   // 학생 답안 이미지

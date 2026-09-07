@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.17">
+<meta name="app-version" content="edit-v3.18">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -476,6 +476,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
                 <input type="radio" name="graph-grid" value="axisonly" id="g-ax" onchange="onGraphGridChange()"> 좌표축만
               </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="radio" name="graph-grid" value="construction" id="g-con" onchange="onGraphGridChange()"> 작도(자·컴퍼스)
+              </label>
             </div>
             <div id="g-coord-settings">
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
@@ -510,6 +513,9 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <button type="button" class="g-org-btn" data-org="br" data-h="r" data-v="b" title="오른쪽 아래" onclick="setGraphOrigin('br')"></button>
               </div>
               <div id="g-org-label" style="font-size:12px;color:var(--ink2);margin-top:6px"></div>
+            </div>
+            <div id="g-con-settings" style="display:none;font-size:12px;color:var(--ink3)">
+              눈금·격자 없는 빈 화면입니다. 학생은 <b>눈금 없는 자(직선)</b>와 <b>컴퍼스(원)</b>만으로 그립니다 — 따로 설정할 값이 없습니다.
             </div>
           </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
@@ -1266,7 +1272,7 @@ function showPanel(item){
     } else if(qtype==='graph'){
       // graph 설정 로드
       const gt=item.graphType||'coordinate';
-      document.getElementById(gt==='numberline'?'g-nl':gt==='axisonly'?'g-ax':'g-coord').checked=true;
+      document.getElementById(gt==='numberline'?'g-nl':gt==='axisonly'?'g-ax':gt==='construction'?'g-con':'g-coord').checked=true;
       onGraphGridChange();
       setGraphOrigin(item.originPos||'bl');
       if(gt==='numberline'){
@@ -1427,6 +1433,7 @@ window.onGraphGridChange=function(){
   document.getElementById('g-coord-settings').style.display=gt==='coordinate'?'':'none';
   document.getElementById('g-nl-settings').style.display=gt==='numberline'?'':'none';
   document.getElementById('g-ax-settings').style.display=gt==='axisonly'?'':'none';
+  document.getElementById('g-con-settings').style.display=gt==='construction'?'':'none';
 };
 
 /* ── 좌표축만(눈금 없는 좌표평면): 원점 위치 9곳 ── */
@@ -1437,6 +1444,7 @@ let curOriginPos='bl';
 function curGraphType(){
   if(document.getElementById('g-nl').checked) return 'numberline';
   if(document.getElementById('g-ax').checked) return 'axisonly';
+  if(document.getElementById('g-con').checked) return 'construction';
   return 'coordinate';
 }
 window.setGraphOrigin=function(pos){
@@ -1540,6 +1548,8 @@ window.saveQuestion = async function(){
       qData.yMax=(()=>{const v=parseFloat(document.getElementById('g-ymax').value);return isNaN(v)?5:v;})();
     } else if(gt==='axisonly'){
       qData.originPos=curOriginPos;
+    } else if(gt==='construction'){
+      // 추가 설정 없음 — 빈 화면 + 자·컴퍼스 도구만
     } else {
       qData.nMin=(()=>{const v=parseFloat(document.getElementById('g-nlmin').value);return isNaN(v)?-10:v;})();
       qData.nMax=(()=>{const v=parseFloat(document.getElementById('g-nlmax').value);return isNaN(v)?10:v;})();

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.63">
+  <meta name="app-version" content="8.64">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3752,8 +3752,16 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
         ${teacherDraw?`<img src="${teacherDraw}" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">`:''}
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        ${q.graphType==='construction' ? `
+        <button id="graph-line-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">📏 직선</button>
+        <button id="graph-circle-btn" class="btn-back" style="font-size:12px">⭕ 컴퍼스</button>
+        <button id="graph-radlock-btn" class="btn-back" style="font-size:12px" title="켜면 마지막에 확인한 원과 같은 반지름을 씁니다">🔓 반지름 고정</button>
+        <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
+        <button id="graph-confirm-btn" class="btn-back" style="font-size:12px;display:none;background:var(--green);border-color:var(--green);color:#fff">✓ 확인</button>
+        ` : `
         <button id="graph-pen-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">✏️ 펜</button>
         <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
+        `}
         <button onclick="graphUndo()" class="btn-back" style="font-size:12px">↩ 실행취소</button>
         <button onclick="graphClear()" class="btn-back" style="font-size:12px">전체 지우기</button>
         <span style="margin-left:auto;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;${gradeBadgeStyle}">${gradeBadgeText}</span>
@@ -3781,7 +3789,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
       img.onload=()=>ansC.getContext('2d').drawImage(img,0,0,W,H);
       img.src=prevDrawing;
     }
-    initGraphCanvas(ansC, W, H);
+    initGraphCanvas(ansC, W, H, q.graphType==='construction');
   });
   requestAnimationFrame(()=>renderMath(panel));
 }
@@ -3794,8 +3802,23 @@ function drawGraphGrid(canvas, q, W, H){
     const nl=drawNumberLine(ctx,W,H,q.nMin??-10,q.nMax??10);
   } else if(q.graphType==='axisonly'){
     drawAxisOnlyPlane(ctx,W,H,q.originPos||'mc');
+  } else if(q.graphType==='construction'){
+    drawConstructionBg(ctx,W,H,q.imageUrl);
   } else {
     drawCoordPlane(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
+  }
+}
+
+/* 작도(자·컴퍼스) 배경 — 격자·눈금 없는 빈 화면. 캔버스 경계만 옅게 표시한다.
+   이미지(imageUrl)가 있으면 그 위에 깔아 준다 — 학생이 그리는 답안(graph-answer-canvas)은
+   이 배경과 별개 캔버스라 이미지를 깔아도 제출 답안 용량에는 영향이 없다. */
+function drawConstructionBg(ctx,W,H,imageUrl){
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
+  ctx.strokeRect(0.5,0.5,W-1,H-1);
+  if(imageUrl){
+    const img=new Image();
+    img.onload=()=>{ ctx.drawImage(img,0,0,W,H); ctx.strokeRect(0.5,0.5,W-1,H-1); };
+    img.src=imageUrl;
   }
 }
 
@@ -3906,10 +3929,27 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
 }
 
 // 그래프 캔버스 드로잉
-let graphUndoStack=[], graphEraser=false;
-function initGraphCanvas(canvas, W, H){
+let graphUndoStack=[], graphStepMeta=[], graphEraser=false, graphConTool='line';
+let graphConfirmedCount=0, graphLastRadius=null, graphRadiusLocked=false;
+window._graphConfirmPending=null; // 제출 직전 "아직 확인 안 한 작도 획"을 자동 확정하기 위한 훅
+
+/* 작도 확정 순서를 나타내는 색·번호 — 6색을 순환한다 */
+const CON_COLORS=['#1c1917','#2563eb','#dc2626','#15803d','#7c3aed','#b45309'];
+const _stepGlyph=n=> n<20 ? String.fromCharCode(9312+n) : `(${n+1})`; // ①②③… (20개 넘으면 숫자로)
+function _angDelta(a,b){ // b-a를 -π~π 범위로 정규화 (컴퍼스로 돌린 각도 누적용)
+  let d=b-a;
+  while(d>Math.PI) d-=Math.PI*2;
+  while(d<-Math.PI) d+=Math.PI*2;
+  return d;
+}
+
+function initGraphCanvas(canvas, W, H, isConstruction){
   let drawing=false, lx=0, ly=0;
-  graphUndoStack=[];
+  // 작도 모드 상태: 시작점, 미확정 획을 시작하기 '직전'의 밑그림, 미확정 획 정보
+  let conStartX=0, conStartY=0, conBase=null, conPending=null;
+  let conRadius=null, conAngleInit=false, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
+  graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
+  graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
   const ctx=canvas.getContext('2d');
   ctx.strokeStyle='#1c1917'; ctx.lineWidth=2; ctx.lineCap='round';
 
@@ -3918,12 +3958,61 @@ function initGraphCanvas(canvas, W, H){
     const scaleX=W/r.width, scaleY=H/r.height;
     return [(e.clientX-r.left)*scaleX,(e.clientY-r.top)*scaleY];
   };
+
+  const confirmBtn=document.getElementById('graph-confirm-btn');
+  const showConfirm=on=>{ if(confirmBtn) confirmBtn.style.display=on?'':'none'; };
+  const discardPending=()=>{
+    if(conBase) ctx.putImageData(conBase,0,0);
+    conBase=null; conPending=null; showConfirm(false);
+  };
+  const stampLabel=(x,y,text,color)=>{
+    ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.strokeText(text,x,y); // 흰 테두리로 배경과 겹쳐도 읽히게
+    ctx.fillStyle=color; ctx.fillText(text,x,y);
+  };
+  const confirmPending=()=>{
+    if(!conPending || !conBase) return;
+    const color=CON_COLORS[graphConfirmedCount % CON_COLORS.length];
+    graphUndoStack.push(conBase);
+    graphStepMeta.push({isStep:true, prevRadius:graphLastRadius});
+    ctx.putImageData(conBase,0,0);
+    ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=color; ctx.lineWidth=2;
+    let labelX,labelY;
+    if(conPending.type==='line'){
+      ctx.beginPath(); ctx.moveTo(conPending.x0,conPending.y0); ctx.lineTo(conPending.x1,conPending.y1); ctx.stroke();
+      const dx=conPending.x1-conPending.x0, dy=conPending.y1-conPending.y0, len=Math.hypot(dx,dy)||1;
+      labelX=(conPending.x0+conPending.x1)/2 + (-dy/len)*12;
+      labelY=(conPending.y0+conPending.y1)/2 + (dx/len)*12;
+    } else {
+      ctx.beginPath(); ctx.arc(conPending.cx,conPending.cy,conPending.r,conPending.startAngle,conPending.endAngle,conPending.anticlockwise); ctx.stroke();
+      labelX=conPending.cx+Math.cos(conPending.startAngle)*(conPending.r+12);
+      labelY=conPending.cy+Math.sin(conPending.startAngle)*(conPending.r+12);
+      graphLastRadius=conPending.r;
+    }
+    stampLabel(labelX,labelY,_stepGlyph(graphConfirmedCount),color);
+    graphConfirmedCount++;
+    conBase=null; conPending=null; showConfirm(false);
+  };
+  window._graphConfirmPending = isConstruction ? confirmPending : (()=>{});
+  window._graphHasPending = isConstruction ? (()=>!!conPending) : (()=>false);
+  window._graphDiscardPending = isConstruction ? (()=>discardPending()) : (()=>{});
+  confirmBtn?.addEventListener('click',confirmPending);
+
+  const drawPreviewLine=(x0,y0,x1,y1)=>{
+    ctx.save(); ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); ctx.restore();
+  };
+  const drawPreviewArc=(cx,cy,r,a0,a1,ccw)=>{
+    ctx.save(); ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,r,a0,a1,ccw); ctx.stroke(); ctx.restore();
+  };
+
   /* 터치 규칙은 두 연습장과 똑같이 맞춘다 (makeTouchScroll 주석 참고).
      여기는 예전에 pid 추적이 아예 없어서 손바닥이 닿으면 그대로 그려졌다 — 함께 막는다. */
   const gScroll=makeTouchScroll();
   let pid=null, drawIsTouch=false, drawStartT=0;
-  const cancelStroke=()=>{                     // 획 시작 때 쌓아 둔 스냅샷으로 되돌린다
-    const prev=graphUndoStack.pop();
+  const cancelStroke=()=>{                     // 획 시작 때 쌓아 둔 스냅샷으로 되돌린다(자유 손그림·지우개용)
+    const prev=graphUndoStack.pop(); graphStepMeta.pop();
     if(prev){ ctx.globalCompositeOperation='source-over'; ctx.putImageData(prev,0,0); }
   };
   const start=e=>{
@@ -3944,7 +4033,7 @@ function initGraphCanvas(canvas, W, H){
     }
     if(isTouch && drawing && drawIsTouch && (performance.now()-drawStartT) <= TOUCH_TOGETHER_MS){
       e.preventDefault();                      // ② 손가락 둘이 거의 동시 → 그리던 획을 되돌리고 굴린다
-      cancelStroke();
+      if(isConstruction && !graphEraser) discardPending(); else cancelStroke();
       drawing=false;
       gScroll.begin(e); gScroll.joinId(pid); pid=null;
       try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
@@ -3953,18 +4042,58 @@ function initGraphCanvas(canvas, W, H){
     if(pid!==null) return;                     // 그리는 중에 늦게 닿은 손가락(손바닥) → 무시
     pid=e.pointerId; drawIsTouch=isTouch; drawStartT=performance.now();
     e.preventDefault();
-    graphUndoStack.push(ctx.getImageData(0,0,W,H));
     drawing=true; [lx,ly]=pos(e);
     try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
-    ctx.beginPath(); ctx.moveTo(lx,ly);
-    if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
-    else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
+    if(isConstruction && !graphEraser){
+      if(conPending) discardPending();          // 이전 미확정 획이 남아 있으면 새로 시작할 때 버린다
+      conBase=ctx.getImageData(0,0,W,H);
+      conStartX=lx; conStartY=ly;
+      if(graphConTool==='circle'){
+        conRadius = (graphRadiusLocked && graphLastRadius) ? graphLastRadius : null;
+        conAngleInit=false; conCumAngle=0;
+      }
+    } else {
+      graphUndoStack.push(ctx.getImageData(0,0,W,H));
+      graphStepMeta.push(null);
+      ctx.beginPath(); ctx.moveTo(lx,ly);
+      if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
+      else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
+    }
   };
   const move=e=>{
     if(gScroll.has(e.pointerId)){ e.preventDefault(); gScroll.move(e); return; }
     if(!drawing || e.pointerId!==pid) return; e.preventDefault();
     const [x,y]=pos(e);
-    ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+    if(isConstruction && !graphEraser){
+      if(!conBase) return;
+      ctx.putImageData(conBase,0,0);
+      if(graphConTool==='circle'){
+        if(conRadius===null){
+          const r=Math.hypot(x-conStartX,y-conStartY);
+          if(r<3){ lx=x; ly=y; return; }         // 손을 조금 뗄 때까지는(반지름 0에 가까움) 미리보기 생략
+          conRadius=r;
+        }
+        if(!conAngleInit){
+          if(Math.hypot(x-conStartX,y-conStartY)<3){ lx=x; ly=y; return; } // 각도를 잴 정도는 움직여야 시작
+          conStartAngle=Math.atan2(y-conStartY,x-conStartX);
+          conPrevAngle=conStartAngle; conCumAngle=0; conAngleInit=true;
+        } else {
+          const curAngle=Math.atan2(y-conStartY,x-conStartX);
+          conCumAngle+=_angDelta(conPrevAngle,curAngle);
+          conCumAngle=Math.max(-Math.PI*2,Math.min(Math.PI*2,conCumAngle)); // 한 바퀴(전체 원)까지만
+          conPrevAngle=curAngle;
+        }
+        const endAngle=conStartAngle+conCumAngle;
+        drawPreviewArc(conStartX,conStartY,conRadius,conStartAngle,endAngle,conCumAngle<0);
+        conPending={type:'circle',cx:conStartX,cy:conStartY,r:conRadius,startAngle:conStartAngle,endAngle,anticlockwise:conCumAngle<0};
+      } else {
+        drawPreviewLine(conStartX,conStartY,x,y);
+        conPending={type:'line',x0:conStartX,y0:conStartY,x1:x,y1:y};
+      }
+      showConfirm(true);
+    } else {
+      ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+    }
     lx=x; ly=y;
   };
   const end=e=>{
@@ -3975,6 +4104,7 @@ function initGraphCanvas(canvas, W, H){
     }
     if(pid!==null && e && e.pointerId!==undefined && e.pointerId!==pid) return;
     drawing=false; pid=null;
+    // 작도 모드는 손을 떼도 미확정 상태 그대로 둔다 — [확인]을 눌러야 획으로 남는다
     try{ canvas.releasePointerCapture(e.pointerId); }catch(_){}
   };
   canvas.classList.add('draw-surface');
@@ -3986,32 +4116,61 @@ function initGraphCanvas(canvas, W, H){
   canvas.addEventListener('pointercancel',end);
 
   // 도구 버튼
-  document.getElementById('graph-pen-btn')?.addEventListener('click',()=>{
-    graphEraser=false;
-    document.getElementById('graph-pen-btn').style.background='var(--acc-lt)';
-    document.getElementById('graph-pen-btn').style.borderColor='var(--accent)';
-    document.getElementById('graph-erase-btn').style.background='';
-    document.getElementById('graph-erase-btn').style.borderColor='';
-  });
-  document.getElementById('graph-erase-btn')?.addEventListener('click',()=>{
-    graphEraser=true;
-    document.getElementById('graph-erase-btn').style.background='var(--acc-lt)';
-    document.getElementById('graph-erase-btn').style.borderColor='var(--accent)';
-    document.getElementById('graph-pen-btn').style.background='';
-    document.getElementById('graph-pen-btn').style.borderColor='';
-  });
+  if(isConstruction){
+    const lineBtn=document.getElementById('graph-line-btn');
+    const circleBtn=document.getElementById('graph-circle-btn');
+    const eraseBtn=document.getElementById('graph-erase-btn');
+    const radLockBtn=document.getElementById('graph-radlock-btn');
+    const setActive=el=>{
+      [lineBtn,circleBtn,eraseBtn].forEach(b=>{ if(b){ b.style.background=''; b.style.borderColor=''; b.style.color=''; } });
+      if(el){ el.style.background='var(--acc-lt)'; el.style.borderColor='var(--accent)'; el.style.color='var(--accent)'; }
+    };
+    lineBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphConTool='line'; graphEraser=false; setActive(lineBtn); });
+    circleBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphConTool='circle'; graphEraser=false; setActive(circleBtn); });
+    eraseBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphEraser=true; setActive(eraseBtn); });
+    radLockBtn?.addEventListener('click',()=>{
+      graphRadiusLocked=!graphRadiusLocked;
+      radLockBtn.textContent = graphRadiusLocked ? '🔒 반지름 고정' : '🔓 반지름 고정';
+      radLockBtn.style.background = graphRadiusLocked ? 'var(--acc-lt)' : '';
+      radLockBtn.style.borderColor = graphRadiusLocked ? 'var(--accent)' : '';
+      radLockBtn.style.color = graphRadiusLocked ? 'var(--accent)' : '';
+    });
+  } else {
+    document.getElementById('graph-pen-btn')?.addEventListener('click',()=>{
+      graphEraser=false;
+      document.getElementById('graph-pen-btn').style.background='var(--acc-lt)';
+      document.getElementById('graph-pen-btn').style.borderColor='var(--accent)';
+      document.getElementById('graph-erase-btn').style.background='';
+      document.getElementById('graph-erase-btn').style.borderColor='';
+    });
+    document.getElementById('graph-erase-btn')?.addEventListener('click',()=>{
+      graphEraser=true;
+      document.getElementById('graph-erase-btn').style.background='var(--acc-lt)';
+      document.getElementById('graph-erase-btn').style.borderColor='var(--accent)';
+      document.getElementById('graph-pen-btn').style.background='';
+      document.getElementById('graph-pen-btn').style.borderColor='';
+    });
+  }
 }
 
 window.graphUndo=function(){
   const canvas=document.getElementById('graph-answer-canvas');
-  if(!canvas||!graphUndoStack.length) return;
+  if(!canvas) return;
+  // 작도 중 미확정 획이 있으면 실행취소는 우선 그것부터 취소한다
+  if(window._graphHasPending && window._graphHasPending()){ window._graphDiscardPending(); return; }
+  if(!graphUndoStack.length) return;
   canvas.getContext('2d').putImageData(graphUndoStack.pop(),0,0);
+  const meta=graphStepMeta.pop();
+  if(meta && meta.isStep){ graphConfirmedCount=Math.max(0,graphConfirmedCount-1); graphLastRadius=meta.prevRadius; }
 };
 window.graphClear=function(){
   const canvas=document.getElementById('graph-answer-canvas');
   if(!canvas) return;
+  if(window._graphHasPending && window._graphHasPending()) window._graphDiscardPending();
   graphUndoStack.push(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height));
+  graphStepMeta.push(null);
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+  graphConfirmedCount=0; graphLastRadius=null;
 };
 
 
@@ -4262,6 +4421,7 @@ async function submitExamAns(q){
   } else if(q.type==='multi'){
     userAns=[...multiSel].sort((a,b)=>a-b);
   } else if(q.type==='graph'){
+    window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
     userAns=gc?gc.toDataURL('image/png'):null;
   } else if(q.type==='link'){
@@ -4481,6 +4641,7 @@ async function submitQAns(){
 
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="graph"){
+    window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
     let _regraded=false;
     if(gc){

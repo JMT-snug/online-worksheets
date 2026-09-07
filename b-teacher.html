@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.40">
+<meta name="app-version" content="3.41">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1279,12 +1279,20 @@ window.migrateWsIds=async function(){
 
   // setDoc/deleteDoc을 수백 번 연달아 부르면 Firestore 쓰기 스트림이 막힌다
   // (resource-exhausted: maximum allowed queued writes). writeBatch로 모아 커밋한다.
+  // 건수뿐 아니라 크기도 봐야 한다 — 커밋 요청 하나의 한도가 11,534,336바이트라
+  // 문항·이미지가 많은 학습지는 몇 개만 모여도 "Request payload size exceeds the limit"이 난다.
   function makeBatcher(){
-    let batch=writeBatch(db), count=0;
-    const flush=async()=>{ if(!count) return; await batch.commit(); batch=writeBatch(db); count=0; };
+    const MAX_OPS=300, MAX_BYTES=8*1024*1024;
+    let batch=writeBatch(db), count=0, bytes=0;
+    const sizeOf=data=>{ try{ return new TextEncoder().encode(JSON.stringify(data)).length; }catch(e){ return 0; } };
+    const flush=async()=>{ if(!count) return; await batch.commit(); batch=writeBatch(db); count=0; bytes=0; };
+    const add=async(apply,size)=>{
+      if(count>0 && (count+1>MAX_OPS || bytes+size>MAX_BYTES)) await flush();
+      apply(); count++; bytes+=size;
+    };
     return {
-      set:async(ref,data)=>{ batch.set(ref,data); if(++count>=300) await flush(); },
-      delete:async(ref)=>{ batch.delete(ref); if(++count>=300) await flush(); },
+      set:async(ref,data)=>add(()=>batch.set(ref,data), sizeOf(data)),
+      delete:async(ref)=>add(()=>batch.delete(ref), 200),
       flush
     };
   }

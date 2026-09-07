@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.22">
+<meta name="app-version" content="edit-v3.23">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1000,18 +1000,29 @@ window.migrateQuestionIds = async function(){
    빠르게 잇달아 쓸 때) 큐가 꽉 차면 "Write stream exhausted maximum allowed queued writes"
    오류가 난다(실제 사고: 2026-09-07, 학습지 32개 정리 중). writeBatch로 여러 건을 한 번에
    커밋하면 요청 수 자체가 크게 줄어 이 문제를 피할 수 있다(한도 500건보다 넉넉히 낮은
-   300건마다 커밋). */
+   300건마다 커밋).
+   ⚠ 건수만으로는 부족하다 — 커밋 요청 하나의 크기 한도(11,534,336바이트)도 있어서,
+   문항·이미지가 많은 학습지는 몇 개만 모여도 "Request payload size exceeds the limit"으로
+   실패한다(실제 사고: 2026-09-08, 학습지 6개 정리 중 4번째에서 중단). 그래서 넣기 전에
+   크기를 재서, 넘칠 것 같으면 **먼저 커밋하고** 새 배치에 담는다. */
 function _makeBatcher(){
-  let batch=writeBatch(db), count=0;
+  const MAX_OPS=300, MAX_BYTES=8*1024*1024; // 요청 한도 11.5MB보다 넉넉히 낮게
+  let batch=writeBatch(db), count=0, bytes=0;
+  const sizeOf=data=>{ try{ return new TextEncoder().encode(JSON.stringify(data)).length; }catch(e){ return 0; } };
   const flush=async()=>{
     if(count===0) return;
     await batch.commit();
-    batch=writeBatch(db); count=0;
+    batch=writeBatch(db); count=0; bytes=0;
+  };
+  // 이번 건을 더하면 건수나 크기 한도를 넘을 때, 담기 전에 지금까지 모은 것을 커밋한다
+  const add=async(apply,size)=>{
+    if(count>0 && (count+1>MAX_OPS || bytes+size>MAX_BYTES)) await flush();
+    apply(); count++; bytes+=size;
   };
   return {
-    set:async(ref,data)=>{ batch.set(ref,data); count++; if(count>=300) await flush(); },
-    update:async(ref,data)=>{ batch.update(ref,data); count++; if(count>=300) await flush(); },
-    delete:async(ref)=>{ batch.delete(ref); count++; if(count>=300) await flush(); },
+    set:async(ref,data)=>add(()=>batch.set(ref,data), sizeOf(data)),
+    update:async(ref,data)=>add(()=>batch.update(ref,data), sizeOf(data)),
+    delete:async(ref)=>add(()=>batch.delete(ref), 200),
     flush,
   };
 }

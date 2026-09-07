@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.19">
+<meta name="app-version" content="edit-v3.20">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -986,7 +986,56 @@ window.migrateQuestionIds = async function(){
   if(currentWsId) selectWs(currentWsId);
 };
 
+/* 학습지가 많으면 학생 기록 이동까지 꽤 오래 걸린다. 예전엔 "확인 중…" 토스트가
+   2.5초 뒤 그냥 사라져서 마치 멈춘 것처럼 보였고, 그 사이 학습지를 클릭하거나
+   새로고침하면 작업이 중간에 끊겨 일부가 임시 ID(ws-tmp-…)에 걸린 채로 남았다
+   (실제 사고: 2026-09-07). 이제 화면 우측 아래에 계속 갱신되는 진행 상태 박스를
+   띄워서 "아직 하고 있다"는 걸 보여주고, 시작할 때 끊긴 임시 문서도 먼저 정리한다. */
+function _migrateStatusBox(){
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;bottom:20px;right:20px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;z-index:9999;font-size:13px;min-width:300px;line-height:1.6';
+  document.body.appendChild(el);
+  return {
+    log:(msg)=>{ el.textContent=msg; },
+    remove:()=>el.remove(),
+  };
+}
+
+/* 끊긴 정리 작업이 남긴 ws-tmp-<시각>-<원래ID> 문서를 찾아 정리한다.
+   - 원본(원래ID)이 아직 살아 있으면 → 1단계(삭제 전) 도중 끊긴 것 → 임시 사본은 중복이니 그냥 지운다.
+   - 원본이 없으면 → 1단계는 끝났고 2단계(최종 ID로 이동)만 안 된 것 → 손대지 않는다.
+     이미 currentWs 배열에 정상 항목처럼 들어 있으므로, 아래 changes 계산에서
+     unitId 기준으로 다시 잡혀 정상적으로 최종 ID를 받는다. */
+async function _recoverStuckWsMigration(status){
+  const snap=await getDocs(collection(db,'curriculum'));
+  const allIds=new Set(snap.docs.map(d=>d.id));
+  const stray=snap.docs.filter(d=>/^ws-tmp-\d+-.+$/.test(d.id));
+  if(!stray.length) return;
+  status.log(`⚠ 끊긴 정리 작업 흔적 ${stray.length}개 확인 중…`);
+  for(const d of stray){
+    const origId=d.id.replace(/^ws-tmp-\d+-/,'');
+    if(!allIds.has(origId)) continue; // 원본이 없으면 그대로 둔다(정상 항목으로 이어서 처리됨)
+    try{
+      await deleteDoc(doc(db,'curriculum',d.id));
+      const recSnap=await getDocs(collectionGroup(db,'worksheets'));
+      for(const rd of recSnap.docs){
+        if(rd.id===d.id && (rd.ref.path.startsWith('records/')||rd.ref.path.startsWith('results/'))){
+          await deleteDoc(rd.ref);
+        }
+      }
+    }catch(e){ console.warn('[끊긴 임시문서 정리 실패]', d.id, e.message); }
+  }
+}
+
 window.migrateWsIds = async function(){
+  await loadAll(); // 끊긴 작업이 있었을 수 있으니 최신 상태를 다시 읽고 시작한다
+
+  const status=_migrateStatusBox();
+  try{ await _recoverStuckWsMigration(status); }
+  catch(e){ console.warn('[끊긴 정리 확인 실패]', e.message); }
+  await loadAll(); // 위에서 지운 게 있으면 다시 반영
+  status.remove();
+
   const byUnit={};
   worksheets.forEach(ws=>{ (byUnit[ws.unitId||'etc']=byUnit[ws.unitId||'etc']||[]).push(ws); });
   const changes=[];
@@ -1002,17 +1051,19 @@ window.migrateWsIds = async function(){
   }
   if(!changes.length){ alert('모든 학습지 ID가 단원·순서와 일치합니다.'); return; }
   const preview=changes.map(({ws,newId})=>`• ${ws.id} → ${newId}  (${ws.title})`).join('\n');
-  if(!confirm(`학습지 ID를 표시 순서 기준으로 바꿉니다.\n학생 기록도 새 ID로 함께 옮깁니다.\n\n${preview}\n\n진행할까요?`)) return;
+  if(!confirm(`학습지 ID를 표시 순서 기준으로 바꿉니다.\n학생 기록도 새 ID로 함께 옮깁니다.\n학습지·학생 수에 따라 시간이 걸릴 수 있습니다 — 끝날 때까지 이 화면을 벗어나거나 새로고침하지 마세요.\n\n${preview}\n\n진행할까요?`)) return;
 
-  toast('학생 기록 확인 중…');
+  const st=_migrateStatusBox();
+  st.log('학생 기록 확인 중… (새로고침하지 마세요)');
   let recs;
   try{ recs=await loadStudentRecords(); }
-  catch(e){ alert('학생 기록을 읽지 못해 중단합니다: '+e.message); return; }
+  catch(e){ st.remove(); alert('학생 기록을 읽지 못해 중단합니다: '+e.message); return; }
 
   // 이름 충돌(A→B, B→C)을 피하려고 임시 ID로 옮긴 뒤 최종 ID로 이동하는 2단계 방식
   const tempPfx='ws-tmp-'+Date.now()+'-';
-  const errors=[]; let ok=0;
+  const errors=[]; let ok=0; let i=0;
   for(const {ws} of changes){
+    i++; st.log(`1/2단계: ${ws.title||ws.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
     try{
       const tmpId=tempPfx+ws.id;
       const {_tmpId:_, ...wsData}=ws;
@@ -1029,8 +1080,10 @@ window.migrateWsIds = async function(){
       ws._tmpId=tmpId;
     }catch(e){ errors.push(`1단계 ${ws.id}: ${e.message}`); }
   }
+  i=0;
   for(const {ws,newId} of changes){
     if(!ws._tmpId) continue;
+    i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
     try{
       const {_tmpId:_, ...wsData}=ws;
       await setDoc(doc(db,'curriculum',newId),{...wsData,id:newId});
@@ -1047,6 +1100,7 @@ window.migrateWsIds = async function(){
       ws.id=newId; delete ws._tmpId; ok++;
     }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
   }
+  st.remove();
   alert(`✅ 학습지 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
     + '\n\n※ 잠금·진도 데이터는 학습지 ID 기준이라, 필요하면 index에서 📊 진도 동기화를 다시 실행하세요.');
   await loadAll();
@@ -1075,12 +1129,14 @@ window.migrateUnitIds = async function(){
     const cnt=worksheets.filter(w=>w.unitId===unit.id).length;
     return `• ${unit.id} → ${newId}  (${unit.title}, 학습지 ${cnt}개)`;
   }).join('\n');
-  if(!confirm(`단원 ID를 학년·표시 순서 기준으로 바꿉니다.\n그 단원을 쓰는 학습지들의 unitId도 함께 옮깁니다.\n(학습지 ID 문자열 자체는 안 바뀝니다 — 필요하면 이 작업 후 "🔧 학습지 ID 정리"도 실행하세요.)\n\n${preview}\n\n진행할까요?`)) return;
+  if(!confirm(`단원 ID를 학년·표시 순서 기준으로 바꿉니다.\n그 단원을 쓰는 학습지들의 unitId도 함께 옮깁니다.\n(학습지 ID 문자열 자체는 안 바뀝니다 — 필요하면 이 작업 후 "🔧 학습지 ID 정리"도 실행하세요.)\n끝날 때까지 이 화면을 벗어나거나 새로고침하지 마세요.\n\n${preview}\n\n진행할까요?`)) return;
 
+  const st=_migrateStatusBox();
   // 이름 충돌(A→B, B→C를 동시에 하는 경우) 방지 — 임시 ID로 옮긴 뒤 최종 ID로 이동
   const tempPfx='u-tmp-'+Date.now()+'-';
-  const errors=[]; let ok=0;
+  const errors=[]; let ok=0; let i=0;
   for(const {unit} of changes){
+    i++; st.log(`1/2단계: ${unit.title||unit.id} (${i}/${changes.length}) — 새로고침하지 마세요`);
     try{
       const tmpId=tempPfx+unit.id;
       const {_tmpId:_, ...uData}=unit;
@@ -1093,8 +1149,10 @@ window.migrateUnitIds = async function(){
       unit._tmpId=tmpId;
     }catch(e){ errors.push(`1단계 ${unit.id}: ${e.message}`); }
   }
+  i=0;
   for(const {unit,newId} of changes){
     if(!unit._tmpId) continue;
+    i++; st.log(`2/2단계: ${newId} (${i}/${changes.length}) — 새로고침하지 마세요`);
     try{
       const {_tmpId:_, ...uData}=unit;
       await setDoc(doc(db,'units',newId),{...uData,id:newId});
@@ -1106,6 +1164,7 @@ window.migrateUnitIds = async function(){
       unit.id=newId; delete unit._tmpId; ok++;
     }catch(e){ errors.push(`2단계 ${newId}: ${e.message}`); }
   }
+  st.remove();
   alert(`✅ 단원 ID 정리 완료: ${ok}개`+(errors.length?`\n\n⚠️ 실패\n${errors.join('\n')}`:'')
     + '\n\n※ 학습지 ID 문자열 안의 옛 단원 ID는 자동으로는 안 바뀝니다. 맞추려면 "🔧 학습지 ID 정리"를 이어서 실행하세요.');
   await loadAll();

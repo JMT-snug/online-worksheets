@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.21">
+<meta name="app-version" content="edit-v3.22">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -229,8 +229,11 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .prev-opt.correct{border-color:var(--green);background:var(--grn-lt);font-weight:600}
 .prev-ans{font-size:13px;color:var(--ink2);background:var(--cream);border-radius:6px;padding:6px 10px;margin-top:4px}
 
-/* ── 단원 삭제 버튼 ── */
-.unit-hdr .unit-del{display:none;background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px;border-radius:4px;margin-left:auto}
+/* ── 단원 수정·삭제 버튼 ── */
+.unit-hdr .unit-edit{display:none;background:none;border:none;cursor:pointer;color:#2563eb;font-size:13px;padding:2px 4px;border-radius:4px;margin-left:auto}
+.unit-hdr:hover .unit-edit{display:inline}
+.unit-edit:hover{background:#dbeafe}
+.unit-hdr .unit-del{display:none;background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:2px 4px;border-radius:4px}
 .unit-hdr:hover .unit-del{display:inline}
 .unit-del:hover{background:#fee2e2}
 
@@ -766,8 +769,9 @@ function renderSidebar(){
     block.innerHTML = `
       <div class="unit-hdr" onclick="toggleUnit(this)">
         <span class="unit-toggle">▶</span>
-        <span style="flex:1">${unit.grade}학년 ${unit.title}</span>
+        <span style="flex:1">${unit.grade}학년 ${unit.title}${unit.category?'':' <span style="color:#ef4444;font-weight:700" title="영역이 없어서 학생 화면에 안 보입니다">⚠ 영역 없음</span>'}</span>
         <span style="font-size:10px;color:#475569">${wsOfUnit.length}</span>
+        <button class="unit-edit" onclick="editUnit('${unit.id}',event)" title="단원 수정">✏️</button>
         <button class="unit-del" onclick="deleteUnit('${unit.id}',event)" title="단원 삭제">✕</button>
       </div>
       <div class="unit-wsList">
@@ -2170,16 +2174,50 @@ window.wsDrop = async (e, targetId, unitId) => {
   toast('순서 저장됨');
 };
 
-// ── 단원 추가 ──
-document.getElementById('btn-add-unit').onclick = async () => {
-  const title=prompt('단원명:'); if(!title) return;
-  const grade=parseInt(prompt('학년 (숫자):')||'1');
-  const id=`u${grade}-${Date.now()}`;
-  const newUnit={id, title, grade, category:'', order:units.length};
-  await setDoc(doc(db,'units',id), newUnit);
-  units.push(newUnit);
+// ── 단원 추가·수정 ──
+// (예전엔 prompt()로 단원명·학년만 물어봤고 영역(category)은 항상 빈 문자열로 저장됐다 —
+//  index.html 학생 화면은 정확히 4개 영역 문자열에 맞는 단원만 매트릭스에 그리므로,
+//  영역이 빈 단원은 학생 화면 어디에도 안 보였다. 이제 추가할 때 영역을 드롭다운으로
+//  반드시 고르게 하고, 이미 빈 채로 만들어진 단원은 사이드바에 경고 표시 + ✏️로 고칠 수 있다.)
+let _editingUnitId = null;
+document.getElementById('btn-add-unit').onclick = () => {
+  _editingUnitId = null;
+  document.getElementById('unit-modal-title').textContent='단원 추가';
+  document.getElementById('au-title').value='';
+  document.getElementById('au-grade').value='1';
+  document.getElementById('au-category').value='수와 연산';
+  document.getElementById('unit-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('au-title').focus(),30);
+};
+window.editUnit = function(unitId, e){
+  e.stopPropagation();
+  const unit=units.find(u=>u.id===unitId); if(!unit) return;
+  _editingUnitId = unitId;
+  document.getElementById('unit-modal-title').textContent='단원 수정';
+  document.getElementById('au-title').value=unit.title||'';
+  document.getElementById('au-grade').value=unit.grade||1;
+  document.getElementById('au-category').value=unit.category||'수와 연산';
+  document.getElementById('unit-modal').style.display='flex';
+};
+window.confirmUnitModal = async function(){
+  const title=document.getElementById('au-title').value.trim();
+  if(!title){ toast('단원명을 입력하세요'); return; }
+  const grade=parseInt(document.getElementById('au-grade').value)||1;
+  const category=document.getElementById('au-category').value;
+  if(_editingUnitId){
+    const unit=units.find(u=>u.id===_editingUnitId); if(!unit) return;
+    unit.title=title; unit.grade=grade; unit.category=category;
+    await setDoc(doc(db,'units',unit.id), unit);
+    toast('단원 수정됨');
+  } else {
+    const id=`u${grade}-${Date.now()}`;
+    const newUnit={id, title, grade, category, order:units.length};
+    await setDoc(doc(db,'units',id), newUnit);
+    units.push(newUnit);
+    toast('단원 추가됨');
+  }
+  document.getElementById('unit-modal').style.display='none';
   renderSidebar();
-  toast('단원 추가됨');
 };
 
 
@@ -2668,6 +2706,38 @@ window._jumpToQuestion = function(qIdx){
 };
 
 </script>
+
+<!-- 단원 추가·수정 모달 -->
+<div class="modal-bg" id="unit-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="width:320px">
+    <h3 id="unit-modal-title">단원 추가</h3>
+    <div class="field">
+      <label>단원명</label>
+      <input id="au-title" placeholder="예: 소인수분해">
+    </div>
+    <div class="field">
+      <label>학년</label>
+      <select id="au-grade">
+        <option value="1">1학년</option>
+        <option value="2">2학년</option>
+        <option value="3">3학년</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>영역 <span style="font-weight:400;color:var(--ink3)">(학생 화면 매트릭스의 가로줄 — 안 고르면 학생 화면에 안 보입니다)</span></label>
+      <select id="au-category">
+        <option value="수와 연산">수와 연산</option>
+        <option value="변화와 관계">변화와 관계</option>
+        <option value="도형과 측정">도형과 측정</option>
+        <option value="자료와 가능성">자료와 가능성</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('unit-modal').style.display='none'">취소</button>
+      <button class="btn-modal-ok" onclick="confirmUnitModal()">저장</button>
+    </div>
+  </div>
+</div>
 
 <!-- 문항 유형 선택 모달 -->
 <div class="modal-bg" id="type-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.64">
+  <meta name="app-version" content="8.65">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3945,9 +3945,16 @@ function _angDelta(a,b){ // b-a를 -π~π 범위로 정규화 (컴퍼스로 돌�
 
 function initGraphCanvas(canvas, W, H, isConstruction){
   let drawing=false, lx=0, ly=0;
-  // 작도 모드 상태: 시작점, 미확정 획을 시작하기 '직전'의 밑그림, 미확정 획 정보
-  let conStartX=0, conStartY=0, conBase=null, conPending=null;
-  let conRadius=null, conAngleInit=false, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
+  // 작도 모드 상태
+  //  conPhase: 'idle'(컴퍼스 대기) | 'centerSet'(중심을 찍어 두고 반지름/각도 제스처를 기다림)
+  //  conActiveGesture: 0(손 뗌) | 1(중심 찍는 중) | 2(반지름·스윕 중)
+  let conPhase='idle', conActiveGesture=0;
+  let conStartX=0, conStartY=0;                 // 직선 시작점
+  let conCenterX=0, conCenterY=0;                // 컴퍼스 중심
+  let conGestureBase=null;                       // 전체 되돌리기 기준(중심 마커 찍기 전 / 직선 시작 전)
+  let conSweepBase=null;                         // 스윕 중 매 move마다 복원할 기준(중심 마커 포함)
+  let conPending=null;                           // 확정 대기 중인 도형 정보
+  let conRadius=0, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
   graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
   graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
   const ctx=canvas.getContext('2d');
@@ -3962,8 +3969,10 @@ function initGraphCanvas(canvas, W, H, isConstruction){
   const confirmBtn=document.getElementById('graph-confirm-btn');
   const showConfirm=on=>{ if(confirmBtn) confirmBtn.style.display=on?'':'none'; };
   const discardPending=()=>{
-    if(conBase) ctx.putImageData(conBase,0,0);
-    conBase=null; conPending=null; showConfirm(false);
+    if(conGestureBase) ctx.putImageData(conGestureBase,0,0);
+    conGestureBase=null; conSweepBase=null; conPending=null;
+    conPhase='idle'; conActiveGesture=0;
+    showConfirm(false);
   };
   const stampLabel=(x,y,text,color)=>{
     ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -3971,11 +3980,11 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     ctx.fillStyle=color; ctx.fillText(text,x,y);
   };
   const confirmPending=()=>{
-    if(!conPending || !conBase) return;
+    if(!conPending || !conGestureBase) return;
     const color=CON_COLORS[graphConfirmedCount % CON_COLORS.length];
-    graphUndoStack.push(conBase);
+    graphUndoStack.push(conGestureBase);
     graphStepMeta.push({isStep:true, prevRadius:graphLastRadius});
-    ctx.putImageData(conBase,0,0);
+    ctx.putImageData(conGestureBase,0,0);
     ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=color; ctx.lineWidth=2;
     let labelX,labelY;
     if(conPending.type==='line'){
@@ -3991,20 +4000,27 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     }
     stampLabel(labelX,labelY,_stepGlyph(graphConfirmedCount),color);
     graphConfirmedCount++;
-    conBase=null; conPending=null; showConfirm(false);
+    conGestureBase=null; conSweepBase=null; conPending=null;
+    conPhase='idle'; conActiveGesture=0;
+    showConfirm(false);
   };
   window._graphConfirmPending = isConstruction ? confirmPending : (()=>{});
-  window._graphHasPending = isConstruction ? (()=>!!conPending) : (()=>false);
+  window._graphHasPending = isConstruction ? (()=>!!conPending || conPhase!=='idle') : (()=>false);
   window._graphDiscardPending = isConstruction ? (()=>discardPending()) : (()=>{});
   confirmBtn?.addEventListener('click',confirmPending);
 
   const drawPreviewLine=(x0,y0,x1,y1)=>{
-    ctx.save(); ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); ctx.restore();
   };
   const drawPreviewArc=(cx,cy,r,a0,a1,ccw)=>{
-    ctx.save(); ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(cx,cy,r,a0,a1,ccw); ctx.stroke(); ctx.restore();
+  };
+  const drawCenterMark=(cx,cy)=>{
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(cx-6,cy); ctx.lineTo(cx+6,cy); ctx.moveTo(cx,cy-6); ctx.lineTo(cx,cy+6); ctx.stroke();
+    ctx.restore();
   };
 
   /* 터치 규칙은 두 연습장과 똑같이 맞춘다 (makeTouchScroll 주석 참고).
@@ -4044,14 +4060,27 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     e.preventDefault();
     drawing=true; [lx,ly]=pos(e);
     try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
-    if(isConstruction && !graphEraser){
-      if(conPending) discardPending();          // 이전 미확정 획이 남아 있으면 새로 시작할 때 버린다
-      conBase=ctx.getImageData(0,0,W,H);
-      conStartX=lx; conStartY=ly;
-      if(graphConTool==='circle'){
-        conRadius = (graphRadiusLocked && graphLastRadius) ? graphLastRadius : null;
-        conAngleInit=false; conCumAngle=0;
+    if(isConstruction && !graphEraser && graphConTool==='circle'){
+      // 컴퍼스: ① 첫 클릭 = 중심 찍기, ② 그다음 클릭+드래그 = 반지름·회전(호/원)
+      if(conPhase==='idle'){
+        conActiveGesture=1;
+        conGestureBase=ctx.getImageData(0,0,W,H);
+        conCenterX=lx; conCenterY=ly;
+        drawCenterMark(conCenterX,conCenterY);
+        conSweepBase=ctx.getImageData(0,0,W,H);
+        conPhase='centerSet';
+      } else {
+        conActiveGesture=2;
+        const distFromCenter=Math.hypot(lx-conCenterX,ly-conCenterY);
+        conRadius = (graphRadiusLocked && graphLastRadius) ? graphLastRadius : Math.max(distFromCenter,1);
+        conStartAngle=Math.atan2(ly-conCenterY,lx-conCenterX);
+        conPrevAngle=conStartAngle; conCumAngle=0;
       }
+    } else if(isConstruction && !graphEraser){
+      // 직선: 기존처럼 한 번의 드래그로 시작점→끝점
+      if(conPending) discardPending();
+      conGestureBase=ctx.getImageData(0,0,W,H);
+      conStartX=lx; conStartY=ly;
     } else {
       graphUndoStack.push(ctx.getImageData(0,0,W,H));
       graphStepMeta.push(null);
@@ -4064,32 +4093,24 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     if(gScroll.has(e.pointerId)){ e.preventDefault(); gScroll.move(e); return; }
     if(!drawing || e.pointerId!==pid) return; e.preventDefault();
     const [x,y]=pos(e);
-    if(isConstruction && !graphEraser){
-      if(!conBase) return;
-      ctx.putImageData(conBase,0,0);
-      if(graphConTool==='circle'){
-        if(conRadius===null){
-          const r=Math.hypot(x-conStartX,y-conStartY);
-          if(r<3){ lx=x; ly=y; return; }         // 손을 조금 뗄 때까지는(반지름 0에 가까움) 미리보기 생략
-          conRadius=r;
-        }
-        if(!conAngleInit){
-          if(Math.hypot(x-conStartX,y-conStartY)<3){ lx=x; ly=y; return; } // 각도를 잴 정도는 움직여야 시작
-          conStartAngle=Math.atan2(y-conStartY,x-conStartX);
-          conPrevAngle=conStartAngle; conCumAngle=0; conAngleInit=true;
-        } else {
-          const curAngle=Math.atan2(y-conStartY,x-conStartX);
-          conCumAngle+=_angDelta(conPrevAngle,curAngle);
-          conCumAngle=Math.max(-Math.PI*2,Math.min(Math.PI*2,conCumAngle)); // 한 바퀴(전체 원)까지만
-          conPrevAngle=curAngle;
-        }
+    if(isConstruction && !graphEraser && graphConTool==='circle'){
+      if(conActiveGesture===1){ lx=x; ly=y; return; }   // 중심 찍는 제스처는 움직여도 무시(뗀 자리가 중심)
+      if(conActiveGesture===2 && conSweepBase){
+        ctx.putImageData(conSweepBase,0,0);
+        const curAngle=Math.atan2(y-conCenterY,x-conCenterX);
+        conCumAngle+=_angDelta(conPrevAngle,curAngle);
+        conCumAngle=Math.max(-Math.PI*2,Math.min(Math.PI*2,conCumAngle)); // 한 바퀴(전체 원)까지만
+        conPrevAngle=curAngle;
         const endAngle=conStartAngle+conCumAngle;
-        drawPreviewArc(conStartX,conStartY,conRadius,conStartAngle,endAngle,conCumAngle<0);
-        conPending={type:'circle',cx:conStartX,cy:conStartY,r:conRadius,startAngle:conStartAngle,endAngle,anticlockwise:conCumAngle<0};
-      } else {
-        drawPreviewLine(conStartX,conStartY,x,y);
-        conPending={type:'line',x0:conStartX,y0:conStartY,x1:x,y1:y};
+        drawPreviewArc(conCenterX,conCenterY,conRadius,conStartAngle,endAngle,conCumAngle<0);
+        conPending={type:'circle',cx:conCenterX,cy:conCenterY,r:conRadius,startAngle:conStartAngle,endAngle,anticlockwise:conCumAngle<0};
+        showConfirm(true);
       }
+    } else if(isConstruction && !graphEraser){
+      if(!conGestureBase) return;
+      ctx.putImageData(conGestureBase,0,0);
+      drawPreviewLine(conStartX,conStartY,x,y);
+      conPending={type:'line',x0:conStartX,y0:conStartY,x1:x,y1:y};
       showConfirm(true);
     } else {
       ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
@@ -4104,7 +4125,9 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     }
     if(pid!==null && e && e.pointerId!==undefined && e.pointerId!==pid) return;
     drawing=false; pid=null;
+    if(isConstruction && graphConTool==='circle') conActiveGesture=0;
     // 작도 모드는 손을 떼도 미확정 상태 그대로 둔다 — [확인]을 눌러야 획으로 남는다
+    // (컴퍼스는 중심을 찍은 상태(centerSet)도 유지 — 반지름 제스처를 기다린다)
     try{ canvas.releasePointerCapture(e.pointerId); }catch(_){}
   };
   canvas.classList.add('draw-surface');
@@ -4125,9 +4148,9 @@ function initGraphCanvas(canvas, W, H, isConstruction){
       [lineBtn,circleBtn,eraseBtn].forEach(b=>{ if(b){ b.style.background=''; b.style.borderColor=''; b.style.color=''; } });
       if(el){ el.style.background='var(--acc-lt)'; el.style.borderColor='var(--accent)'; el.style.color='var(--accent)'; }
     };
-    lineBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphConTool='line'; graphEraser=false; setActive(lineBtn); });
-    circleBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphConTool='circle'; graphEraser=false; setActive(circleBtn); });
-    eraseBtn?.addEventListener('click',()=>{ if(conPending) discardPending(); graphEraser=true; setActive(eraseBtn); });
+    lineBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='line'; graphEraser=false; setActive(lineBtn); });
+    circleBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='circle'; graphEraser=false; setActive(circleBtn); });
+    eraseBtn?.addEventListener('click',()=>{ discardPending(); graphEraser=true; setActive(eraseBtn); });
     radLockBtn?.addEventListener('click',()=>{
       graphRadiusLocked=!graphRadiusLocked;
       radLockBtn.textContent = graphRadiusLocked ? '🔒 반지름 고정' : '🔓 반지름 고정';

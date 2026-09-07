@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.16">
+<meta name="app-version" content="edit-v3.17">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -984,8 +984,11 @@ window.migrateWsIds = async function(){
   const changes=[];
   for(const [unitId,list] of Object.entries(byUnit)){
     list.sort((a,b)=>(a.order??99)-(b.order??99));
-    list.forEach((ws,i)=>{
-      const newId=`ws-${unitId}-${String(i+1).padStart(2,'0')}`;
+    let seq=0;
+    list.forEach(ws=>{
+      // 복습 학습지는 번호를 매기지 않고 항상 -FN로 고정 (이 기능 이전에 번호 ID로
+      // 만들어졌던 복습 학습지도 ID 정리를 돌리면 -FN으로 바뀐다)
+      const newId = ws.type==='review' ? `ws-${unitId}-FN` : (()=>{ seq++; return `ws-${unitId}-${String(seq).padStart(2,'0')}`; })();
       if(ws.id!==newId) changes.push({ws,newId});
     });
   }
@@ -1717,8 +1720,9 @@ if(_initAddBtn) _initAddBtn.onclick = function(){ window.addQuestionItem && wind
 // ── 학습지 추가 ──
 window.addWorksheet = function(unitId){
   const title = prompt('새 학습지 제목:'); if(!title) return;
-  // 순번 기반 ID (ws-u1-04-01, ws-u1-04-02...)
-  let seq=worksheets.filter(w=>w.unitId===unitId).length+1;
+  // 순번 기반 ID (ws-u1-04-01, ws-u1-04-02...) — 자동 생성되는 복습 학습지(-FN)는 세지 않는다
+  const siblingCount = worksheets.filter(w=>w.unitId===unitId && w.type!=='review').length;
+  let seq=siblingCount+1;
   let id=`ws-${unitId}-${String(seq).padStart(2,'0')}`;
   while(worksheets.find(w=>w.id===id)){ seq++; id=`ws-${unitId}-${String(seq).padStart(2,'0')}`; }
   const unit = units.find(u=>u.id===unitId);
@@ -1726,7 +1730,7 @@ window.addWorksheet = function(unitId){
     id, unitId, title, type:'regular',
     grade: unit?.grade||1, category: unit?.category||'',
     questions:[], vocab:[], diff:1,
-    order: worksheets.filter(w=>w.unitId===unitId).length,
+    order: siblingCount,
     status:'draft',
   };
   worksheets.push(newWs);
@@ -1922,12 +1926,42 @@ async function saveToFirestore(status, silent=false){
     if(!silent) toast(status==='published'?'✅ 발행 완료':'💾 저장 완료');
     else toast('💾 자동저장됨', 1200);
     await loadAll();
+    if(saveData.type==='regular') await maybeAutoCreateReviewWs(saveData.unitId);
     // 저장 후 현재 학습지 active 복원
     document.querySelectorAll('.ws-item').forEach(el=>el.classList.toggle('active',el.dataset.wsid===wsId));
     // 편집 화면 유지 (renderEditor 재호출 없이 ID만 갱신)
     currentWsId = wsId; currentWs = saveData;
     updateStatusUI(); // 상태 배지/버튼 실시간 갱신
   }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
+}
+
+/* ── 단원별 복습 학습지 자동 생성 ──
+   한 단원에 일반 학습지가 3개 이상 모이면, 그 단원의 복습 학습지(type:'review')를
+   자동으로 만든다. 이미 있으면(ID가 -FN이거나 type==='review') 건드리지 않는다.
+   ID를 -FN(번호 아님)으로 고정하고 order를 큰 값으로 박아 두어, 학습지가 몇 개든
+   그 단원 목록에서 항상 맨 끝에 온다(정렬 기준은 ID가 아니라 order 필드). */
+async function maybeAutoCreateReviewWs(unitId){
+  if(!unitId) return;
+  const regularCount = worksheets.filter(w=>w.unitId===unitId && w.type==='regular').length;
+  if(regularCount < 3) return;
+  const reviewId = `ws-${unitId}-FN`;
+  if(worksheets.some(w=>w.unitId===unitId && (w.type==='review' || w.id===reviewId))) return; // 이미 있음
+  const unit = units.find(u=>u.id===unitId);
+  const newReviewWs = {
+    id: reviewId, unitId, title: '🔁 단원 복습',
+    type:'review', grade: unit?.grade||1, category: unit?.category||'',
+    questions:[], vocab:[], diff:1,
+    order: 999, // 항상 마지막에 오도록 고정 (일반 학습지는 0,1,2… 순으로 늘어남)
+    status:'draft',
+    createdBy: currentUser?.email||'', lastModified: new Date().toISOString(),
+  };
+  try{
+    await setDoc(doc(db,'curriculum',reviewId), newReviewWs);
+    worksheets.push(newReviewWs);
+    worksheets.sort((a,b)=>(a.order??99)-(b.order??99));
+    renderSidebar();
+    toast('🔁 학습지가 3개 이상이 되어 단원 복습 학습지를 자동으로 만들었습니다 (발행은 직접 해주세요)', 4000);
+  }catch(e){ console.warn('[복습 학습지 자동 생성 실패]', e.message); }
 }
 
 

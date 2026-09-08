@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.69">
+  <meta name="app-version" content="8.70">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1606,7 +1606,7 @@ function renderGradeBell(){
       if(g.pq.feedback&&String(g.pq.feedback).trim()) chips.push('<span class="bell-chip gm-i">💬 피드백</span>');
       const fb=g.pq.feedback?`<div class="bell-fb">💬 ${_escHtml(g.pq.feedback)}</div>`:'';
       return `<div class="bell-item" data-i="${i}">
-        <div class="bell-item-top"><b>${g.qNum}번 문제</b> · ${_escHtml(g.ws.title)}</div>
+        <div class="bell-item-top">${_escHtml(g.ws.title)} · <b>${g.qNum}번 그래프</b></div>
         <div class="bell-item-mark">${chips.join('')}</div>${fb}</div>`;
     }).join('')+
     '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';

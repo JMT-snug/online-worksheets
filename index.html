@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.70">
+  <meta name="app-version" content="8.71">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -77,9 +77,16 @@ header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:ce
 .bell-panel.show{display:block}
 .bell-head{font-size:12px;font-weight:800;color:var(--ink2);padding:8px 10px 6px}
 .bell-empty{font-size:13px;color:var(--ink3);padding:22px 12px;text-align:center}
-.bell-item{padding:9px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid var(--rule)}
+.bell-item{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid var(--rule)}
 .bell-item:last-of-type{border-bottom:none}
 .bell-item:hover{background:var(--acc-lt)}
+.bell-item-body{flex:1;min-width:0}
+/* ✓ 확인 버튼: 1번 = 회색 처리(확인함), 2번 = 알림 지우기 */
+.bell-check{flex-shrink:0;width:26px;height:26px;margin-top:1px;border-radius:50%;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink3);font-size:13px;font-weight:800;font-family:inherit;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.bell-check:hover{border-color:var(--accent);color:var(--accent);background:var(--acc-lt)}
+.bell-item.dim .bell-item-body{opacity:.45;filter:grayscale(1)}
+.bell-item.dim .bell-check{background:var(--green);border-color:var(--green);color:#fff}
+.bell-item.dim .bell-check:hover{background:var(--red);border-color:var(--red);color:#fff}
 .bell-item-top{font-size:13px;color:var(--ink);font-weight:600}
 .bell-item-mark{font-size:12px;color:var(--ink2);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px}
 /* 채점 결과 칩 (종 알림) — 색으로 정답/오답/의견을 구분 */
@@ -1546,6 +1553,12 @@ function gradeResultChip(pq){
 function _gradeSeenKey(){return 'gradeSeen::'+((user&&user.email)||'');}
 function _loadGradeSeen(){try{return JSON.parse(localStorage.getItem(_gradeSeenKey())||'null');}catch(e){return null;}}
 function _saveGradeSeen(m){try{localStorage.setItem(_gradeSeenKey(),JSON.stringify(m));}catch(e){}}
+/* '확인함(회색)' 상태 — 읽음(seen)과 따로 둔다 (v8.71)
+   ✓ 를 한 번 누르면 여기 담겨 회색이 되고(배지·빨간 점에서 빠짐), 목록에는 남는다.
+   한 번 더 누르면 seen 으로 옮겨져 목록에서도 사라진다. */
+function _gradeDimKey(){return 'gradeDim::'+((user&&user.email)||'');}
+function _loadGradeDim(){try{return JSON.parse(localStorage.getItem(_gradeDimKey())||'{}')||{};}catch(e){return {};}}
+function _saveGradeDim(m){try{localStorage.setItem(_gradeDimKey(),JSON.stringify(m));}catch(e){}}
 
 /* 현재 채점된 그래프 문제 수집 */
 function _collectGradedGraphs(){
@@ -1573,19 +1586,39 @@ function computeNewGrades(){
     _saveGradeSeen(base);
     return [];
   }
-  return graded.filter(g=>seen[g.key]!==g.sig);
+  const dim=_loadGradeDim();
+  // 채점이 바뀌면(sig 불일치) '확인함'도 풀린다 — 다시 새 알림으로 본다
+  return graded.filter(g=>seen[g.key]!==g.sig).map(g=>({...g, dim:dim[g.key]===g.sig}));
 }
 /* 본 것으로 표시 (wsId 지정 시 해당 학습지만) */
 function markGradesSeen(wsId){
   const graded=_collectGradedGraphs();
   const seen=_loadGradeSeen()||{};
-  graded.forEach(g=>{ if(!wsId||g.wsId===wsId) seen[g.key]=g.sig; });
-  _saveGradeSeen(seen);
+  const dim=_loadGradeDim();
+  graded.forEach(g=>{ if(!wsId||g.wsId===wsId){ seen[g.key]=g.sig; delete dim[g.key]; } });
+  _saveGradeSeen(seen); _saveGradeDim(dim);
 }
-/* 알림 상태 재계산 + 종 렌더 */
+/* ✓ 1번: 이 항목만 '확인함(회색)'으로 — 목록에는 남는다 */
+function dimOneGrade(g){
+  if(!g) return;
+  const dim=_loadGradeDim(); dim[g.key]=g.sig; _saveGradeDim(dim);
+}
+/* ✓ 2번: 이 항목만 읽음 처리 — 목록에서 사라진다 */
+function markOneGradeSeen(g){
+  if(!g) return;
+  const seen=_loadGradeSeen()||{}; seen[g.key]=g.sig; _saveGradeSeen(seen);
+  const dim=_loadGradeDim(); delete dim[g.key]; _saveGradeDim(dim);
+}
+/* 알림 상태가 바뀐 뒤 보고 있는 목록 화면의 빨간 점도 다시 그린다 */
+function _refreshNotifViews(){
+  if(document.getElementById('dash-page').classList.contains('active')) renderCards();
+  if(document.getElementById('unit-page').classList.contains('active')&&window._currentUnit) showUnitPage(window._currentUnit);
+}
+/* 알림 상태 재계산 + 종 렌더
+   배지 개수와 카드 빨간 점은 '확인 안 한 것(dim 아님)'만 센다 */
 function refreshGradeNotif(){
   window._newGrades=computeNewGrades();
-  window._newGradeWs=new Set(window._newGrades.map(g=>g.wsId));
+  window._newGradeWs=new Set(window._newGrades.filter(g=>!g.dim).map(g=>g.wsId));
   renderGradeBell();
 }
 function renderGradeBell(){
@@ -1596,28 +1629,41 @@ function renderGradeBell(){
   if(!user){ wrap.style.display='none'; return; }
   wrap.style.display='inline-flex';
   const list=window._newGrades||[];
-  if(list.length){ cnt.style.display='inline-block'; cnt.textContent=list.length>99?'99+':list.length; }
+  const unread=list.filter(g=>!g.dim).length;   // 배지는 '확인 안 한 것'만 센다
+  if(unread){ cnt.style.display='inline-block'; cnt.textContent=unread>99?'99+':unread; }
   else { cnt.style.display='none'; cnt.textContent=''; }
   if(!list.length){ panel.innerHTML='<div class="bell-empty">🔔 새 채점 알림이 없어요</div>'; return; }
-  panel.innerHTML='<div class="bell-head">✍️ 그래프 채점 알림</div>'+
+  panel.innerHTML='<div class="bell-head">✍️ 그래프 채점 알림<br><span style="font-weight:600;font-size:11px;color:var(--ink3)">✓ 한 번 = 확인함(회색) · 한 번 더 = 알림 지우기</span></div>'+
     list.map((g,i)=>{
       const chips=[gradeResultChip(g.pq)];
       if(g.pq.teacherDrawing) chips.push('<span class="bell-chip gm-i">✏️ 첨삭</span>');
       if(g.pq.feedback&&String(g.pq.feedback).trim()) chips.push('<span class="bell-chip gm-i">💬 피드백</span>');
       const fb=g.pq.feedback?`<div class="bell-fb">💬 ${_escHtml(g.pq.feedback)}</div>`:'';
-      return `<div class="bell-item" data-i="${i}">
-        <div class="bell-item-top">${_escHtml(g.ws.title)} · <b>${g.qNum}번 그래프</b></div>
-        <div class="bell-item-mark">${chips.join('')}</div>${fb}</div>`;
+      return `<div class="bell-item${g.dim?' dim':''}" data-i="${i}">
+        <div class="bell-item-body">
+          <div class="bell-item-top">${_escHtml(g.ws.title)} · <b>${g.qNum}번 그래프</b></div>
+          <div class="bell-item-mark">${chips.join('')}</div>${fb}
+        </div>
+        <button type="button" class="bell-check" data-i="${i}"
+          title="${g.dim?'한 번 더 누르면 알림을 지웁니다':'확인함으로 표시 (회색)'}">✓</button></div>`;
     }).join('')+
     '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';
   panel.querySelectorAll('.bell-item').forEach(el=>{
     el.addEventListener('click',()=>openGradeNotif((window._newGrades||[])[+el.dataset.i]));
   });
+  // ✓ 버튼: 1번 = 회색(확인함), 2번 = 알림 지우기. 항목 클릭(문항 이동)과 겹치지 않게 막는다
+  panel.querySelectorAll('.bell-check').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const g=(window._newGrades||[])[+btn.dataset.i]; if(!g) return;
+      if(g.dim) markOneGradeSeen(g); else dimOneGrade(g);
+      refreshGradeNotif(); _refreshNotifViews();
+    });
+  });
   const cl=panel.querySelector('#bell-clear');
-  if(cl) cl.addEventListener('click',()=>{
-    markGradesSeen(null); refreshGradeNotif();
-    if(document.getElementById('dash-page').classList.contains('active')) renderCards();
-    if(document.getElementById('unit-page').classList.contains('active')&&window._currentUnit) showUnitPage(window._currentUnit);
+  if(cl) cl.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    markGradesSeen(null); refreshGradeNotif(); _refreshNotifViews();
     panel.classList.remove('show');
   });
 }
@@ -2904,7 +2950,7 @@ async function startQuiz(ws) {
   // 그래프 채점 알림: 학습지를 열면 해당 학습지의 채점을 '본 것'으로 처리
   // (읽음 처리 전에 '이번에 새로 채점된 문항'을 잡아 둬야 문항 점을 깜빡이게 할 수 있다)
   try{
-    window._wsNewGradeQ=new Set((window._newGrades||[]).filter(g=>g.wsId===ws.id).map(g=>g.qId));
+    window._wsNewGradeQ=new Set((window._newGrades||[]).filter(g=>g.wsId===ws.id&&!g.dim).map(g=>g.qId));
     markGradesSeen(ws.id); refreshGradeNotif();
     updateStrip();   // 위 Set이 정해진 뒤 문항 점의 '새 채점' 깜빡임을 반영
   }catch(e){ window._wsNewGradeQ=new Set(); }

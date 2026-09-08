@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.66">
+  <meta name="app-version" content="8.67">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -4216,6 +4216,12 @@ window.graphClear=function(){
 function renderStep3Q(q, panel){
   const steps=getSteps(q);
   const st=getS3State(q.id);
+  /* ⚠️ 아래에서 panel.innerHTML 을 통째로 새로 쓴다 — 문제 영역 위에 겹쳐 둔
+     L자 연습장(#problem-canvas)도 이때 같이 없어진다. 단계형은 단계를 넘길 때마다
+     여기를 다시 지나므로, 그냥 두면 2단계부터는 문제 위에 필기가 안 되고
+     1단계에서 그려 둔 것도 사라진다. → 그리기를 먼저 보관하고, 새로 그린 뒤
+     캔버스를 다시 만들어 되살린다. */
+  saveProblemCanvas();
   const tabs=steps.map((s,i)=>{
     const done=st.done[i];
     const active=st.curStep===i+1;
@@ -4240,6 +4246,8 @@ function renderStep3Q(q, panel){
     </div>`;
   renderMath(panel);
   renderStep3Body(q);
+  // 날아간 L자 연습장을 다시 만든다 (단계마다 답칸 높이가 달라지므로 한 프레임 뒤에 재어서 맞춘다)
+  requestAnimationFrame(()=>{ try{ initProblemCanvas(); }catch(e){ console.warn('[L자 연습장]',e); } });
 }
 
 function renderStep3Body(q){
@@ -5324,6 +5332,17 @@ function resetUndoStack(){ undoStack=[]; _hist=[]; _redo=[]; _step=0; updateHist
 // 문제 영역 캔버스 (L자 연습장) 관련
 let _pCanvasStore = {};  // qIdx → ImageData
 let _pCanvasIdx = 0;
+/** 지금 문제 위에 그린 것을 보관해 둔다 — 화면을 다시 그려서 캔버스가 날아가기 전에 부른다.
+    (평소에는 획을 뗄 때 저장되지만, 단계형처럼 도중에 패널을 통째로 새로 그리는 곳에서는
+     그리기가 끝나기 전 모습까지 챙겨 두어야 필기가 사라지지 않는다) */
+function saveProblemCanvas(){
+  const cv=document.getElementById('problem-canvas');
+  if(!cv || !cv.width || !cv.height) return;
+  try{
+    _pCanvasStore[curQIdx]=cv.getContext('2d',{willReadFrequently:true})
+      .getImageData(0,0,cv.width,cv.height);
+  }catch(e){}
+}
 function initProblemCanvas(){
   const panel=document.getElementById('quiz-left-panel');
   if(!panel) return;

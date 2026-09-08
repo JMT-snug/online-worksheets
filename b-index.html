@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.65">
+  <meta name="app-version" content="8.66">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2316,18 +2316,23 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 /* multi 보기 렌더링: 라벨+(수식) */
 function renderOption(opt){
   if(!opt) return opt;
+  // 저장된 텍스트가 이중 백슬래시(\\( ... \\))일 수 있어 먼저 단일로 정규화한다 —
+  // fracText()와 같은 순서(정규화 → backtick 치환)여야 \(...\) 구분자를 정확히 찾는다.
+  opt = String(opt).replace(/\\\\/g,'\\');
+  // backtick(`) → 반칸 공백(\,) 치환은 각 반환 직전에 한 번씩 한다.
+  // 아래에서 \(...\)로 감싸는 경로는 감싼 뒤에 치환해야 구분자 안으로 들어간 backtick까지 바뀐다.
   // 이미 LaTeX(\()나 HTML(<span)이 있으면 그대로 (교사가 edit에서 직접 수식 지정한 경우)
-  if(opt.includes('\\(') || opt.includes('<span')) return opt;
+  if(opt.includes('\\(') || opt.includes('<span')) return _bqSpace(opt);
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
   const lbl = m ? m[1] : '', raw = m ? m[2] : opt;
   // 한글이 포함된 선지는 일반 텍스트로 표시 — 통째로 수식(\(...\))에 넣으면
   // MathJax가 수학 변수처럼 이탤릭·문자별 배치로 렌더해 글이 기울고 자간이 깨짐
-  if(/[가-힣]/.test(raw)) return opt;
+  if(/[가-힣]/.test(raw)) return _bqSpace(opt);
   let t = raw.replace(/−/g,'-').replace(/²/g,'^2').replace(/³/g,'^3');
   t = t.replace(/\(([^)]+)\)\/([0-9a-zA-Z^]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([a-zA-Z][a-zA-Z0-9^]*)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
   t = t.replace(/([0-9]+)\/([0-9]+)/g,(_,n,d)=>`\\frac{${n}}{${d}}`);
-  return lbl + `\\(${t}\\)`;
+  return _bqSpace(lbl + `\\(${t}\\)`);
 }
 /* 선택지 보이는 글자수 추정 (LaTeX/HTML 제거) — 2x2 vs 1열 판단용 */
 function optVisibleLen(opt){
@@ -2373,12 +2378,17 @@ function _bqSpace(text){
   return text.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g,
     m => m.includes('`') ? m.replace(/`/g,'\\,') : m);
 }
+/* 저장 형식 정규화(이중 백슬래시 → 단일) + backtick(`) → 반칸 공백.
+   fracText 를 타지 않는 렌더 경로(예: multi 문제 본문)도 같은 처리를 받게 하려고 따로 뺐다 —
+   순서를 바꾸면 안 된다: 정규화 뒤에 치환해야 \(...\) 구분자를 정확히 찾는다. */
+function normTex(text){
+  if(!text) return text;
+  return _bqSpace(String(text).replace(/\\\\/g,'\\'));
+}
 function fracText(text){
   if(!text) return text;
-  // LaTeX 정규화: 모든 이중 백슬래시 → 단일 (\\frac, \\(, \\) 등)
-  text = text.replace(/\\\\/g,'\\');
-  // backtick 치환은 단일 백슬래시로 정규화된 뒤에 해야 \(...\) 구분자를 정확히 찾는다
-  text = _bqSpace(text);
+  // LaTeX 정규화(이중 백슬래시 → 단일) 후 backtick 치환
+  text = normTex(text);
   // 중복 줄바꿈 정리: <br> 주변 \n 제거 (저장된 <br>\n 중복 방지)
   text = text.replace(/<br\s*\/?>\s*\n/gi,'<br>');
   text = text.replace(/\n\s*<br\s*\/?>/gi,'<br>');
@@ -3607,6 +3617,12 @@ function quizKeyHandler(e){
 /* ── multi 타입: 여러 개 고르기 (동류항 찾기용으로 시작했지만 지금은 단원 무관) ── */
 let multiSel = new Set();
 
+/* multi 본문은 다른 유형과 달리 fracText 가 아니라 mathStyle(줄바꿈만 처리)로 그린다 —
+   선지에 이미 수식이 들어 있어 본문 자동 변환(분수·제곱)을 일부러 안 걸었던 것이다.
+   그 바람에 v8.60 에서 넣은 backtick → 반칸 공백 치환까지 같이 빠져,
+   학생 화면의 수식 안에 backtick 이 그대로 찍혔다(2026-09-08 신고 2건).
+   자동 변환은 그대로 두고 정규화·치환(normTex)만 얹는다. 선지 쪽은 renderOption 참고.
+   ※ 아래 innerHTML 은 템플릿 리터럴이라 그 안에 backtick 문자를 쓰면 안 된다(구문 오류). */
 function renderMultiQ(q, panel){
   multiSel = new Set();
   const imgHtmlM = q.imageUrl
@@ -3623,7 +3639,7 @@ function renderMultiQ(q, panel){
              화면에서 하는 일 그대로인 '모두 고르기'로 바꿨다. 단원 이름을 넣지 말 것. -->
         <span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">모두 고르기</span>
       </div>
-      <div class="q-text" style="margin-top:4px;line-height:1.8">${mathStyle(q.text)}</div>
+      <div class="q-text" style="margin-top:4px;line-height:1.8">${mathStyle(normTex(q.text))}</div>
       ${imgHtmlM}
     </div>
     <div class="math-input-card">

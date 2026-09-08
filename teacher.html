@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.41">
+<meta name="app-version" content="3.42">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -565,7 +565,9 @@ function findQDef(wsId, qid){
   const ws=(typeof WORKSHEETS!=='undefined'?WORKSHEETS:[]).find(w=>w.id===wsId);
   return ws?.questions?.find(x=>x.id===qid)||null;
 }
-function _stripTex(s){ return String(s??'').replace(/\\\(|\\\)/g,'').replace(/\s+/g,' ').trim(); }
+/* backtick(`)은 수식 안 반칸 공백 표시용 문자다(index·edit 에서 \, 로 바뀐다).
+   여긴 MathJax 없이 글자 그대로 보여 주는 곳이라, 지우지 않으면 선지에 ` 가 그대로 찍힌다. */
+function _stripTex(s){ return String(s??'').replace(/\\\(|\\\)/g,'').replace(/`/g,' ').replace(/\s+/g,' ').trim(); }
 /* submittedAt(제출 시각)이 있는데 답안이 비어 있으면 '안 푼 것'이 아니라
    구버전(v8.12 이전)의 시험 종료 저장이 답안을 null로 덮어써 유실된 경우다.
    실제 무응답과 구분해 표시해야 교사가 개별 조치를 할 수 있다. */

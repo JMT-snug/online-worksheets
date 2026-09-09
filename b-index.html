@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.73">
+  <meta name="app-version" content="8.74">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -4195,6 +4195,8 @@ function initGraphCanvas(canvas, W, H, isConstruction){
       labelY=(conPending.y0+conPending.y1)/2 + (dx/len)*15;
     } else {
       ctx.beginPath(); ctx.arc(conPending.cx,conPending.cy,conPending.r,conPending.startAngle,conPending.endAngle,conPending.anticlockwise); ctx.stroke();
+      // 원의 중심에 × 를 남긴다 — 어느 점을 중심으로 잡고 돌렸는지 그림에 그대로 보이게(채점용)
+      strokeXMark(conPending.cx,conPending.cy,5);
       // 번호는 호 한가운데(= 손으로 잡은 방향) 바깥쪽에 — 양쪽으로 벌어져도 자리가 흔들리지 않는다
       const _la=conPending.midAngle!=null?conPending.midAngle:conPending.startAngle;
       labelX=conPending.cx+Math.cos(_la)*(conPending.r+15);
@@ -4222,9 +4224,17 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(cx,cy,r,a0,a1,ccw); ctx.stroke(); ctx.restore();
   };
+  /* 컴퍼스 중심 표시 — × 모양. 현재 획의 스타일 그대로 긋는다(색·굵기는 부르는 쪽에서 정한다) */
+  const strokeXMark=(cx,cy,s)=>{
+    ctx.beginPath();
+    ctx.moveTo(cx-s,cy-s); ctx.lineTo(cx+s,cy+s);
+    ctx.moveTo(cx+s,cy-s); ctx.lineTo(cx-s,cy+s);
+    ctx.stroke();
+  };
+  // 중심을 찍는 동안 보여 주는 회색 안내용 × ([확인]하면 아래 확정용 ×로 바뀐다)
   const drawCenterMark=(cx,cy)=>{
     ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(cx-6,cy); ctx.lineTo(cx+6,cy); ctx.moveTo(cx,cy-6); ctx.lineTo(cx,cy+6); ctx.stroke();
+    strokeXMark(cx,cy,6);
     ctx.restore();
   };
   /* 반지름 고정이 켜져 있을 때, 중심을 찍자마자 '고정된 반지름'을 옅은 점선 원으로 보여 준다.

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.71">
+  <meta name="app-version" content="8.72">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3169,7 +3169,10 @@ function renderQuestion() {
   const panel=document.getElementById("quiz-left-panel");
 
   // 문제 헤더
-  const imgHtml = q.imageUrl
+  /* 작도 문항은 이미지를 작도 캔버스 배경으로 깔아 주므로(drawConstructionBg) 지문에서는 뺀다.
+     안 그러면 같은 그림이 위아래로 두 번 보인다. */
+  const _imgInCanvas = q.type==='graph' && q.graphType==='construction';
+  const imgHtml = (q.imageUrl && !_imgInCanvas)
     ? `<img src="${q.imageUrl.replace(/drive\.google\.com\/uc\?export=view&id=([\w-]+)/,'lh3.googleusercontent.com/d/$1')}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
     : '';
   const _realN=curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length+1;
@@ -3871,6 +3874,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
         ${q.graphType==='construction' ? `
         <button id="graph-line-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">📏 직선</button>
         <button id="graph-circle-btn" class="btn-back" style="font-size:12px">⭕ 컴퍼스</button>
+        <button id="graph-freepen-btn" class="btn-back" style="font-size:12px" title="직선·컴퍼스를 끄고 자유롭게 그립니다 — 점을 찍거나 점 이름을 쓸 때 씁니다">✏️ 펜(점·이름)</button>
         <button id="graph-radlock-btn" class="btn-back" style="font-size:12px" title="켜면 마지막에 확인한 원과 같은 반지름을 씁니다">🔓 반지름 고정</button>
         <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
         <button id="graph-confirm-btn" class="btn-back" style="font-size:12px;display:none;background:var(--green);border-color:var(--green);color:#fff">✓ 확인</button>
@@ -4165,7 +4169,7 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     }
     if(isTouch && drawing && drawIsTouch && (performance.now()-drawStartT) <= TOUCH_TOGETHER_MS){
       e.preventDefault();                      // ② 손가락 둘이 거의 동시 → 그리던 획을 되돌리고 굴린다
-      if(isConstruction && !graphEraser) discardPending(); else cancelStroke();
+      if(isConstruction && !graphEraser && graphConTool!=='pen') discardPending(); else cancelStroke();
       drawing=false;
       gScroll.begin(e); gScroll.joinId(pid); pid=null;
       try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
@@ -4192,12 +4196,13 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         conStartAngle=Math.atan2(ly-conCenterY,lx-conCenterX);
         conPrevAngle=conStartAngle; conCumAngle=0;
       }
-    } else if(isConstruction && !graphEraser){
+    } else if(isConstruction && !graphEraser && graphConTool==='line'){
       // 직선: 기존처럼 한 번의 드래그로 시작점→끝점
       if(conPending) discardPending();
       conGestureBase=ctx.getImageData(0,0,W,H);
       conStartX=lx; conStartY=ly;
     } else {
+      // 펜(점·이름) / 지우개 / 일반 그래프: 자유 손그림 — [확인] 없이 그린 즉시 남는다
       graphUndoStack.push(ctx.getImageData(0,0,W,H));
       graphStepMeta.push(null);
       ctx.beginPath(); ctx.moveTo(lx,ly);
@@ -4222,7 +4227,7 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         conPending={type:'circle',cx:conCenterX,cy:conCenterY,r:conRadius,startAngle:conStartAngle,endAngle,anticlockwise:conCumAngle<0};
         showConfirm(true);
       }
-    } else if(isConstruction && !graphEraser){
+    } else if(isConstruction && !graphEraser && graphConTool==='line'){
       if(!conGestureBase) return;
       ctx.putImageData(conGestureBase,0,0);
       drawPreviewLine(conStartX,conStartY,x,y);
@@ -4258,14 +4263,17 @@ function initGraphCanvas(canvas, W, H, isConstruction){
   if(isConstruction){
     const lineBtn=document.getElementById('graph-line-btn');
     const circleBtn=document.getElementById('graph-circle-btn');
+    const freePenBtn=document.getElementById('graph-freepen-btn');
     const eraseBtn=document.getElementById('graph-erase-btn');
     const radLockBtn=document.getElementById('graph-radlock-btn');
     const setActive=el=>{
-      [lineBtn,circleBtn,eraseBtn].forEach(b=>{ if(b){ b.style.background=''; b.style.borderColor=''; b.style.color=''; } });
+      [lineBtn,circleBtn,freePenBtn,eraseBtn].forEach(b=>{ if(b){ b.style.background=''; b.style.borderColor=''; b.style.color=''; } });
       if(el){ el.style.background='var(--acc-lt)'; el.style.borderColor='var(--accent)'; el.style.color='var(--accent)'; }
     };
     lineBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='line'; graphEraser=false; setActive(lineBtn); });
     circleBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='circle'; graphEraser=false; setActive(circleBtn); });
+    // 펜: 직선·컴퍼스를 모두 끈 자유 필기 — 점을 찍거나 점 이름(A, B…)을 적을 때 쓴다
+    freePenBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='pen'; graphEraser=false; setActive(freePenBtn); });
     eraseBtn?.addEventListener('click',()=>{ discardPending(); graphEraser=true; setActive(eraseBtn); });
     radLockBtn?.addEventListener('click',()=>{
       graphRadiusLocked=!graphRadiusLocked;

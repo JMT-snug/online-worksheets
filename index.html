@@ -3875,7 +3875,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
         <button id="graph-line-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">📏 직선</button>
         <button id="graph-circle-btn" class="btn-back" style="font-size:12px">⭕ 컴퍼스</button>
         <button id="graph-freepen-btn" class="btn-back" style="font-size:12px" title="직선·컴퍼스를 끄고 자유롭게 그립니다 — 점을 찍거나 점 이름을 쓸 때 씁니다">✏️ 펜(점·이름)</button>
-        <button id="graph-radlock-btn" class="btn-back" style="font-size:12px" title="켜면 마지막에 확인한 원과 같은 반지름을 씁니다">🔓 반지름 고정</button>
+        <button id="graph-radlock-btn" class="btn-back" style="font-size:12px" title="켜면 마지막에 확인한 원과 같은 반지름을 씁니다">🔓 반지름 고정 끔</button>
         <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
         <button id="graph-confirm-btn" class="btn-back" style="font-size:12px;display:none;background:var(--green);border-color:var(--green);color:#fff">✓ 확인</button>
         ` : `
@@ -4053,8 +4053,13 @@ let graphUndoStack=[], graphStepMeta=[], graphEraser=false, graphConTool='line';
 let graphConfirmedCount=0, graphLastRadius=null, graphRadiusLocked=false;
 window._graphConfirmPending=null; // 제출 직전 "아직 확인 안 한 작도 획"을 자동 확정하기 위한 훅
 
-/* 작도 확정 순서를 나타내는 색·번호 — 6색을 순환한다 */
-const CON_COLORS=['#1c1917','#2563eb','#dc2626','#15803d','#7c3aed','#b45309'];
+/* 작도 확정 순서를 나타내는 색·번호 — 빨주노초파남보 7색을 순환한다.
+   ⚠️ 검정은 쓰지 않는다 — 배경으로 깔리는 문제 그림이 대개 검은 선이라 겹치면 구분이 안 된다.
+   노랑은 흰 바탕에서 잘 안 보여 어두운 금빛(#ca8a04)으로 대신한다. */
+const CON_COLORS=['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb','#4338ca','#9333ea'];
+/* 펜(점·이름) 전용 색 — 작도 7색 어디에도 없는 청록.
+   무채색이 아니어서 검은 배경 그림과 확실히 구분되고, 채도가 낮아 작도 단계 색으로도 오해되지 않는다. */
+const CON_PEN_COLOR='#0d9488';
 const _stepGlyph=n=> n<20 ? String.fromCharCode(9312+n) : `(${n+1})`; // ①②③… (20개 넘으면 숫자로)
 function _angDelta(a,b){ // b-a를 -π~π 범위로 정규화 (컴퍼스로 돌린 각도 누적용)
   let d=b-a;
@@ -4065,6 +4070,7 @@ function _angDelta(a,b){ // b-a를 -π~π 범위로 정규화 (컴퍼스로 돌�
 
 function initGraphCanvas(canvas, W, H, isConstruction){
   let drawing=false, lx=0, ly=0;
+  let freeMoved=false;   // 자유 손그림에서 손이 실제로 움직였는가 (제자리 탭 = 점 찍기)
   // 작도 모드 상태
   //  conPhase: 'idle'(컴퍼스 대기) | 'centerSet'(중심을 찍어 두고 반지름/각도 제스처를 기다림)
   //  conActiveGesture: 0(손 뗌) | 1(중심 찍는 중) | 2(반지름·스윕 중)
@@ -4075,8 +4081,10 @@ function initGraphCanvas(canvas, W, H, isConstruction){
   let conSweepBase=null;                         // 스윕 중 매 move마다 복원할 기준(중심 마커 포함)
   let conPending=null;                           // 확정 대기 중인 도형 정보
   let conRadius=0, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
+  let conUsedLock=false;                         // 이번 호를 '반지름 고정'으로 그렸는가 (채점용 꼬리표에 쓴다)
   graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
   graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
+  window._graphSyncRadLock=null;   // 문항이 바뀌면 이전 문항의 고정 버튼 훅을 버린다
   const ctx=canvas.getContext('2d');
   ctx.strokeStyle='#1c1917'; ctx.lineWidth=2; ctx.lineCap='round';
 
@@ -4094,9 +4102,16 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     conPhase='idle'; conActiveGesture=0;
     showConfirm(false);
   };
+  /* 확정된 획에 붙는 획순 표시 — 「①」 「②」 「③🔒」.
+     선인지 호인지는 그림 모양으로 바로 보이지만, 그 호를 '반지름 고정'으로 옮겨 그렸는지는
+     그림만 봐서는 알 수 없다. 그래서 고정으로 그린 호에만 자물쇠를 덧붙여 채점할 때 구분한다.
+     번호가 잘 보이도록 굵게 키웠고, 캔버스 밖으로 나가지 않게 좌우·위아래를 안으로 끌어당긴다. */
   const stampLabel=(x,y,text,color)=>{
-    ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.strokeText(text,x,y); // 흰 테두리로 배경과 겹쳐도 읽히게
+    ctx.font='bold 15px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const half=(ctx.measureText(text).width/2)+3;
+    x=Math.max(half,Math.min(W-half,x));
+    y=Math.max(11,Math.min(H-11,y));
+    ctx.lineWidth=4; ctx.strokeStyle='#ffffff'; ctx.strokeText(text,x,y); // 흰 테두리로 배경과 겹쳐도 읽히게
     ctx.fillStyle=color; ctx.fillText(text,x,y);
   };
   const confirmPending=()=>{
@@ -4110,16 +4125,20 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     if(conPending.type==='line'){
       ctx.beginPath(); ctx.moveTo(conPending.x0,conPending.y0); ctx.lineTo(conPending.x1,conPending.y1); ctx.stroke();
       const dx=conPending.x1-conPending.x0, dy=conPending.y1-conPending.y0, len=Math.hypot(dx,dy)||1;
-      labelX=(conPending.x0+conPending.x1)/2 + (-dy/len)*12;
-      labelY=(conPending.y0+conPending.y1)/2 + (dx/len)*12;
+      labelX=(conPending.x0+conPending.x1)/2 + (-dy/len)*15;
+      labelY=(conPending.y0+conPending.y1)/2 + (dx/len)*15;
     } else {
       ctx.beginPath(); ctx.arc(conPending.cx,conPending.cy,conPending.r,conPending.startAngle,conPending.endAngle,conPending.anticlockwise); ctx.stroke();
-      labelX=conPending.cx+Math.cos(conPending.startAngle)*(conPending.r+12);
-      labelY=conPending.cy+Math.sin(conPending.startAngle)*(conPending.r+12);
+      // 번호는 호 한가운데(= 손으로 잡은 방향) 바깥쪽에 — 양쪽으로 벌어져도 자리가 흔들리지 않는다
+      const _la=conPending.midAngle!=null?conPending.midAngle:conPending.startAngle;
+      labelX=conPending.cx+Math.cos(_la)*(conPending.r+15);
+      labelY=conPending.cy+Math.sin(_la)*(conPending.r+15);
       graphLastRadius=conPending.r;
     }
-    stampLabel(labelX,labelY,_stepGlyph(graphConfirmedCount),color);
+    const stepTag = conPending.usedLock ? '🔒' : '';   // 반지름 고정으로 그린 호에만 자물쇠
+    stampLabel(labelX,labelY,_stepGlyph(graphConfirmedCount)+stepTag,color);
     graphConfirmedCount++;
+    window._graphSyncRadLock?.();   // 기준 반지름이 새로 잡혔을 수 있다 → 고정 버튼 문구 갱신
     conGestureBase=null; conSweepBase=null; conPending=null;
     conPhase='idle'; conActiveGesture=0;
     showConfirm(false);
@@ -4140,6 +4159,16 @@ function initGraphCanvas(canvas, W, H, isConstruction){
   const drawCenterMark=(cx,cy)=>{
     ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(cx-6,cy); ctx.lineTo(cx+6,cy); ctx.moveTo(cx,cy-6); ctx.lineTo(cx,cy+6); ctx.stroke();
+    ctx.restore();
+  };
+  /* 반지름 고정이 켜져 있을 때, 중심을 찍자마자 '고정된 반지름'을 옅은 점선 원으로 보여 준다.
+     버튼 글자만으로는 지금 어떤 길이로 잠겨 있는지 알 수 없어서, 눈으로 바로 확인하게 하는 표시다.
+     안내용이라 [확인]을 누르면 사라진다(확정 그림에는 남지 않는다). */
+  const drawLockedRadiusGuide=(cx,cy)=>{
+    if(!graphRadiusLocked || !graphLastRadius) return;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([3,5]);
+    ctx.strokeStyle='#9ca3af'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(cx,cy,graphLastRadius,0,Math.PI*2); ctx.stroke();
     ctx.restore();
   };
 
@@ -4187,11 +4216,13 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         conGestureBase=ctx.getImageData(0,0,W,H);
         conCenterX=lx; conCenterY=ly;
         drawCenterMark(conCenterX,conCenterY);
+        drawLockedRadiusGuide(conCenterX,conCenterY);
         conSweepBase=ctx.getImageData(0,0,W,H);
         conPhase='centerSet';
       } else {
         conActiveGesture=2;
         const distFromCenter=Math.hypot(lx-conCenterX,ly-conCenterY);
+        conUsedLock = !!(graphRadiusLocked && graphLastRadius);
         conRadius = (graphRadiusLocked && graphLastRadius) ? graphLastRadius : Math.max(distFromCenter,1);
         conStartAngle=Math.atan2(ly-conCenterY,lx-conCenterX);
         conPrevAngle=conStartAngle; conCumAngle=0;
@@ -4205,8 +4236,11 @@ function initGraphCanvas(canvas, W, H, isConstruction){
       // 펜(점·이름) / 지우개 / 일반 그래프: 자유 손그림 — [확인] 없이 그린 즉시 남는다
       graphUndoStack.push(ctx.getImageData(0,0,W,H));
       graphStepMeta.push(null);
+      freeMoved=false;
       ctx.beginPath(); ctx.moveTo(lx,ly);
       if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
+      /* 작도 펜은 점을 찍고 글자를 쓰는 용도라 굵게(4px), 색도 작도 7색·검정과 겹치지 않는 청록으로 */
+      else if(isConstruction){ctx.globalCompositeOperation='source-over';ctx.lineWidth=4;ctx.strokeStyle=CON_PEN_COLOR;}
       else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
     }
   };
@@ -4220,11 +4254,15 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         ctx.putImageData(conSweepBase,0,0);
         const curAngle=Math.atan2(y-conCenterY,x-conCenterX);
         conCumAngle+=_angDelta(conPrevAngle,curAngle);
-        conCumAngle=Math.max(-Math.PI*2,Math.min(Math.PI*2,conCumAngle)); // 한 바퀴(전체 원)까지만
+        /* 호는 누른 지점을 가운데 두고 양쪽으로 똑같이 벌어진다 — 어느 쪽으로 돌리든
+           반대편도 같이 그려져서, 교점을 지나도록 호를 늘릴 때 방향을 신경 쓰지 않아도 된다.
+           돌린 각도가 곧 '한쪽 팔' 길이라 ±π 까지만 받는다(양쪽 합쳐 한 바퀴). */
+        conCumAngle=Math.max(-Math.PI,Math.min(Math.PI,conCumAngle));
         conPrevAngle=curAngle;
-        const endAngle=conStartAngle+conCumAngle;
-        drawPreviewArc(conCenterX,conCenterY,conRadius,conStartAngle,endAngle,conCumAngle<0);
-        conPending={type:'circle',cx:conCenterX,cy:conCenterY,r:conRadius,startAngle:conStartAngle,endAngle,anticlockwise:conCumAngle<0};
+        const half=Math.abs(conCumAngle);
+        const startAngle=conStartAngle-half, endAngle=conStartAngle+half;
+        drawPreviewArc(conCenterX,conCenterY,conRadius,startAngle,endAngle,false);
+        conPending={type:'circle',cx:conCenterX,cy:conCenterY,r:conRadius,startAngle,endAngle,anticlockwise:false,midAngle:conStartAngle,usedLock:conUsedLock};
         showConfirm(true);
       }
     } else if(isConstruction && !graphEraser && graphConTool==='line'){
@@ -4235,6 +4273,7 @@ function initGraphCanvas(canvas, W, H, isConstruction){
       showConfirm(true);
     } else {
       ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+      freeMoved=true;
     }
     lx=x; ly=y;
   };
@@ -4245,6 +4284,12 @@ function initGraphCanvas(canvas, W, H, isConstruction){
       return;
     }
     if(pid!==null && e && e.pointerId!==undefined && e.pointerId!==pid) return;
+    /* 펜으로 제자리에서 콕 찍은 경우 — 길이 0짜리 획은 브라우저에 따라 아무것도 안 남는다.
+       점을 표시하려고 쓰는 도구이므로 여기서 동그란 점을 직접 찍어 준다. */
+    if(drawing && !freeMoved && isConstruction && !graphEraser && graphConTool==='pen'){
+      ctx.globalCompositeOperation='source-over'; ctx.fillStyle=CON_PEN_COLOR;
+      ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fill();
+    }
     drawing=false; pid=null;
     if(isConstruction && graphConTool==='circle') conActiveGesture=0;
     // 작도 모드는 손을 떼도 미확정 상태 그대로 둔다 — [확인]을 눌러야 획으로 남는다
@@ -4275,13 +4320,28 @@ function initGraphCanvas(canvas, W, H, isConstruction){
     // 펜: 직선·컴퍼스를 모두 끈 자유 필기 — 점을 찍거나 점 이름(A, B…)을 적을 때 쓴다
     freePenBtn?.addEventListener('click',()=>{ discardPending(); graphConTool='pen'; graphEraser=false; setActive(freePenBtn); });
     eraseBtn?.addEventListener('click',()=>{ discardPending(); graphEraser=true; setActive(eraseBtn); });
-    radLockBtn?.addEventListener('click',()=>{
-      graphRadiusLocked=!graphRadiusLocked;
-      radLockBtn.textContent = graphRadiusLocked ? '🔒 반지름 고정' : '🔓 반지름 고정';
-      radLockBtn.style.background = graphRadiusLocked ? 'var(--acc-lt)' : '';
-      radLockBtn.style.borderColor = graphRadiusLocked ? 'var(--accent)' : '';
-      radLockBtn.style.color = graphRadiusLocked ? 'var(--accent)' : '';
-    });
+    /* 지금 반지름이 잠겨 있는지 한눈에 알 수 있게 버튼 자체가 상태를 말하게 한다.
+       ① 꺼짐: '🔓 반지름 고정 끔'  ② 켜짐: '🔒 반지름 고정 켬'(강조색)
+       ③ 켰는데 아직 기준으로 삼을 원을 확인한 적이 없으면 '기준 원 없음'을 덧붙인다
+          — 이 상태에서는 고정이 실제로 아무 일도 하지 않기 때문에 헷갈리기 쉽다.
+       여기에 더해, 중심을 찍으면 잠긴 반지름이 점선 원으로 보인다(drawLockedRadiusGuide). */
+    const syncRadLock=()=>{
+      if(!radLockBtn) return;
+      const noBase = graphRadiusLocked && !graphLastRadius;
+      radLockBtn.textContent = graphRadiusLocked
+        ? (noBase ? '🔒 반지름 고정 켬 (기준 원 없음)' : '🔒 반지름 고정 켬')
+        : '🔓 반지름 고정 끔';
+      radLockBtn.title = graphRadiusLocked
+        ? (noBase ? '원(호)을 하나 그려서 [확인]하면 그 반지름으로 잠깁니다'
+                  : '중심을 찍으면 잠긴 반지름이 점선 원으로 보입니다')
+        : '켜면 마지막에 확인한 원과 같은 반지름을 씁니다';
+      radLockBtn.style.background  = graphRadiusLocked ? (noBase ? '#fef3c7' : 'var(--acc-lt)') : '';
+      radLockBtn.style.borderColor = graphRadiusLocked ? (noBase ? '#b45309' : 'var(--accent)') : '';
+      radLockBtn.style.color       = graphRadiusLocked ? (noBase ? '#b45309' : 'var(--accent)') : '';
+    };
+    window._graphSyncRadLock = syncRadLock;   // [확인]·실행취소로 기준 반지름이 바뀔 때도 다시 맞춘다
+    syncRadLock();
+    radLockBtn?.addEventListener('click',()=>{ graphRadiusLocked=!graphRadiusLocked; syncRadLock(); });
   } else {
     document.getElementById('graph-pen-btn')?.addEventListener('click',()=>{
       graphEraser=false;
@@ -4309,6 +4369,7 @@ window.graphUndo=function(){
   canvas.getContext('2d').putImageData(graphUndoStack.pop(),0,0);
   const meta=graphStepMeta.pop();
   if(meta && meta.isStep){ graphConfirmedCount=Math.max(0,graphConfirmedCount-1); graphLastRadius=meta.prevRadius; }
+  window._graphSyncRadLock?.();
 };
 window.graphClear=function(){
   const canvas=document.getElementById('graph-answer-canvas');
@@ -4318,6 +4379,7 @@ window.graphClear=function(){
   graphStepMeta.push(null);
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
   graphConfirmedCount=0; graphLastRadius=null;
+  window._graphSyncRadLock?.();
 };
 
 

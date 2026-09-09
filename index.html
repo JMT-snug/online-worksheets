@@ -4081,6 +4081,7 @@ function initGraphCanvas(canvas, W, H, isConstruction){
   let conSweepBase=null;                         // 스윕 중 매 move마다 복원할 기준(중심 마커 포함)
   let conPending=null;                           // 확정 대기 중인 도형 정보
   let conRadius=0, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
+  let conMinAngle=0, conMaxAngle=0;              // 스윕 중 양쪽으로 가장 멀리 간 지점(호의 두 끝)
   let conUsedLock=false;                         // 이번 호를 '반지름 고정'으로 그렸는가 (채점용 꼬리표에 쓴다)
   graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
   graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
@@ -4225,7 +4226,7 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         conUsedLock = !!(graphRadiusLocked && graphLastRadius);
         conRadius = (graphRadiusLocked && graphLastRadius) ? graphLastRadius : Math.max(distFromCenter,1);
         conStartAngle=Math.atan2(ly-conCenterY,lx-conCenterX);
-        conPrevAngle=conStartAngle; conCumAngle=0;
+        conPrevAngle=conStartAngle; conCumAngle=0; conMinAngle=0; conMaxAngle=0;
       }
     } else if(isConstruction && !graphEraser && graphConTool==='line'){
       // 직선: 기존처럼 한 번의 드래그로 시작점→끝점
@@ -4254,13 +4255,16 @@ function initGraphCanvas(canvas, W, H, isConstruction){
         ctx.putImageData(conSweepBase,0,0);
         const curAngle=Math.atan2(y-conCenterY,x-conCenterX);
         conCumAngle+=_angDelta(conPrevAngle,curAngle);
-        /* 호는 누른 지점을 가운데 두고 양쪽으로 똑같이 벌어진다 — 어느 쪽으로 돌리든
-           반대편도 같이 그려져서, 교점을 지나도록 호를 늘릴 때 방향을 신경 쓰지 않아도 된다.
-           돌린 각도가 곧 '한쪽 팔' 길이라 ±π 까지만 받는다(양쪽 합쳐 한 바퀴). */
-        conCumAngle=Math.max(-Math.PI,Math.min(Math.PI,conCumAngle));
+        /* 호는 '지금 손이 있는 곳'이 아니라 '지금까지 가 본 양 끝' 사이로 그려진다.
+           한쪽으로만 돌리면 그쪽으로만 늘어나고, 반대로 더 돌리면 그 방향으로도 늘어난다
+           (위아래로 왔다 갔다 하면 두 최대치를 잇는 호가 남는다).
+           되돌린다고 줄어들지는 않으니, 너무 크게 그렸으면 손을 뗐다가 다시 누르면 새로 그려진다.
+           반대쪽까지 합쳐 한 바퀴를 넘지 않도록 잡아 둔다. */
+        conCumAngle=Math.max(conMaxAngle-Math.PI*2,Math.min(conMinAngle+Math.PI*2,conCumAngle));
         conPrevAngle=curAngle;
-        const half=Math.abs(conCumAngle);
-        const startAngle=conStartAngle-half, endAngle=conStartAngle+half;
+        conMinAngle=Math.min(conMinAngle,conCumAngle);
+        conMaxAngle=Math.max(conMaxAngle,conCumAngle);
+        const startAngle=conStartAngle+conMinAngle, endAngle=conStartAngle+conMaxAngle;
         drawPreviewArc(conCenterX,conCenterY,conRadius,startAngle,endAngle,false);
         conPending={type:'circle',cx:conCenterX,cy:conCenterY,r:conRadius,startAngle,endAngle,anticlockwise:false,midAngle:conStartAngle,usedLock:conUsedLock};
         showConfirm(true);

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.72">
+  <meta name="app-version" content="8.73">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -87,6 +87,10 @@ header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:ce
 .bell-item.dim .bell-item-body{opacity:.45;filter:grayscale(1)}
 .bell-item.dim .bell-check{background:var(--green);border-color:var(--green);color:#fff}
 .bell-item.dim .bell-check:hover{background:var(--red);border-color:var(--red);color:#fff}
+/* 📢 공지 — 눌러서 이동할 곳이 없으니 커서도 바꾸지 않는다 */
+.bell-item.notice{cursor:default;background:#fffbeb;border-left:3px solid var(--amber)}
+.bell-item.notice:hover{background:#fffbeb}
+.bell-notice-body{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.5;white-space:normal;word-break:break-word}
 .bell-item-top{font-size:13px;color:var(--ink);font-weight:600}
 .bell-item-mark{font-size:12px;color:var(--ink2);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px}
 /* 채점 결과 칩 (종 알림) — 색으로 정답/오답/의견을 구분 */
@@ -1529,6 +1533,46 @@ function renderCards() {
    - '본 것' 여부는 localStorage에 시그니처(정답여부+피드백해시+교사필기유무)로 저장
    - 그래프 문제(q.type==='graph')가 새로 채점/수정되면 종 배지·카드 점으로 알림 */
 function _escHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ══════════ 📢 학생 공지 (v8.73) ══════════
+   시스템을 고쳤을 때 "학생이 알아야 할 것"만 손으로 골라 여기에 적는다.
+   종 🔔 목록 맨 위에 채점 알림과 같은 모양으로 뜨고, ✓ 정리 방식도 같다.
+
+   ⚠️ 운영 규칙 — 아무거나 공지하지 않기 위한 것이다:
+     ① 새 공지는 반드시 **교사 확인을 받고** 넣는다 (기능을 고쳤다고 자동으로 넣지 않는다)
+     ② 넣은 공지는 `README_버전정보.md` 의 「학생 공지 목록」 절에도 같이 남긴다
+     ③ `until`(표시 종료일, YYYY-MM-DD) 이 지나면 저절로 사라진다 — 공지가 쌓여
+        종 배지가 늘 켜져 있는 일이 없게 하려는 것. 지난 공지는 배열에서 지워도 된다
+   id 는 한 번 정하면 바꾸지 않는다 — 학생이 '읽음' 처리한 기록의 열쇠다. */
+const NOTICES=[
+  {id:'n-2026-09-09-bell-click', until:'2026-09-30',
+   title:'알림을 누르면 그 문제로 바로 가요',
+   body:'채점 알림을 누르면 해당 학습지가 열리면서 그 문항으로 곧장 이동합니다. 선생님 첨삭(✏️)과 피드백(💬)을 그 자리에서 바로 볼 수 있어요.'},
+  {id:'n-2026-09-09-grade-marks', until:'2026-09-30',
+   title:'채점 결과가 한눈에 보여요',
+   body:'알림에 ⭕ 정답 · ❌ 오답 · 📝 확인 요망 과 ✏️ 첨삭 · 💬 피드백 표시가 붙습니다. 학습지 안에서는 위쪽 문항 번호 오른쪽 위의 작은 점으로 보여요 — 초록은 정답, 빨강은 오답, 노랑은 선생님 의견입니다.'},
+  {id:'n-2026-09-09-check-btn', until:'2026-09-30',
+   title:'알림을 하나씩 정리할 수 있어요',
+   body:'알림 오른쪽 ✓ 를 한 번 누르면 「확인함」이 되어 회색으로 바뀌고, 한 번 더 누르면 그 알림이 지워집니다. 한꺼번에 지우려면 맨 아래 [모두 읽음 표시]를 누르세요.'},
+];
+function _todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+/* 공지의 '확인함/읽음'은 채점 알림과 따로 저장한다 ({id: 'dim'|'seen'}) */
+function _noticeStateKey(){return 'noticeState::'+((user&&user.email)||'');}
+function _loadNoticeState(){try{return JSON.parse(localStorage.getItem(_noticeStateKey())||'{}')||{};}catch(e){return {};}}
+function _saveNoticeState(m){try{localStorage.setItem(_noticeStateKey(),JSON.stringify(m));}catch(e){}}
+function _setNoticeState(id,v){const st=_loadNoticeState(); st[id]=v; _saveNoticeState(st);}
+/* 지금 보여 줄 공지 — 기간이 지났거나 읽음 처리한 것은 뺀다 */
+function activeNotices(){
+  const today=_todayStr(), st=_loadNoticeState();
+  return NOTICES.filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
+                .map(n=>({...n, dim:st[n.id]==='dim'}));
+}
+/* 공지도 모두 읽음 처리 (「모두 읽음 표시」에서 함께 부른다) */
+function markNoticesSeen(){
+  const st=_loadNoticeState();
+  activeNotices().forEach(n=>{ st[n.id]='seen'; });
+  _saveNoticeState(st);
+}
 function _fbHash(s){let h=0;s=String(s||'');for(let i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return h;}
 function _gradeSig(pq){
   if(!pq) return null;
@@ -1619,6 +1663,7 @@ function _refreshNotifViews(){
 function refreshGradeNotif(){
   window._newGrades=computeNewGrades();
   window._newGradeWs=new Set(window._newGrades.filter(g=>!g.dim).map(g=>g.wsId));
+  window._notices=activeNotices();   // 공지는 학습지와 무관하므로 카드 빨간 점에는 넣지 않는다
   renderGradeBell();
 }
 function renderGradeBell(){
@@ -1629,11 +1674,25 @@ function renderGradeBell(){
   if(!user){ wrap.style.display='none'; return; }
   wrap.style.display='inline-flex';
   const list=window._newGrades||[];
-  const unread=list.filter(g=>!g.dim).length;   // 배지는 '확인 안 한 것'만 센다
+  const notices=window._notices||[];
+  // 배지는 공지·채점 알림 통틀어 '확인 안 한 것'만 센다
+  const unread=notices.filter(n=>!n.dim).length+list.filter(g=>!g.dim).length;
   if(unread){ cnt.style.display='inline-block'; cnt.textContent=unread>99?'99+':unread; }
   else { cnt.style.display='none'; cnt.textContent=''; }
-  if(!list.length){ panel.innerHTML='<div class="bell-empty">🔔 새 채점 알림이 없어요</div>'; return; }
-  panel.innerHTML='<div class="bell-head">✍️ 그래프 채점 알림<br><span style="font-weight:600;font-size:11px;color:var(--ink3)">✓ 한 번 = 확인함(회색) · 한 번 더 = 알림 지우기</span></div>'+
+  if(!list.length&&!notices.length){ panel.innerHTML='<div class="bell-empty">🔔 새 알림이 없어요</div>'; return; }
+  const howto='<span style="font-weight:600;font-size:11px;color:var(--ink3)">✓ 한 번 = 확인함(회색) · 한 번 더 = 알림 지우기</span>';
+  const noticeHtml=notices.length
+    ? '<div class="bell-head">📢 공지<br>'+howto+'</div>'+
+      notices.map((n,i)=>`<div class="bell-item notice${n.dim?' dim':''}">
+        <div class="bell-item-body">
+          <div class="bell-item-top">📢 ${_escHtml(n.title)}</div>
+          <div class="bell-notice-body">${_escHtml(n.body)}</div>
+        </div>
+        <button type="button" class="bell-check" data-n="${i}"
+          title="${n.dim?'한 번 더 누르면 공지를 지웁니다':'확인함으로 표시 (회색)'}">✓</button></div>`).join('')
+    : '';
+  panel.innerHTML=noticeHtml+
+    (list.length ? '<div class="bell-head">✍️ 그래프 채점 알림'+(notices.length?'':'<br>'+howto)+'</div>' : '')+
     list.map((g,i)=>{
       const chips=[gradeResultChip(g.pq)];
       if(g.pq.teacherDrawing) chips.push('<span class="bell-chip gm-i">✏️ 첨삭</span>');
@@ -1648,22 +1707,28 @@ function renderGradeBell(){
           title="${g.dim?'한 번 더 누르면 알림을 지웁니다':'확인함으로 표시 (회색)'}">✓</button></div>`;
     }).join('')+
     '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';
-  panel.querySelectorAll('.bell-item').forEach(el=>{
+  // 채점 알림만 눌러서 이동한다 (공지는 갈 곳이 없다)
+  panel.querySelectorAll('.bell-item[data-i]').forEach(el=>{
     el.addEventListener('click',()=>openGradeNotif((window._newGrades||[])[+el.dataset.i]));
   });
-  // ✓ 버튼: 1번 = 회색(확인함), 2번 = 알림 지우기. 항목 클릭(문항 이동)과 겹치지 않게 막는다
+  // ✓ 버튼: 1번 = 회색(확인함), 2번 = 지우기. 항목 클릭(문항 이동)과 겹치지 않게 막는다
   panel.querySelectorAll('.bell-check').forEach(btn=>{
     btn.addEventListener('click',(e)=>{
       e.stopPropagation();
-      const g=(window._newGrades||[])[+btn.dataset.i]; if(!g) return;
-      if(g.dim) markOneGradeSeen(g); else dimOneGrade(g);
+      if(btn.dataset.n!==undefined){        // 공지
+        const n=(window._notices||[])[+btn.dataset.n]; if(!n) return;
+        _setNoticeState(n.id, n.dim?'seen':'dim');
+      }else{                                 // 채점 알림
+        const g=(window._newGrades||[])[+btn.dataset.i]; if(!g) return;
+        if(g.dim) markOneGradeSeen(g); else dimOneGrade(g);
+      }
       refreshGradeNotif(); _refreshNotifViews();
     });
   });
   const cl=panel.querySelector('#bell-clear');
   if(cl) cl.addEventListener('click',(e)=>{
     e.stopPropagation();
-    markGradesSeen(null); refreshGradeNotif(); _refreshNotifViews();
+    markGradesSeen(null); markNoticesSeen(); refreshGradeNotif(); _refreshNotifViews();
     panel.classList.remove('show');
   });
 }

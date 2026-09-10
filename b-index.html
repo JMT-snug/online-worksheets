@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.74">
+  <meta name="app-version" content="8.75">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -230,6 +230,21 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 #dash-page>main{max-width:1120px;margin:0 auto;padding:32px 24px}
 .dash-greet{font-size:24px;font-weight:900;margin-bottom:4px}
 .dash-sub{color:var(--ink3);font-size:14px;margin-bottom:28px}
+/* 학년 버튼 (v8.75) — 인사말 옆. 누른 학년의 단원만 표에 남긴다 */
+.dash-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+.dash-head .dash-greet{margin-bottom:0}
+.grade-tabs{display:inline-flex;gap:4px;background:var(--paper);border:1.5px solid var(--rule);border-radius:999px;padding:3px}
+.grade-tab{padding:5px 13px;border-radius:999px;border:none;background:transparent;font-family:inherit;
+  font-size:13px;font-weight:700;color:var(--ink3);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.grade-tab:hover{background:var(--cream);color:var(--ink2)}
+.grade-tab.on{color:#fff}
+.grade-tab.on.g0{background:var(--ink)}
+.grade-tab.on.g1{background:var(--g1)}
+.grade-tab.on.g2{background:var(--g2)}
+.grade-tab.on.g3{background:var(--g3)}
+.matrix-tbl.one-grade{min-width:0}
+.matrix-tbl.one-grade .mtd{border-left:none;padding-left:10px}
+.matrix-tbl.one-grade .ws-item{max-width:520px}
 .sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
 
 /* ── MATRIX: table 기반, sticky 없음 ── */
@@ -752,8 +767,11 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 <!-- DASHBOARD -->
 <div id="dash-page" class="page">
   <main>
-    <div class="dash-greet" id="dash-greet">안녕하세요!</div>
-    <div class="dash-sub">학습할 단원을 선택하세요.</div>
+    <div class="dash-head">
+      <div class="dash-greet" id="dash-greet">안녕하세요!</div>
+      <div class="grade-tabs" id="grade-tabs" aria-label="학년 선택"></div>
+    </div>
+    <div class="dash-sub" id="dash-sub">학습할 단원을 선택하세요.</div>
     <div class="matrix-wrap">
       <table class="matrix-tbl" id="matrix-tbl">
         <thead>
@@ -1218,7 +1236,7 @@ document.getElementById("btn-login").addEventListener("click", async () => {
   try { await signInWithPopup(auth, p); }
   catch(e) { alert("로그인 오류: " + e.message); }
 });
-document.getElementById("btn-logout").addEventListener("click", () => signOut(auth));
+document.getElementById("btn-logout").addEventListener("click", () => { try{ sessionStorage.removeItem('dashGrade'); }catch(e){} signOut(auth); });
 
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1420,7 +1438,96 @@ async function loadDash() {
     }
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
   refreshGradeNotif();
+  if(curGrade===null){
+    // 이번 로그인에서 아직 학년을 정하지 않았으면: 새로고침 전 선택 → 자동 판정
+    let g=null;
+    try{ const s=sessionStorage.getItem('dashGrade'); if(s!==null && /^[0-3]$/.test(s)) g=+s; }catch(e){}
+    if(g===null) g=detectGrade();
+    curGrade=g;
+  }
+  renderGradeTabs();
   renderCards();
+}
+
+/* ══════════ 학년 버튼 · 자동 판정 (v8.75) ══════════
+   메인 화면(단원 목록)은 선택한 학년의 열만 보여준다. 0 = 전체(3열).
+   로그인 직후 한 번만 자동으로 정하고, 버튼으로 바꾼 선택은 새로고침까지만(sessionStorage)
+   유지된다 — 다음 로그인 땐 다시 자동 판정한다(로그아웃 때 지움).
+
+   자동 판정 순서
+   · 학생 (교사 권한 없음)
+       ① 아이디가 숫자 5개(예: 26123@…)면 앞 2자리 = 입학년도 → 학년 = 학년도 − 입학년도 + 1
+          (학년도는 3월에 바뀐다: 1~2월은 전년도로 본다). 1~3 밖이면 무시
+       ② 최근에 접속한 학습지의 학년 (records 의 lastUpdated 와, 이 기기에서 마지막으로 연 단원)
+       ③ 둘 다 없으면 1학년
+       ※ 학급 명단(teacher_data)은 학생이 읽을 수 없어 학급으로는 판정하지 않는다 (2026-09-11 B안)
+   · 교사
+       ① 학급 담당 교사: 담당 학급의 학년 (올해 학급 우선, 여러 학년이면 가장 낮은 학년)
+       ② 기본(마스터) 교사: 최근에 연 단원의 학년 (교사 미리보기는 records 를 남기지 않으므로
+          showUnitPage 가 localStorage 에 적어 두는 것을 쓴다) → 없으면 전체 */
+let curGrade = null;   // null=아직 미정, 0=전체, 1~3=학년
+function schoolYear(){ const d=new Date(); return d.getMonth()>=2 ? d.getFullYear() : d.getFullYear()-1; }
+function gradeFromStudentId(email){
+  const m=/^(\d{5})@/.exec(String(email||'').trim());
+  if(!m) return null;
+  const g=schoolYear()-(2000+Number(m[1].slice(0,2)))+1;
+  return (g>=1&&g<=3)?g:null;
+}
+function _lastUnitKey(){ return 'lastUnitGrade::'+((user&&user.email)||''); }
+function _saveLastUnitGrade(grade){ try{ localStorage.setItem(_lastUnitKey(), JSON.stringify({grade, at:new Date().toISOString()})); }catch(e){} }
+function _loadLastUnitGrade(){ try{ return JSON.parse(localStorage.getItem(_lastUnitKey())||'null'); }catch(e){ return null; } }
+/* 최근 접속한 학습지의 학년 — records 의 lastUpdated/completedAt(ISO 문자열이라 그대로 비교)과
+   이 기기에서 마지막으로 연 단원 중 더 최근 것 */
+function gradeFromRecent(){
+  let best=null, bestAt='';
+  for(const [wsId,d] of Object.entries(wsProgress||{})){
+    const at=String(d.lastUpdated||d.completedAt||'');
+    if(!at || at<=bestAt) continue;
+    const ws=WORKSHEETS.find(w=>w.id===wsId);
+    const u=ws && UNITS.find(x=>x.id===ws.unitId);
+    if(u && GRADES.includes(u.grade)){ best=u.grade; bestAt=at; }
+  }
+  const ls=_loadLastUnitGrade();
+  if(ls && GRADES.includes(ls.grade) && String(ls.at||'')>bestAt) best=ls.grade;
+  return best;
+}
+function gradeFromMyClasses(){
+  if(!myClassNames || !myClassNames.size) return null;
+  const parsed=[...myClassNames].map(n=>{ const m=/^(\d{4})\/(\d)학년/.exec(n); return m?{year:+m[1],grade:+m[2]}:null; }).filter(Boolean);
+  if(!parsed.length) return null;
+  const thisYear=parsed.filter(c=>c.year===schoolYear());
+  const pool=(thisYear.length?thisYear:parsed).map(c=>c.grade).filter(g=>GRADES.includes(g));
+  return pool.length ? Math.min(...pool) : null;
+}
+function detectGrade(){
+  let g=null, why='';
+  if(isTeacherAcct()){
+    if(isScopedTeacher()){ g=gradeFromMyClasses(); why='담당 학급'; }
+    if(g===null){ g=gradeFromRecent(); why='최근 접속'; }
+    if(g===null){ g=0; why='기본(전체)'; }
+  }else{
+    g=gradeFromStudentId(user&&user.email); why='학번';
+    if(g===null){ g=gradeFromRecent(); why='최근 접속'; }
+    if(g===null){ g=1; why='기본(1학년)'; }
+  }
+  console.log('[학년 자동 판정]', g===0?'전체':g+'학년', '←', why);
+  return g;
+}
+function setGrade(g){
+  curGrade=GRADES.includes(g)?g:0;
+  try{ sessionStorage.setItem('dashGrade', String(curGrade)); }catch(e){}
+  renderGradeTabs();
+  renderCards();
+}
+window.setGrade=setGrade;
+function renderGradeTabs(){
+  const box=document.getElementById('grade-tabs'); if(!box) return;
+  const cur=curGrade??0;
+  box.innerHTML=[1,2,3,0].map(g=>
+    `<button type="button" class="grade-tab g${g}${cur===g?' on':''}" data-g="${g}">${g?g+'학년':'전체'}</button>`).join('');
+  box.querySelectorAll('.grade-tab').forEach(b=>b.addEventListener('click',()=>setGrade(+b.dataset.g)));
+  const sub=document.getElementById('dash-sub');
+  if(sub) sub.textContent = cur ? `${cur}학년 단원이에요. 다른 학년은 위 버튼으로 바꿀 수 있어요.` : '학습할 단원을 선택하세요.';
 }
 
 /* ── MATRIX RENDER (단원 기반) ── */
@@ -1497,6 +1604,11 @@ function makeUnitItem(unit) {
 function renderCards() {
   const tbody = document.getElementById("matrix-body");
   tbody.innerHTML = "";
+  // 선택한 학년만 (0=전체). 머리글의 학년 칸도 같이 감춘다
+  const shown = curGrade ? [curGrade] : GRADES;
+  const tbl = document.getElementById("matrix-tbl");
+  if(tbl) tbl.classList.toggle("one-grade", shown.length===1);
+  GRADES.forEach(g=>{ const th=document.querySelector(".mth-g"+g); if(th) th.style.display = shown.includes(g) ? "" : "none"; });
 
   CATEGORIES.forEach(cat => {
     const cc = CAT_COLOR[cat];
@@ -1513,7 +1625,7 @@ function renderCards() {
     tr.appendChild(tdLabel);
 
     // 학년별 td
-    GRADES.forEach(g => {
+    shown.forEach(g => {
       const td = document.createElement("td");
       td.className = "mtd";
       const units = UNITS.filter(u=>u.grade===g && u.category===cat);
@@ -2317,6 +2429,7 @@ function escHtml(t){
 function showUnitPage(unit) {
   window._currentUnit = unit;
   try{ sessionStorage.setItem('lastUnit', JSON.stringify(unit)); }catch(e){}
+  _saveLastUnitGrade(unit.grade); // 다음 로그인의 「최근 접속한 학습지 학년」 판정용
   const gc = GRADE_COLOR[unit.grade];
   const cc = CAT_COLOR[unit.category]||{text:"var(--accent)"};
   document.getElementById("unit-title").textContent = unit.title;

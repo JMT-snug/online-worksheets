@@ -244,7 +244,12 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .grade-tab.on.g3{background:var(--g3)}
 .matrix-tbl.one-grade{min-width:0}
 .matrix-tbl.one-grade .mtd{border-left:none;padding-left:10px}
-.matrix-tbl.one-grade .ws-item{max-width:520px}
+/* 한 학년만 볼 때는 영역별 단원을 가로로 늘어놓는다 — 한 줄에 최대 4개, 폭이 좁으면 3→2개 */
+.matrix-tbl.one-grade .unit-cell{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;align-items:stretch}
+.matrix-tbl.one-grade .unit-cell .ws-item{margin-bottom:0}
+.matrix-tbl.one-grade .unit-cell .ws-item-title{padding-right:34px} /* 카드가 좁아져 제목이 오른쪽 위 배지(3/5)와 겹치지 않게 */
+@media (max-width:900px){ .matrix-tbl.one-grade .unit-cell{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:600px){ .matrix-tbl.one-grade .unit-cell{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
 
 /* ── MATRIX: table 기반, sticky 없음 ── */
@@ -1632,7 +1637,9 @@ function renderCards() {
       if(!units.length) {
         td.innerHTML=`<div style="color:var(--rule);text-align:center;padding:10px;font-size:16px">—</div>`;
       } else {
-        units.forEach(u=>td.appendChild(makeUnitItem(u)));
+        const cell=document.createElement("div"); cell.className="unit-cell"; // 한 학년 보기에서 가로 격자
+        units.forEach(u=>cell.appendChild(makeUnitItem(u)));
+        td.appendChild(cell);
       }
       tr.appendChild(td);
     });

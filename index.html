@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.75">
+  <meta name="app-version" content="8.76">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -577,6 +577,13 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .step3-body{padding:14px 16px}
 .step3-label{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:0;line-height:1.6}
 .step3-hint{font-size:12px;color:var(--ink3);margin-bottom:8px;background:var(--cream);padding:6px 10px;border-radius:6px}
+/* 이미 해결한 단계를 다시 열어 봤을 때 — 답칸 대신 그때 쓴 답을 보여 주는 칸 */
+.step3-solved{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--cream);border:1px dashed var(--rule);border-radius:8px;padding:11px 13px;margin-bottom:8px}
+.step3-solved-lb{font-size:12px;font-weight:700;color:var(--green);white-space:nowrap}
+.step3-solved-ans{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:.3px;word-break:break-all}
+.s3-goto-btn{margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
+  background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 /* word input for step3 */
 .word-inp-full{width:100%;height:38px;font-size:15px;font-weight:700;
   border:1.5px solid var(--accent);border-radius:8px;
@@ -2837,8 +2844,11 @@ async function saveWorksheet(isComplete=false){
         };
       } else {
         // 시도 횟수·정답 여부·최종 답안 중 하나라도 있어야 "이 탭이 손댄 문항"으로 본다
+        // 단계형은 문제를 끝까지 못 풀었어도 해결한 단계가 있으면 저장 대상이다
+        const _s3 = q.type==='step3' ? step3State[q.id] : null;
+        const _s3Touched = !!(_s3 && Array.isArray(_s3.done) && _s3.done.some(Boolean));
         const touched = (attempts[i]||0)>0 || !!answered[i]
-          || (lastAnswers[i]!==undefined && lastAnswers[i]!==null);
+          || (lastAnswers[i]!==undefined && lastAnswers[i]!==null) || _s3Touched;
         if(!touched) return;
         perQ[q.id]={
           attempts:   attempts[i]||0,
@@ -2850,6 +2860,12 @@ async function saveWorksheet(isComplete=false){
           // 값이 없으면 기존 저장분을 지우지 않도록 필드를 아예 넣지 않는다.
           ...(lastAnswers[i]!==undefined&&lastAnswers[i]!==null ? {lastAnswer:lastAnswers[i]} : {}),
           ...(lastAnswerTokens[i] ? {lastAnswerTokens:lastAnswerTokens[i]} : {}),
+          // 단계형 진도 — 다음 접속에 해결한 단계와 그때 쓴 답을 그대로 복원한다
+          ...(_s3 ? {
+            stepDone:    _s3.done.map(v=>!!v),
+            stepCur:     _s3.curStep||1,
+            stepAnswers: (_s3.ans||[]).map(v=>(v===undefined||v===null)?'':String(v)),
+          } : {}),
         };
       }
     });
@@ -3054,6 +3070,8 @@ async function startQuiz(ws) {
           answered[i]=s.correct||false;
           attempts[i]=s.attempts||0;
           wrongAnswers[i].inputs=[...(s.wrongInputs||[])];
+          // 단계형: 해결해 둔 단계와 그때 쓴 답을 되살린다
+          restoreS3State(q, s);
           // 저장된 최종 답안 복원 — 다시 저장할 때 기존 값이 지워지지 않도록
           if(s.lastAnswer!==undefined&&s.lastAnswer!==null) lastAnswers[i]=s.lastAnswer;
           if(s.lastAnswerTokens) lastAnswerTokens[i]=s.lastAnswerTokens;
@@ -3818,6 +3836,17 @@ function quizKeyHandler(e){
     const st=getS3State(q.id);
     const steps=getSteps(q);
     const step=steps[st.curStep-1];
+    /* 이미 해결한 단계를 다시 보는 중이면 답칸·키패드가 없다. 숫자 키를 흘려보내지 않으면
+       qInput이 없는 #ans-display를 건드리고, 엔터는 빈 답을 재채점한다. */
+    if(st.done[st.curStep-1]){
+      if(e.key==="Enter"||e.code==="NumpadEnter"){
+        e.preventDefault();
+        const _nx=st.done.findIndex(v=>!v);
+        if(_nx!==-1) goStep3(_nx+1,q.id);
+        else if(answered[curQIdx]){ if(allAnswered()) finishQuiz(); else goNextUnanswered(true); }
+      }
+      return;
+    }
     const isKeypad = step && ['number','expr','equation'].includes(step.answerType||'number');
     if(isKeypad){
       // 수 단계: 메인 키패드와 동일하게 물리 키보드 처리
@@ -4008,7 +4037,11 @@ window.submitMulti = function(){
 
 /* ── 3단계 풀이 렌더/채점 ── */
 // 각 문제별 step 상태
-const step3State = {}; // key: q.id → {curStep:1|2|3, done:[false,false,false], advTimer:타이머}
+/* key: q.id → {curStep, done:[단계별 해결 여부], ans:[단계별 내가 쓴 답], advTimer}
+   done/ans 는 records/{email}/worksheets/{wsId} 의 perQuestion[qid].stepDone / stepAnswers 로
+   함께 저장된다 — 문제를 끝까지 풀지 못하고 나가도 해결한 단계는 다음 접속에 그대로 남고,
+   다 푼 문제는 중간 단계를 다시 열어 그때 쓴 답을 다시 볼 수 있다. */
+const step3State = {};
 
 function getSteps(q){
   if(Array.isArray(q.steps) && q.steps.length) return q.steps;
@@ -4023,10 +4056,36 @@ function getSteps(q){
 function getS3State(qid){
   const q=curWS.questions.find(x=>x.id===qid)||{};
   const n=getSteps(q).length||1;
+  // 단계 수가 달라졌으면(교사가 문항을 고침) 이전 기록은 의미가 없으므로 처음부터
   if(!step3State[qid] || step3State[qid].done.length!==n){
-    step3State[qid]={curStep:1, done:Array(n).fill(false)};
+    step3State[qid]={curStep:1, done:Array(n).fill(false), ans:Array(n).fill(null)};
+  }
+  // ans 칸이 없던 구버전 상태 보정
+  if(!Array.isArray(step3State[qid].ans) || step3State[qid].ans.length!==n){
+    step3State[qid].ans=Array(n).fill(null);
   }
   return step3State[qid];
+}
+
+/* 저장본(perQuestion[qid])의 단계 진도를 메모리 상태로 되살린다.
+   이번 탭에서 이미 풀어 둔 단계는 지우지 않고 합친다 — 두 기기에서 같이 풀 때 유실 방지. */
+function restoreS3State(q, saved){
+  if(!q || q.type!=='step3' || !saved) return;
+  const done=saved.stepDone;
+  if(!Array.isArray(done) || !done.length) return;
+  const n=getSteps(q).length||1;
+  if(done.length!==n) return;               // 문항이 바뀌었다 → 복원하지 않음
+  const prev=step3State[q.id];
+  const sAns=Array.isArray(saved.stepAnswers)?saved.stepAnswers:[];
+  const mDone=done.map((v,k)=>!!v || !!prev?.done?.[k]);
+  const mAns=Array.from({length:n},(_,k)=>{
+    const v=sAns[k];
+    if(v!==undefined && v!==null && v!=='') return String(v);
+    return prev?.ans?.[k] ?? null;
+  });
+  let cur=Number(saved.stepCur)||1;
+  if(!(cur>=1 && cur<=n)) cur=1;
+  step3State[q.id]={curStep:cur, done:mDone, ans:mAns};
 }
 
 const STEP_TAB_LABELS = ['①','②','③','④','⑤','⑥','⑦','⑧'];
@@ -4630,6 +4689,29 @@ function renderStep3Body(q){
   const at=step.answerType||'number';
   const labelHtml=`<div class="step3-label">${fracText(step.label||'')}</div>`;
 
+  /* ── 이미 해결한 단계 ──
+     답칸을 비워 다시 내밀면 학생이 "또 풀어야 하나" 하고 헷갈린다. 그때 쓴 답을
+     그대로 보여 주고, 이어 풀 단계(또는 다음 문제)로 가는 버튼만 둔다.
+     문제를 다 푼 뒤에도 탭을 눌러 중간 풀이를 다시 볼 수 있게 하는 것이 목적. */
+  if(st.done[i]){
+    const savedAns=(st.ans && st.ans[i]!==undefined && st.ans[i]!==null && st.ans[i]!=='')
+                   ? String(st.ans[i]) : String(step.answer??'');
+    const escAns=String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const hintHtmlD = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>` : '';
+    const nextUndone = st.done.findIndex(v=>!v);
+    const navHtml = nextUndone===-1
+      ? `<button class="s3-goto-btn" onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}">${allAnswered()?'결과 보기 →':'다음 문제 →'}</button>`
+      : `<button class="s3-goto-btn" onclick="goStep3(${nextUndone+1},'${q.id}')">${STEP_TAB_LABELS[nextUndone]||(nextUndone+1)}단계 이어 풀기 →</button>`;
+    body.innerHTML=labelHtml+hintHtmlD+`
+      <div class="step3-solved">
+        <span class="step3-solved-lb">✅ 내가 쓴 답</span>
+        <span class="step3-solved-ans">${escAns}</span>
+      </div>
+      <div class="feedback-strip show fb-correct" id="s3-fb">이미 해결한 단계예요.${navHtml}</div>`;
+    if(window.MathJax?.typesetPromise) MathJax.typesetPromise([body]).catch(()=>{});
+    return;
+  }
+
   // 수/다항식/방정식 → 수학 키패드, 텍스트 → 일반 입력
   const useKeypad = (at==='number' || at==='expr' || at==='equation');
 
@@ -4712,6 +4794,7 @@ function submitStep3(stepNum, byEnter){
   const i=stepNum-1;
   const step=steps[i];
   if(!step) return;
+  if(st.done[i]) return;   // 이미 해결한 단계를 다시 보는 중 — 재채점하지 않는다
   const fb=document.getElementById("s3-fb");
   const at=step.answerType||'number';
   const isLastStep = stepNum===steps.length;
@@ -4732,6 +4815,14 @@ function submitStep3(stepNum, byEnter){
     if(t.type==="exp")  return `(${t.base||0})^(${t.expo||1})`;
     return "";
   }).join("").replace(/−/g,"-");
+  /* 나중에 이 단계를 다시 열었을 때 보여 줄 "내가 쓴 답".
+     수 단계의 userAns는 계산값이라 분수 2/3이 0.6666…으로 남는다 → 누른 모양 그대로 만든다. */
+  const tokensToDisp=()=>qTokens.map(t=>{
+    if(t.type==="char") return t.val;
+    if(t.type==="frac") return `${t.num||0}/${t.den||1}`;
+    if(t.type==="exp")  return `${t.base||0}^${t.expo||1}`;
+    return "";
+  }).join("");
 
   if(at==='number'){
     const val=qTokensToNum();
@@ -4755,8 +4846,12 @@ function submitStep3(stepNum, byEnter){
 
   if(ok){
     st.done[i]=true;
+    st.ans[i]=usesKeypad ? (tokensToDisp()||userAns) : userAns;   // 다시 열었을 때 보여 줄 답
     if(!isLastStep){
       st.curStep=stepNum+1;
+      // 문제를 끝까지 못 풀고 나가도 여기까지는 남도록 바로 저장한다
+      // (탭을 닫을 때 부르는 pagehide 저장은 비동기 쓰기가 끊길 수 있어 믿을 수 없다)
+      saveWorksheet();
       fb.className="feedback-strip show fb-correct";
       fb.innerHTML=`✅ 맞았어요! ${STEP_TAB_LABELS[stepNum]||(stepNum+1)}단계로 넘어가세요.`;
       st.advTimer=setTimeout(()=>{

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.76">
+  <meta name="app-version" content="8.77">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -4653,7 +4653,8 @@ function renderStep3Q(q, panel){
   const tabs=steps.map((s,i)=>{
     const done=st.done[i];
     const active=st.curStep===i+1;
-    const locked=i>0 && !st.done[i-1] && !active;
+    // 교사 미리보기는 앞 단계를 안 풀어도 아무 단계나 열어 볼 수 있다 (goStep3 의 잠금과 같은 조건)
+    const locked=i>0 && !st.done[i-1] && !active && !isTeacherAcct();
     const shortLabel=s.label && s.label.length<=10 ? s.label : `${i+1}단계`;
     return `<button class="step3-tab ${active?'active':''} ${done?'done':''} ${locked?'locked':''}"
       onclick="goStep3(${i+1},'${q.id}')">${STEP_TAB_LABELS[i]||(i+1)} ${shortLabel}${done?' ✓':''}</button>`;
@@ -4897,7 +4898,8 @@ function submitStep3(stepNum, byEnter){
 
 function goStep3(n, qid){
   const st=getS3State(qid);
-  if(n>1 && !st.done[n-2]) return; // 이전 단계 완료 전 잠금
+  // 이전 단계 완료 전 잠금 — 단, 교사 계정은 문항 점검용으로 어느 단계든 바로 열 수 있다
+  if(n>1 && !st.done[n-2] && !isTeacherAcct()) return;
   setNextFocus(false);   // 단계 탭을 눌러서 온 것 → 엔터가 아니다
   st.curStep=n;
   const panel=document.getElementById("quiz-left-panel");

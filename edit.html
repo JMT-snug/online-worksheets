@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.26">
+<meta name="app-version" content="edit-v3.27">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -109,6 +109,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .q-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:.15s;position:relative}
 /* 파트 구분선 */
 .part-divider{display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;padding:6px 12px;background:#e0e7ff;border:1px solid #c7d2fe;border-radius:8px}
+.part-divider{cursor:grab}
+.part-divider.drag-over{outline:2px dashed var(--accent);outline-offset:2px}
 .part-divider .pd-name{font-size:12px;font-weight:800;color:#4338ca}
 .part-divider .pd-actions button{border:none;background:transparent;cursor:pointer;font-size:12px;padding:2px 5px;border-radius:5px}
 .part-divider .pd-actions button:hover{background:#c7d2fe}
@@ -1253,11 +1255,28 @@ function renderQList(){
     if(item._type==='q' && item.partStart && item.partStart.id){
       const dv=document.createElement('div');
       dv.className='part-divider';
+      dv.draggable=true;
       dv.innerHTML=`<span class="pd-name">🧩 ${item.partStart.name||'파트'}</span>
         <span class="pd-actions">
+          <button title="구분선을 한 문항 위로" onclick="event.stopPropagation();movePartBy(${item._idx},-1)" ${item._idx===0?'disabled':''}>▲</button>
+          <button title="구분선을 한 문항 아래로" onclick="event.stopPropagation();movePartBy(${item._idx},1)" ${item._idx>=allItems.length-1?'disabled':''}>▼</button>
           <button title="파트 이름 수정" onclick="event.stopPropagation();renamePart(${item._idx})">✏️</button>
           <button title="파트 구분 삭제" onclick="event.stopPropagation();removePartStart(${item._idx})">✕</button>
         </span>`;
+      // 구분선 자체를 끌어서 다른 문항 앞으로 옮긴다 (데이터에 'part:' 접두어로 카드 드래그와 구분)
+      dv.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', 'part:'+item._idx); dv.style.opacity='.4'; });
+      dv.addEventListener('dragend',   e => { dv.style.opacity='1'; });
+      dv.addEventListener('dragover',  e => { e.preventDefault(); dv.classList.add('drag-over'); });
+      dv.addEventListener('dragleave', e => { dv.classList.remove('drag-over'); });
+      dv.addEventListener('drop',      e => {
+        e.preventDefault(); dv.classList.remove('drag-over');
+        const data = e.dataTransfer.getData('text/plain');
+        if(data.startsWith('part:')){ movePartTo(parseInt(data.slice(5)), item._idx); return; }
+        // 문항 카드를 구분선 위에 놓으면 그 파트의 첫 문항이 된다
+        const from = parseInt(data);
+        if(combinedItems[from]?._type==='extra'){ toast('자동생성 문항은 순서 변경이 불가합니다'); return; }
+        moveItemToPartStart(from, item._idx);
+      });
       list.appendChild(dv);
     }
     const card = document.createElement('div');
@@ -1300,7 +1319,12 @@ function renderQList(){
     card.addEventListener('dragleave', e => { card.classList.remove('drag-over'); });
     card.addEventListener('drop',      e => {
       e.preventDefault(); card.classList.remove('drag-over');
-      const from = parseInt(e.dataTransfer.getData('text/plain'));
+      const data = e.dataTransfer.getData('text/plain');
+      if(data.startsWith('part:')){
+        if(isExtraItem){ toast('자동생성 문항 앞에는 파트를 둘 수 없습니다'); return; }
+        movePartTo(parseInt(data.slice(5)), item._idx); return;
+      }
+      const from = parseInt(data);
       const to   = i;
       if(from===to) return;
       if(isExtraItem || combinedItems[from]?._type==='extra'){ toast('자동생성 문항은 순서 변경이 불가합니다'); return; }
@@ -1375,6 +1399,43 @@ function moveItem(from, to, allItems){
   arr.splice(toItem._idx, 0, moved);
   currentWs.questions = arr;
   selectedQIdx = newSelected;
+  renderQList();
+}
+
+// ── 파트 구분선 이동 ──
+// 구분선은 문항의 partStart 표시이므로 "옮긴다" = 표시를 다른 문항으로 옮겨 단다.
+window.movePartTo = function(fromQIdx, toQIdx){
+  const qs = currentWs?.questions; if(!qs) return;
+  const src = qs[fromQIdx], dst = qs[toQIdx];
+  if(!src?.partStart || !dst || fromQIdx===toQIdx) return;
+  if(dst.partStart){ toast('그 문항에는 이미 파트 구분이 있습니다'); return; }
+  dst.partStart = src.partStart; delete src.partStart;
+  renderQList();
+  toast('🧩 구분선 이동 — 저장해야 반영됩니다');
+};
+window.movePartBy = function(qIdx, delta){
+  const to = qIdx + delta;
+  if(to<0 || to>=(currentWs?.questions?.length||0)) return;
+  movePartTo(qIdx, to);
+};
+// 문항 카드를 구분선 위에 놓았을 때: 그 파트의 첫 문항으로 넣는다 (위·아래 어느 쪽에서 와도 같은 결과)
+function moveItemToPartStart(from, partQIdx){
+  const qs = currentWs.questions;
+  if(from===partQIdx) return;
+  const selObj = selectedQIdx!==null ? qs[selectedQIdx] : null;
+  const arr = [...qs];
+  const [moved] = arr.splice(from, 1);
+  const p = from<partQIdx ? partQIdx-1 : partQIdx;   // 빠진 뒤 구분선 문항의 위치
+  const holder = arr[p];
+  if(moved.partStart){                               // 옮겨 나간 자리는 다음 문항이 이어받는다
+    const next = arr[from]; if(next && !next.partStart) next.partStart = moved.partStart;
+    delete moved.partStart;
+  }
+  moved.partStart = holder.partStart; delete holder.partStart;
+  arr.splice(p, 0, moved);
+  currentWs.questions = arr;
+  selectedQIdx = selObj ? arr.indexOf(selObj) : null;
+  if(selectedQIdx===-1) selectedQIdx=null;
   renderQList();
 }
 

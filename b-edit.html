@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.27">
+<meta name="app-version" content="edit-v3.28">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1773,7 +1773,7 @@ window.pasteQuestion = async function(){
     item.id = `q${Date.now()}`;
     if(!currentWs.questions) currentWs.questions=[];
     currentWs.questions.push(item);
-    await saveToFirestore(currentWs.status||'draft', true);
+    await saveToFirestore(null, true);
     renderSidebar();
     toast('📥 붙여넣기 완료');
   }catch(e){ toast('붙여넣기 실패: '+e.message); console.error(e); }
@@ -1841,7 +1841,7 @@ window.saveQuestion = async function(){
       currentWs.questions[qIdxL]=_linkQ;
     }
     renderQList();
-    saveToFirestore(currentWs.status||'draft', true);
+    saveToFirestore(null, true);
     return;
   }
   if(type==='step3'){
@@ -1879,7 +1879,7 @@ window.saveQuestion = async function(){
     };
     if(currentWs.questions[qIdxS]?.partStart) _step3Q.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     currentWs.questions[qIdxS]=_addScore(_step3Q);
-    renderQList(); saveToFirestore(currentWs.status||'draft',true); return;
+    renderQList(); saveToFirestore(null, true); return;
   }
   if(type==='pool_random'){
     if(!poolCorrect.length){ toast('정답 풀을 1개 이상 추가하세요'); return; }
@@ -1897,7 +1897,7 @@ window.saveQuestion = async function(){
     };
     if(_psPool) currentWs.questions[qIdx2].partStart=_psPool;
     renderQList();
-    saveToFirestore(currentWs.status||'draft',true);
+    saveToFirestore(null, true);
     return;
   }
   const diff = parseInt(document.getElementById('q-diff-sel').value);
@@ -1966,9 +1966,8 @@ window.saveQuestion = async function(){
     }
   }
   renderQList();
-  // 적용 즉시 Firestore 자동저장
-  const autoStatus = currentWs.status||'draft';
-  saveToFirestore(autoStatus, true);
+  // 적용 즉시 Firestore 자동저장 (잠금 상태는 건드리지 않음)
+  saveToFirestore(null, true);
   console.log('[saveQuestion] 끝. 현재 currentWs.questions[selectedQIdx]:', currentWs?.questions?.[selectedQIdx]);
 };
 
@@ -2174,13 +2173,22 @@ window.cleanupTempWs=async function(){
 window.saveMetaField = async function(){
   if(!currentWs || !currentWsId) return;
   const unitChanged = document.getElementById('ws-unit').value !== currentWs.unitId;
-  await saveToFirestore(currentWs.status||'draft', true);
+  await saveToFirestore(null, true);
   if(unitChanged) revealWsInSidebar(currentWsId); // 옮겨간 단원을 펼쳐서 보여준다
 };
 
+/* 잠금 관련 필드(status·unlockedClasses·allowedEmails·partUnlocked·partAllowed)는 index.html의
+   반별/파트별 잠금 버튼이 updateDoc으로 실시간 바꾸는 값이다. edit은 학습지를 열 때 한 번 읽은
+   currentWs를 들고 있으므로, 그대로 setDoc(전체 덮어쓰기)하면 그 사이 index에서 해제한 것이
+   옛 상태로 되돌아간다(학생이 풀다가 갑자기 다시 잠기는 현상). 그래서 저장 직전에 문서를 다시
+   읽어 잠금 필드는 항상 Firestore의 최신 값을 쓴다.
+   - status를 넘기지 않으면(자동저장·일반 저장): 잠금 상태 그대로 유지
+   - status를 넘기면(🔒 잠금 / ✅ 발행 버튼): 그 상태로 바꾸고, 상태가 실제로 바뀔 때는
+     index의 전체 잠금/공개 토글과 같이 반별·파트별 해제 정보를 초기화한다 */
+const LOCK_FIELDS=['status','unlockedClasses','allowedEmails','partUnlocked','partAllowed'];
 async function saveToFirestore(status, silent=false){
   if(!currentWs){ toast('학습지를 선택하세요'); return; }
-  if(status===undefined||status===null) status=currentWs.status||'draft';
+  const explicitStatus = !(status===undefined||status===null);
   const wsId = document.getElementById('ws-id').value.trim() || currentWs.id;
   const saveData = {
     ...currentWs,
@@ -2199,13 +2207,22 @@ async function saveToFirestore(status, silent=false){
     createdBy: currentUser.email,
   };
   try{
+    const existing = (await getDoc(doc(db,'curriculum',wsId))).data();
     // 빈 배열로 기존 데이터 삭제 방지: vocab/questions 독립 체크
-    if(!saveData.questions?.length || !saveData.vocab?.length){
-      const existing = (await getDoc(doc(db,'curriculum',wsId))).data();
-      if(!saveData.questions?.length && existing?.questions?.length)
-        saveData.questions = existing.questions;
-      if(!saveData.vocab?.length && existing?.vocab?.length)
-        saveData.vocab = existing.vocab;
+    if(!saveData.questions?.length && existing?.questions?.length)
+      saveData.questions = existing.questions;
+    if(!saveData.vocab?.length && existing?.vocab?.length)
+      saveData.vocab = existing.vocab;
+    // 잠금 필드는 Firestore 최신 값 기준 (문서가 없으면 = ID 변경/신규 → currentWs 값 유지)
+    const latest = existing || currentWs;
+    LOCK_FIELDS.forEach(k=>{ if(latest[k]!==undefined) saveData[k]=latest[k]; else delete saveData[k]; });
+    if(explicitStatus){
+      const changed = (latest.status||'draft')!==status;
+      saveData.status=status;
+      if(changed){ saveData.unlockedClasses={}; saveData.allowedEmails=[]; saveData.partUnlocked={}; saveData.partAllowed={}; }
+    }else{
+      status = saveData.status||'draft';
+      saveData.status=status;
     }
     await setDoc(doc(db,'curriculum',wsId), saveData);
     currentWsId = wsId;

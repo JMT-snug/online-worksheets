@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.77">
+  <meta name="app-version" content="8.78">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -230,6 +230,28 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 #dash-page>main{max-width:1120px;margin:0 auto;padding:32px 24px}
 .dash-greet{font-size:24px;font-weight:900;margin-bottom:4px}
 .dash-sub{color:var(--ink3);font-size:14px;margin-bottom:28px}
+/* 📝 시험 대비 (v8.78) — 시험기간 중 범위 학습지 표시 · 배너 · AI 진단 결과 모달 */
+.exam-chip{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:8px;background:#fef3c7;color:#b45309;border:1px solid #fcd34d;margin-right:4px;vertical-align:1px;white-space:nowrap}
+.ws-item.exam-range{background:#fffbeb;border-color:#fcd34d}
+.ws-list-card.exam-range{background:#fffbeb;border-color:#fcd34d}
+.ws-list-card.exam-range::before{background:#f59e0b;opacity:1}
+.exam-banner{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:12px;padding:12px 16px;margin:-14px 0 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.exam-banner .eb-title{font-weight:800;font-size:14px;color:#92400e}
+.exam-banner .eb-sub{font-size:12px;color:#b45309}
+.exam-banner .eb-btn{margin-left:auto;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid #4c1d95;background:#4c1d95;color:#ede9fe}
+.exam-banner .eb-btn:disabled{opacity:.5;cursor:default}
+.exam-banner .eb-btn.ghost{background:transparent;color:#4c1d95;margin-left:0}
+@media (max-width:600px){ .exam-banner .eb-btn{margin-left:0;width:100%} }
+.exam-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;align-items:center;justify-content:center;padding:16px}
+.exam-modal-bg.show{display:flex}
+.exam-modal{background:var(--paper);color:var(--ink);border-radius:14px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;padding:18px 20px;box-shadow:0 16px 48px rgba(0,0,0,.25)}
+.exam-modal h3{margin:0 0 6px;font-size:16px}
+.exam-modal .em-note{font-size:11px;color:var(--ink3);margin-bottom:12px}
+.exam-modal .em-sec{margin-bottom:12px;font-size:14px;line-height:1.55}
+.exam-modal .em-sec b{display:block;margin-bottom:3px}
+.exam-modal .em-sec ul{margin:0 0 0 18px;padding:0}
+.exam-modal .em-sec li{margin-bottom:3px}
+.exam-modal .em-close{margin-top:6px;padding:8px 16px;border-radius:8px;border:1px solid var(--rule);background:var(--paper);font-family:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
 /* 학년 버튼 (v8.75) — 인사말 옆. 누른 학년의 단원만 표에 남긴다 */
 .dash-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:4px}
 .dash-head .dash-greet{margin-bottom:0}
@@ -777,6 +799,10 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 </div>
 
 <!-- DASHBOARD -->
+<!-- 📝 시험 대비 AI 진단 결과 (v8.78) -->
+<div id="exam-modal" class="exam-modal-bg" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="exam-modal" id="exam-modal-body"></div>
+</div>
 <div id="dash-page" class="page">
   <main>
     <div class="dash-head">
@@ -784,6 +810,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
       <div class="grade-tabs" id="grade-tabs" aria-label="학년 선택"></div>
     </div>
     <div class="dash-sub" id="dash-sub">학습할 단원을 선택하세요.</div>
+    <div id="exam-banner"></div>
     <div class="matrix-wrap">
       <table class="matrix-tbl" id="matrix-tbl">
         <thead>
@@ -928,6 +955,9 @@ const FB = {
 const ALLOWED_DOMAINS = [];
 const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"]; // 전체 권한 교사
 const TEACHER_EMAILS  = [...BASE_TEACHER_EMAILS]; // + config/teachers의 학급 담당 교사 (loadExtraTeachers가 병합)
+/* 🤖 AI 웹앱 (Gemini 중계 Apps Script) — teacher.html·edit.html 과 같은 값. 시험 대비 AI 진단이 쓴다 (v8.78) */
+const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec";
+const AI_WEBAPP_TOKEN = "snug-ai-assist";
 // 담당 교사 권한 범위: null=전체 권한(기본 교사), Set=담당 학급 이름만 잠금 조작 가능 (loadTeacherData에서 계산)
 let myClassNames = null;
 function isScopedTeacher(){ return !!(user && TEACHER_EMAILS.includes(user.email) && myClassNames!==null); }
@@ -1370,6 +1400,7 @@ onAuthStateChanged(auth, async u => {
   try{ loadErrorReportConfig(); }catch(e){ console.warn('[오류신고 설정 준비 실패]', e); } // 신고 스크린샷 Drive 폴더 ID 미리 확보
   try{ updateHeader(u); }catch(e){ console.warn('[헤더 렌더 실패]', e); }
   try{ await loadCurriculum(); }catch(e){ console.error('[커리큘럼 로드 실패]', e); }
+  try{ await loadExamConfig(); }catch(e){ console.warn('[시험 설정 로드 실패]', e); }   // 📝 시험 대비 (v8.78)
   try{ await loadTeacherData(); }catch(e){ console.warn('[교사 데이터 로드 실패]', e); }
   try{
     await loadDash();
@@ -1542,6 +1573,155 @@ function renderGradeTabs(){
   if(sub) sub.textContent = cur ? `${cur}학년 단원이에요. 다른 학년은 위 버튼으로 바꿀 수 있어요.` : '학습할 단원을 선택하세요.';
 }
 
+/* ══════════ 📝 시험 대비 (v8.78) ══════════
+   교사가 teacher.html 「시험 대비 설정」에서 config/exam 에 학년별로 저장한다:
+     exams: { "1": {title,start,end,wsIds:[...],aiLimit}, "2":…, "3":… }
+   · 오늘이 start~end(양 끝 포함) 안인 시험만 '진행 중'으로 본다 → 그 학년의 범위 학습지에
+     📝 칩·호박색 배경, 종 🔔 공지, 단원 목록 위 배너(🤖 AI 학습 진단 버튼).
+   · AI 진단은 시험 ID(학년-시작일)마다 aiLimit 회. 사용 횟수·결과는
+     records/{내 이메일}/exam_ai/{시험ID} 에 둔다(기기 무관, 교사도 학생 상세에서 볼 수 있다).
+   · 교사 계정은 횟수 제한 없이 눌러 볼 수 있다(자기 기록 기준이라 대개 비어 있다 — 동작 확인용). */
+let EXAM_CONFIG = {};        // config/exam 의 exams 맵
+let EXAM_WS = {};            // wsId → 진행 중인 시험 (범위 판정용)
+const EXAM_AI_STATE = {};    // examId → {count, results:[{at, analysis}]}
+function _mdStr(d){ const m=/^\d{4}-(\d{2})-(\d{2})$/.exec(String(d||'')); return m?(+m[1])+'/'+(+m[2]):String(d||''); }
+async function loadExamConfig(){
+  EXAM_CONFIG={}; EXAM_WS={};
+  try{
+    const snap=await getDoc(doc(db,'config','exam'));
+    EXAM_CONFIG=(snap.exists()&&snap.data().exams)||{};
+  }catch(e){ console.warn('[config/exam 읽기 실패]', e.message); }
+  const act=activeExams();
+  act.forEach(ex=>ex.wsIds.forEach(id=>{ EXAM_WS[id]=ex; }));
+  if(act.length) console.log('[시험 대비] 진행 중', act.map(ex=>ex.grade+'학년 '+ex.title+' ('+ex.wsIds.length+'개)'));
+  // 내 AI 진단 사용 기록 (시험마다 하나)
+  await Promise.all(act.map(async ex=>{
+    try{
+      const s=await getDoc(doc(db,'records',user.email,'exam_ai',ex.id));
+      EXAM_AI_STATE[ex.id]=s.exists()?{count:s.data().count||0, results:s.data().results||[]}:{count:0,results:[]};
+    }catch(e){ EXAM_AI_STATE[ex.id]={count:0,results:[]}; console.warn('[exam_ai 읽기 실패]', e.message); }
+  }));
+}
+/* 오늘 진행 중인 시험 목록 (학년 오름차순). 학습지 id 는 실제 있는 것만 남긴다 */
+function activeExams(){
+  const today=_todayStr(); const out=[];
+  for(const g of [1,2,3]){
+    const ex=EXAM_CONFIG[String(g)]; if(!ex||!ex.start||!ex.end) continue;
+    if(today<ex.start||today>ex.end) continue;
+    const known=new Set(WORKSHEETS.map(w=>w.id));
+    out.push({ grade:g, id:g+'-'+ex.start, title:ex.title||(g+'학년 시험'), start:ex.start, end:ex.end,
+      aiLimit:Math.max(0,+ex.aiLimit||0), wsIds:(ex.wsIds||[]).filter(id=>known.has(id)) });
+  }
+  return out;
+}
+function unitInExamRange(unit){ return WORKSHEETS.some(w=>w.unitId===unit.id && EXAM_WS[w.id]); }
+function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, ex.aiLimit-(st.count||0)); }
+/* 단원 목록 위 배너 — 보고 있는 학년의 진행 중인 시험만 (전체 보기면 모두) */
+function renderExamBanner(){
+  const box=document.getElementById('exam-banner'); if(!box) return;
+  const shown = curGrade ? [curGrade] : GRADES;
+  const list=activeExams().filter(ex=>shown.includes(ex.grade));
+  if(!list.length){ box.innerHTML=''; return; }
+  const teacher=isTeacherAcct();
+  box.innerHTML=list.map(ex=>{
+    const total=ex.wsIds.length;
+    const done=ex.wsIds.filter(id=>wsProgress[id]?.isComplete).length;
+    const st=EXAM_AI_STATE[ex.id]||{count:0,results:[]};
+    const left=examRemaining(ex);
+    const hasPrev=(st.results||[]).length>0;
+    let btns='';
+    if(ex.aiLimit>0 || teacher){
+      const can = teacher || left>0;
+      btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'}
+        title="${can?'시험 범위 학습지의 기록을 바탕으로 AI가 학습 상태를 진단해요':'이번 시험의 AI 진단을 모두 사용했어요'}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${ex.aiLimit})`}</button>`;
+      if(hasPrev) btns+=`<button type="button" class="eb-btn ghost" data-ex="${ex.id}" data-act="last">지난 진단 보기</button>`;
+    }
+    return `<div class="exam-banner">
+      <div>
+        <div class="eb-title">📝 ${ex.grade}학년 ${escHtml(ex.title)} 대비 <span style="font-weight:600;font-size:12px">${_mdStr(ex.start)} ~ ${_mdStr(ex.end)}</span></div>
+        <div class="eb-sub">시험 범위 학습지 ${total}개 중 ${done}개 완료 · 📝 표시된 학습지를 먼저 풀어 보세요</div>
+      </div>${btns}</div>`;
+  }).join('');
+  box.querySelectorAll('.eb-btn').forEach(b=>b.addEventListener('click',()=>{
+    const ex=activeExams().find(x=>x.id===b.dataset.ex); if(!ex) return;
+    if(b.dataset.act==='last') showExamAIResult(ex, (EXAM_AI_STATE[ex.id]?.results||[]).slice(-1)[0], true);
+    else runExamAI(ex);
+  }));
+}
+const EXAM_AI_SKIP_TYPES=new Set(['graph','link','pool_random']);   // teacher 의 AI_ANALYZE_SKIP_TYPES 와 같다
+/* 보낼 자료 만들기 — 범위 학습지별 정답률·틀린 문항(문제·정답·내 답), 아직 안 푼 학습지 */
+function buildExamAIPayload(ex){
+  const worksheets=[], notStarted=[];
+  for(const id of ex.wsIds){
+    const ws=WORKSHEETS.find(w=>w.id===id); if(!ws||ws.type==='review') continue;
+    const unitTitle=(UNITS.find(u=>u.id===ws.unitId)||{}).title||'';
+    const r=wsProgress[ws.id];
+    if(!r){ notStarted.push({title:ws.title||'', unitTitle}); continue; }
+    const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
+    const wrongItems=[];
+    (ws.questions||[]).forEach(q=>{
+      if(EXAM_AI_SKIP_TYPES.has(q.type)) return;
+      const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
+      const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
+      const correctAns=q.type==='multi'
+        ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
+        : q.answer;
+      wrongItems.push({ qText:String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,300),
+        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns) });
+    });
+    worksheets.push({ title:ws.title||'', unitTitle, done:!!r.isComplete, correctRate:rate, wrongItems });
+  }
+  return { worksheets, notStarted };
+}
+async function runExamAI(ex){
+  const teacher=isTeacherAcct();
+  const left=examRemaining(ex);
+  if(!teacher && left<=0){ alert('이번 시험의 AI 진단을 모두 사용했어요.'); return; }
+  const payload=buildExamAIPayload(ex);
+  if(!payload.worksheets.length && !payload.notStarted.length){ alert('시험 범위 학습지가 없어요.'); return; }
+  const msg = teacher ? '교사 계정으로 AI 진단을 실행합니다 (횟수 제한 없음).'
+    : `AI 학습 진단은 이번 시험에 ${ex.aiLimit}회만 받을 수 있어요 (남은 횟수 ${left}회).\n`+
+      (payload.notStarted.length?`아직 안 푼 범위 학습지가 ${payload.notStarted.length}개 있어요 — 더 풀고 나서 받으면 진단이 더 정확해요.\n`:'')+
+      '\n지금 진단을 받을까요?';
+  if(!confirm(msg)) return;
+  showExamAIResult(ex, null, false, '🤖 진단 중… (몇십 초 걸릴 수 있어요)');
+  try{
+    const res=await fetch(AI_WEBAPP_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token:AI_WEBAPP_TOKEN, action:'analyzeExamPrep', examTitle:ex.title, grade:ex.grade,
+        dateRange:_mdStr(ex.start)+'~'+_mdStr(ex.end), worksheets:payload.worksheets, notStarted:payload.notStarted }) });
+    const out=await res.json();
+    if(!out||!out.ok) throw new Error(out?.error==='unknown action' ? 'AI 서버가 아직 준비되지 않았어요 (선생님께 알려 주세요)' : (out?.error||'서버 응답 오류'));
+    const entry={ at:new Date().toISOString(), analysis:out.analysis||{} };
+    const st=EXAM_AI_STATE[ex.id]||{count:0,results:[]};
+    st.count=(st.count||0)+1; st.results=[...(st.results||[]), entry].slice(-5); EXAM_AI_STATE[ex.id]=st;
+    try{
+      await setDoc(doc(db,'records',user.email,'exam_ai',ex.id),
+        { examId:ex.id, examTitle:ex.title, grade:ex.grade, count:st.count, results:st.results, lastAt:entry.at, studentEmail:user.email }, { merge:true });
+    }catch(e){ console.warn('[exam_ai 저장 실패]', e.message); }
+    showExamAIResult(ex, entry, false);
+    renderExamBanner();
+  }catch(e){
+    showExamAIResult(ex, null, false, '❌ 진단 실패: '+e.message);
+  }
+}
+function showExamAIResult(ex, entry, isPrev, plain){
+  const bg=document.getElementById('exam-modal'), body=document.getElementById('exam-modal-body'); if(!bg||!body) return;
+  const close='<button type="button" class="em-close" onclick="document.getElementById(\'exam-modal\').classList.remove(\'show\')">닫기</button>';
+  if(plain){ body.innerHTML=`<h3>🤖 AI 학습 진단</h3><div class="em-sec">${escHtml(plain)}</div>${close}`; bg.classList.add('show'); return; }
+  if(!entry){ body.innerHTML=`<h3>🤖 AI 학습 진단</h3><div class="em-sec">아직 받은 진단이 없어요.</div>${close}`; bg.classList.add('show'); return; }
+  const a=entry.analysis||{};
+  const list=(arr)=>arr?.length?`<ul>${arr.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ul>`:'';
+  body.innerHTML=`<h3>🤖 AI 학습 진단 — ${ex.grade}학년 ${escHtml(ex.title)}</h3>
+    <div class="em-note">${isPrev?'지난 진단 · ':''}${String(entry.at||'').slice(0,16).replace('T',' ')} · 시험 범위 학습지 기록 기준이에요. 참고용이니 최종 판단은 스스로·선생님과 함께 해요.</div>
+    <div class="em-sec" style="font-weight:700">${escHtml(a.summary||'')}</div>
+    ${a.strengths?.length?`<div class="em-sec"><b>👍 잘하고 있는 것</b>${list(a.strengths)}</div>`:''}
+    ${a.weaknesses?.length?`<div class="em-sec"><b>⚠️ 보완할 것</b>${list(a.weaknesses)}</div>`:''}
+    ${a.commonMistakes?.length?`<div class="em-sec"><b>🔁 반복되는 실수</b>${list(a.commonMistakes)}</div>`:''}
+    ${a.studyPlan?.length?`<div class="em-sec"><b>📚 시험 전 공부 순서</b>${list(a.studyPlan)}</div>`:''}
+    ${close}`;
+  bg.classList.add('show');
+}
+
 /* ── MATRIX RENDER (단원 기반) ── */
 const CATEGORIES = ["수와 연산","변화와 관계","도형과 측정","자료와 가능성"];
 const GRADES = [1,2,3];
@@ -1605,7 +1785,8 @@ function makeUnitItem(unit) {
     ${badge}
     ${statusHtml}
     <div class="ws-item-title">${hasNew?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${unit.title}</div>
-    <div class="ws-item-sub">${prog.hasSheets ? `학습지 ${prog.allCount}개` : "준비 중"}</div>`;
+    <div class="ws-item-sub">${unitInExamRange(unit)?'<span class="exam-chip">📝 시험 범위</span>':''}${prog.hasSheets ? `학습지 ${prog.allCount}개` : "준비 중"}</div>`;
+  if(unitInExamRange(unit)) item.classList.add('exam-range');
 
   if(prog.hasSheets) {
     item.addEventListener("click", ()=>showUnitPage(unit));
@@ -1614,6 +1795,7 @@ function makeUnitItem(unit) {
 }
 
 function renderCards() {
+  renderExamBanner();   // 📝 시험 대비 배너 (v8.78) — 학년 선택에 따라 다시 그린다
   const tbody = document.getElementById("matrix-body");
   tbody.innerHTML = "";
   // 선택한 학년만 (0=전체). 머리글의 학년 칸도 같이 감춘다
@@ -1690,7 +1872,12 @@ function _setNoticeState(id,v){const st=_loadNoticeState(); st[id]=v; _saveNotic
 /* 지금 보여 줄 공지 — 기간이 지났거나 읽음 처리한 것은 뺀다 */
 function activeNotices(){
   const today=_todayStr(), st=_loadNoticeState();
-  return NOTICES.filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
+  // 📝 시험 공지 (v8.78) — 교사가 config/exam 에 설정한 시험이 기간 중이면 자동으로 맨 위에 붙는다
+  const examN=activeExams().map(ex=>({ id:'exam-notice::'+ex.id, until:ex.end,
+    title:`${ex.grade}학년 ${ex.title} 대비 (${_mdStr(ex.start)}~${_mdStr(ex.end)})`,
+    body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
+         (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'') }));
+  return [...examN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
                 .map(n=>({...n, dim:st[n.id]==='dim'}));
 }
 /* 공지도 모두 읽음 처리 (「모두 읽음 표시」에서 함께 부른다) */
@@ -2484,15 +2671,16 @@ function showUnitPage(unit) {
       else if(empty)   badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
       else             badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
 
+      const inExam = !!EXAM_WS[ws.id];   // 📝 시험 범위 (v8.78)
       const card = document.createElement("div");
-      card.className = "ws-list-card" + (empty||isBlocked?" empty":"");
+      card.className = "ws-list-card" + (empty||isBlocked?" empty":"") + (inExam?" exam-range":"");
       if(isBlocked) card.style.cssText="opacity:.55;cursor:not-allowed;filter:grayscale(.4)";
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
           <div class="wslc-id">${escHtml(ws.id||'')}</div>
           <div class="wslc-title">${(window._newGradeWs&&window._newGradeWs.has(ws.id))?'<span class="notif-dot-in" title="새 채점 결과"></span>':''}${ws.title}</div>
-          <div class="wslc-meta">${ws.type==="review"
+          <div class="wslc-meta">${inExam?'<span class="exam-chip">📝 시험 범위</span>':''}${ws.type==="review"
               ? (reviewCompletions>0
                   ? `🔁 ${reviewCompletions}회 완료 · 평균 정답률 ${prog.sumTotal?Math.round((prog.sumCorrect||0)/prog.sumTotal*100):0}%`
                   : "🔁 무작위 10문제 복습 (매번 새로 출제)")

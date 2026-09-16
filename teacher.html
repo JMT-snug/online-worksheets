@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.42">
+<meta name="app-version" content="3.43">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -476,6 +476,7 @@ function buildSidebar(){
     <div class="sb-item ${selView==='students'||selView.startsWith('stu:')?'active':''}" data-view="students">👤 학생별 조회</div>
     <div class="sb-item ${selView==='classmatrix'?'active':''}" data-view="classmatrix">📊 반별 비교</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
+    <div class="sb-item ${selView==='exam'?'active':''}" data-view="exam">📝 시험 대비 설정</div>
     <div style="border-top:1px solid var(--rule);margin:8px 0 4px"></div>
     <div class="sb-item" onclick="migrateWsIds()" style="color:#f59e0b;font-size:12px">🔧 학습지 ID 정리</div>
     <div class="sb-item" onclick="migrateQuestionIds()" style="color:#f59e0b;font-size:12px">🔧 문항 ID 정리</div>
@@ -551,6 +552,7 @@ function navigate(view){
   buildSidebar();
   if(view==="overview") renderOverview();
   else if(view==="classes") renderClasses();
+  else if(view==="exam") renderExamSettings();
   else if(view==="comparison") renderComparison();
   else if(view==="students") renderStudents();
   else if(view==="classmatrix") renderClassMatrix();
@@ -1026,13 +1028,183 @@ function renderStudentDetail(uid){
           style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95">🤖 AI 학습 분석</button>
       </div>
       <div id="ai-analysis-result" style="display:none;margin-bottom:16px"></div>
+      <div id="exam-ai-result" style="margin-bottom:16px"></div>
       <table class="data-table">
         <thead><tr><th>학습지</th><th>상태</th><th>정답률</th><th style="text-align:center">시도</th><th>문항별 (클릭=상세)</th></tr></thead>
         <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:30px">기록이 없습니다</td></tr>'}</tbody>
       </table>
     </div>`;
+  loadExamAiForStudent(uid);   // 📝 시험 대비 AI 진단 결과 (있을 때만, 비동기)
 }
 window.renderStudentDetail=renderStudentDetail;
+
+/* ══════════ 📝 시험 대비 설정 (teacher v3.43) ══════════
+   Firestore config/exam 문서 하나에 학년별로 시험을 둔다:
+     { exams: { "1": {title,start,end,wsIds:[...],aiLimit,updatedAt,updatedBy}, "2":…, "3":… } }
+   · 학생 index 는 오늘이 start~end 안이면 그 학년의 범위 학습지에 📝 표시를 하고,
+     종 🔔 공지 + 🤖 AI 학습 진단(aiLimit 회) 배너를 띄운다.
+   · 시험 ID = 학년-start (예 1-2026-10-12). 학생의 진단 횟수는 이 ID 로 세므로
+     **시작일을 바꾸면 새 시험으로 보고 횟수가 다시 생긴다** — 화면에 안내.
+   · 저장은 기본 교사만 (firestore.rules: config/exam write = isBaseTeacher). 담당 교사는 보기만. */
+let examConfig=null;          // config/exam 문서 내용 (exams 맵)
+let examSelGrade=1;
+async function loadExamConfig(){
+  try{
+    const snap=await getDoc(doc(db,"config","exam"));
+    examConfig=snap.exists()?(snap.data()||{}):{};
+    if(!examConfig.exams) examConfig.exams={};
+  }catch(e){ console.warn("[config/exam 로드 실패]",e.message); examConfig={exams:{}}; }
+}
+function examIdOf(grade,start){ return grade+"-"+start; }
+function examStatusLabel(ex){
+  if(!ex||!ex.start||!ex.end) return "";
+  const today=new Date(); const t=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-"+String(today.getDate()).padStart(2,"0");
+  if(t<ex.start) return `<span style="color:var(--ink3)">⏳ 시작 전 (${ex.start} 부터 학생 화면에 표시)</span>`;
+  if(t>ex.end)   return `<span style="color:var(--ink3)">✅ 기간 종료 (학생 화면에서 사라짐)</span>`;
+  return `<span style="color:#b45309;font-weight:700">🔔 시험기간 중 — 학생 화면에 표시되는 중</span>`;
+}
+async function renderExamSettings(){
+  selView="exam";
+  const content=document.getElementById("content");
+  content.innerHTML='<div class="loading">시험 설정 불러오는 중…</div>';
+  if(!examConfig) await loadExamConfig();
+  if(selView!=="exam") return;   // 기다리는 사이 다른 화면으로 갔으면 그리지 않는다
+  const ro=scopedTeacher;        // 담당 교사: 읽기 전용
+  const g=examSelGrade;
+  const ex=examConfig.exams[String(g)]||null;
+  const sel=new Set((ex&&ex.wsIds)||[]);
+  const units=UNITS.filter(u=>u.grade===g);
+  let h=`<div class="pg-title">📝 시험 대비 설정</div>
+  <div class="pg-sub">${ro
+    ?'시험기간·범위는 기본 교사만 바꿀 수 있습니다. 여기서는 확인만 가능합니다.'
+    :'학년별로 시험기간과 범위 학습지를 정하면, 그 기간 동안 학생 화면에 📝 시험 범위 표시와 🤖 AI 학습 진단 버튼이 나타납니다.'}</div>
+  <div style="display:flex;gap:6px;margin-bottom:16px">
+    ${[1,2,3].map(x=>`<button class="btn-sm ${x===g?'btn-sm-accent':''}" onclick="examSelectGrade(${x})">${GRADE_LABEL[x]}${examConfig.exams[String(x)]?' ●':''}</button>`).join('')}
+  </div>
+  <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:12px">${g}학년 시험 ${ex?'<span style="font-size:12px;font-weight:500;margin-left:8px">'+examStatusLabel(ex)+'</span>':''}</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;max-width:760px">
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">시험 이름</label>
+        <input type="text" id="exam-title" value="${escapeAttr(ex?.title||'')}" placeholder="예: 2학기 중간고사" style="width:100%" ${ro?'disabled':''}></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">시작일 (표시 시작)</label>
+        <input type="date" id="exam-start" value="${ex?.start||''}" style="width:100%" ${ro?'disabled':''}></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">종료일 (시험 마지막 날)</label>
+        <input type="date" id="exam-end" value="${ex?.end||''}" style="width:100%" ${ro?'disabled':''}></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">AI 진단 허용 횟수</label>
+        <input type="number" id="exam-ailimit" min="0" max="10" value="${ex?.aiLimit??1}" style="width:100%;padding:7px 10px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit" ${ro?'disabled':''}></div>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6">
+      · 시작일부터 종료일까지(양 끝 포함) 학생 화면에 표시됩니다. 0회로 두면 AI 진단 버튼은 나오지 않고 범위 표시만 됩니다.<br>
+      · 학생의 AI 진단 횟수는 「학년-시작일」을 시험 ID 로 셉니다. <b>시작일을 바꾸면 새 시험으로 보아 횟수가 다시 생깁니다.</b>
+      ${ex?'<br>· 현재 시험 ID: <code>'+examIdOf(g,ex.start)+'</code>'+(ex.updatedAt?' · 마지막 저장 '+String(ex.updatedAt).slice(0,16).replace('T',' ')+' ('+(ex.updatedBy||'')+')':''):''}
+    </div>
+  </div>
+  <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="card-title">시험 범위 학습지 <span id="exam-sel-count" style="font-size:12px;color:var(--ink3);font-weight:500">${sel.size}개 선택</span></div>
+      ${ro?'':'<button class="btn-sm" onclick="examCheckAll(false)" style="margin-left:auto">전체 해제</button>'}
+    </div>`;
+  if(!units.length) h+='<div style="color:var(--ink3);font-size:13px">이 학년의 단원이 없습니다.</div>';
+  units.forEach(u=>{
+    const sheets=WORKSHEETS.filter(ws=>ws.unitId===u.id && ws.type!=="review");
+    if(!sheets.length) return;
+    const allOn=sheets.every(ws=>sel.has(ws.id));
+    h+=`<div style="border-top:1px solid var(--rule);padding:10px 0">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;cursor:pointer">
+        <input type="checkbox" class="exam-unit-cb" data-unit="${u.id}" ${allOn?'checked':''} ${ro?'disabled':''} onchange="examToggleUnit('${u.id}',this.checked)">
+        📂 ${u.title} <span style="font-size:11px;color:var(--ink3);font-weight:500">${u.category||''} · ${sheets.length}개</span>
+      </label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;margin:6px 0 0 26px">
+        ${sheets.map(ws=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" class="exam-ws-cb" data-unit="${u.id}" value="${ws.id}" ${sel.has(ws.id)?'checked':''} ${ro?'disabled':''} onchange="examSyncUnit('${u.id}')">
+          <span>${ws.title}</span><span style="font-size:11px;color:var(--ink3)">${ws.status==='draft'?'📝 준비 중':ws.status==='locked'?'🔒':''}</span></label>`).join('')}
+      </div></div>`;
+  });
+  h+=`</div>`;
+  if(!ro) h+=`<div style="display:flex;gap:8px;align-items:center">
+    <button class="btn-sm btn-sm-accent" onclick="saveExamSettings(${g})">💾 저장</button>
+    ${ex?`<button class="btn-sm" onclick="clearExamSettings(${g})" style="color:#b91c1c">🗑 ${g}학년 시험 해제</button>`:''}
+    <span id="exam-save-msg" style="font-size:12px;color:var(--ink3)"></span>
+  </div>`;
+  content.innerHTML=h;
+}
+function escapeAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+window.examSelectGrade=function(g){ examSelGrade=g; renderExamSettings(); };
+function examUpdateCount(){
+  const n=document.querySelectorAll('.exam-ws-cb:checked').length;
+  const el=document.getElementById('exam-sel-count'); if(el) el.textContent=n+'개 선택';
+}
+window.examToggleUnit=function(unitId,on){
+  document.querySelectorAll(`.exam-ws-cb[data-unit="${unitId}"]`).forEach(cb=>{ cb.checked=on; });
+  examUpdateCount();
+};
+window.examSyncUnit=function(unitId){
+  const cbs=[...document.querySelectorAll(`.exam-ws-cb[data-unit="${unitId}"]`)];
+  const u=document.querySelector(`.exam-unit-cb[data-unit="${unitId}"]`);
+  if(u) u.checked=cbs.length>0&&cbs.every(c=>c.checked);
+  examUpdateCount();
+};
+window.examCheckAll=function(on){
+  document.querySelectorAll('.exam-ws-cb,.exam-unit-cb').forEach(cb=>{ cb.checked=on; });
+  examUpdateCount();
+};
+window.saveExamSettings=async function(g){
+  if(scopedTeacher){ alert('시험 설정은 기본 교사만 저장할 수 있습니다.'); return; }
+  const title=(document.getElementById('exam-title')?.value||'').trim();
+  const start=document.getElementById('exam-start')?.value||'';
+  const end=document.getElementById('exam-end')?.value||'';
+  const aiLimit=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-ailimit')?.value,10)||0));
+  const wsIds=[...document.querySelectorAll('.exam-ws-cb:checked')].map(cb=>cb.value);
+  if(!start||!end){ alert('시작일과 종료일을 모두 입력하세요.'); return; }
+  if(start>end){ alert('종료일이 시작일보다 앞설 수 없습니다.'); return; }
+  if(!wsIds.length && !confirm('시험 범위 학습지를 하나도 고르지 않았습니다. 그대로 저장할까요?')) return;
+  const prev=examConfig.exams[String(g)];
+  if(prev && prev.start!==start && !confirm('시작일이 바뀌면 새 시험으로 보아 학생들의 AI 진단 횟수가 다시 생깁니다. 계속할까요?')) return;
+  const msg=document.getElementById('exam-save-msg'); if(msg) msg.textContent='저장 중…';
+  try{
+    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit,
+      updatedAt:new Date().toISOString(), updatedBy:tUser.email };
+    await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:entry } },{ merge:true });
+    examConfig.exams[String(g)]=entry;
+    if(msg) msg.textContent='✅ 저장했습니다. 학생 화면은 다음 접속(새로고침)부터 반영됩니다.';
+    renderExamSettings();
+  }catch(e){ console.error('[saveExamSettings]',e); alert('저장 실패: '+e.message+'\n(firestore.rules 에 config/exam 쓰기 규칙이 게시돼 있는지 확인)'); if(msg) msg.textContent=''; }
+};
+window.clearExamSettings=async function(g){
+  if(scopedTeacher) return;
+  if(!confirm(g+'학년 시험 설정을 지울까요? 학생 화면의 시험 범위 표시와 AI 진단 버튼이 사라집니다.')) return;
+  try{
+    await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:deleteField() } },{ merge:true });
+    delete examConfig.exams[String(g)];
+    renderExamSettings();
+  }catch(e){ alert('해제 실패: '+e.message); }
+};
+
+/* 학생 상세 화면: 그 학생이 받은 시험 대비 AI 진단 결과 (records/{email}/exam_ai/*) — 있을 때만 표시 */
+async function loadExamAiForStudent(email){
+  const box=document.getElementById('exam-ai-result'); if(!box||!email||email==='-') return;
+  try{
+    const snap=await getDocs(collection(db,'records',email,'exam_ai'));
+    if(snap.empty){ box.innerHTML=''; return; }
+    if(!document.getElementById('exam-ai-result')) return;
+    const docs=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.lastAt||'').localeCompare(String(a.lastAt||'')));
+    const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${s}</li>`).join('')}</ul>`:'';
+    box.innerHTML=docs.map(d=>{
+      const results=(d.results||[]).slice().reverse();
+      return `<div class="card" style="margin:0 0 10px;border-color:#fcd34d;background:#fffbeb;padding:12px 14px">
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">📝 학생이 받은 시험 대비 AI 진단 — ${d.examTitle||d.id} · ${d.count||results.length}회 사용</div>
+        ${results.map(r=>{ const a=r.analysis||{}; return `<div style="border-top:1px dashed #fcd34d;padding-top:8px;margin-top:8px">
+          <div style="font-size:11px;color:var(--ink3)">${String(r.at||'').slice(0,16).replace('T',' ')}</div>
+          <div style="font-weight:700;margin:4px 0 8px">${a.summary||''}</div>
+          ${a.strengths?.length?`<div style="margin-bottom:6px"><b>👍 잘하고 있는 것</b>${list(a.strengths)}</div>`:''}
+          ${a.weaknesses?.length?`<div style="margin-bottom:6px"><b>⚠️ 보완할 것</b>${list(a.weaknesses)}</div>`:''}
+          ${a.commonMistakes?.length?`<div style="margin-bottom:6px"><b>🔁 반복되는 실수</b>${list(a.commonMistakes)}</div>`:''}
+          ${a.studyPlan?.length?`<div><b>📚 공부 순서</b>${list(a.studyPlan)}</div>`:''}
+        </div>`; }).join('')}
+      </div>`;
+    }).join('');
+  }catch(e){ console.warn('[exam_ai 로드 실패]',e.message); }
+}
 
 /* ══════════ 🤖 AI 학습 분석 (학생 단위 — 전체 또는 대단원) ══════════
    정답률·오답(wrongInputs)을 학습지의 실제 문항 텍스트·정답과 함께 Apps Script

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.43">
+<meta name="app-version" content="3.44">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1093,6 +1093,11 @@ async function renderExamSettings(){
       <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">AI 진단 허용 횟수</label>
         <input type="number" id="exam-ailimit" min="0" max="10" value="${ex?.aiLimit??1}" style="width:100%;padding:7px 10px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit" ${ro?'disabled':''}></div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 10px;cursor:pointer">
+      <input type="checkbox" id="exam-require-review" ${ex?.aiRequireReview?'checked':''} ${ro?'disabled':''}>
+      🔁 범위에 넣은 <b>복습 학습지를 각각 1회 이상 완료</b>해야 AI 진단을 받을 수 있게
+      <span style="font-size:11px;color:var(--ink3)">(아래 목록에서 복습 학습지도 범위에 넣어야 적용됩니다)</span>
+    </label>
     <div style="font-size:12px;color:var(--ink3);line-height:1.6">
       · 시작일부터 종료일까지(양 끝 포함) 학생 화면에 표시됩니다. 0회로 두면 AI 진단 버튼은 나오지 않고 범위 표시만 됩니다.<br>
       · 학생의 AI 진단 횟수는 「학년-시작일」을 시험 ID 로 셉니다. <b>시작일을 바꾸면 새 시험으로 보아 횟수가 다시 생깁니다.</b>
@@ -1106,7 +1111,8 @@ async function renderExamSettings(){
     </div>`;
   if(!units.length) h+='<div style="color:var(--ink3);font-size:13px">이 학년의 단원이 없습니다.</div>';
   units.forEach(u=>{
-    const sheets=WORKSHEETS.filter(ws=>ws.unitId===u.id && ws.type!=="review");
+    // 복습 학습지(-FN)는 단원 맨 아래에 🔁 표시로 — AI 진단 조건(aiRequireReview)의 대상이 된다 (v3.44)
+    const sheets=WORKSHEETS.filter(ws=>ws.unitId===u.id).sort((a,b)=>(a.type==='review')-(b.type==='review'));
     if(!sheets.length) return;
     const allOn=sheets.every(ws=>sel.has(ws.id));
     h+=`<div style="border-top:1px solid var(--rule);padding:10px 0">
@@ -1117,7 +1123,7 @@ async function renderExamSettings(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;margin:6px 0 0 26px">
         ${sheets.map(ws=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" class="exam-ws-cb" data-unit="${u.id}" value="${ws.id}" ${sel.has(ws.id)?'checked':''} ${ro?'disabled':''} onchange="examSyncUnit('${u.id}')">
-          <span>${ws.title}</span><span style="font-size:11px;color:var(--ink3)">${ws.status==='draft'?'📝 준비 중':ws.status==='locked'?'🔒':''}</span></label>`).join('')}
+          <span>${ws.type==='review'?'🔁 ':''}${ws.title}</span><span style="font-size:11px;color:var(--ink3)">${ws.type==='review'?'복습 · ':''}${ws.status==='draft'?'📝 준비 중':ws.status==='locked'?'🔒':''}</span></label>`).join('')}
       </div></div>`;
   });
   h+=`</div>`;
@@ -1155,14 +1161,17 @@ window.saveExamSettings=async function(g){
   const end=document.getElementById('exam-end')?.value||'';
   const aiLimit=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-ailimit')?.value,10)||0));
   const wsIds=[...document.querySelectorAll('.exam-ws-cb:checked')].map(cb=>cb.value);
+  const aiRequireReview=!!document.getElementById('exam-require-review')?.checked;
   if(!start||!end){ alert('시작일과 종료일을 모두 입력하세요.'); return; }
+  if(aiRequireReview && aiLimit>0 && !wsIds.some(id=>WORKSHEETS.find(w=>w.id===id)?.type==='review')
+     && !confirm('복습 학습지 완료 조건을 켰지만 범위에 복습 학습지가 하나도 없습니다. 이대로면 조건이 항상 통과됩니다. 그대로 저장할까요?')) return;
   if(start>end){ alert('종료일이 시작일보다 앞설 수 없습니다.'); return; }
   if(!wsIds.length && !confirm('시험 범위 학습지를 하나도 고르지 않았습니다. 그대로 저장할까요?')) return;
   const prev=examConfig.exams[String(g)];
   if(prev && prev.start!==start && !confirm('시작일이 바뀌면 새 시험으로 보아 학생들의 AI 진단 횟수가 다시 생깁니다. 계속할까요?')) return;
   const msg=document.getElementById('exam-save-msg'); if(msg) msg.textContent='저장 중…';
   try{
-    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit,
+    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit, aiRequireReview,
       updatedAt:new Date().toISOString(), updatedBy:tUser.email };
     await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:entry } },{ merge:true });
     examConfig.exams[String(g)]=entry;

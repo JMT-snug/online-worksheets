@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.79">
+  <meta name="app-version" content="8.80">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1610,12 +1610,23 @@ function activeExams(){
     if(today<ex.start||today>ex.end) continue;
     const known=new Set(WORKSHEETS.map(w=>w.id));
     out.push({ grade:g, id:g+'-'+ex.start, title:ex.title||(g+'학년 시험'), start:ex.start, end:ex.end,
-      aiLimit:Math.max(0,+ex.aiLimit||0), wsIds:(ex.wsIds||[]).filter(id=>known.has(id)) });
+      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview,
+      wsIds:(ex.wsIds||[]).filter(id=>known.has(id)) });
   }
   return out;
 }
 function unitInExamRange(unit){ return WORKSHEETS.some(w=>w.unitId===unit.id && EXAM_WS[w.id]); }
 function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, ex.aiLimit-(st.count||0)); }
+/* 범위 학습지 '완료' — 일반 학습지는 isComplete, 복습 학습지(-FN)는 1회 이상 완료(completions) */
+function examWsDone(id){ const p=wsProgress[id]; if(!p) return false; const ws=WORKSHEETS.find(w=>w.id===id); return ws?.type==='review' ? (p.completions||0)>=1 : !!p.isComplete; }
+/* 🔁 AI 진단 조건 (v8.80): 교사가 aiRequireReview 를 켜면 범위 안 복습 학습지를 각각 1회 이상 완료해야 진단 가능.
+   반환 {required:[복습 학습지], missing:[아직 안 한 것], ok} — 조건이 꺼져 있거나 범위에 복습 학습지가 없으면 ok */
+function examReviewGate(ex){
+  const required=ex.wsIds.map(id=>WORKSHEETS.find(w=>w.id===id)).filter(w=>w&&w.type==='review');
+  if(!ex.aiRequireReview || !required.length) return {required, missing:[], ok:true};
+  const missing=required.filter(w=>!examWsDone(w.id));
+  return {required, missing, ok:missing.length===0};
+}
 /* 단원 목록 위 배너 — 보고 있는 학년의 진행 중인 시험만 (전체 보기면 모두) */
 function renderExamBanner(){
   const box=document.getElementById('exam-banner'); if(!box) return;
@@ -1625,15 +1636,21 @@ function renderExamBanner(){
   const teacher=isTeacherAcct();
   box.innerHTML=list.map(ex=>{
     const total=ex.wsIds.length;
-    const done=ex.wsIds.filter(id=>wsProgress[id]?.isComplete).length;
+    const done=ex.wsIds.filter(examWsDone).length;
     const st=EXAM_AI_STATE[ex.id]||{count:0,results:[]};
     const left=examRemaining(ex);
     const hasPrev=(st.results||[]).length>0;
+    const gate=examReviewGate(ex);
     let btns='';
     if(ex.aiLimit>0 || teacher){
-      const can = teacher || left>0;
-      btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'}
-        title="${can?'시험 범위 학습지의 기록을 바탕으로 AI가 학습 상태를 진단해요':'이번 시험의 AI 진단을 모두 사용했어요'}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${ex.aiLimit})`}</button>`;
+      const can = teacher || (left>0 && gate.ok);
+      const why = teacher ? '교사 계정 — 횟수·조건 제한 없이 실행돼요'
+        : left<=0 ? '이번 시험의 AI 진단을 모두 사용했어요'
+        : !gate.ok ? '아직 안 한 복습 학습지: '+gate.missing.map(w=>w.title).join(', ')
+        : '시험 범위 학습지의 기록을 바탕으로 AI가 학습 상태를 진단해요';
+      btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'} title="${escHtml(why)}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${ex.aiLimit})`}</button>`;
+      if(!teacher && left>0 && !gate.ok)
+        btns+=`<div style="flex-basis:100%;font-size:12px;color:#b45309">🔁 시험 범위의 복습 학습지 ${gate.required.length-gate.missing.length}/${gate.required.length}개 완료 — 각각 1회 이상 풀면 AI 진단을 받을 수 있어요</div>`;
       if(hasPrev) btns+=`<button type="button" class="eb-btn ghost" data-ex="${ex.id}" data-act="last">지난 진단 보기</button>`;
     }
     return `<div class="exam-banner">
@@ -1653,10 +1670,16 @@ const EXAM_AI_SKIP_TYPES=new Set(['graph','link','pool_random']);   // teacher �
 function buildExamAIPayload(ex){
   const worksheets=[], notStarted=[];
   for(const id of ex.wsIds){
-    const ws=WORKSHEETS.find(w=>w.id===id); if(!ws||ws.type==='review') continue;
+    const ws=WORKSHEETS.find(w=>w.id===id); if(!ws) continue;
     const unitTitle=(UNITS.find(u=>u.id===ws.unitId)||{}).title||'';
     const r=wsProgress[ws.id];
     if(!r){ notStarted.push({title:ws.title||'', unitTitle}); continue; }
+    if(ws.type==='review'){   // 복습 학습지는 매번 문항이 달라 오답 대조를 안 한다 — 누적 정답률·완료 횟수만
+      if(!(r.completions>0)){ notStarted.push({title:ws.title||'', unitTitle}); continue; }
+      worksheets.push({ title:ws.title||'', unitTitle, done:true, correctRate:r.sumTotal?Math.round((r.sumCorrect||0)/r.sumTotal*100):0,
+        wrongItems:[], note:'복습 학습지 '+r.completions+'회 완료 (누적 정답률)' });
+      continue;
+    }
     const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
     const wrongItems=[];
     (ws.questions||[]).forEach(q=>{
@@ -1677,6 +1700,8 @@ async function runExamAI(ex){
   const teacher=isTeacherAcct();
   const left=examRemaining(ex);
   if(!teacher && left<=0){ alert('이번 시험의 AI 진단을 모두 사용했어요.'); return; }
+  const gate=examReviewGate(ex);
+  if(!teacher && !gate.ok){ alert('시험 범위의 복습 학습지를 각각 1회 이상 풀어야 AI 진단을 받을 수 있어요.\n\n아직 안 한 복습 학습지:\n· '+gate.missing.map(w=>w.title).join('\n· ')); return; }
   const payload=buildExamAIPayload(ex);
   if(!payload.worksheets.length && !payload.notStarted.length){ alert('시험 범위 학습지가 없어요.'); return; }
   const msg = teacher ? '교사 계정으로 AI 진단을 실행합니다 (횟수 제한 없음).'
@@ -1876,7 +1901,8 @@ function activeNotices(){
   const examN=activeExams().map(ex=>({ id:'exam-notice::'+ex.id, until:ex.end,
     title:`${ex.grade}학년 ${ex.title} 대비 (${_mdStr(ex.start)}~${_mdStr(ex.end)})`,
     body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
-         (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'') }));
+         (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
+         (ex.aiLimit>0&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
   return [...examN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
                 .map(n=>({...n, dim:st[n.id]==='dim'}));
 }

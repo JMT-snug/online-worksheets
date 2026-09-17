@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.81">
+  <meta name="app-version" content="8.82">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -934,7 +934,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=8.26"></script>
+<script src="grading.js?v=8.82"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -3732,7 +3732,8 @@ function renderQuestion() {
 /* 토큰 렌더 */
 /* ── 수식 입력기 LaTeX 렌더링 ── */
 function latexEsc(s){
-  return s.replace(/−/g,'-').replace(/×/g,'\\times ').replace(/÷/g,'\\div ');
+  return s.replace(/−/g,'-').replace(/×/g,'\\times ').replace(/÷/g,'\\div ')
+          .replace(/≤/g,'\\le ').replace(/≥/g,'\\ge ');
 }
 
 function tokensToLatex(){
@@ -3916,10 +3917,22 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
   const varRow=`<div class="kbd-var-row">${
     vars.map(v=>`<button tabindex="-1" class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
-  const eqCell=showEq?`<button tabindex="-1" class="kb op" onclick="qInput('=')">=</button>`:`<span></span>`;
+  /* 정답에 = 나 부등호가 들어 있으면 그 버튼을 띄운다.
+     예전에는 단계형의 '등식' 단계에만 = 버튼이 있어서, 문항 유형 「③ 문자 포함 식」의
+     정답이 y=30/x 같은 관계식이면 태블릿에서 = 를 칠 방법이 아예 없었다. */
+  const ansStr=String(answer||'');
+  const wantsEq=showEq||ansStr.includes('=');
+  const relRow=/[<>≤≥]/.test(ansStr)
+    ? `<div class="kbd-var-row">${
+        [['&lt;','&lt;'],['≤','≤'],['&gt;','&gt;'],['≥','≥']]
+          .map(([lb,v])=>`<button tabindex="-1" class="kb op" onclick="qInput('${v}')">${lb}</button>`).join('')
+      }</div>`
+    : '';
+  const eqCell=wantsEq?`<button tabindex="-1" class="kb op" onclick="qInput('=')">=</button>`:`<span></span>`;
   const enterBtn=onEnter?`<button tabindex="-1" class="kb enter" onclick="${onEnter}">엔터</button>`:'';
   return `
     ${varRow}
+    ${relRow}
     <div class="kbd-grid">
       <button tabindex="-1" class="kb"   onclick="qInput('7')">7</button>
       <button tabindex="-1" class="kb"   onclick="qInput('8')">8</button>
@@ -4027,7 +4040,10 @@ updateAnsFocusBtn();   // 모듈은 DOMContentLoaded 전에 실행되지만 헤�
 /* 키보드 */
 const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9",
   ".":".","Backspace":"⌫","Delete":"⌫","-":"−","+":"+","*":"×","/":"/","Tab":"TAB",
-  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","e":"e","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"(","=":"="};
+  "Enter":"ENTER","NumpadEnter":"ENTER","^":"EXP","ArrowLeft":"←","ArrowRight":"→","a":"a","b":"b","c":"c","d":"d","e":"e","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","X":"x",")":")",",":",","(":"(","=":"=",
+  /* 부등식 답(x>3, x≤3)을 물리 키보드로도 칠 수 있게 한다.
+     ≤ 는 < 와 = 를 이어 치면 되고(채점에서 ≤ 와 <= 를 같게 본다), 키패드에는 ≤ ≥ 버튼이 따로 있다. */
+  "<":"<",">":">","≤":"≤","≥":"≥"};
 function quizKeyHandler(e){
   /* 화면 위에 떠 있는 다른 입력창(🚨 오류 신고 글상자 등)에 글자를 넣는 중이면
      문제 답칸으로 가로채지 않는다. 이 처리기는 document 전체의 키를 받기 때문에,
@@ -4264,7 +4280,7 @@ function getSteps(q){
   if(Array.isArray(q.steps) && q.steps.length) return q.steps;
   // 구버전 step1/2/3 → steps[] 변환
   const steps=[];
-  if(q.step1) steps.push({label:q.step1.label||'', answerType:'equation', answer:q.step1.equation||'', answerAlt:q.step1.equationAlt||[], hint:q.step1.hint||''});
+  if(q.step1) steps.push({label:q.step1.label||'', answerType:'expr', answer:q.step1.equation||'', answerAlt:q.step1.equationAlt||[], hint:q.step1.hint||''});
   if(q.step2) steps.push({label:q.step2.label||'', answerType:'number', answer:q.step2.answer, answerAlt:[], hint:q.step2.hint||''});
   if(q.step3) steps.push({label:q.step3.label||'', answerType:'text', answer:q.step3.answer, answerAlt:q.step3.answerAlt||[], hint:q.step3.hint||''});
   return steps;
@@ -4935,26 +4951,19 @@ function renderStep3Body(q){
 
   if(useKeypad){
     qTokens=[]; qEditPart=null; qCursorIdx=0;
-    const defHint = at==='number'   ? '💡 숫자/분수로 입력하세요'
-                  : at==='expr'     ? '💡 다항식을 입력하세요 (x 버튼 사용)'
-                  : '💡 방정식을 입력하세요 (= 버튼 사용)';
+    /* 안내 문구는 유형명이 아니라 정답의 생김새를 따른다 —
+       「③ 문자 포함 식」 하나로 식·등식·부등식을 모두 받기 때문이다. */
+    const ansStr=String(step.answer||'');
+    const defHint = at==='number'        ? '💡 숫자/분수로 입력하세요'
+                  : /[<>≤≥]/.test(ansStr) ? '💡 부등식을 입력하세요 (부등호 버튼 사용)'
+                  : ansStr.includes('=') ? '💡 등식을 입력하세요 (= 버튼 사용)'
+                  : '💡 문자가 든 식을 입력하세요 (x 버튼 사용)';
     const hintHtml = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>`
                                : `<div class="step3-hint">${defHint}</div>`;
-    // 방정식이면 = 버튼, 아니면 (−)
-    const eqBtn = at==='equation'
-      ? `<button class="kb op" onclick="qInput('=')">=</button>`
-      : `<button class="kb w2" onclick="qNeg()">(−)</button>`;
-    const negRow = at==='equation'
-      ? `<button class="kb w2" onclick="qNeg()">(−)</button>
-         <button class="kb"    onclick="qInput('0')">0</button>
-         <button class="kb"    onclick="qInput('.')">.</button>`
-      : `<button class="kb"    onclick="qInput('0')">0</button>
-         <button class="kb"    onclick="qInput('.')">.</button>
-         <button class="kb op" onclick="qInput('(')">( )</button>`;
     body.innerHTML=labelHtml+hintHtml+`
       <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
       <div class="kbd-wrap" onmousedown="event.preventDefault()">
-        ${buildKeypad(step.answer||'',{onEnter:`submitStep3(${st.curStep})`,showEq:at==='equation'})}
+        ${buildKeypad(step.answer||'',{onEnter:`submitStep3(${st.curStep})`})}
       </div>
       <div class="feedback-strip" id="s3-fb"></div>`;
   } else {
@@ -5047,14 +5056,14 @@ function submitStep3(stepNum, byEnter){
     userAns=String(val);
     const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
     ok=!isNaN(val)&&Math.abs(val-correctNum)<0.001;
-  } else if(at==='expr'){
+  } else if(at==='expr' || at==='equation'){
+    /* 'equation'은 옛 데이터에만 남아 있는 유형명이다. 지금은 문항 유형과 똑같이
+       「③ 문자 포함 식」 하나로 다루고, 식·등식·부등식 중 무엇으로 볼지는
+       정답의 생김새를 보고 mathEquivCheck 가 알아서 고른다.
+       (예전에는 equation 단계의 정답에 = 가 없으면 학생이 뭘 써도 오답이었다.) */
     userAns=tokensToRaw();
     const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
-    ok=alts.some(ex=>exprEquivCheck(userAns,ex));
-  } else if(at==='equation'){
-    userAns=tokensToRaw();
-    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
-    ok=alts.some(eq=>eqEquivCheck(userAns,eq));
+    ok=alts.some(ex=>mathEquivCheck(userAns,ex));
   } else { // text
     const inp=document.getElementById("s3-inp");
     userAns=(inp?.value||"").trim();
@@ -5082,7 +5091,8 @@ function submitStep3(stepNum, byEnter){
       recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
       const dispAns = at==='number' ? (typeof step.answer==='number'?step.answer:step.answer) : step.answer;
-      const doneHtml=`✅ 완료! 답: ${dispAns}&nbsp;
+      // 부등호(<)가 든 답을 그대로 넣으면 태그로 읽혀 뒤쪽 버튼까지 사라진다 → 반드시 escape
+      const doneHtml=`✅ 완료! 답: ${_escHtml(dispAns)}&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
@@ -5104,8 +5114,7 @@ function submitStep3(stepNum, byEnter){
     }
   } else {
     fb.className="feedback-strip show fb-wrong";
-    fb.innerHTML= at==='equation' ? "❌ 식을 다시 확인해보세요."
-                : at==='expr'     ? "❌ 다항식을 다시 확인해보세요."
+    fb.innerHTML= (at==='equation'||at==='expr') ? "❌ 식을 다시 확인해보세요."
                 : at==='number'   ? "❌ 다시 풀어보세요!"
                 : "❌ 다시 확인해보세요.";
     lp()?.classList.add("shake");
@@ -5470,7 +5479,7 @@ async function submitQAns(){
       if(input) input.disabled=true;
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
-      fb.innerHTML=`✅ 정답! &nbsp;<strong>${q.answer}</strong>&nbsp;
+      fb.innerHTML=`✅ 정답! &nbsp;<strong>${_escHtml(q.answer)}</strong>&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
@@ -5533,7 +5542,7 @@ async function submitQAns(){
     fb.className="feedback-strip show fb-correct";
     const isLast = curQIdx===curWS.questions.length-1;
     const dispAns = q.answerFrac || q.answer;
-    fb.innerHTML=`✅ 정답! &nbsp; x = ${dispAns} &nbsp;
+    fb.innerHTML=`✅ 정답! &nbsp; x = ${_escHtml(dispAns)} &nbsp;
       <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;

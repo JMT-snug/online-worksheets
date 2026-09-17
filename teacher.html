@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.44">
+<meta name="app-version" content="3.45">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -221,7 +221,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=8.26"></script>
+<script src="grading.js?v=8.82"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -2741,7 +2741,8 @@ window.showQDetail=function(key){
   } else if(d.wrongInputs.length){
     body+=`<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">오답 기록</div>
-      <div>${d.wrongInputs.map(w=>`<span class="wrong-chip">${w}</span>`).join('')}</div>
+      <!-- 학생이 친 답을 그대로 넣으면 안 된다: 부등식 답(3<x)의 < 가 태그로 읽혀 기록이 사라진다 -->
+      <div>${d.wrongInputs.map(w=>`<span class="wrong-chip">${escapeAttr(w)}</span>`).join('')}</div>
     </div>`;
   } else {
     body+=`<div style="font-size:13px;color:var(--green);margin-bottom:14px">✅ 첫 번에 정답</div>`;

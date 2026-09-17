@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.29">
+<meta name="app-version" content="edit-v3.30">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -143,10 +143,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .ans-alt-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .ans-alt-tag{background:var(--acc-lt);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:12px;display:flex;align-items:center;gap:4px}
 .ans-alt-tag button{background:none;border:none;cursor:pointer;color:var(--ink3);font-size:11px;padding:0 2px}
-
-/* 단계형 '등식' 유형 경고 (정답에 = 가 없으면 학생 답이 전부 오답 처리된다) */
-.step-eqwarn{font-size:11px;line-height:1.5;color:#b45309;background:#fef3c7;
-  border:1px solid #fcd34d;border-radius:6px;padding:6px 9px;margin-bottom:6px}
 
 /* 이미지 첨부 버튼 */
 .img-btn{background:var(--acc-lt);color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -417,7 +413,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <select id="q-type-sel" onchange="onQTypeChange()">
               <option value="word_text">① 한글 용어</option>
               <option value="equation">② 숫자 값</option>
-              <option value="word_expr">③ 문자 포함 식 (x, y 등 문자·= 포함 가능)</option>
+              <option value="word_expr">③ 문자 포함 식 (x, y 등 문자 · =, 부등호 포함 가능)</option>
               <option value="multi">객관식</option>
               <option value="link">링크(다음 문항)</option>
               <option value="graph">그래프 그리기</option>
@@ -564,8 +560,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 <option value="factor">인수분해 (곱의 형태만 검증, 덧셈 금지)</option>
               </select>
             </div>
-            <label>정답 (수식, 예: 4*a**2)</label>
-            <input id="q-ans-expr" placeholder="4*a**2 또는 -11/b">
+            <label>정답 (식 · 등식 · 부등식)</label>
+            <input id="q-ans-expr" placeholder="예: 4*a**2, y=30/x, x>3">
             <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px">미리보기</div>
           </div>
 
@@ -1564,12 +1560,12 @@ function showPanel(item){
       // 신규 steps[] 우선, 없으면 기존 step1/2/3에서 변환
       if(Array.isArray(item.steps) && item.steps.length){
         editSteps = item.steps.map(s=>({
-          label:s.label||'', answerType:s.answerType||'number',
+          label:s.label||'', answerType:normStepType(s.answerType),
           answer:s.answer??'', answerAlt:[...(s.answerAlt||[])], hint:s.hint||''
         }));
       } else {
         editSteps=[];
-        if(item.step1) editSteps.push({label:item.step1.label||'',answerType:'equation',answer:item.step1.equation||'',answerAlt:[...(item.step1.equationAlt||[])],hint:item.step1.hint||''});
+        if(item.step1) editSteps.push({label:item.step1.label||'',answerType:'expr',answer:item.step1.equation||'',answerAlt:[...(item.step1.equationAlt||[])],hint:item.step1.hint||''});
         if(item.step2) editSteps.push({label:item.step2.label||'',answerType:'number',answer:item.step2.answer??'',answerAlt:[],hint:item.step2.hint||''});
         if(item.step3) editSteps.push({label:item.step3.label||'',answerType:'text',answer:item.step3.answer??'',answerAlt:[...(item.step3.answerAlt||[])],hint:item.step3.hint||''});
       }
@@ -1873,26 +1869,14 @@ window.saveQuestion = async function(){
   if(type==='step3'){
     const qIdxS=selectedQIdx;
     if(!editSteps.length){ toast('단계를 1개 이상 추가하세요'); return; }
-    // '등식' 유형인데 정답에 = 가 없으면 학생 답이 전부 오답 처리된다 — 저장 전에 잡아준다
-    const _eqBad = editSteps.map((s,i)=>({s,i}))
-      .filter(({s})=>(s.answerType||'number')==='equation'
-                   && (s.answer??'').toString().trim()
-                   && !(s.answer??'').toString().includes('='));
-    if(_eqBad.length){
-      const _list=_eqBad.map(({s,i})=>`  · ${i+1}단계 — 정답: ${s.answer}`).join('\n');
-      const _msg='⚠️ 답 유형이 \'③ 문자 포함 식 (= 포함)\'인데 정답에 = 가 없는 단계가 있습니다.\n\n'
-        + _list + '\n\n'
-        + '등식 채점은 양변을 = 로 갈라 비교하므로, 이대로 저장하면\n학생이 무엇을 입력해도 오답 처리됩니다.\n\n'
-        + '[확인] 위 단계를 \'② 숫자 값\'으로 바꿔서 저장\n'
-        + '[취소] 저장하지 않고 돌아가서 직접 고치기';
-      if(!confirm(_msg)) return;
-      _eqBad.forEach(({i})=>{ editSteps[i].answerType='number'; });
-      renderSteps();
-    }
+    /* 예전에 있던 '등식 유형인데 = 가 없다' 경고는 없앴다 —
+       유형이 하나로 합쳐졌고, 정답 모양대로 채점하므로 더 이상 함정이 아니다.
+       저장할 때 옛 유형명 'equation' 은 'expr' 로 정리해 둔다. */
     const steps = editSteps.map(s=>{
-      const o={ label:(s.label||'').trim(), answerType:s.answerType||'number', hint:(s.hint||'').trim() };
+      const at=normStepType(s.answerType);
+      const o={ label:(s.label||'').trim(), answerType:at, hint:(s.hint||'').trim() };
       const av=(s.answer??'').toString().trim();
-      o.answer = (s.answerType==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
+      o.answer = (at==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
       if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
       return o;
     });
@@ -1958,9 +1942,9 @@ window.saveQuestion = async function(){
          (실제 신고: 「반비례」 학습지 14번, 정답 y=30/x가 계속 오답 처리됨).
          문자·= 가 섞인 답은 저장을 막고 "③ 문자 포함 식"으로 안내한다. */
       const _bareAns = ansVal.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'');
-      if(/=|[a-zA-Z]/.test(_bareAns)){
+      if(/[=<>≤≥]|[a-zA-Z]/.test(_bareAns)){
         alert(`「② 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))만 채점할 수 있어요.\n\n`
-          + `지금 입력한 "${ansVal}"처럼 문자(x, y 등)나 =가 들어간 관계식·방정식은 이 유형으로는 채점이 안 됩니다`
+          + `지금 입력한 "${ansVal}"처럼 문자(x, y 등)나 =·부등호가 들어간 관계식·방정식·부등식은 이 유형으로는 채점이 안 됩니다`
           + `(학생이 뭘 입력해도 무조건 오답 처리돼요).\n\n`
           + `문항 유형을 「③ 문자 포함 식」으로 바꾸고 정답을 다시 입력해 주세요.`);
         return;
@@ -2651,12 +2635,17 @@ window.runImageCleanup = async function(){
 // ── 동적 단계형(steps) 관리 ──
 let editSteps = []; // 현재 편집 중인 단계 배열
 
+/* 답 유형은 문항 유형과 똑같이 세 가지다.
+   예전에는 여기에만 '③ 문자 포함 식 (= 포함)'이 따로 있어서 문항 쪽과 어긋났고,
+   고른 유형과 정답 모양이 다르면(등식 유형인데 = 가 없는 등) 전원 오답이 되는 함정이었다.
+   지금은 식·등식·부등식 중 무엇으로 채점할지 정답의 생김새를 보고 알아서 고른다. */
 const STEP_ANSWER_TYPES = [
   {val:'number',   label:'② 숫자 값'},
-  {val:'expr',     label:'③ 문자 포함 식'},
-  {val:'equation', label:'③ 문자 포함 식 (= 포함)'},
+  {val:'expr',     label:'③ 문자 포함 식 (=, 부등호 포함 가능)'},
   {val:'text',     label:'① 한글 용어'},
 ];
+/* 옛 데이터의 'equation' 은 이제 'expr' 과 같은 것으로 다룬다 */
+const normStepType = at => (at==='equation' ? 'expr' : (at||'number'));
 
 window.addStep = function(){
   editSteps.push({ label:'', answerType:'number', answer:'', answerAlt:[], hint:'' });
@@ -2671,23 +2660,8 @@ window.updateStep = function(i, field, val){
   if(editSteps[i]) editSteps[i][field]=val;
 };
 
-/* 답 유형이 '등식(= 포함)'인데 정답에 = 가 없으면 채점이 성립하지 않는다.
-   eqEquivCheck가 양변을 = 로 갈라 비교하는데 가를 수가 없어 무조건 false가 되고,
-   그 유형에는 숫자/식 폴백이 없어서 학생이 무엇을 써도 오답이 된다. */
-function stepEqWarnText(st){
-  const at=st.answerType||'number';
-  const av=(st.answer??'').toString().trim();
-  if(at!=='equation' || !av || av.includes('=')) return '';
-  return '⚠️ 답 유형이 <b>= 포함</b>인데 정답에 = 가 없습니다 — 이대로 두면 학생 답이 <b>모두 오답</b> 처리됩니다. 숫자 답이면 <b>② 숫자 값</b>으로 바꾸세요.';
-}
-window.updateStepEqWarn = function(i){
-  const el=document.getElementById('step-eqwarn-'+i);
-  const st=editSteps[i];
-  if(!el||!st) return;
-  const t=stepEqWarnText(st);
-  el.innerHTML=t;
-  el.style.display=t?'':'none';
-};
+/* 예전의 '= 가 없습니다' 경고는 없앴다 — 유형이 하나로 합쳐져서
+   정답에 = 가 있든 없든(부등호여도) 그 모양대로 채점된다. */
 window.addStepAlt = function(e, i){
   if(e.key!=='Enter') return;
   const inp=e.target; const v=inp.value.trim(); if(!v) return;
@@ -2706,8 +2680,9 @@ function renderSteps(){
   if(!c) return;
   c.innerHTML = editSteps.map((s,i)=>{
     const color=STEP_COLORS[i%STEP_COLORS.length];
-    const typeOpts=STEP_ANSWER_TYPES.map(t=>`<option value="${t.val}" ${s.answerType===t.val?'selected':''}>${t.label}</option>`).join('');
-    const showAlt = s.answerType==='text' || s.answerType==='expr' || s.answerType==='equation';
+    const stType=normStepType(s.answerType);
+    const typeOpts=STEP_ANSWER_TYPES.map(t=>`<option value="${t.val}" ${stType===t.val?'selected':''}>${t.label}</option>`).join('');
+    const showAlt = stType==='text' || stType==='expr';
     const altTags=(s.answerAlt||[]).map((a,j)=>`<div class="ans-alt-tag">${a}<button onclick="removeStepAlt(${i},${j})">✕</button></div>`).join('');
     return `
       <div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:10px;border-left:3px solid ${color}">
@@ -2721,8 +2696,7 @@ function renderSteps(){
         <label style="font-size:11px">답 유형</label>
         <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         <label style="font-size:11px">정답</label>
-        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value);updateStepEqWarn(${i})" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${s.answerType==='equation'?'예: 2x+3=11':s.answerType==='number'?'예: 4, 8/3':s.answerType==='expr'?'예: 2x+3':'예: 21, 2년 후'}" style="margin-bottom:6px">
-        <div class="step-eqwarn" id="step-eqwarn-${i}" style="display:${stepEqWarnText(s)?'':'none'}">${stepEqWarnText(s)}</div>
+        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3':stType==='expr'?'예: 2x+3, 2x+3=11, x>3':'예: 21, 2년 후'}" style="margin-bottom:6px">
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">
@@ -2799,7 +2773,7 @@ function _doAddQuestion(type){
   else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
   else if(type==='step3'){ newQ.type='step3';
     newQ.steps=[
-      {label:'방정식을 세우시오.',answerType:'equation',answer:'',answerAlt:[],hint:''},
+      {label:'방정식을 세우시오.',answerType:'expr',answer:'',answerAlt:[],hint:''},
       {label:'x의 값을 구하시오.',answerType:'number',answer:'',hint:''},
       {label:'답을 구하시오.',answerType:'text',answer:'',answerAlt:[],hint:''},
     ]; }
@@ -3024,7 +2998,7 @@ window._jumpToQuestion = function(qIdx){
       <div class="type-opt" data-type="word_expr" onclick="selectTypeOpt(this)">
         <div class="type-icon">🔣</div>
         <div class="type-name">③ 문자 포함 식</div>
-        <div class="type-desc">x, y 포함 수식 정답</div>
+        <div class="type-desc">식 · 등식(y=30/x) · 부등식(x&gt;3)</div>
       </div>
       <div class="type-opt" data-type="equation" onclick="selectTypeOpt(this)">
         <div class="type-icon">🔢</div>

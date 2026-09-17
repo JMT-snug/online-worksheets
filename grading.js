@@ -6,7 +6,8 @@
    HTML 안에 채점 함수를 복사해 넣지 말 것 (과거 세 벌 복사가 채점 불일치 사고의 원인).
 
    포함: evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
-         _examEvExpr, isTextAnswerQ, varsOf, normalizeMultiAnswer, gradeExamWord, judgeAnswer
+         _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
+         normalizeMultiAnswer, gradeExamWord, judgeAnswer
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -51,25 +52,30 @@ function _compileMulti(s){
   if(_MULTI_CACHE.has(s)) return _MULTI_CACHE.get(s);
   let fn=null;
   try{
-    let t=String(s).toLowerCase().replace(/\s/g,'')
+    /* 대문자와 소문자를 다른 문자로 다룬다 (넓이 A 와 한 변 a).
+       예전에는 여기서 통째로 소문자로 바꿔서 A 와 a 가 같은 문자가 됐다.
+       '대소문자를 구분하지 않는' 지금까지의 동작은 mathEquivCheck 가
+       필요할 때 양쪽을 소문자로 바꿔 주는 것으로 유지한다. */
+    let t=String(s).replace(/\s/g,'')
       .replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/')
-      .replace(/math\.sqrt\(/g,'sqrt(')
+      .replace(/Math\./gi,'')
+      .replace(/sqrt\(/gi,'sqrt(')
       .replace(/\*\*/g,'^');
     let g=0;
     while(/sqrt\(/.test(t) && g++<12) t=t.replace(/sqrt\(([^()]*)\)/g,(_,v)=>`((${v})^0.5)`);
-    if(/sqrt/.test(t)) throw 0;
+    if(/sqrt/i.test(t)) throw 0;
     let prev;
     do{prev=t;
-      t=t.replace(/(\d|\)|[a-z])\(/g,'$1*(');
-      t=t.replace(/\)(\d|[a-z]|\()/g,')*$1');
-      t=t.replace(/(\d)([a-z])/g,'$1*$2');
-      t=t.replace(/([a-z])(\d)/g,'$1*$2');
-      t=t.replace(/([a-z])([a-z])/g,'$1*$2');
+      t=t.replace(/(\d|\)|[a-zA-Z])\(/g,'$1*(');
+      t=t.replace(/\)(\d|[a-zA-Z]|\()/g,')*$1');
+      t=t.replace(/(\d)([a-zA-Z])/g,'$1*$2');
+      t=t.replace(/([a-zA-Z])(\d)/g,'$1*$2');
+      t=t.replace(/([a-zA-Z])([a-zA-Z])/g,'$1*$2');
     }while(prev!==t);
     t=t.replace(/\^/g,'**');
     // 허용 문자(숫자·영문자·사칙연산·괄호)만 남았는지 먼저 확인한 뒤에 치환한다
-    if(!/^[a-z\d+\-*/().]+$/.test(t.replace(/\*\*/g,''))) throw 0;
-    t=t.replace(/[a-z]/g, ch=>'e['+JSON.stringify(ch)+']');
+    if(!/^[a-zA-Z\d+\-*/().]+$/.test(t.replace(/\*\*/g,''))) throw 0;
+    t=t.replace(/[a-zA-Z]/g, ch=>'e['+JSON.stringify(ch)+']');
     fn=new Function('e','"use strict";return('+t+')');
   }catch(err){ fn=null; }
   if(_MULTI_CACHE.size>500) _MULTI_CACHE.clear();
@@ -268,6 +274,12 @@ function exprEquivCheck(userExpr, correctExpr){
    한쪽만 관계식이면 다른 답으로 본다 (정답 x=4 에 4 만 쓴 것은 답이 아니다). */
 function mathEquivCheck(user, correct){
   try{
+    /* 정답이 A 와 a 를 갈라 쓰지 않았다면 대소문자를 무시한다 (x 를 X 로 쳐도 정답).
+       갈라 썼다면 그대로 두어 구분해 채점한다 — A=a² 를 a=A² 로 쓴 것은 다른 답이다. */
+    if(!isCaseSignificant(correct)){
+      user=String(user).toLowerCase();
+      correct=String(correct).toLowerCase();
+    }
     const ur=splitRelChain(user), cr=splitRelChain(correct);
     if(!ur && !cr) return exprEquivCheck(user, correct);
     if(!ur || !cr) return false;
@@ -328,9 +340,19 @@ function isTextAnswerQ(q){
    수식 동치는 모든 문자를 같은 값으로 치환하므로, 쓰인 문자가 다르면 서로 다른 식으로 본다.
    (40km/h vs 40m, 2x+3 vs 2y+3 처럼 문자만 다른 답이 통과하던 문제 방지) */
 function varsOf(s){
-  let t=String(s??'').toLowerCase().replace(/math\./g,'')
-        .replace(/sqrt|cbrt|pow|abs|log|sin|cos|tan|pi/g,'');
-  return [...new Set(t.match(/[a-z]/g)||[])].sort().join('');
+  let t=String(s??'').replace(/Math\./gi,'')
+        .replace(/sqrt|cbrt|pow|abs|log|sin|cos|tan|pi/gi,'');
+  return [...new Set(t.match(/[a-zA-Z]/g)||[])].sort().join('');
+}
+
+/* 정답이 스스로 대문자와 소문자를 갈라 쓰고 있는가 — 넓이 A 와 한 변 a 처럼
+   같은 글자를 두 가지로 쓴 경우에만 참이다.
+   이런 답만 대소문자를 구분해 채점하고, 나머지는 지금까지처럼 구분하지 않는다.
+   (학생은 화면 키패드에 나온 글자를 누르므로 평소엔 구분이 오히려 방해가 된다.) */
+function isCaseSignificant(s){
+  const t=String(s??'');
+  const lower=new Set(t.match(/[a-z]/g)||[]);
+  return (t.match(/[A-Z]/g)||[]).some(ch=>lower.has(ch.toLowerCase()));
 }
 
 function gradeExamWord(q, ans){
@@ -345,11 +367,15 @@ function gradeExamWord(q, ans){
     if(allAns.some(a=>mathEquivCheck(raw, String(a)))) return true;
   }catch(e){}
   // 2) 텍스트 정규화 비교 — 일반 모드와 동일한 normW (≤ 와 <= 는 같은 글자로 본다)
-  const normW=s=>String(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
-    .replace(/\s*,\s*/g,",")
-    .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim().toLowerCase();
-  if(allAns.map(normW).includes(normW(raw))) return true;
-  // 4) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
+  //    대소문자는 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (isCaseSignificant)
+  const normW=(s,keepCase)=>{
+    const t=String(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
+      .replace(/\s*,\s*/g,",")
+      .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim();
+    return keepCase?t:t.toLowerCase();
+  };
+  if(allAns.some(a=>{ const ks=isCaseSignificant(a); return normW(a,ks)===normW(raw,ks); })) return true;
+  // 3) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
   //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
   const hasVar=s=>/[a-zA-Z가-힣]/.test(String(s));
   if(!hasVar(raw)){

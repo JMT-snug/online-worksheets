@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.30">
+<meta name="app-version" content="edit-v3.31">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -562,6 +562,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
             <label>정답 (식 · 등식 · 부등식)</label>
             <input id="q-ans-expr" placeholder="예: 4*a**2, y=30/x, x>3">
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px">
+              대소문자는 <b>구분하지 않습니다</b> (x 를 X 로 써도 정답).
+              단, 정답에 <code>A</code> 와 <code>a</code> 를 <b>둘 다</b> 쓰면(예: 넓이 A, 한 변 a) 그 문항만 구분해서 채점합니다.
+            </div>
             <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px">미리보기</div>
           </div>
 

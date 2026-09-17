@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.78">
+  <meta name="app-version" content="8.79">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3151,7 +3151,7 @@ async function ensureLatestVersion(){
 
 /* ── 단원별 복습 학습지 ──
    문항을 직접 담지 않고, 같은 단원(unitId)의 일반 학습지 중 이 학생의 학급에
-   잠금이 풀려 있는 것에서 그래프·링크를 뺀 문항을 모아 매번 무작위 10개를 뽑는다.
+   잠금이 풀려 있는 것에서 그래프·링크·복습 제외(noReview) 문항을 뺀 나머지를 모아 매번 무작위 10개를 뽑는다.
    접속 시점에 curriculum 전체를 다시 읽어오므로, 잠금 해제·학습지 추가가
    따로 손대지 않아도 다음 접속(또는 '다시 풀기')에 바로 반영된다. */
 async function startReviewQuiz(ws){
@@ -3170,6 +3170,7 @@ async function startReviewQuiz(ws){
       if(wsBlockedFor(src, user?.email)) return; // 학급에 잠금 해제된 학습지에서만 추출
       (src.questions||[]).forEach(q=>{
         if(q.type==='graph'||q.type==='link') return; // 그래프(수동채점)·링크(안내문)는 제외
+        if(q.noReview) return; // 교사가 edit.html에서 「🔁 단원 복습 학습지에서 제외」를 체크한 문항
         const {partStart, ...rest}=q; // 파트 마커는 원본 학습지 것이므로 떼어낸다
         pool.push({...rest, id:`${src.id}__${q.id}`});
       });

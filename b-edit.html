@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.28">
+<meta name="app-version" content="edit-v3.29">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -434,6 +434,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <option value="2">★★ 중급</option>
               <option value="3">★★★ 고급</option>
             </select>
+          </div>
+          <!-- 🔁 단원 복습 학습지에서 제외 (일반 학습지 문항만 — 그래프·링크는 원래 제외라 숨김) -->
+          <div class="field" id="field-noreview" style="display:none">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400">
+              <input type="checkbox" id="q-noreview" style="width:auto;margin:0">
+              🔁 단원 복습 학습지에서 제외
+              <span style="color:var(--ink3);font-size:11px">(체크하면 이 문항은 복습 무작위 추출에 안 뽑힘)</span>
+            </label>
           </div>
 
           <!-- 문제 텍스트 (word/equation/multi) -->
@@ -1245,7 +1253,7 @@ function renderQList(){
 
   if(!combinedItems.length){
     list.innerHTML = currentWs.type==='review'
-      ? '<div class="empty">이 학습지는 문항을 직접 추가하지 않습니다.<br>같은 단원의 다른 학습지 문항 중 무작위 10개가 학생이 접속할 때마다 자동으로 출제됩니다.<br>(그래프·링크 문항은 제외)</div>'
+      ? '<div class="empty">이 학습지는 문항을 직접 추가하지 않습니다.<br>같은 단원의 다른 학습지 문항 중 무작위 10개가 학생이 접속할 때마다 자동으로 출제됩니다.<br>(그래프·링크 문항, 그리고 각 문항 편집에서 「🔁 단원 복습 학습지에서 제외」를 체크한 문항은 제외)</div>'
       : '<div class="empty">문항이 없습니다.<br>오른쪽 위 [+ 문항 추가]를 눌러주세요.</div>';
     return;
   }
@@ -1298,7 +1306,7 @@ function renderQList(){
       <span class="q-drag">⣿</span>
       <span class="q-num">${i+1}</span>
       <div class="q-info">
-        <span class="q-type-badge ${badgeClass}">${badgeLabel}</span>
+        <span class="q-type-badge ${badgeClass}">${badgeLabel}</span>${item.noReview?'<span class="q-type-badge" style="background:#fee2e2;color:#b91c1c" title="단원 복습 학습지에서 제외됨">🔁✕ 복습 제외</span>':''}
         <div class="q-text-preview">${preview}</div>
       </div>
       <div class="q-actions">
@@ -1501,6 +1509,8 @@ function showPanel(item){
     }
     document.getElementById('q-text').value = (item.text||'');
     const _qh=document.getElementById('q-hint'); if(_qh) _qh.value = (item.hint||'');
+    const _qnr=document.getElementById('q-noreview'); if(_qnr) _qnr.checked = !!item.noReview;
+    _syncNoReviewField(qtype);
     // 링크 타입 필드 로드
     document.getElementById('q-link-label').value = item.linkLabel||'';
     const fmEl=document.getElementById('q-factor-mode');
@@ -1588,8 +1598,9 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint']
+  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint','field-noreview']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  _syncNoReviewField(type);
   if(type==='pool_random'){
     show('field-pool');
   } else if(type==='step3'){
@@ -1744,6 +1755,7 @@ window.onWsTypeChange=function(){
   }
   const _qlt=document.getElementById('q-list-title');
   if(_qlt && currentWs) _qlt.textContent = t==='review' ? '복습 학습지 — 문항 자동 추출' : `문항 목록 (${(currentWs.questions||[]).length}개)`;
+  const _qts=document.getElementById('q-type-sel'); if(_qts) _syncNoReviewField(_qts.value); // 학습지 종류 바꾸면 🔁 복습 제외 칸 표시도 갱신
   if(typeof renderQList==='function') renderQList();
   if(typeof renderSidebar==='function') renderSidebar();
 };
@@ -1779,6 +1791,20 @@ window.pasteQuestion = async function(){
   }catch(e){ toast('붙여넣기 실패: '+e.message); console.error(e); }
 };
 
+/** 🔁 복습 제외 체크박스 표시 여부 — 일반 학습지(regular)의 그래프·링크 아닌 문항에만.
+    그래프·링크는 index.html의 startReviewQuiz가 원래부터 빼므로 굳이 보여주지 않는다. */
+function _syncNoReviewField(type){
+  const f=document.getElementById('field-noreview'); if(!f) return;
+  const wsType=currentWs?.type||'regular';
+  f.style.display=(wsType==='regular' && type!=='graph' && type!=='link') ? '' : 'none';
+}
+/** 문항 객체에 복습 제외 플래그를 넣거나(체크) 지운다(해제·해당 없음) */
+function _withNoReview(q){
+  const f=document.getElementById('field-noreview');
+  const el=document.getElementById('q-noreview');
+  if(el && f && f.style.display!=='none' && el.checked) q.noReview=true; else delete q.noReview;
+  return q;
+}
 /** 힌트 칸의 값 (없거나 안 쓰는 유형이면 빈 문자열) */
 function _hintVal(){
   const el=document.getElementById('q-hint');
@@ -1796,7 +1822,7 @@ function _withHint(q){
 window.saveQuestion = async function(){
   const _qScore=parseFloat(document.getElementById('q-score')?.value);
   console.log('[saveQuestion] 시작', {selectedQIdx, _qScore, currentWsType:currentWs?.type, qScoreRaw:document.getElementById('q-score')?.value});
-  const _addScore=q=>{ if(!isNaN(_qScore)&&_qScore>=0){ q.score=_qScore; console.log('[_addScore]', q.id||'(no id)', '→ score:', _qScore); } return q; };
+  const _addScore=q=>{ if(!isNaN(_qScore)&&_qScore>=0){ q.score=_qScore; console.log('[_addScore]', q.id||'(no id)', '→ score:', _qScore); } return _withNoReview(q); };
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
   if(type==='graph'){
@@ -1896,6 +1922,7 @@ window.saveQuestion = async function(){
       diff:parseInt(document.getElementById('q-diff-sel').value)||1,
     };
     if(_psPool) currentWs.questions[qIdx2].partStart=_psPool;
+    _withNoReview(currentWs.questions[qIdx2]);
     renderQList();
     saveToFirestore(null, true);
     return;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.46">
+<meta name="app-version" content="3.47">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -477,6 +477,7 @@ function buildSidebar(){
     <div class="sb-item ${selView==='classmatrix'?'active':''}" data-view="classmatrix">📊 반별 비교</div>
     <div class="sb-item ${selView==='classes'?'active':''}" data-view="classes">🏫 학급 관리</div>
     <div class="sb-item ${selView==='exam'?'active':''}" data-view="exam">📝 시험 대비 설정</div>
+    <div class="sb-item ${selView==='notices'?'active':''}" data-view="notices">📢 학생 공지</div>
     <div style="border-top:1px solid var(--rule);margin:8px 0 4px"></div>
     <div class="sb-item" onclick="migrateWsIds()" style="color:#f59e0b;font-size:12px">🔧 학습지 ID 정리</div>
     <div class="sb-item" onclick="migrateQuestionIds()" style="color:#f59e0b;font-size:12px">🔧 문항 ID 정리</div>
@@ -553,6 +554,7 @@ function navigate(view){
   if(view==="overview") renderOverview();
   else if(view==="classes") renderClasses();
   else if(view==="exam") renderExamSettings();
+  else if(view==="notices") renderNotices();
   else if(view==="comparison") renderComparison();
   else if(view==="students") renderStudents();
   else if(view==="classmatrix") renderClassMatrix();
@@ -1187,6 +1189,118 @@ window.clearExamSettings=async function(g){
     delete examConfig.exams[String(g)];
     renderExamSettings();
   }catch(e){ alert('해제 실패: '+e.message); }
+};
+
+/* ══════════ 📢 학생 공지 보내기 (teacher v3.47) ══════════
+   Firestore config/notices 문서 하나에 공지 배열을 둔다:
+     { items:[ {id, title, body, until, grade:'all'|'1'|'2'|'3', createdAt, createdBy} ] }
+   · 학생 index 는 이 문서를 구독해서 종 🔔 목록 맨 위(시험 공지 다음)에 띄운다 — 올리면 새로고침 없이 바로 뜬다.
+   · until(표시 종료일)이 지나면 학생 화면에서 저절로 사라진다. 지운 공지는 즉시 사라진다.
+   · id 는 학생의 '읽음' 기록 열쇠라 만들 때 한 번 정하고 바꾸지 않는다.
+   · 저장은 기본 교사만 (firestore.rules: config/notices write = isBaseTeacher). 담당 교사는 보기만.
+   · 본문에 HTML 은 넣지 않는다(학생 화면이 글자 그대로 이스케이프한다). 이모지는 괜찮다. */
+let noticeConfig=null;   // config/notices 문서 내용 (items 배열)
+async function loadNoticeConfig(){
+  try{
+    const snap=await getDoc(doc(db,"config","notices"));
+    noticeConfig=snap.exists()?(snap.data()||{}):{};
+    if(!Array.isArray(noticeConfig.items)) noticeConfig.items=[];
+  }catch(e){ console.warn("[config/notices 로드 실패]",e.message); noticeConfig={items:[]}; }
+}
+function _todayISO(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function _plusDaysISO(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+const NOTICE_GRADE_LABEL={all:'전체 학년','1':'1학년','2':'2학년','3':'3학년'};
+async function renderNotices(){
+  selView="notices";
+  const content=document.getElementById("content");
+  content.innerHTML='<div class="loading">공지 불러오는 중…</div>';
+  await loadNoticeConfig();
+  if(selView!=="notices") return;
+  const ro=scopedTeacher;
+  const today=_todayISO();
+  const items=[...noticeConfig.items].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  let h=`<div class="pg-title">📢 학생 공지</div>
+  <div class="pg-sub">${ro
+    ?'공지는 기본 교사만 보낼 수 있습니다. 여기서는 확인만 가능합니다.'
+    :'여기서 보낸 공지는 학생 화면의 종 🔔 목록 맨 위에 바로 뜹니다(새로고침 불필요). 표시 종료일이 지나면 저절로 사라집니다.'}</div>`;
+  if(!ro) h+=`
+  <div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:12px">새 공지</div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;max-width:760px">
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">제목</label>
+        <input type="text" id="ntc-title" maxlength="60" placeholder="예: 다음 주 수행평가 안내" style="width:100%"></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">대상</label>
+        <select id="ntc-grade" style="width:100%;padding:7px 10px;border:1.5px solid var(--rule);border-radius:8px;font-family:inherit;font-size:13px">
+          <option value="all">전체 학년</option><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option>
+        </select></div>
+      <div><label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">표시 종료일</label>
+        <input type="date" id="ntc-until" value="${_plusDaysISO(14)}" min="${today}" style="width:100%"></div>
+    </div>
+    <label style="font-size:12px;color:var(--ink3);font-weight:600;display:block;margin-bottom:4px">내용</label>
+    <textarea id="ntc-body" rows="3" maxlength="400" placeholder="학생에게 보일 내용 (이모지 OK, HTML 태그는 글자로 보입니다)" style="width:100%;max-width:760px;padding:8px 10px;border:1.5px solid var(--rule);border-radius:8px;font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+      <button class="btn-sm btn-sm-accent" onclick="sendNotice()">📨 보내기</button>
+      <span id="ntc-msg" style="font-size:12px;color:var(--ink3)"></span>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;margin-top:10px">
+      · 학생마다 ✓ 로 「확인함」 처리할 수 있고, 표시 종료일이 지나면 종 목록에서 사라집니다.<br>
+      · 종 배지가 늘 켜져 있으면 진짜 채점 알림이 묻히니, <b>학생이 알아야 실제로 달라지는 것</b>만 보내 주세요.
+    </div>
+  </div>`;
+  h+=`<div style="background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:18px;margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:12px">보낸 공지 <span style="font-size:12px;color:var(--ink3);font-weight:500">${items.length}개</span></div>`;
+  if(!items.length) h+='<div style="color:var(--ink3);font-size:13px">아직 보낸 공지가 없습니다.</div>';
+  items.forEach(n=>{
+    const live = !n.until || n.until>=today;
+    h+=`<div style="border-top:1px solid var(--rule);padding:10px 0;display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px">${escapeAttr(n.title)}
+          <span style="font-size:11px;font-weight:600;margin-left:6px;padding:2px 8px;border-radius:10px;${live?'background:#fef3c7;color:#b45309':'background:#f3f4f6;color:var(--ink3)'}">${live?'🔔 표시 중':'기간 종료'}</span>
+          <span style="font-size:11px;color:var(--ink3);font-weight:500;margin-left:6px">${NOTICE_GRADE_LABEL[String(n.grade||'all')]||'전체 학년'} · ${n.until||'기한 없음'}까지</span>
+        </div>
+        <div style="font-size:13px;color:var(--ink2);white-space:pre-wrap;margin-top:4px">${escapeAttr(n.body||'')}</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:4px">${String(n.createdAt||'').slice(0,16).replace('T',' ')} · ${escapeAttr(n.createdBy||'')}</div>
+      </div>
+      ${ro?'':`<button class="btn-sm" onclick="deleteNotice('${escapeAttr(n.id)}')" style="color:#b91c1c;flex-shrink:0">🗑 지우기</button>`}
+    </div>`;
+  });
+  h+=`</div>`;
+  content.innerHTML=h;
+}
+window.sendNotice=async function(){
+  if(scopedTeacher){ alert('공지는 기본 교사만 보낼 수 있습니다.'); return; }
+  const title=(document.getElementById('ntc-title')?.value||'').trim();
+  const body=(document.getElementById('ntc-body')?.value||'').trim();
+  const grade=document.getElementById('ntc-grade')?.value||'all';
+  const until=document.getElementById('ntc-until')?.value||'';
+  if(!title){ alert('제목을 입력하세요.'); return; }
+  if(!body){ alert('내용을 입력하세요.'); return; }
+  if(!until){ alert('표시 종료일을 정하세요.'); return; }
+  if(until<_todayISO()){ alert('표시 종료일이 이미 지났습니다.'); return; }
+  const who=NOTICE_GRADE_LABEL[grade]||'전체 학년';
+  if(!confirm(`${who} 학생들의 종 🔔 에 지금 바로 뜹니다.\n\n제목: ${title}\n표시 종료: ${until}\n\n보낼까요?`)) return;
+  const msg=document.getElementById('ntc-msg'); if(msg) msg.textContent='보내는 중…';
+  try{
+    await loadNoticeConfig();   // 다른 교사가 그 사이 올린 것을 덮어쓰지 않도록 최신 배열 위에 더한다
+    const item={ id:'t-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),
+      title, body, grade, until, createdAt:new Date().toISOString(), createdBy:tUser.email };
+    const items=[...noticeConfig.items, item];
+    await setDoc(doc(db,"config","notices"),{ items, updatedAt:item.createdAt },{ merge:true });
+    noticeConfig.items=items;
+    renderNotices();
+  }catch(e){ console.error('[sendNotice]',e); alert('보내기 실패: '+e.message+'\n(firestore.rules 에 config/notices 쓰기 규칙이 게시돼 있는지 확인)'); if(msg) msg.textContent=''; }
+};
+window.deleteNotice=async function(id){
+  if(scopedTeacher) return;
+  const n=(noticeConfig?.items||[]).find(x=>x.id===id); if(!n) return;
+  if(!confirm(`「${n.title}」 공지를 지울까요? 학생 화면에서 바로 사라집니다.`)) return;
+  try{
+    await loadNoticeConfig();
+    const items=noticeConfig.items.filter(x=>x.id!==id);
+    await setDoc(doc(db,"config","notices"),{ items, updatedAt:new Date().toISOString() },{ merge:true });
+    noticeConfig.items=items;
+    renderNotices();
+  }catch(e){ alert('지우기 실패: '+e.message); }
 };
 
 /* 학생 상세 화면: 그 학생이 받은 시험 대비 AI 진단 결과 (records/{email}/exam_ai/*) — 있을 때만 표시 */

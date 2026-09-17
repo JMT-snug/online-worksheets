@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.87">
+  <meta name="app-version" content="8.88">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1278,7 +1278,7 @@ document.getElementById("btn-login").addEventListener("click", async () => {
   try { await signInWithPopup(auth, p); }
   catch(e) { alert("로그인 오류: " + e.message); }
 });
-document.getElementById("btn-logout").addEventListener("click", () => { try{ sessionStorage.removeItem('dashGrade'); }catch(e){} signOut(auth); });
+document.getElementById("btn-logout").addEventListener("click", () => { try{ sessionStorage.removeItem('dashGrade'); }catch(e){} try{ stopRemoteNotices(); }catch(e){} signOut(auth); });
 
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1401,6 +1401,7 @@ onAuthStateChanged(auth, async u => {
   try{ updateHeader(u); }catch(e){ console.warn('[헤더 렌더 실패]', e); }
   try{ await loadCurriculum(); }catch(e){ console.error('[커리큘럼 로드 실패]', e); }
   try{ await loadExamConfig(); }catch(e){ console.warn('[시험 설정 로드 실패]', e); }   // 📝 시험 대비 (v8.78)
+  try{ watchRemoteNotices(); }catch(e){ console.warn('[교사 공지 구독 실패]', e); }   // 📢 교사가 보내는 공지 (v8.88)
   try{ await loadTeacherData(); }catch(e){ console.warn('[교사 데이터 로드 실패]', e); }
   try{
     await loadDash();
@@ -1893,6 +1894,33 @@ const NOTICES=[
    title:'알림을 하나씩 정리할 수 있어요',
    body:'알림 오른쪽 ✓ 를 한 번 누르면 「확인함」이 되어 회색으로 바뀌고, 한 번 더 누르면 그 알림이 지워집니다. 한꺼번에 지우려면 맨 아래 [모두 읽음 표시]를 누르세요.'},
 ];
+/* ── 📢 교사가 보내는 공지 (v8.88) ──
+   teacher.html 「📢 학생 공지」에서 Firestore config/notices 에 저장한다:
+     { items:[ {id, title, body, until, grade:'all'|'1'|'2'|'3', createdAt, createdBy} ] }
+   위 NOTICES(코드에 박은 공지)와 같은 모양으로 종 목록에 섞여 뜨고, 읽음 처리도 같다.
+   문서를 구독하므로 교사가 올리면 학생이 새로고침하지 않아도 종 배지가 바로 켜진다.
+   대상 학년은 curGrade(학년 자동 판정)로 거른다 — 판정 전이거나 교사(0=전체)면 다 보여 준다. */
+let REMOTE_NOTICES=[];
+let _noticesUnsub=null;
+function watchRemoteNotices(){
+  if(_noticesUnsub) return;
+  try{
+    _noticesUnsub=onSnapshot(doc(db,'config','notices'), snap=>{
+      REMOTE_NOTICES=(snap.exists()&&Array.isArray(snap.data().items))?snap.data().items:[];
+      try{ refreshGradeNotif(); }catch(e){}   // 아직 대시보드 준비 전이면 조용히 넘어간다 (loadDash 가 다시 그린다)
+    }, err=>console.warn('[config/notices 구독 실패]', err.message));
+  }catch(e){ console.warn('[config/notices]', e); }
+}
+function stopRemoteNotices(){ if(_noticesUnsub){ try{_noticesUnsub();}catch(e){} _noticesUnsub=null; } REMOTE_NOTICES=[]; }
+function remoteNoticesForMe(){
+  return REMOTE_NOTICES.filter(n=>{
+    if(!n||!n.id||!n.title) return false;
+    const g=String(n.grade||'all');
+    if(g==='all') return true;
+    if(curGrade===null||curGrade===0) return true;
+    return String(curGrade)===g;
+  }).map(n=>({id:String(n.id), title:String(n.title), body:String(n.body||''), until:n.until||''}));
+}
 function _todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 /* 공지의 '확인함/읽음'은 채점 알림과 따로 저장한다 ({id: 'dim'|'seen'}) */
 function _noticeStateKey(){return 'noticeState::'+((user&&user.email)||'');}
@@ -1908,7 +1936,9 @@ function activeNotices(){
     body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
          (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
          (ex.aiLimit>0&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
-  return [...examN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
+  // 순서: 시험 공지 → 교사가 보낸 공지(최근 것이 위) → 코드에 박은 공지
+  const remoteN=remoteNoticesForMe().slice().reverse();
+  return [...examN, ...remoteN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')
                 .map(n=>({...n, dim:st[n.id]==='dim'}));
 }
 /* 공지도 모두 읽음 처리 (「모두 읽음 표시」에서 함께 부른다) */

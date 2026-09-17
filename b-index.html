@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.83">
+  <meta name="app-version" content="8.84">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2854,11 +2854,29 @@ const mathVars = s => s;
 */
 /* 수식 구분자(\(...\)·\[...\]·$$...$$·$...$) 안에서만 backtick(`)을 반칸 공백(\,, 1/6em)으로 바꾼다.
    구분자 밖(일반 한글 문장 등)의 backtick은 MathJax가 안 보는 영역이라 건드리지 않는다 —
-   건드리면 렌더 안 된 "\," 글자가 그대로 찍힌다. */
+   건드리면 렌더 안 된 "\," 글자가 그대로 찍힌다.
+
+   v8.84: 인라인 수식(\(...\)·$...$)은 양끝에 반칸 공백을 **자동으로** 넣는다 —
+   한글 문장에 수식이 딱 붙어 보이는 걸 교사가 매번 backtick 으로 띄우던 것을 대신한다.
+   그리는 순간에만 넣으므로 저장된 문항은 그대로이고, 이미 만든 문항에도 곧바로 적용된다.
+   · 블록 수식(\[...\]·$$...$$)은 줄 가운데 오므로 양끝 공백이 의미 없어 건드리지 않는다
+   · 교사가 이미 backtick 이나 \, 를 양끝에 넣어 둔 수식에는 겹쳐 넣지 않는다 (두 번 돌려도 같다)
+   · 빈 수식 \(\) 은 그대로 둔다 */
 function _bqSpace(text){
-  if(!text || text.indexOf('`')===-1) return text;
-  return text.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g,
-    m => m.includes('`') ? m.replace(/`/g,'\\,') : m);
+  if(!text) return text;
+  const s=String(text);
+  if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
+  return s.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g, m=>{
+    const isBlock = m.startsWith('$$') || m.startsWith('\\[');
+    if(isBlock) return m.includes('`') ? m.replace(/`/g,'\\,') : m;
+    const inl = m.startsWith('\\(');
+    const open = inl ? '\\(' : '$', close = inl ? '\\)' : '$';
+    let body = m.slice(open.length, m.length-close.length).replace(/`/g,'\\,');
+    if(!body.trim()) return m;
+    if(!/^\s*\\,/.test(body)) body = '\\,' + body;
+    if(!/\\,\s*$/.test(body)) body = body + '\\,';
+    return open + body + close;
+  });
 }
 /* 저장 형식 정규화(이중 백슬래시 → 단일) + backtick(`) → 반칸 공백.
    fracText 를 타지 않는 렌더 경로(예: multi 문제 본문)도 같은 처리를 받게 하려고 따로 뺐다 —

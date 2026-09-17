@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.31">
+<meta name="app-version" content="edit-v3.32">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1686,11 +1686,24 @@ function renderAltList(){
 window.renderAltList = renderAltList;
 
 /* 수식 구분자(\(...\)·\[...\]·$$...$$·$...$) 안에서만 backtick(`)을 반칸 공백(\,, 1/6em)으로 바꾼다.
-   index.html의 fracText와 같은 규칙 — 편집기 미리보기도 학생 화면과 같게 보이도록 여기서도 적용한다. */
+   index.html의 _bqSpace 와 같은 규칙 — 편집기 미리보기도 학생 화면과 같게 보이도록 여기서도 적용한다.
+   v3.32: 인라인 수식 양끝에 반칸 공백을 자동으로 넣는다 (index v8.84 와 동일 — 자세한 설명은 그쪽 주석).
+   그리는 순간에만 넣으므로 저장되는 문항 텍스트는 바뀌지 않는다. */
 function _bqSpace(text){
-  if(!text || text.indexOf('`')===-1) return text;
-  return text.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g,
-    m => m.includes('`') ? m.replace(/`/g,'\\,') : m);
+  if(!text) return text;
+  const s=String(text);
+  if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
+  return s.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g, m=>{
+    const isBlock = m.startsWith('$$') || m.startsWith('\\[');
+    if(isBlock) return m.includes('`') ? m.replace(/`/g,'\\,') : m;
+    const inl = m.startsWith('\\(');
+    const open = inl ? '\\(' : '$', close = inl ? '\\)' : '$';
+    let body = m.slice(open.length, m.length-close.length).replace(/`/g,'\\,');
+    if(!body.trim()) return m;
+    if(!/^\s*\\,/.test(body)) body = '\\,' + body;
+    if(!/\\,\s*$/.test(body)) body = body + '\\,';
+    return open + body + close;
+  });
 }
 
 // ── LaTeX 미리보기 ──

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.32">
+<meta name="app-version" content="edit-v3.33">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1693,7 +1693,9 @@ function _bqSpace(text){
   if(!text) return text;
   const s=String(text);
   if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
-  return s.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g, m=>{
+  /* 첫 갈래 \\\$ 는 이스케이프한 달러(금액 표기 \$3)를 그대로 돌려준다 — index 와 같은 이유 */
+  return s.replace(/\\\$|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^$\\\n])*?\$/g, m=>{
+    if(m==='\\$') return m;
     const isBlock = m.startsWith('$$') || m.startsWith('\\[');
     if(isBlock) return m.includes('`') ? m.replace(/`/g,'\\,') : m;
     const inl = m.startsWith('\\(');

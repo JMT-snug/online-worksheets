@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.84">
+  <meta name="app-version" content="8.85">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2866,7 +2866,11 @@ function _bqSpace(text){
   if(!text) return text;
   const s=String(text);
   if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
-  return s.replace(/\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]*?\$/g, m=>{
+  /* 첫 갈래 \\\$ 는 이스케이프한 달러(금액 표기 \$3)를 통째로 집어 그대로 돌려준다 —
+     이걸 안 하면 "\$3 이고 \$5" 의 두 달러 사이가 수식으로 잡혀 \, 글자가 그대로 찍힌다(v8.84 에서 실제로 났다).
+     $...$ 갈래 안에서도 \$ 는 건너뛴다. (lookbehind 는 옛 Safari 에서 파싱 자체가 죽으므로 쓰지 않는다) */
+  return s.replace(/\\\$|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^$\\\n])*?\$/g, m=>{
+    if(m==='\\$') return m;
     const isBlock = m.startsWith('$$') || m.startsWith('\\[');
     if(isBlock) return m.includes('`') ? m.replace(/`/g,'\\,') : m;
     const inl = m.startsWith('\\(');

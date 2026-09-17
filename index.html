@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.86">
+  <meta name="app-version" content="8.87">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1880,6 +1880,9 @@ function _escHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&am
         종 배지가 늘 켜져 있는 일이 없게 하려는 것. 지난 공지는 배열에서 지워도 된다
    id 는 한 번 정하면 바꾸지 않는다 — 학생이 '읽음' 처리한 기록의 열쇠다. */
 const NOTICES=[
+  {id:'n-2026-09-17-line-two-tap', until:'2026-10-17',
+   title:'작도의 📏 직선 그리는 법이 바뀌었어요',
+   body:'컴퍼스처럼 두 번 찍습니다. ① 첫 점을 콕 찍고 ② 둘째 점을 찍으면 두 점 사이에 선분이 그어져요. ②에서 손을 떼지 않고 끌면 그 직선을 따라 끈 만큼 길어집니다(앞으로도, 첫 점 뒤로도). 다 됐으면 [✓ 확인]을 누르세요.'},
   {id:'n-2026-09-09-bell-click', until:'2026-09-30',
    title:'알림을 누르면 그 문제로 바로 가요',
    body:'채점 알림을 누르면 해당 학습지가 열리면서 그 문항으로 곧장 이동합니다. 선생님 첨삭(✏️)과 피드백(💬)을 그 자리에서 바로 볼 수 있어요.'},
@@ -4384,8 +4387,8 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
         ${q.graphType==='construction' ? `
-        <button id="graph-line-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)">📏 직선</button>
-        <button id="graph-circle-btn" class="btn-back" style="font-size:12px">⭕ 컴퍼스</button>
+        <button id="graph-line-btn" class="btn-back" style="font-size:12px;background:var(--acc-lt);border-color:var(--accent);color:var(--accent)" title="두 번 찍습니다 — ① 첫 점, ② 둘째 점. ②에서 누른 채 끌면 그 직선을 따라 늘어납니다">📏 직선</button>
+        <button id="graph-circle-btn" class="btn-back" style="font-size:12px" title="두 번 찍습니다 — ① 중심, ② 누른 채 돌리면 호">⭕ 컴퍼스</button>
         <button id="graph-freepen-btn" class="btn-back" style="font-size:12px" title="직선·컴퍼스를 끄고 자유롭게 그립니다 — 점을 찍거나 점 이름을 쓸 때 씁니다">✏️ 펜(점·이름)</button>
         <button id="graph-radlock-btn" class="btn-back" style="font-size:12px" title="켜면 마지막에 확인한 원과 같은 반지름을 씁니다">🔓 반지름 고정 끔</button>
         <button id="graph-erase-btn" class="btn-back" style="font-size:12px">지우개</button>
@@ -4593,10 +4596,12 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   //  conPhase: 'idle'(컴퍼스 대기) | 'centerSet'(중심을 찍어 두고 반지름/각도 제스처를 기다림)
   //  conActiveGesture: 0(손 뗌) | 1(중심 찍는 중) | 2(반지름·스윕 중)
   let conPhase='idle', conActiveGesture=0;
-  let conStartX=0, conStartY=0;                 // 직선 시작점
-  /* 직선은 호와 같은 방식으로 '손이 지나간 가장 먼 두 지점' 사이를 긋는다.
-     방향은 시작점에서 가장 멀리 간 지점이 정하고(conLineDir), 그 반대쪽으로 되돌아가 지나간
-     거리(conLineBack)만큼 시작점 뒤로도 늘어난다 — 첫 점을 가운데 찍고 양쪽으로 그을 수 있다. */
+  let conStartX=0, conStartY=0;                 // 직선의 첫 점(A)
+  /* 직선은 컴퍼스처럼 두 번 찍는다 (v8.87).
+       ① 첫 클릭 = 점 A 고정(작은 점으로 표시)  ② 다음 클릭 = 점 B 고정, 선분 AB 를 바로 긋는다
+       ③ ②에서 손을 떼지 않고 끌면, 직선 AB 위로 정사영한 '가장 멀리 간 거리'만큼 선분이 연장된다
+          (B 쪽으로도, A 반대쪽으로도). 되돌린다고 줄지는 않는다 — 호와 같은 규칙.
+     conLineDir = A→B 단위 방향, conLineFar = A 에서 앞쪽 끝까지, conLineBack = A 에서 뒤쪽 끝까지. */
   let conLineDirX=0, conLineDirY=0, conLineFar=0, conLineBack=0;
   let conCenterX=0, conCenterY=0;                // 컴퍼스 중심
   let conGestureBase=null;                       // 전체 되돌리기 기준(중심 마커 찍기 전 / 직선 시작 전)
@@ -4728,6 +4733,7 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   window._graphConfirmPending = isConstruction ? confirmPending : (()=>{});
   window._graphHasPending = isConstruction ? (()=>!!conPending || conPhase!=='idle') : (()=>false);
   window._graphDiscardPending = isConstruction ? (()=>discardPending()) : (()=>{});
+  window._graphPendingForTest = ()=>conPending;   // 자동 검증(헤드리스 크롬)에서 미확정 획을 읽는 용도
   confirmBtn?.addEventListener('click',confirmPending);
 
   const drawPreviewLine=(x0,y0,x1,y1)=>{
@@ -4750,6 +4756,21 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
     ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.5;
     strokeXMark(cx,cy,6);
     ctx.restore();
+  };
+  /* 직선의 첫 점(A) 표시 — 컴퍼스 중심(×)과 구분되게 작은 회색 점. [확인]하면 바탕째 사라진다 */
+  const drawPointMark=(x,y)=>{
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([]); ctx.fillStyle='#6b7280';
+    ctx.beginPath(); ctx.arc(x,y,3.5,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  };
+  /* 직선 미리보기: A 에서 뒤로 conLineBack, 앞으로 conLineFar 만큼 — conPending 도 여기서 맞춘다 */
+  const redrawLinePreview=()=>{
+    if(!conSweepBase) return;
+    const x0=conStartX-conLineDirX*conLineBack, y0=conStartY-conLineDirY*conLineBack;
+    const x1=conStartX+conLineDirX*conLineFar,  y1=conStartY+conLineDirY*conLineFar;
+    ctx.putImageData(conSweepBase,0,0);
+    drawPreviewLine(x0,y0,x1,y1);
+    conPending={type:'line',x0,y0,x1,y1};
   };
   /* 반지름 고정이 켜져 있을 때, 중심을 찍자마자 '고정된 반지름'을 옅은 점선 원으로 보여 준다.
      버튼 글자만으로는 지금 어떤 길이로 잠겨 있는지 알 수 없어서, 눈으로 바로 확인하게 하는 표시다.
@@ -4818,11 +4839,25 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
         conPrevAngle=conStartAngle; conCumAngle=0; conMinAngle=0; conMaxAngle=0;
       }
     } else if(isConstruction && !graphEraser && graphConTool==='line'){
-      // 직선: 한 번의 드래그. 손이 지나간 가장 먼 두 지점 사이를 긋는다 (호와 같은 규칙)
-      if(conPending) discardPending();
-      conGestureBase=ctx.getImageData(0,0,W,H);
-      conStartX=lx; conStartY=ly;
-      conLineDirX=0; conLineDirY=0; conLineFar=0; conLineBack=0;
+      // 직선: ① 첫 클릭 = 점 A 고정, ② 다음 클릭 = 점 B 고정 + 선분 AB, ③ ②에서 끌면 연장 (컴퍼스와 같은 두 번 찍기)
+      if(conPhase==='idle'){
+        if(conPending) discardPending();
+        conActiveGesture=1;
+        conGestureBase=ctx.getImageData(0,0,W,H);
+        conStartX=lx; conStartY=ly;
+        drawPointMark(conStartX,conStartY);
+        conSweepBase=ctx.getImageData(0,0,W,H);      // A 표시까지 담은 바탕 — 끌 때마다 여기서 다시 그린다
+        conPhase='lineStart';
+        conLineDirX=0; conLineDirY=0; conLineFar=0; conLineBack=0;
+      } else {
+        const ddx=lx-conStartX, ddy=ly-conStartY, dist=Math.hypot(ddx,ddy);
+        if(dist<2) return;                            // A 와 같은 자리를 또 찍음 → 방향을 정할 수 없어 무시
+        conActiveGesture=2;
+        conLineDirX=ddx/dist; conLineDirY=ddy/dist;
+        conLineFar=dist; conLineBack=0;               // B 까지가 앞쪽 끝. 끌면 늘어난다
+        redrawLinePreview();
+        showConfirm(true);
+      }
     } else {
       // 펜(점·이름) / 지우개 / 일반 그래프: 자유 손그림 — [확인] 없이 그린 즉시 남는다
       graphUndoStack.push(ctx.getImageData(0,0,W,H));
@@ -4860,18 +4895,14 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
         showConfirm(true);
       }
     } else if(isConstruction && !graphEraser && graphConTool==='line'){
-      if(!conGestureBase) return;
-      const ddx=x-conStartX, ddy=y-conStartY, dist=Math.hypot(ddx,ddy);
-      if(dist>conLineFar){ conLineFar=dist; conLineDirX=ddx/dist; conLineDirY=ddy/dist; }   // 더 멀리 갔다 → 방향·앞쪽 끝 갱신
-      if(conLineFar<=0) return;
-      const proj=ddx*conLineDirX+ddy*conLineDirY;                                          // 시작점 기준 앞(+)·뒤(−) 거리
-      if(proj<0) conLineBack=Math.max(conLineBack,-proj);                                  // 되돌아가 지나간 만큼 뒤로도 늘린다
-      const x0=conStartX-conLineDirX*conLineBack, y0=conStartY-conLineDirY*conLineBack;
-      const x1=conStartX+conLineDirX*conLineFar,  y1=conStartY+conLineDirY*conLineFar;
-      ctx.putImageData(conGestureBase,0,0);
-      drawPreviewLine(x0,y0,x1,y1);
-      conPending={type:'line',x0,y0,x1,y1};
-      showConfirm(true);
+      if(conActiveGesture===1){ lx=x; ly=y; return; }   // A 를 찍는 제스처는 움직여도 무시 (누른 자리가 A)
+      if(conActiveGesture!==2 || !conSweepBase) return;
+      // B 를 누른 채 끌면: 직선 AB 위에 정사영한 거리의 최댓값만큼 앞·뒤로 연장한다 (되돌려도 줄지 않음)
+      const proj=(x-conStartX)*conLineDirX+(y-conStartY)*conLineDirY;
+      if(proj>conLineFar) conLineFar=proj;
+      else if(proj<0 && -proj>conLineBack) conLineBack=-proj;
+      else return;                                       // 늘어난 게 없으면 다시 그리지 않는다
+      redrawLinePreview();
     } else {
       ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
       freeMoved=true;
@@ -4892,7 +4923,7 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fill();
     }
     drawing=false; pid=null;
-    if(isConstruction && graphConTool==='circle') conActiveGesture=0;
+    if(isConstruction && (graphConTool==='circle' || graphConTool==='line')) conActiveGesture=0;
     // 작도 모드는 손을 떼도 미확정 상태 그대로 둔다 — [확인]을 눌러야 획으로 남는다
     // (컴퍼스는 중심을 찍은 상태(centerSet)도 유지 — 반지름 제스처를 기다린다)
     try{ canvas.releasePointerCapture(e.pointerId); }catch(_){}

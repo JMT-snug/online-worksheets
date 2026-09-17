@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.80">
+  <meta name="app-version" content="8.81">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1713,6 +1713,8 @@ async function runExamAI(ex){
   try{
     const res=await fetch(AI_WEBAPP_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ token:AI_WEBAPP_TOKEN, action:'analyzeExamPrep', examTitle:ex.title, grade:ex.grade,
+        // 교사 확인용 시트 기록에 쓰는 값 (v8.81) — 누가 몇 번째로 받았는지
+        examId:ex.id, studentEmail:user.email, studentName:user.displayName||'', useCount:((EXAM_AI_STATE[ex.id]?.count)||0)+1,
         dateRange:_mdStr(ex.start)+'~'+_mdStr(ex.end), worksheets:payload.worksheets, notStarted:payload.notStarted }) });
     const out=await res.json();
     if(!out||!out.ok) throw new Error(out?.error==='unknown action' ? 'AI 서버가 아직 준비되지 않았어요 (선생님께 알려 주세요)' : (out?.error||'서버 응답 오류'));

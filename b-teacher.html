@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.47">
+<meta name="app-version" content="3.48">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1338,6 +1338,42 @@ window._updateAIUnitSelVisibility=function(){
   if(sel) sel.style.display = scope==='unit' ? '' : 'none';
 };
 const AI_ANALYZE_SKIP_TYPES=new Set(['graph','link','pool_random']);
+/* ══════════ 🕳 예상 오답 경로 대조 (v3.48) ══════════
+   edit 의 🤖 AI 검토가 문항에 저장해 둔 `aiTraps:[{wrong,path,label}]` — "학생이 이렇게 틀릴 것 같다"는
+   예측과 그 오답이 나오는 경로 — 를 학생의 실제 오답과 맞춰 본다. 일치하면 hit:true 로 표시해 AI 에
+   함께 보내고(원인을 추측 대신 이 경로로 설명하게), 화면에는 우리가 직접 센 적중 횟수를 따로 보여 준다.
+   문항에 aiTraps 가 없으면 아무 일도 일어나지 않는다(예전과 동일). */
+/** 예상 오답·경로를 화면에 그릴 때 쓰는 escape — 답에 부등호(<)가 들어가면 태그로 읽혀 화면이 깨진다 */
+function _te(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/** 답 비교용 정규화 — 공백·쉼표 제거, 전각/유니코드 기호를 보통 기호로, 대소문자 무시.
+    느슨하게 맞추되 값 자체는 바꾸지 않는다(일치하면 ★, 아니면 그냥 참고용으로만 넘어간다). */
+function _trapNorm(v){
+  return String(v??'').trim().toLowerCase()
+    .replace(/\s+|,/g,'')
+    .replace(/[−–—]/g,'-').replace(/[×✕]/g,'*').replace(/[÷]/g,'/')
+    .replace(/[≤]/g,'<=').replace(/[≥]/g,'>=')
+    .replace(/^\+/,'');
+}
+/** 이 문항의 예상 오답 목록 + 학생 답과 일치하는지 (최대 3개) */
+function _trapsFor(q, studentAns){
+  const list=(q.aiTraps||[]).slice(0,3);
+  if(!list.length) return [];
+  const sa=_trapNorm(studentAns);
+  return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),
+    hit: sa!=='' && _trapNorm(t.wrong)===sa }));
+}
+/** 적중한 경로를 이름(label)별로 묶어 센다 — 화면 표시용. [{label, path, count, answers:[...]}] */
+function _countTrapHits(worksheets){
+  const map=new Map();
+  worksheets.forEach(w=>(w.wrongItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{
+    if(!t.hit) return;
+    const key=t.label||t.path;
+    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0, answers:[]};
+    cur.count++; if(cur.answers.length<5) cur.answers.push(t.wrong);
+    map.set(key,cur);
+  })));
+  return [...map.values()].sort((a,b)=>b.count-a.count);
+}
 window.analyzeStudentWithAI=async function(uid){
   const scope=document.getElementById('ai-scope-sel')?.value||'all';
   const unitId=document.getElementById('ai-unit-sel')?.value||'';
@@ -1361,13 +1397,16 @@ window.analyzeStudentWithAI=async function(uid){
       const correctAns=q.type==='multi'
         ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
         : q.answer;
+      const traps=_trapsFor(q, studentAns);
       wrongItems.push({
         qText:(q.text||'').replace(/<br\s*\/?>/gi,'\n').slice(0,300),
         correctAnswer:String(correctAns??''), studentAnswer:String(studentAns),
+        ...(traps.length?{traps}:{}),
       });
     });
     return { title: ws.title||'', correctRate: rate, wrongItems };
   });
+  const pathHits=_countTrapHits(worksheets);   // 예상 오답 경로별 적중 횟수 (AI 없이 우리가 센 값)
 
   const any=Object.values(wsMap).find(r=>r.studentName)||{};
   const unitTitle = scope==='unit' ? (UNIT_MAP[unitId]?.title||'') : '';
@@ -1382,6 +1421,18 @@ window.analyzeStudentWithAI=async function(uid){
     if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
     const a=out.analysis||{};
     const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${s}</li>`).join('')}</ul>`:'';
+    /* 🕳 예상 오답 경로와 일치한 것 — AI 가 아니라 우리가 직접 센 값이라 확실하다.
+       (AI 는 이 ★ 표시를 근거로 위의 반복되는 오류·지도 제안을 쓴다) */
+    const trapTotal=worksheets.reduce((n,w)=>n+(w.wrongItems||[]).filter(it=>(it.traps||[]).length).length,0);
+    const hitHtml=pathHits.length
+      ? `<div style="margin-bottom:10px"><b>🕳 예상 오답 경로와 일치</b>
+          <span style="font-size:11px;color:var(--ink3)">(출제자가 edit 의 🤖 AI 검토로 미리 적어 둔 경로 — 이 학생의 오답이 실제로 걸린 것)</span>
+          <ul style="margin:4px 0 0 18px;padding:0">${pathHits.map(h=>`<li style="margin-bottom:3px">
+            <b>${_te(h.label)}</b> <span style="color:#b91c1c">${h.count}회</span>
+            <span style="display:block;font-size:12px;color:var(--ink3)">${_te(h.path)} · 적어 낸 답: ${h.answers.map(_te).join(', ')}</span></li>`).join('')}</ul></div>`
+      : (trapTotal
+        ? `<div style="margin-bottom:10px;font-size:12px;color:var(--ink3)">🕳 예상 오답 경로가 있는 오답 ${trapTotal}개를 대조했지만 일치한 것은 없습니다 — 예상과 다른 이유로 틀렸을 수 있습니다.</div>`
+        : '');
     resultEl.innerHTML=`
       <div class="card" style="margin-top:0;border-color:#c4b5fd;background:#faf5ff">
         <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">🤖 AI 학습 분석 (${scope==='unit'?unitTitle:'전체 학습'} 기준) — 참고용입니다, 최종 판단은 선생님이 해주세요.</div>
@@ -1389,6 +1440,7 @@ window.analyzeStudentWithAI=async function(uid){
         ${a.strengths?.length?`<div style="margin-bottom:10px"><b>👍 강점</b>${list(a.strengths)}</div>`:''}
         ${a.weaknesses?.length?`<div style="margin-bottom:10px"><b>⚠️ 약점</b>${list(a.weaknesses)}</div>`:''}
         ${a.commonMistakes?.length?`<div style="margin-bottom:10px"><b>🔁 반복되는 오류</b>${list(a.commonMistakes)}</div>`:''}
+        ${hitHtml}
         ${a.suggestion?`<div><b>💡 다음 지도 제안</b><div style="margin-top:4px">${a.suggestion}</div></div>`:''}
       </div>`;
   }catch(e){

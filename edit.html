@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.35">
+<meta name="app-version" content="edit-v3.36">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -2972,7 +2972,7 @@ window.reviewWorksheetWithAI = async function(){
           ${al.dropped?'다시 검토하면 나올 수 있습니다.':''}</div>`
       : '';
     body.innerHTML = alignNote + `<div style="font-weight:700;margin-bottom:8px">⚠️ 문항 점검 ${findings.length?`(${findings.length}건)`:''}</div>${findHtml}`
-      + _aiTrapSection(traps, qs);
+      + _aiTrapSection(traps, qs, out.coverage);
   }catch(e){
     body.innerHTML = '❌ 검토 실패: '+e.message;
   }
@@ -2985,15 +2985,23 @@ window.reviewWorksheetWithAI = async function(){
 let _aiTrapsPending = [];          // 지금 검토 결과의 예상 오답 (저장 전)
 const AI_TRAP_MAX_PER_Q = 3;       // 한 문항에 저장하는 최대 개수
 function _esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _aiTrapSection(traps, qs){
+function _aiTrapSection(traps, qs, coverage){
   _aiTrapsPending = traps;
   const saved = (currentWs?.questions||[]).reduce((n,q)=>n+((q.aiTraps||[]).length),0);
   const savedLine = saved
     ? `<div style="font-size:12px;color:var(--ink3);margin-bottom:6px">지금 이 학습지에 저장된 예상 오답 ${saved}개 — 저장하면 이번 결과로 바뀝니다.
          <button class="btn-modal-cancel" style="padding:2px 8px;font-size:11px" onclick="clearAITraps()">🗑 저장된 것 지우기</button></div>`
     : '';
+  /* 얼마나 고르게 나왔는지 (v3.36) — 서버가 문항마다 세어 보낸다. 빠진 문항이 있으면 번호를 보여 줘서
+     "다시 검토"할지 판단할 수 있게 한다 (모델 출력은 매번 조금씩 달라서 한 번 더 돌리면 채워지기도 한다) */
+  const cv = coverage || { questions: qs.length, withTraps: new Set(traps.map(t=>t.idx)).size, traps: traps.length,
+                           missing: qs.map(q=>q.idx).filter(i=>!traps.some(t=>t.idx===i)) };
+  const missing = (cv.missing||[]).map(i=>(i+1)+'번').join('·');
+  const coverLine = `<div style="font-size:12px;color:${cv.withTraps<cv.questions?'#b45309':'var(--ink3)'};margin-bottom:6px">
+      문항 ${cv.questions}개 중 <b>${cv.withTraps}개</b>에 예상 오답 (총 ${cv.traps}개${cv.questions?`, 문항당 평균 ${(cv.traps/cv.questions).toFixed(1)}개`:''})${missing?` · 없는 문항: ${missing}`:''}
+      ${cv.withTraps<cv.questions?' — 정답이 정해지지 않았거나 AI가 오답을 못 떠올린 문항입니다. 다시 검토하면 채워지기도 합니다.':''}</div>`;
   if(!traps.length)
-    return `<div style="font-weight:700;margin:14px 0 8px">🕳 예상 오답과 오답 경로</div>${savedLine}
+    return `<div style="font-weight:700;margin:14px 0 8px">🕳 예상 오답과 오답 경로</div>${savedLine}${coverLine}
       <div style="font-size:13px;color:var(--ink3)">AI가 예측한 오답이 없습니다 (정답이 정해지지 않은 문항만 있거나, AI가 확신하지 못한 경우입니다).</div>`;
   // 문항 순서대로 묶기
   const byIdx = new Map();
@@ -3015,7 +3023,7 @@ function _aiTrapSection(traps, qs){
       ${rows}</div>`;
   }).join('');
   return `<div style="font-weight:700;margin:14px 0 8px">🕳 예상 오답과 오답 경로 (${traps.length}개)</div>
-    ${savedLine}
+    ${savedLine}${coverLine}
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">학생이 이렇게 틀릴 것 같다는 AI 예측입니다. <b>맞다고 보는 것만 남기고 저장</b>하면,
       그 뒤 teacher 의 🤖 AI 학습 분석이 학생의 실제 오답과 대조해 원인을 짚어 줍니다.</div>
     ${blocks}

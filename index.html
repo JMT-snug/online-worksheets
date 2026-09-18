@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.92">
+  <meta name="app-version" content="8.93">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1679,7 +1679,7 @@ function _trapNorm(v){
     .replace(/^\+/,'');
 }
 function _trapsFor(q, studentAns){
-  const list=(q.aiTraps||[]).slice(0,3);
+  const list=(q.aiTraps||[]).slice(0,5);   // edit 의 AI_TRAP_MAX_PER_Q 와 같게 (검토를 거듭하면 쌓이므로 3 → 5, v8.93)
   if(!list.length) return [];
   const sa=_trapNorm(studentAns);
   return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),

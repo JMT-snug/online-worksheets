@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.48">
+<meta name="app-version" content="3.49">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1356,7 +1356,7 @@ function _trapNorm(v){
 }
 /** 이 문항의 예상 오답 목록 + 학생 답과 일치하는지 (최대 3개) */
 function _trapsFor(q, studentAns){
-  const list=(q.aiTraps||[]).slice(0,3);
+  const list=(q.aiTraps||[]).slice(0,5);   // edit 의 AI_TRAP_MAX_PER_Q 와 같게 (검토를 거듭하면 쌓이므로 3 → 5, v3.49)
   if(!list.length) return [];
   const sa=_trapNorm(studentAns);
   return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),

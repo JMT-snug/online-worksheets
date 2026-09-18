@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.34">
+<meta name="app-version" content="edit-v3.35">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -2962,7 +2962,16 @@ window.reviewWorksheetWithAI = async function(){
       </div>`;
     }).join('') : '<div style="font-size:13px;color:var(--ink3);margin-bottom:8px">✅ AI가 특별히 짚은 문제가 없습니다.</div>';
 
-    body.innerHTML = `<div style="font-weight:700;margin-bottom:8px">⚠️ 문항 점검 ${findings.length?`(${findings.length}건)`:''}</div>${findHtml}`
+    /* 문항 번호 검증 결과 (Apps Script 가 문제 본문으로 대조한다) — 엉뚱한 문항에 붙는 것보다
+       빠지는 게 나아서 못 찾은 것은 버린다. 버린 게 있으면 교사에게 알린다. */
+    const al = out.align || {};
+    const alignNote = (al.fixed || al.dropped)
+      ? `<div style="font-size:12px;color:#b45309;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+          ⚠️ AI가 가리킨 문항 번호를 문제 내용과 대조했습니다 —
+          ${al.fixed?`${al.fixed}건은 번호를 바로잡았고 `:''}${al.dropped?`${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`:''}.
+          ${al.dropped?'다시 검토하면 나올 수 있습니다.':''}</div>`
+      : '';
+    body.innerHTML = alignNote + `<div style="font-weight:700;margin-bottom:8px">⚠️ 문항 점검 ${findings.length?`(${findings.length}건)`:''}</div>${findHtml}`
       + _aiTrapSection(traps, qs);
   }catch(e){
     body.innerHTML = '❌ 검토 실패: '+e.message;

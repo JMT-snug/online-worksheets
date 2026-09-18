@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.89">
+  <meta name="app-version" content="8.90">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1667,6 +1667,35 @@ function renderExamBanner(){
   }));
 }
 const EXAM_AI_SKIP_TYPES=new Set(['graph','link','pool_random']);   // teacher 의 AI_ANALYZE_SKIP_TYPES 와 같다
+/* 🕳 예상 오답 경로 (v8.90) — edit 의 🤖 AI 검토가 문항에 저장해 둔 `aiTraps:[{wrong,path,label}]` 를
+   내 오답과 맞춰 본다. 일치하면 hit:true 로 표시해 AI 에 함께 보내서, "왜 틀렸는지"를 추측이 아니라
+   선생님이 문제를 낼 때 적어 둔 경로로 설명하게 한다. teacher v3.48 의 _trapNorm/_trapsFor 와 같은 규칙.
+   문항에 aiTraps 가 없으면 아무 일도 일어나지 않는다(예전과 동일). */
+function _trapNorm(v){
+  return String(v??'').trim().toLowerCase()
+    .replace(/\s+|,/g,'')
+    .replace(/[−–—]/g,'-').replace(/[×✕]/g,'*').replace(/[÷]/g,'/')
+    .replace(/[≤]/g,'<=').replace(/[≥]/g,'>=')
+    .replace(/^\+/,'');
+}
+function _trapsFor(q, studentAns){
+  const list=(q.aiTraps||[]).slice(0,3);
+  if(!list.length) return [];
+  const sa=_trapNorm(studentAns);
+  return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),
+    hit: sa!=='' && _trapNorm(t.wrong)===sa }));
+}
+/** 걸린 경로를 이름별로 묶어 센다 (화면 표시용 — AI 가 아니라 우리가 센 값) */
+function _countTrapHits(worksheets){
+  const map=new Map();
+  (worksheets||[]).forEach(w=>(w.wrongItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{
+    if(!t.hit) return;
+    const key=t.label||t.path;
+    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0};
+    cur.count++; map.set(key,cur);
+  })));
+  return [...map.values()].sort((a,b)=>b.count-a.count);
+}
 /* 보낼 자료 만들기 — 범위 학습지별 정답률·틀린 문항(문제·정답·내 답), 아직 안 푼 학습지 */
 function buildExamAIPayload(ex){
   const worksheets=[], notStarted=[];
@@ -1690,8 +1719,10 @@ function buildExamAIPayload(ex){
       const correctAns=q.type==='multi'
         ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
         : q.answer;
+      const traps=_trapsFor(q, studentAns);
       wrongItems.push({ qText:String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,300),
-        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns) });
+        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns),
+        ...(traps.length?{traps}:{}) });
     });
     worksheets.push({ title:ws.title||'', unitTitle, done:!!r.isComplete, correctRate:rate, wrongItems });
   }
@@ -1719,7 +1750,9 @@ async function runExamAI(ex){
         dateRange:_mdStr(ex.start)+'~'+_mdStr(ex.end), worksheets:payload.worksheets, notStarted:payload.notStarted }) });
     const out=await res.json();
     if(!out||!out.ok) throw new Error(out?.error==='unknown action' ? 'AI 서버가 아직 준비되지 않았어요 (선생님께 알려 주세요)' : (out?.error||'서버 응답 오류'));
-    const entry={ at:new Date().toISOString(), analysis:out.analysis||{} };
+    // 걸린 오답 경로는 AI 말고 우리가 직접 센다 — 지난 진단을 다시 열 때도 보이도록 결과와 함께 저장 (v8.90)
+    const hits=_countTrapHits(payload.worksheets).slice(0,5);
+    const entry={ at:new Date().toISOString(), analysis:out.analysis||{}, ...(hits.length?{hits}:{}) };
     const st=EXAM_AI_STATE[ex.id]||{count:0,results:[]};
     st.count=(st.count||0)+1; st.results=[...(st.results||[]), entry].slice(-5); EXAM_AI_STATE[ex.id]=st;
     try{
@@ -1797,6 +1830,8 @@ function showExamAIResult(ex, entry, isPrev, plain){
     ${a.strengths?.length?`<div class="em-sec"><b>👍 잘하고 있는 것</b>${list(a.strengths)}</div>`:''}
     ${a.weaknesses?.length?`<div class="em-sec"><b>⚠️ 보완할 것</b>${list(a.weaknesses)}</div>`:''}
     ${a.commonMistakes?.length?`<div class="em-sec"><b>🔁 반복되는 실수</b>${list(a.commonMistakes)}</div>`:''}
+    ${entry.hits?.length?`<div class="em-sec"><b>🕳 이런 실수에 자주 걸렸어요</b>
+      <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <b>${h.count}번</b><span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
     ${a.studyPlan?.length?`<div class="em-sec"><b>📚 시험 전 공부 순서</b>${list(a.studyPlan)}</div>`:''}
     ${close}`;
   bg.classList.add('show');

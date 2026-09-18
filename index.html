@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.90">
+  <meta name="app-version" content="8.91">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1750,16 +1750,26 @@ async function runExamAI(ex){
         dateRange:_mdStr(ex.start)+'~'+_mdStr(ex.end), worksheets:payload.worksheets, notStarted:payload.notStarted }) });
     const out=await res.json();
     if(!out||!out.ok) throw new Error(out?.error==='unknown action' ? 'AI 서버가 아직 준비되지 않았어요 (선생님께 알려 주세요)' : (out?.error||'서버 응답 오류'));
+    // 형식만 맞고 알맹이가 빈 결과는 진단을 받은 게 아니다 — 실패로 보내 횟수를 쓰지 않는다 (v8.91)
+    if(!examAnalysisHasContent(out.analysis)) throw new Error('AI가 빈 진단을 돌려줬어요 (잠시 후 다시 시도해 주세요)');
     // 걸린 오답 경로는 AI 말고 우리가 직접 센다 — 지난 진단을 다시 열 때도 보이도록 결과와 함께 저장 (v8.90)
     const hits=_countTrapHits(payload.worksheets).slice(0,5);
     const entry={ at:new Date().toISOString(), analysis:out.analysis||{}, ...(hits.length?{hits}:{}) };
     const st=EXAM_AI_STATE[ex.id]||{count:0,results:[]};
     st.count=(st.count||0)+1; st.results=[...(st.results||[]), entry].slice(-5); EXAM_AI_STATE[ex.id]=st;
-    try{
-      await setDoc(doc(db,'records',user.email,'exam_ai',ex.id),
-        { examId:ex.id, examTitle:ex.title, grade:ex.grade, count:st.count, results:st.results, lastAt:entry.at, studentEmail:user.email }, { merge:true });
-    }catch(e){ console.warn('[exam_ai 저장 실패]', e.message); }
-    showExamAIResult(ex, entry, false);
+    // 횟수는 여기 저장돼야 진짜로 깎인다(기기·새로고침 무관) — 한 번 실패하면 잠깐 뒤 다시 시도한다
+    let saved=false;
+    for(let i=0;i<2 && !saved;i++){
+      try{
+        await setDoc(doc(db,'records',user.email,'exam_ai',ex.id),
+          { examId:ex.id, examTitle:ex.title, grade:ex.grade, count:st.count, results:st.results, lastAt:entry.at, studentEmail:user.email }, { merge:true });
+        saved=true;
+      }catch(e){
+        console.warn('[exam_ai 저장 실패'+(i?' (재시도)':'')+']', e.message);
+        if(!i) await new Promise(r=>setTimeout(r,800));
+      }
+    }
+    showExamAIResult(ex, entry, false, '', saved?'':'⚠️ 진단은 나왔지만 사용 기록을 저장하지 못했어요 — 새로고침하면 이 진단이 안 보일 수 있어요.');
     renderExamBanner();
   }catch(e){
     // 실패는 횟수를 쓰지 않는다(count 그대로). 학생이 따로 신고하지 않아도 🚨 오류 신고 경로로 자동 접수한다 (v8.89)
@@ -1817,7 +1827,15 @@ async function autoReportExamAIFail(ex, err, payload){
   if(!ok){ try{ localStorage.removeItem(key); }catch(e){} }   // 아무 데도 못 남겼으면 다음 시도 때 다시 보내게
   return ok?'sent':'fail';
 }
-function showExamAIResult(ex, entry, isPrev, plain){
+/* 진단에 알맹이가 있는가 (v8.91) — 스키마만 맞고 값이 전부 빈 결과에 횟수를 쓰지 않으려고 본다.
+   Apps Script 쪽에서도 같은 판정(hasContent_)을 하지만, 옛 버전이 배포돼 있어도 막히도록 여기서도 본다. */
+function examAnalysisHasContent(a){
+  if(!a || typeof a!=='object') return false;
+  if(String(a.summary||'').trim()) return true;
+  return ['weaknesses','studyPlan','strengths','commonMistakes']
+    .some(k=>Array.isArray(a[k]) && a[k].some(s=>String(s??'').trim()));
+}
+function showExamAIResult(ex, entry, isPrev, plain, warn){
   const bg=document.getElementById('exam-modal'), body=document.getElementById('exam-modal-body'); if(!bg||!body) return;
   const close='<button type="button" class="em-close" onclick="document.getElementById(\'exam-modal\').classList.remove(\'show\')">닫기</button>';
   if(plain){ body.innerHTML=`<h3>🤖 AI 학습 진단</h3><div class="em-sec">${escHtml(plain).replace(/\n/g,'<br>')}</div>${close}`; bg.classList.add('show'); return; }
@@ -1833,6 +1851,7 @@ function showExamAIResult(ex, entry, isPrev, plain){
     ${entry.hits?.length?`<div class="em-sec"><b>🕳 이런 실수에 자주 걸렸어요</b>
       <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <b>${h.count}번</b><span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
     ${a.studyPlan?.length?`<div class="em-sec"><b>📚 시험 전 공부 순서</b>${list(a.studyPlan)}</div>`:''}
+    ${warn?`<div class="em-sec" style="color:#b45309;font-size:13px">${escHtml(warn)}</div>`:''}
     ${close}`;
   bg.classList.add('show');
 }

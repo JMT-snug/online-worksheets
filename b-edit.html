@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.37">
+<meta name="app-version" content="edit-v3.38">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -2938,9 +2938,9 @@ function _reviewQuestions(){
      aiReview = { at, count, findings:[{idx,severity,issue}], traps:[{idx,wrong,path,label,on,at}], coverage }
    · findings(오류 점검)는 **마지막 검토 것만** 남기고, traps(예상 오답)는 **검토를 거듭해도 쌓인다**
      (같은 문항·같은 오답은 한 번만). 교사가 체크를 풀면 `on:false` 로 남겨 두어 다음 검토에서 다시 올라오지 않는다.
-   · 문항의 `aiTraps`(teacher·index 의 분석이 쓰는 것)는 이 기록에서 `on` 인 것만 골라 문항당 AI_TRAP_MAX_PER_Q 개까지 만든다.
+   · 문항의 `aiTraps`(teacher·index 의 분석이 쓰는 것)는 이 기록에서 `on` 인 것을 전부 모아 만든다 — 개수 상한은 없다
+     (v3.38: 분석 프롬프트가 일치한 것(★)만 자세히 보내므로 많아도 비대해지지 않는다. 같은 오답은 한 번만 들어가 무한정 쌓이지도 않는다).
    · v3.34~36 에서 저장한 예상 오답(aiTraps 만 있고 aiReview 가 없는 학습지)은 처음 열 때 기록으로 옮겨 온다. */
-const AI_TRAP_MAX_PER_Q = 5;       // 문항당 분석에 쓰는 최대 개수 (검토를 거듭하면 쌓이므로 3 → 5)
 let _aiRec = null;                 // 지금 모달에 떠 있는 검토 기록
 let _aiSaveTimer = null;
 function _esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -3010,7 +3010,7 @@ async function _saveReview(rec){
   rec.traps.filter(t=>t.on).forEach(t=>{                       // 기록 순서 = 오래된 것 먼저 → 앞의 것이 우선
     if(!byIdx.has(t.idx)) byIdx.set(t.idx,[]);
     const l=byIdx.get(t.idx);
-    if(l.length<AI_TRAP_MAX_PER_Q) l.push({ wrong:t.wrong, path:t.path, label:t.label||'' });
+    l.push({ wrong:t.wrong, path:t.path, label:t.label||'' });
   });
   const newQs=(currentWs.questions||[]).map((q,i)=>{ const c={...q}; const l=byIdx.get(i); if(l?.length) c.aiTraps=l; else delete c.aiTraps; return c; });
   await setDoc(doc(db,'curriculum',currentWs.id), { aiReview:stored, questions:newQs }, { merge:true });
@@ -3090,11 +3090,10 @@ function _renderReview(rec, opts={}){
           <span style="display:block;color:var(--ink3);font-size:12px;margin-top:2px">${_esc(t.path)}</span>
         </span>
       </label>`).join('');
-    const over=list.filter(t=>t.on).length>AI_TRAP_MAX_PER_Q ? `<div style="font-size:11px;color:#b45309;margin-top:4px">체크한 것이 ${AI_TRAP_MAX_PER_Q}개를 넘어 앞의 ${AI_TRAP_MAX_PER_Q}개만 분석에 쓰입니다</div>` : '';
     return `<div style="border:1px solid var(--rule);border-radius:8px;padding:10px 12px;margin-bottom:8px">
       <div style="font-size:12px;font-weight:700;cursor:pointer" onclick="_jumpToQuestion(${idx})">${idx+1}번 문항 (클릭하면 이동)</div>
       <div style="font-size:12px;color:var(--ink3)">${qText(idx)}</div>
-      ${rows}${over}</div>`;
+      ${rows}</div>`;
   }).join('');
   const trapHtml = rec.traps.length
     ? `<div style="font-size:12px;color:var(--ink3);margin-bottom:8px">학생이 이렇게 틀릴 것 같다는 AI 예측입니다. <b>체크한 것만</b> teacher·학생 진단의 오답 대조에 쓰입니다 — 아니다 싶은 것은 체크를 풀어 두세요(바로 저장됩니다. 풀어 둔 것은 다시 검토해도 다시 올라오지 않습니다).</div>${blocks}`

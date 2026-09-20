@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.95">
+  <meta name="app-version" content="8.96">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -3269,6 +3269,7 @@ async function saveWorksheet(isComplete=false){
           correct:       prev.correct??null,
           strokeCount:   prev.strokeCount||0,      // 작도 획순 이어 그리기용
           lastRadius:    prev.lastRadius??null,
+          conVec:        prev.conVec??null,        // 작도 벡터 기록(v8.96)
           answeredAt:    nowISO,
         };
       } else {
@@ -3488,7 +3489,8 @@ async function startQuiz(ws) {
         const s=_pq[q.id]; if(!s) return;
         if(curWS.questions[i]?.type==='graph'){
           answered[i]=s.drawing?{drawing:s.drawing,teacherDrawing:s.teacherDrawing||null,feedback:s.feedback||null,correct:s.correct,
-                                 strokeCount:s.strokeCount||0,lastRadius:s.lastRadius??null}:false;   // 작도 획순·기준 반지름도 되살린다
+                                 strokeCount:s.strokeCount||0,lastRadius:s.lastRadius??null,
+                                 conVec:(typeof s.conVec==='string'?s.conVec:null)}:false;   // 작도 획순·기준 반지름·벡터 기록도 되살린다
         } else if(s.examAnswer!==undefined && s.examAnswer!==null){
           // 시험지 답안 복원 — 복원하지 않으면 새로고침 후 시험 종료 시
           // 답안이 없는 상태로 채점되고 저장된 답안까지 지워짐
@@ -4572,6 +4574,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
       <div id="graph-canvas-wrap" style="position:relative;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:#fff">
         <canvas id="graph-bg-canvas" style="display:block;width:100%"></canvas>
         <canvas id="graph-answer-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;cursor:crosshair"></canvas>
+        ${q.graphType==='construction'?`<canvas id="graph-label-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>`:''}
         ${teacherDraw?`<img src="${teacherDraw}" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">`:''}
       </div>
       <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
@@ -4608,16 +4611,38 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     bgC.width  = W; bgC.height  = H; bgC.style.height = H+'px';
     ansC.width = W; ansC.height = H;
     drawGraphGrid(bgC, q, W, H);
-    if(prevDrawing){
+    const isCon=q.graphType==='construction';
+    /* 작도 답안에 벡터 기록(conVec, v8.96)이 있으면 PNG 를 얹지 않고 그 기록으로 다시 그린다(initGraphCanvas 안에서).
+       기록이 없는 옛 답안은 예전처럼 PNG 를 얹고, 그 위에 이어 그린다(legacy). */
+    const vec = (isCon && prevDrawing) ? parseConVec(prevAns?.conVec) : null;
+    if(prevDrawing && !vec){
       const img=new Image();
       img.onload=()=>ansC.getContext('2d').drawImage(img,0,0,W,H);
       img.src=prevDrawing;
     }
     // 저장된 그림을 이어 그릴 때는 획순 번호와 기준 반지름도 이어받는다
-    initGraphCanvas(ansC, W, H, q.graphType==='construction',
-      prevDrawing ? {strokeCount:prevAns?.strokeCount, lastRadius:prevAns?.lastRadius} : null);
+    initGraphCanvas(ansC, W, H, isCon,
+      prevDrawing ? {strokeCount:prevAns?.strokeCount, lastRadius:prevAns?.lastRadius,
+                     ...(vec ? {items:vec.items, w:vec.w, h:vec.h} : {legacy:isCon})} : null);
   });
   requestAnimationFrame(()=>renderMath(panel));
+}
+
+/* 저장된 작도 벡터 기록(JSON 문자열)을 읽는다. 모양이 조금이라도 이상하면 null —
+   그러면 번호가 박힌 PNG 를 바탕으로 이어 그리는 옛 방식으로 돌아간다(그림은 어차피 PNG 가 전부다). */
+function parseConVec(str){
+  if(typeof str!=='string' || !str) return null;
+  let o; try{ o=JSON.parse(str); }catch(_){ return null; }
+  if(!o || o.v!==1 || !(o.w>0) || !(o.h>0) || !Array.isArray(o.items)) return null;
+  const num=v=>typeof v==='number' && isFinite(v);
+  const ok=o.items.every(it=>{
+    if(!it) return false;
+    if(it.t==='L') return [it.n,it.x0,it.y0,it.x1,it.y1].every(num);
+    if(it.t==='A') return [it.n,it.cx,it.cy,it.rx,it.ry,it.a0,it.a1,it.m].every(num);
+    if(it.t==='P'||it.t==='E') return Array.isArray(it.p) && it.p.length>=2 && it.p.length%2===0 && it.p.every(num);
+    return false;
+  });
+  return ok ? o : null;
 }
 
 function drawGraphGrid(canvas, q, W, H){
@@ -4757,6 +4782,13 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
 // 그래프 캔버스 드로잉
 let graphUndoStack=[], graphStepMeta=[], graphEraser=false, graphConTool='line';
 let graphConfirmedCount=0, graphLastRadius=null, graphRadiusLocked=false;
+/* 작도 답안의 벡터 기록 (v8.96) — 확정한 선·호와 펜·지우개 획을 그린 순서대로 담는다.
+   그림(PNG)은 여전히 채점용으로 저장하지만, 획순 번호는 여기 담긴 획 모양을 보고 제출 직전에 자리를 잡고,
+   다시 열 때는 PNG 대신 이 기록으로 그림을 다시 그려서 번호가 그림에 박히지 않게 한다.
+   graphLegacyBase: 벡터 기록 없이 저장된 옛 답안(번호가 PNG 에 박힌 그림)을 바탕으로 깔고 이어 그리는 중인가.
+   graphDirty: 다시 연 뒤 확정·펜·실행취소·전체 지우기로 그림이 실제로 바뀌었는가(안 바뀌었으면 저장된 PNG 를 그대로 둔다).
+   graphIsCon: 지금 캔버스가 작도 모드인가(graphUndo/graphClear 가 벡터 기록을 같이 다룰지 판단). */
+let graphConItems=[], graphLegacyBase=false, graphDirty=false, graphIsCon=false;
 window._graphConfirmPending=null; // 제출 직전 "아직 확인 안 한 작도 획"을 자동 확정하기 위한 훅
 
 /* 작도 확정 순서를 나타내는 색·번호 — 빨주노초파남보 7색을 순환한다.
@@ -4766,6 +4798,8 @@ const CON_COLORS=['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb','#4338ca','#
 /* 펜(점·이름) 전용 색 — 작도 7색 어디에도 없는 청록.
    무채색이 아니어서 검은 배경 그림과 확실히 구분되고, 채도가 낮아 작도 단계 색으로도 오해되지 않는다. */
 const CON_PEN_COLOR='#0d9488';
+/* 작도 선·호 굵기 — 4px (v8.96: 2px 에서 두 배로. 배경 그림의 검은 선 옆에 놓여도 눈에 띄고, 태블릿에서 손으로 가리켜도 보인다) */
+const CON_LINE_W=4;
 const _stepGlyph=n=> n<20 ? String.fromCharCode(9312+n) : `(${n+1})`; // ①②③… (20개 넘으면 숫자로)
 function _angDelta(a,b){ // b-a를 -π~π 범위로 정규화 (컴퍼스로 돌린 각도 누적용)
   let d=b-a;
@@ -4799,15 +4833,28 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   let conRadius=0, conStartAngle=0, conPrevAngle=0, conCumAngle=0;
   let conMinAngle=0, conMaxAngle=0;              // 스윕 중 양쪽으로 가장 멀리 간 지점(호의 두 끝)
   let conUsedLock=false;                         // 이번 호를 '반지름 고정'으로 그렸는가 (채점용 꼬리표에 쓴다)
+  let curFree=null;                              // 지금 긋고 있는 펜·지우개 획의 벡터 기록 항목 (작도 모드)
   graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
   graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
+  graphConItems=[]; graphLegacyBase=false; graphDirty=false; graphIsCon=!!isConstruction;
   if(startState){   // 저장된 그림을 이어 그리는 경우: 번호와 기준 반지름을 그대로 이어받는다
     graphConfirmedCount=Math.max(0, Number(startState.strokeCount)||0);
     graphLastRadius=(typeof startState.lastRadius==='number' && startState.lastRadius>0) ? startState.lastRadius : null;
+    graphLegacyBase=!!startState.legacy;         // 벡터 기록이 없는 옛 답안: 번호가 박힌 PNG 를 바탕으로 이어 그린다
   }
   window._graphSyncRadLock=null;   // 문항이 바뀌면 이전 문항의 고정 버튼 훅을 버린다
-  const ctx=canvas.getContext('2d');
+  /* willReadFrequently: 획마다 스냅샷(getImageData)을 뜨고 번호 자리를 잡을 때마다 전체를 읽는 캔버스다.
+     이 힌트가 없으면 크롬이 읽기가 잦아진 뒤에야 CPU 래스터로 갈아타는데, GPU 로 그린 획과 CPU 로 그린 획은
+     가장자리 픽셀이 달라서 다시 열어 벡터로 재생한 그림이 저장본과 픽셀까지 같지 않았다(2026-09-21 확인).
+     처음부터 CPU 래스터로 고정해 두면 같은 브라우저에서는 언제 그려도 같은 픽셀이 나온다. */
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
   ctx.strokeStyle='#1c1917'; ctx.lineWidth=2; ctx.lineCap='round';
+  /* 획순 번호 전용 덧캔버스(작도만) — 획은 답안 캔버스에, 번호는 여기에 따로 그려서 뒤에 언제든 자리를 옮길 수 있게 한다.
+     포인터 이벤트는 받지 않고(pointer-events:none) 제출할 때 _graphExport 가 두 장을 합친다. */
+  const lblCanvas=isConstruction ? document.getElementById('graph-label-canvas') : null;
+  if(lblCanvas){ lblCanvas.width=W; lblCanvas.height=H; }
+  const lctx=lblCanvas ? lblCanvas.getContext('2d',{willReadFrequently:true}) : null;
+  const r2=v=>Math.round(v*100)/100, r4=v=>Math.round(v*10000)/10000;   // 기록용 반올림(좌표 0.01px · 각도 0.0001rad)
 
   const pos=e=>{
     const r=canvas.getBoundingClientRect();
@@ -4826,111 +4873,200 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   /* 확정된 획에 붙는 획순 표시 — 「①」 「②」 「③🔒」.
      선인지 호인지는 그림 모양으로 바로 보이지만, 그 호를 '반지름 고정'으로 옮겨 그렸는지는
      그림만 봐서는 알 수 없다. 그래서 고정으로 그린 호에만 자물쇠를 덧붙여 채점할 때 구분한다.
-     번호가 잘 보이도록 굵게 키웠고, 캔버스 밖으로 나가지 않게 좌우·위아래를 안으로 끌어당긴다. */
+     번호가 잘 보이도록 굵게 키웠고, 캔버스 밖으로 나가지 않게 좌우·위아래를 안으로 끌어당긴다.
+     ★ v8.96: 번호는 획과 같은 캔버스에 굽지 않고 덧캔버스(lblCanvas)에 따로 그린다.
+       예전엔 [확인] 순간 자리를 정해 그림에 박았기 때문에, 그 뒤에 그은 획이 번호를 지나가면 번호가 가려졌다.
+       이제 획이 바뀔 때마다(확정·펜·지우개·실행취소·전체 지우기) 모든 번호를 처음부터 다시 놓고(relayoutLabels),
+       제출하는 순간의 자리로 그림에 합쳐 저장한다(_graphExport) — 뒤에 그은 획과도 겹치지 않는다. */
   const LABEL_FONT='bold 15px sans-serif', LABEL_H=22, LOCK_W=13;
-  /* 번호 상자 안에 이미 그려진 픽셀(다른 획·다른 번호·방금 확정한 획)이 몇 개인지 센다.
-     답안 캔버스는 그린 곳만 불투명하므로 알파값으로 바로 알 수 있다. */
-  const labelHits=(x,y,w,h)=>{
-    const x0=Math.max(0,Math.round(x-w/2)), y0=Math.max(0,Math.round(y-h/2));
-    const x1=Math.min(W,Math.round(x+w/2)), y1=Math.min(H,Math.round(y+h/2));
-    if(x1<=x0||y1<=y0) return 1e9;
-    const d=ctx.getImageData(x0,y0,x1-x0,y1-y0).data;
-    let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>40) n++;
-    return n;
-  };
-  /* 후보 자리들 중 아무것과도 안 겹치는 첫 자리를 고르고, 다 겹치면 가장 덜 겹치는 자리.
-     후보는 부르는 쪽이 획 모양에 맞춰 준다(선: 양옆·앞뒤, 호: 바깥·안쪽·양 끝). */
-  const pickLabelSpot=(cands,text,withLock)=>{
-    ctx.font=LABEL_FONT;
-    const w=ctx.measureText(text).width+8+(withLock?LOCK_W+2:0), h=LABEL_H;
-    let best=null;
-    for(const [x,y] of cands){
-      const cx=Math.max(w/2,Math.min(W-w/2,x)), cy=Math.max(h/2,Math.min(H-h/2,y));
-      const hit=labelHits(cx,cy,w,h);
-      if(hit===0) return [cx,cy];
-      if(!best||hit<best[2]) best=[cx,cy,hit];
-    }
-    return best?[best[0],best[1]]:[cands[0][0],cands[0][1]];
-  };
   /* 자물쇠는 이모지(🔒) 대신 획 색으로 직접 그린다 — 이모지는 글자색을 받지 않아
-     어느 획의 자물쇠인지 색으로 알아볼 수 없었다. (x,y)는 자물쇠 가운데. */
-  const drawLock=(x,y,color)=>{
-    ctx.save();
-    ctx.lineWidth=3.5; ctx.strokeStyle='#ffffff'; ctx.lineCap='round'; ctx.lineJoin='round';
-    const body=()=>{ ctx.beginPath(); ctx.rect(x-5,y-1,10,8); };
-    const shackle=()=>{ ctx.beginPath(); ctx.arc(x,y-2,3.5,Math.PI,0); };
-    body(); ctx.stroke(); shackle(); ctx.stroke();             // 흰 테두리(배경과 겹쳐도 보이게)
-    ctx.lineWidth=1.6; ctx.strokeStyle=color; ctx.fillStyle=color;
-    body(); ctx.fill(); shackle(); ctx.stroke();
-    ctx.restore();
+     어느 획의 자물쇠인지 색으로 알아볼 수 없었다. (x,y)는 자물쇠 가운데. g = 그릴 캔버스 컨텍스트. */
+  const drawLock=(g,x,y,color)=>{
+    g.save();
+    g.lineWidth=3.5; g.strokeStyle='#ffffff'; g.lineCap='round'; g.lineJoin='round';
+    const body=()=>{ g.beginPath(); g.rect(x-5,y-1,10,8); };
+    const shackle=()=>{ g.beginPath(); g.arc(x,y-2,3.5,Math.PI,0); };
+    body(); g.stroke(); shackle(); g.stroke();             // 흰 테두리(배경과 겹쳐도 보이게)
+    g.lineWidth=1.6; g.strokeStyle=color; g.fillStyle=color;
+    body(); g.fill(); shackle(); g.stroke();
+    g.restore();
   };
-  const stampLabel=(x,y,text,color,withLock)=>{
-    ctx.font=LABEL_FONT; ctx.textAlign='center'; ctx.textBaseline='middle';
-    const tw=ctx.measureText(text).width;
+  const stampLabel=(g,x,y,text,color,withLock)=>{
+    g.font=LABEL_FONT; g.textAlign='center'; g.textBaseline='middle';
+    const tw=g.measureText(text).width;
     const total=tw+(withLock?LOCK_W+2:0);
     const tx=x-total/2+tw/2;                                    // 번호와 자물쇠를 한 덩어리로 가운데 정렬
-    ctx.lineWidth=4; ctx.strokeStyle='#ffffff'; ctx.strokeText(text,tx,y); // 흰 테두리로 배경과 겹쳐도 읽히게
-    ctx.fillStyle=color; ctx.fillText(text,tx,y);
-    if(withLock) drawLock(tx+tw/2+2+LOCK_W/2, y, color);
+    g.lineWidth=4; g.strokeStyle='#ffffff'; g.strokeText(text,tx,y); // 흰 테두리로 배경과 겹쳐도 읽히게
+    g.fillStyle=color; g.fillText(text,tx,y);
+    if(withLock) drawLock(g, tx+tw/2+2+LOCK_W/2, y, color);
+  };
+  /* 번호 후보 자리 — 획 모양에 맞춰 여러 개 만든다. 순서 = 선호도(가까운 곳부터).
+     선: 가운데 → 앞뒤로 옮겨 가며 × 양옆·더 바깥.  호: 손으로 잡은 방향(m) 바깥쪽이 1순위, 좌우로 벌려 가며 × 바깥·더 바깥·안쪽.
+     (선이 4px 로 굵어져 옆 간격도 15→16, 28→30 으로 조금 띄웠다) */
+  const labelCands=it=>{
+    const cands=[];
+    if(it.t==='L'){
+      const dx=it.x1-it.x0, dy=it.y1-it.y0, len=Math.hypot(dx,dy)||1;
+      const nx=-dy/len, ny=dx/len;                              // 선에 수직인 방향
+      for(const t of [0.5,0.3,0.7,0.15,0.85]){
+        const px=it.x0+dx*t, py=it.y0+dy*t;
+        for(const off of [16,-16,30,-30]) cands.push([px+nx*off, py+ny*off]);
+      }
+    } else {
+      const sweep=Math.abs(_angDelta(it.a0,it.a1))||Math.PI;
+      const spread=Math.min(0.6, sweep/3);                      // 호를 따라 좌우로 옮겨 볼 각도
+      for(const da of [0, spread, -spread, spread*2, -spread*2]){
+        const a=it.m+da;
+        for(const off of [16, 31, -17]){                        // 바깥 → 더 바깥 → 안쪽
+          if(it.rx+off<8 || it.ry+off<8) continue;
+          cands.push([it.cx+Math.cos(a)*(it.rx+off), it.cy+Math.sin(a)*(it.ry+off)]);
+        }
+      }
+    }
+    return cands;
+  };
+  /* 획이 아직 그림에 남아 있는가 — 획 위 16곳의 픽셀(알파)을 본다. 지우개로 다 지운 획은 번호도 뺀다
+     (① ③ 처럼 건너뛰는 게 사실 그대로다). 캔버스 밖으로 나간 부분은 세지 않는다(길게 연장한 직선). */
+  const strokeAlive=(it,px)=>{
+    const N=16; let inb=0, vis=0;
+    for(let i=0;i<N;i++){
+      const u=(i+0.5)/N; let x,y;
+      if(it.t==='L'){ x=it.x0+(it.x1-it.x0)*u; y=it.y0+(it.y1-it.y0)*u; }
+      else { const a=it.a0+(it.a1-it.a0)*u; x=it.cx+Math.cos(a)*it.rx; y=it.cy+Math.sin(a)*it.ry; }
+      const xi=Math.round(x), yi=Math.round(y);
+      if(xi<0||yi<0||xi>=W||yi>=H) continue;
+      inb++; if(px[(yi*W+xi)*4+3]>40) vis++;
+    }
+    return inb>0 && vis*4>=inb;
+  };
+  /* 모든 번호를 처음부터 다시 놓는다. 획 레이어 전체 픽셀을 한 번만 읽고, 번호마다 후보 자리 중
+     획(뒤에 그은 것·펜 글씨 포함)·먼저 놓은 번호와 안 겹치는 첫 자리를 고른다. 다 겹치면 가장 덜 겹치는 자리.
+     같은 그림이면 언제 불러도 같은 자리가 나온다(결정적) — 제출 직전에 한 번 더 불러 그 자리를 굳힌다. */
+  const relayoutLabels=()=>{
+    if(!lctx) return;
+    lctx.clearRect(0,0,W,H);
+    const px=ctx.getImageData(0,0,W,H).data;
+    const placed=[];                                            // 이미 놓은 번호 상자 [x0,y0,x1,y1]
+    const hits=(x0,y0,x1,y1)=>{
+      let n=0;
+      for(let yy=y0;yy<y1;yy++){ let i=(yy*W+x0)*4+3; for(let xx=x0;xx<x1;xx++,i+=4) if(px[i]>40) n++; }
+      for(const b of placed){
+        const ox=Math.min(x1,b[2])-Math.max(x0,b[0]), oy=Math.min(y1,b[3])-Math.max(y0,b[1]);
+        if(ox>0&&oy>0) n+=ox*oy;
+      }
+      return n;
+    };
+    lctx.font=LABEL_FONT;
+    for(const it of graphConItems){
+      if(it.t!=='L' && it.t!=='A') continue;
+      if(!strokeAlive(it,px)) continue;
+      const text=_stepGlyph(it.n), withLock=!!it.k, color=CON_COLORS[it.n % CON_COLORS.length];
+      const w=lctx.measureText(text).width+8+(withLock?LOCK_W+2:0), h=LABEL_H;
+      let best=null;
+      for(const [x,y] of labelCands(it)){
+        const cx=Math.max(w/2,Math.min(W-w/2,x)), cy=Math.max(h/2,Math.min(H-h/2,y));
+        const x0=Math.max(0,Math.round(cx-w/2)), y0=Math.max(0,Math.round(cy-h/2));
+        const x1=Math.min(W,Math.round(cx+w/2)), y1=Math.min(H,Math.round(cy+h/2));
+        const hit=(x1<=x0||y1<=y0) ? 1e9 : hits(x0,y0,x1,y1);
+        if(!best||hit<best[2]) best=[cx,cy,hit,x0,y0,x1,y1];
+        if(hit===0) break;
+      }
+      if(!best) continue;
+      stampLabel(lctx,best[0],best[1],text,color,withLock);
+      placed.push([best[3],best[4],best[5],best[6],text,best[2]]);
+    }
+    window._graphLabelsForTest=placed;   // 자동 검증용: 놓인 번호 상자 [x0,y0,x1,y1,글자,겹친 픽셀 수]
+  };
+  /* 벡터 기록 한 항목을 답안 캔버스에 그린다. [확인] 직후의 즉시 그리기와 다시 열 때의 재생이 같은 함수를 거치므로
+     화면에 보였던 그대로 다시 그려진다. 선·호는 획 색·CON_LINE_W 굵기, 호의 중심에는 × 를 남긴다(채점용).
+     펜·지우개는 점을 찍을 때와 똑같이 점과 점 사이를 한 토막씩 긋는다(그리는 동안의 freeSeg 와 같은 방식). */
+  const drawItem=it=>{
+    ctx.save(); ctx.setLineDash([]); ctx.lineCap='round'; ctx.lineJoin='round';
+    if(it.t==='L' || it.t==='A'){
+      ctx.globalCompositeOperation='source-over';
+      ctx.strokeStyle=CON_COLORS[it.n % CON_COLORS.length]; ctx.lineWidth=CON_LINE_W;
+      ctx.beginPath();
+      if(it.t==='L'){ ctx.moveTo(it.x0,it.y0); ctx.lineTo(it.x1,it.y1); }
+      else if(it.rx===it.ry) ctx.arc(it.cx,it.cy,it.rx,it.a0,it.a1,false);
+      else ctx.ellipse(it.cx,it.cy,it.rx,it.ry,0,it.a0,it.a1,false);   // 크기가 다른 화면에서 이어받아 가로세로 비율이 달라진 경우
+      ctx.stroke();
+      if(it.t==='A'){ ctx.lineWidth=2.5; strokeXMark(it.cx,it.cy,6); }
+    } else if(it.t==='P' || it.t==='E'){
+      const p=it.p;
+      if(p.length<=2){ if(it.t==='P') freeDot(p[0],p[1]); }
+      else for(let i=2;i<p.length;i+=2) freeSeg(it,p[i-2],p[i-1],p[i],p[i+1]);
+    }
+    ctx.restore();
+  };
+  /* 작도 펜·지우개 한 토막 — 펜은 점을 찍고 글자를 쓰는 용도라 굵게(4px), 색은 작도 7색·검정과 겹치지 않는 청록.
+     지우개는 20px. 그리는 동안(move)과 재생(drawItem)이 같은 함수를 쓴다. */
+  const freeSeg=(it,x0,y0,x1,y1)=>{
+    ctx.save(); ctx.setLineDash([]); ctx.lineCap='round';
+    if(it.t==='E'){ ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; }
+    else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=CON_PEN_COLOR; ctx.lineWidth=4; }
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    ctx.restore();
+  };
+  const freeDot=(x,y)=>{                       // 펜으로 제자리에서 콕 찍은 점(반지름 3px)
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.fillStyle=CON_PEN_COLOR;
+    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+    ctx.restore();
   };
   const confirmPending=()=>{
     if(!conPending || !conGestureBase) return;
-    const color=CON_COLORS[graphConfirmedCount % CON_COLORS.length];
+    const n=graphConfirmedCount;                                // 이 획의 번호(0부터) — 색·①②③ 모두 여기서 나온다
     graphUndoStack.push(conGestureBase);
     graphStepMeta.push({isStep:true, prevRadius:graphLastRadius});
     ctx.putImageData(conGestureBase,0,0);
-    ctx.globalCompositeOperation='source-over'; ctx.strokeStyle=color; ctx.lineWidth=2;
-    /* 번호 자리: 예전엔 선의 한가운데 옆·호의 한가운데 바깥 한 곳에 고정이라 다른 획이나
-       앞서 찍은 번호와 겹치기 일쑤였다. 이제 획 모양에 맞춘 후보 자리를 여러 개 만들어
-       그림(획·번호)과 안 겹치는 첫 자리를 고른다. 순서 = 선호도(가까운 곳부터). */
-    const cands=[];
+    let it;
     if(conPending.type==='line'){
-      ctx.beginPath(); ctx.moveTo(conPending.x0,conPending.y0); ctx.lineTo(conPending.x1,conPending.y1); ctx.stroke();
-      const dx=conPending.x1-conPending.x0, dy=conPending.y1-conPending.y0, len=Math.hypot(dx,dy)||1;
-      const nx=-dy/len, ny=dx/len;                              // 선에 수직인 방향
-      for(const t of [0.5,0.3,0.7,0.15,0.85]){                  // 가운데 → 앞뒤로 옮겨 가며
-        const px=conPending.x0+dx*t, py=conPending.y0+dy*t;
-        for(const off of [15,-15,28,-28]) cands.push([px+nx*off, py+ny*off]);
-      }
+      it={t:'L', n, x0:r2(conPending.x0), y0:r2(conPending.y0), x1:r2(conPending.x1), y1:r2(conPending.y1)};
     } else {
-      ctx.beginPath(); ctx.arc(conPending.cx,conPending.cy,conPending.r,conPending.startAngle,conPending.endAngle,conPending.anticlockwise); ctx.stroke();
-      // 원의 중심에 × 를 남긴다 — 어느 점을 중심으로 잡고 돌렸는지 그림에 그대로 보이게(채점용)
-      strokeXMark(conPending.cx,conPending.cy,5);
-      // 번호는 호 한가운데(= 손으로 잡은 방향) 바깥쪽이 1순위 — 양쪽으로 벌어져도 자리가 흔들리지 않는다
-      const _la=conPending.midAngle!=null?conPending.midAngle:conPending.startAngle;
-      const sweep=Math.abs(_angDelta(conPending.startAngle,conPending.endAngle))||Math.PI;
-      const spread=Math.min(0.6, sweep/3);                      // 호를 따라 좌우로 옮겨 볼 각도
-      for(const da of [0, spread, -spread, spread*2, -spread*2]){
-        const a=_la+da;
-        for(const rr of [conPending.r+15, conPending.r+30, conPending.r-16]){ // 바깥 → 더 바깥 → 안쪽
-          if(rr<8) continue;
-          cands.push([conPending.cx+Math.cos(a)*rr, conPending.cy+Math.sin(a)*rr]);
-        }
-      }
-      graphLastRadius=conPending.r;
+      it={t:'A', n, cx:r2(conPending.cx), cy:r2(conPending.cy), rx:r2(conPending.r), ry:r2(conPending.r),
+          a0:r4(conPending.startAngle), a1:r4(conPending.endAngle),
+          m:r4(conPending.midAngle!=null?conPending.midAngle:conPending.startAngle),   // 손으로 잡은 방향(번호 1순위 자리)
+          k:conPending.usedLock?1:0};                           // 반지름 고정으로 그린 호에만 자물쇠
+      graphLastRadius=it.rx;
     }
-    const withLock = !!conPending.usedLock;                     // 반지름 고정으로 그린 호에만 자물쇠
-    const labelText=_stepGlyph(graphConfirmedCount);
-    const [labelX,labelY]=pickLabelSpot(cands,labelText,withLock);
-    stampLabel(labelX,labelY,labelText,color,withLock);
+    graphConItems.push(it);
+    drawItem(it);
     graphConfirmedCount++;
+    graphDirty=true;
     window._graphSyncRadLock?.();   // 기준 반지름이 새로 잡혔을 수 있다 → 고정 버튼 문구 갱신
     conGestureBase=null; conSweepBase=null; conPending=null;
     conPhase='idle'; conActiveGesture=0;
     showConfirm(false);
+    relayoutLabels();                                           // 번호 자리는 확정할 때마다 전부 다시 잡는다
   };
   window._graphConfirmPending = isConstruction ? confirmPending : (()=>{});
   window._graphHasPending = isConstruction ? (()=>!!conPending || conPhase!=='idle') : (()=>false);
   window._graphDiscardPending = isConstruction ? (()=>discardPending()) : (()=>{});
+  window._graphRelayout = isConstruction ? relayoutLabels : (()=>{});
   window._graphPendingForTest = ()=>conPending;   // 자동 검증(헤드리스 크롬)에서 미확정 획을 읽는 용도
+  /* 제출용 그림 — 획 레이어와 번호 덧캔버스를 한 장으로 합친 PNG(투명 배경). 번호는 이 순간의 자리로 굳는다.
+     작도가 아니면 답안 캔버스 그대로. */
+  window._graphExport = ()=>{
+    if(!lblCanvas) return canvas.toDataURL('image/png');
+    relayoutLabels();
+    const off=document.createElement('canvas'); off.width=W; off.height=H;
+    const g=off.getContext('2d'); g.drawImage(canvas,0,0); g.drawImage(lblCanvas,0,0);
+    return off.toDataURL('image/png');
+  };
+  /* 저장용 벡터 기록(JSON 문자열). 캔버스 크기(w,h)를 같이 적어 두어 다른 크기의 화면에서 열어도 비율대로 옮긴다.
+     옛 PNG 를 바탕으로 이어 그린 답안은 PNG 만이 전부라 null. 너무 크면(펜으로 잔뜩 칠한 경우) 문서 한도를 지키려고 null. */
+  window._graphVectors = ()=>{
+    if(!isConstruction || graphLegacyBase) return null;
+    const json=JSON.stringify({v:1,w:W,h:H,items:graphConItems});
+    return json.length<=120000 ? json : null;
+  };
   confirmBtn?.addEventListener('click',confirmPending);
 
   const drawPreviewLine=(x0,y0,x1,y1)=>{
-    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=CON_LINE_W;
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); ctx.restore();
   };
   const drawPreviewArc=(cx,cy,r,a0,a1,ccw)=>{
-    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=2;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.setLineDash([5,4]); ctx.strokeStyle='#6b7280'; ctx.lineWidth=CON_LINE_W;
     ctx.beginPath(); ctx.arc(cx,cy,r,a0,a1,ccw); ctx.stroke(); ctx.restore();
   };
   /* 컴퍼스 중심 표시 — × 모양. 현재 획의 스타일 그대로 긋는다(색·굵기는 부르는 쪽에서 정한다) */
@@ -4979,6 +5115,7 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   const cancelStroke=()=>{                     // 획 시작 때 쌓아 둔 스냅샷으로 되돌린다(자유 손그림·지우개용)
     const prev=graphUndoStack.pop(); graphStepMeta.pop();
     if(prev){ ctx.globalCompositeOperation='source-over'; ctx.putImageData(prev,0,0); }
+    if(isConstruction && curFree){ graphConItems.pop(); curFree=null; }   // 벡터 기록에서도 그 획을 뺀다
   };
   const start=e=>{
     const isTouch = e.pointerType==='touch';
@@ -5052,11 +5189,17 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       graphUndoStack.push(ctx.getImageData(0,0,W,H));
       graphStepMeta.push(null);
       freeMoved=false;
-      ctx.beginPath(); ctx.moveTo(lx,ly);
-      if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
-      /* 작도 펜은 점을 찍고 글자를 쓰는 용도라 굵게(4px), 색도 작도 7색·검정과 겹치지 않는 청록으로 */
-      else if(isConstruction){ctx.globalCompositeOperation='source-over';ctx.lineWidth=4;ctx.strokeStyle=CON_PEN_COLOR;}
-      else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
+      graphDirty=true;
+      if(isConstruction){
+        /* 작도의 펜·지우개는 벡터 기록에도 남긴다(다시 열 때 재생용). 점 좌표는 기록과 같은 값으로 반올림해 두어
+           지금 그리는 그림과 나중에 재생한 그림이 똑같다. 굵기·색은 freeSeg/freeDot 이 정한다 */
+        lx=r2(lx); ly=r2(ly);
+        curFree={t:graphEraser?'E':'P', p:[lx,ly]}; graphConItems.push(curFree);
+      } else {
+        ctx.beginPath(); ctx.moveTo(lx,ly);
+        if(graphEraser){ctx.globalCompositeOperation='destination-out';ctx.lineWidth=20;}
+        else{ctx.globalCompositeOperation='source-over';ctx.lineWidth=2;ctx.strokeStyle='#1c1917';}
+      }
     }
   };
   const move=e=>{
@@ -5092,6 +5235,11 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       else if(proj<0 && -proj>conLineBack) conLineBack=-proj;
       else return;                                       // 늘어난 게 없으면 다시 그리지 않는다
       redrawLinePreview();
+    } else if(isConstruction && curFree){
+      const x2=r2(x), y2=r2(y);
+      if(Math.hypot(x2-lx,y2-ly)<1.5) return;          // 너무 촘촘한 점은 건너뛴다(그림은 같고 기록만 가벼워진다)
+      curFree.p.push(x2,y2); freeSeg(curFree,lx,ly,x2,y2);
+      freeMoved=true; lx=x2; ly=y2; return;
     } else {
       ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
       freeMoved=true;
@@ -5107,11 +5255,10 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
     if(pid!==null && e && e.pointerId!==undefined && e.pointerId!==pid) return;
     /* 펜으로 제자리에서 콕 찍은 경우 — 길이 0짜리 획은 브라우저에 따라 아무것도 안 남는다.
        점을 표시하려고 쓰는 도구이므로 여기서 동그란 점을 직접 찍어 준다. */
-    if(drawing && !freeMoved && isConstruction && !graphEraser && graphConTool==='pen'){
-      ctx.globalCompositeOperation='source-over'; ctx.fillStyle=CON_PEN_COLOR;
-      ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fill();
-    }
-    drawing=false; pid=null;
+    if(drawing && !freeMoved && isConstruction && !graphEraser && graphConTool==='pen') freeDot(lx,ly);
+    const freeDone = drawing && isConstruction && !!curFree;   // 작도의 펜·지우개 획이 끝났다 → 번호 자리를 다시 잡는다
+    drawing=false; pid=null; curFree=null;
+    if(freeDone) relayoutLabels();
     if(isConstruction && (graphConTool==='circle' || graphConTool==='line')) conActiveGesture=0;
     // 작도 모드는 손을 떼도 미확정 상태 그대로 둔다 — [확인]을 눌러야 획으로 남는다
     // (컴퍼스는 중심을 찍은 상태(centerSet)도 유지 — 반지름 제스처를 기다린다)
@@ -5179,6 +5326,22 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       document.getElementById('graph-pen-btn').style.borderColor='';
     });
   }
+
+  /* 저장된 벡터 기록으로 그림을 다시 그린다(v8.96). PNG 를 얹는 대신 획을 하나씩 재생하므로 번호가 그림에 박혀 있지 않고,
+     이어 그리면 옛 번호도 새 획을 피해 다시 자리를 잡는다. 저장 당시와 캔버스 크기가 다르면(다른 기기) 가로·세로 비율대로 옮긴다
+     — 배경 그림도 같은 비율로 늘어나므로 그 위에 맞는다(원은 타원이 되지만 위치는 맞는다). */
+  if(isConstruction && startState && Array.isArray(startState.items)){
+    const sx=W/(startState.w||W), sy=H/(startState.h||H);
+    graphConItems=startState.items.map(it=>{
+      if(it.t==='L') return {t:'L',n:it.n,x0:r2(it.x0*sx),y0:r2(it.y0*sy),x1:r2(it.x1*sx),y1:r2(it.y1*sy)};
+      if(it.t==='A') return {t:'A',n:it.n,cx:r2(it.cx*sx),cy:r2(it.cy*sy),rx:r2(it.rx*sx),ry:r2(it.ry*sy),a0:it.a0,a1:it.a1,m:it.m,k:it.k?1:0};
+      return {t:it.t,p:it.p.map((v,i)=>r2(v*(i%2?sy:sx)))};
+    });
+    if(graphLastRadius!=null && sx!==1) graphLastRadius=r2(graphLastRadius*sx);
+    for(const it of graphConItems) drawItem(it);
+    relayoutLabels();
+    graphDirty=false;                            // 재생만 했을 뿐 학생이 바꾼 건 없다
+  }
 }
 
 window.graphUndo=function(){
@@ -5192,17 +5355,27 @@ window.graphUndo=function(){
   if(meta && meta.isStep){ graphConfirmedCount=Math.max(0,graphConfirmedCount-1); graphLastRadius=meta.prevRadius; }
   // '전체 지우기'를 되돌린 경우: 그림과 함께 번호·기준 반지름도 지우기 전으로 (예전엔 그림만 돌아와 다음 획이 ①부터였다)
   if(meta && meta.isClear){ graphConfirmedCount=meta.prevCount||0; graphLastRadius=meta.prevRadius??null; }
+  // 벡터 기록도 같이 되돌린다 — 전체 지우기는 지우기 전 목록째, 그 밖(확정·펜·지우개)은 마지막 항목 하나
+  if(graphIsCon){
+    if(meta && meta.isClear){ graphConItems=meta.prevItems||[]; graphLegacyBase=!!meta.prevLegacy; }
+    else graphConItems.pop();
+  }
+  graphDirty=true;
   window._graphSyncRadLock?.();
+  window._graphRelayout?.();                    // 획이 하나 빠졌으니 번호 자리를 다시 잡는다
 };
 window.graphClear=function(){
   const canvas=document.getElementById('graph-answer-canvas');
   if(!canvas) return;
   if(window._graphHasPending && window._graphHasPending()) window._graphDiscardPending();
   graphUndoStack.push(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height));
-  graphStepMeta.push({isClear:true, prevCount:graphConfirmedCount, prevRadius:graphLastRadius});
+  graphStepMeta.push({isClear:true, prevCount:graphConfirmedCount, prevRadius:graphLastRadius, prevItems:graphConItems, prevLegacy:graphLegacyBase});
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
   graphConfirmedCount=0; graphLastRadius=null;
+  graphConItems=[]; graphLegacyBase=false;      // 다 비운 뒤부터는 벡터 기록만으로 그림이 온전하다(옛 PNG 바탕도 끝)
+  graphDirty=true;
   window._graphSyncRadLock?.();
+  window._graphRelayout?.();
 };
 
 
@@ -5495,7 +5668,7 @@ async function submitExamAns(q){
   } else if(q.type==='graph'){
     window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
-    userAns=gc?gc.toDataURL('image/png'):null;
+    userAns=gc?(window._graphExport?window._graphExport():gc.toDataURL('image/png')):null;   // 작도는 획+번호를 합친 한 장
   } else if(q.type==='link'){
     userAns=true;
   }
@@ -5718,13 +5891,18 @@ async function submitQAns(){
     let _regraded=false;
     if(gc){
       const prev=answered[curQIdx]||{};
-      // 학생 답안만 PNG(투명 배경)로 저장
-      const drawing=gc.toDataURL('image/png');
+      /* 학생 답안만 PNG(투명 배경)로 저장 — 작도는 획 레이어와 획순 번호를 합친 한 장(_graphExport, 번호 자리는 이 순간 확정).
+         다시 열고 아무것도 안 바꿨으면(graphDirty=false) 저장돼 있던 PNG 를 그대로 둔다 — 다른 크기의 화면에서
+         다시 그린 그림은 픽셀이 달라서, 새 답안으로 오해해 채점 결과를 지우는 일이 없게 한다. */
+      const drawing=(graphDirty || !prev.drawing)
+        ? (window._graphExport ? window._graphExport() : gc.toDataURL('image/png'))
+        : prev.drawing;
       // ★ 그래프를 새로 그려 제출하면 이전 채점 결과(교사 첨삭·피드백·정오답)를 지운다 ★
       //   예전에는 prev를 그대로 펼쳐 담아, 새 답안 위에 옛 첨삭이 남고 옛 정오답 판정도 유지됐다.
       _regraded = !!(prev.drawing && prev.drawing!==drawing && (prev.teacherDrawing||prev.feedback||prev.correct!=null));
-      // 작도: 획순 번호가 몇까지 찍혔는지와 기준 반지름을 그림과 함께 남긴다 (다시 열 때 이어받음)
-      const _stroke={strokeCount:graphConfirmedCount, lastRadius:graphLastRadius};
+      // 작도: 획순 번호가 몇까지 찍혔는지·기준 반지름·벡터 기록(conVec)을 그림과 함께 남긴다 (다시 열 때 이어받음)
+      const _stroke={strokeCount:graphConfirmedCount, lastRadius:graphLastRadius,
+                     conVec:(window._graphVectors ? window._graphVectors() : null)};
       answered[curQIdx] = (prev.drawing && prev.drawing!==drawing)
         ? {drawing, teacherDrawing:null, feedback:null, correct:null, ..._stroke}   // 새 답안 → 다시 채점 대기
         : {...prev, drawing, ..._stroke};
@@ -5758,6 +5936,7 @@ async function submitQAns(){
               feedback: _ans.feedback||null,
               strokeCount: _ans.strokeCount||0,          // 작도 획순 이어 그리기용
               lastRadius: _ans.lastRadius??null,
+              conVec: _ans.conVec??null,                 // 작도 벡터 기록(v8.96) — 없으면 null 로 지워 PNG 와 어긋나지 않게
             }
           }
         },{merge:true}).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length,_regraded?'(재제출 → 채점 초기화)':''))

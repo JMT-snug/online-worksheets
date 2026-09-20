@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.96">
+  <meta name="app-version" content="8.97">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -4617,7 +4617,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     const vec = (isCon && prevDrawing) ? parseConVec(prevAns?.conVec) : null;
     if(prevDrawing && !vec){
       const img=new Image();
-      img.onload=()=>ansC.getContext('2d').drawImage(img,0,0,W,H);
+      img.onload=()=>{ ansC.getContext('2d').drawImage(img,0,0,W,H); window._graphSetLegacyBase?.(img); };   // 번호를 다시 매겨 다시 그릴 때 바탕으로 쓴다
       img.src=prevDrawing;
     }
     // 저장된 그림을 이어 그릴 때는 획순 번호와 기준 반지름도 이어받는다
@@ -4787,8 +4787,9 @@ let graphConfirmedCount=0, graphLastRadius=null, graphRadiusLocked=false;
    다시 열 때는 PNG 대신 이 기록으로 그림을 다시 그려서 번호가 그림에 박히지 않게 한다.
    graphLegacyBase: 벡터 기록 없이 저장된 옛 답안(번호가 PNG 에 박힌 그림)을 바탕으로 깔고 이어 그리는 중인가.
    graphDirty: 다시 연 뒤 확정·펜·실행취소·전체 지우기로 그림이 실제로 바뀌었는가(안 바뀌었으면 저장된 PNG 를 그대로 둔다).
-   graphIsCon: 지금 캔버스가 작도 모드인가(graphUndo/graphClear 가 벡터 기록을 같이 다룰지 판단). */
-let graphConItems=[], graphLegacyBase=false, graphDirty=false, graphIsCon=false;
+   graphIsCon: 지금 캔버스가 작도 모드인가(graphUndo/graphClear 가 벡터 기록을 같이 다룰지 판단).
+   graphBaseCount(v8.97): 옛 PNG 에 이미 박혀 있는 번호 개수 — 이어 그리는 획은 이 다음 번호부터 매긴다. 벡터 답안은 0. */
+let graphConItems=[], graphLegacyBase=false, graphDirty=false, graphIsCon=false, graphBaseCount=0;
 window._graphConfirmPending=null; // 제출 직전 "아직 확인 안 한 작도 획"을 자동 확정하기 위한 훅
 
 /* 작도 확정 순서를 나타내는 색·번호 — 빨주노초파남보 7색을 순환한다.
@@ -4836,11 +4837,12 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   let curFree=null;                              // 지금 긋고 있는 펜·지우개 획의 벡터 기록 항목 (작도 모드)
   graphUndoStack=[]; graphStepMeta=[]; graphEraser=false; graphConTool='line';
   graphConfirmedCount=0; graphLastRadius=null; graphRadiusLocked=false;
-  graphConItems=[]; graphLegacyBase=false; graphDirty=false; graphIsCon=!!isConstruction;
+  graphConItems=[]; graphLegacyBase=false; graphDirty=false; graphIsCon=!!isConstruction; graphBaseCount=0;
   if(startState){   // 저장된 그림을 이어 그리는 경우: 번호와 기준 반지름을 그대로 이어받는다
     graphConfirmedCount=Math.max(0, Number(startState.strokeCount)||0);
     graphLastRadius=(typeof startState.lastRadius==='number' && startState.lastRadius>0) ? startState.lastRadius : null;
     graphLegacyBase=!!startState.legacy;         // 벡터 기록이 없는 옛 답안: 번호가 박힌 PNG 를 바탕으로 이어 그린다
+    graphBaseCount=graphLegacyBase ? graphConfirmedCount : 0;   // PNG 에 박힌 번호는 못 건드리니 그 다음부터 매긴다
   }
   window._graphSyncRadLock=null;   // 문항이 바뀌면 이전 문항의 고정 버튼 훅을 버린다
   /* willReadFrequently: 획마다 스냅샷(getImageData)을 뜨고 번호 자리를 잡을 때마다 전체를 읽는 캔버스다.
@@ -4939,13 +4941,26 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
     }
     return inb>0 && vis*4>=inb;
   };
-  /* 모든 번호를 처음부터 다시 놓는다. 획 레이어 전체 픽셀을 한 번만 읽고, 번호마다 후보 자리 중
-     획(뒤에 그은 것·펜 글씨 포함)·먼저 놓은 번호와 안 겹치는 첫 자리를 고른다. 다 겹치면 가장 덜 겹치는 자리.
-     같은 그림이면 언제 불러도 같은 자리가 나온다(결정적) — 제출 직전에 한 번 더 불러 그 자리를 굳힌다. */
+  /* 모든 번호를 처음부터 다시 놓는다 — 두 단계.
+     ① 번호 다시 매기기(v8.97): 획 위 픽셀로 살아 있는 획만 골라 순서대로 다시 번호를 준다. 지우개로 ②를 다 지우면 ③이 ②로
+        당겨지고 색(빨주노초파남보)도 번호를 따라간다 — 번호가 바뀐 획이 하나라도 있으면 벡터 기록으로 그림 전체를 다시 그린다(renderAll).
+        지운 획은 번호를 그대로 둔다(남은 조각의 색이 튀지 않게). 다음에 확정할 획의 번호(graphConfirmedCount)도 여기서 정해진다.
+     ② 자리 잡기: 획 레이어 전체 픽셀을 한 번 읽고, 번호마다 후보 자리 중 획(뒤에 그은 것·펜 글씨 포함)·먼저 놓은 번호와
+        안 겹치는 첫 자리를 고른다. 다 겹치면 가장 덜 겹치는 자리.
+     같은 그림이면 언제 불러도 같은 결과가 나온다(결정적) — 제출 직전에 한 번 더 불러 그 자리를 굳힌다. */
   const relayoutLabels=()=>{
     if(!lctx) return;
+    let px=ctx.getImageData(0,0,W,H).data;
+    let k=graphBaseCount, changed=false; const alive=[];
+    for(const it of graphConItems){
+      if(it.t!=='L' && it.t!=='A') continue;
+      if(!strokeAlive(it,px)) continue;
+      if(it.n!==k){ it.n=k; changed=true; }
+      k++; alive.push(it);
+    }
+    graphConfirmedCount=k;
+    if(changed && renderAll()) px=ctx.getImageData(0,0,W,H).data;   // 색이 바뀐 획이 있다 → 다시 그리고 다시 읽는다
     lctx.clearRect(0,0,W,H);
-    const px=ctx.getImageData(0,0,W,H).data;
     const placed=[];                                            // 이미 놓은 번호 상자 [x0,y0,x1,y1]
     const hits=(x0,y0,x1,y1)=>{
       let n=0;
@@ -4957,9 +4972,7 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       return n;
     };
     lctx.font=LABEL_FONT;
-    for(const it of graphConItems){
-      if(it.t!=='L' && it.t!=='A') continue;
-      if(!strokeAlive(it,px)) continue;
+    for(const it of alive){
       const text=_stepGlyph(it.n), withLock=!!it.k, color=CON_COLORS[it.n % CON_COLORS.length];
       const w=lctx.measureText(text).width+8+(withLock?LOCK_W+2:0), h=LABEL_H;
       let best=null;
@@ -5011,6 +5024,19 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
     ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.fillStyle=CON_PEN_COLOR;
     ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
     ctx.restore();
+  };
+  /* 벡터 기록으로 답안 캔버스를 처음부터 다시 그린다(v8.97, 번호·색이 바뀌었을 때). 옛 PNG 를 바탕으로 이어 그리는 중이면
+     그 그림을 먼저 깔고 그 위에 획을 재생한다(renderGraphQ 가 이미지를 내려받은 뒤 _graphSetLegacyBase 로 넘겨 준다) —
+     아직 안 내려왔으면 다시 그릴 수 없으니 false 를 돌려주고 그림은 그대로 둔다. */
+  let legacyBaseImg=null;
+  window._graphSetLegacyBase = im=>{ legacyBaseImg=im; };
+  const renderAll=()=>{
+    if(graphLegacyBase && !legacyBaseImg) return false;
+    ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.clearRect(0,0,W,H);
+    if(graphLegacyBase) ctx.drawImage(legacyBaseImg,0,0,W,H);
+    ctx.restore();
+    for(const it of graphConItems) drawItem(it);
+    return true;
   };
   const confirmPending=()=>{
     if(!conPending || !conGestureBase) return;
@@ -5357,7 +5383,7 @@ window.graphUndo=function(){
   if(meta && meta.isClear){ graphConfirmedCount=meta.prevCount||0; graphLastRadius=meta.prevRadius??null; }
   // 벡터 기록도 같이 되돌린다 — 전체 지우기는 지우기 전 목록째, 그 밖(확정·펜·지우개)은 마지막 항목 하나
   if(graphIsCon){
-    if(meta && meta.isClear){ graphConItems=meta.prevItems||[]; graphLegacyBase=!!meta.prevLegacy; }
+    if(meta && meta.isClear){ graphConItems=meta.prevItems||[]; graphLegacyBase=!!meta.prevLegacy; graphBaseCount=meta.prevBase||0; }
     else graphConItems.pop();
   }
   graphDirty=true;
@@ -5369,10 +5395,10 @@ window.graphClear=function(){
   if(!canvas) return;
   if(window._graphHasPending && window._graphHasPending()) window._graphDiscardPending();
   graphUndoStack.push(canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height));
-  graphStepMeta.push({isClear:true, prevCount:graphConfirmedCount, prevRadius:graphLastRadius, prevItems:graphConItems, prevLegacy:graphLegacyBase});
+  graphStepMeta.push({isClear:true, prevCount:graphConfirmedCount, prevRadius:graphLastRadius, prevItems:graphConItems, prevLegacy:graphLegacyBase, prevBase:graphBaseCount});
   canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
   graphConfirmedCount=0; graphLastRadius=null;
-  graphConItems=[]; graphLegacyBase=false;      // 다 비운 뒤부터는 벡터 기록만으로 그림이 온전하다(옛 PNG 바탕도 끝)
+  graphConItems=[]; graphLegacyBase=false; graphBaseCount=0;   // 다 비운 뒤부터는 벡터 기록만으로 그림이 온전하다(옛 PNG 바탕도 끝)
   graphDirty=true;
   window._graphSyncRadLock?.();
   window._graphRelayout?.();

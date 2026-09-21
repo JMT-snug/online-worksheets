@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="9.2">
+  <meta name="app-version" content="9.3">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -936,7 +936,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=8.83"></script>
+<script src="grading.js?v=9.3"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1692,7 +1692,21 @@ function examBonus(ex){
 function examLimit(ex){ return ((ex.aiLimitAfterDone && !examAllDone(ex)) ? 0 : ex.aiLimit) + examBonus(ex); }
 function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, examLimit(ex)-(st.count||0)); }
 /* 범위 학습지 '완료' — 일반 학습지는 isComplete, 복습 학습지(-FN)는 1회 이상 완료(completions) */
-function examWsDone(id){ const p=wsProgress[id]; if(!p) return false; const ws=WORKSHEETS.find(w=>w.id===id); return ws?.type==='review' ? (p.completions||0)>=1 : !!p.isComplete; }
+/* 학습지 완료 여부 (v9.3) — 저장된 isComplete 가 true 여도 그래프 문항이 모두 ⭕ 정답으로 채점될 때까지는
+   완료가 아니다(grading.js graphsAllCorrect). 옛 규칙으로 완료된 기록도 그래프가 ❌·미채점이면 완료로 보이지 않는다. */
+function wsDone(ws, prog){ prog=prog||wsProgress[ws?.id]; if(!ws||!prog) return false; return !!prog.isComplete && graphsAllCorrect(ws.questions, prog.perQuestion); }
+/* 그래프 문항 상태 요약 — 'wrong'(❌ 오답이 있음) · 'wait'(제출됐지만 채점 전) · null */
+function graphPendState(ws, pq){
+  let wait=false;
+  for(const q of (ws?.questions||[])){
+    if(q.type!=='graph') continue;
+    const v=pq?.[q.id];
+    if(v?.correct===false) return 'wrong';
+    if(v?.drawing && v.correct!==true) wait=true;
+  }
+  return wait?'wait':null;
+}
+function examWsDone(id){ const p=wsProgress[id]; if(!p) return false; const ws=WORKSHEETS.find(w=>w.id===id); return ws?.type==='review' ? (p.completions||0)>=1 : wsDone(ws,p); }
 /* 🔁 AI 진단 조건 (v8.80): 교사가 aiRequireReview 를 켜면 범위 안 복습 학습지를 각각 1회 이상 완료해야 진단 가능.
    반환 {required:[복습 학습지], missing:[아직 안 한 것], ok} — 조건이 꺼져 있거나 범위에 복습 학습지가 없으면 ok */
 function examReviewGate(ex){
@@ -1840,7 +1854,7 @@ function buildExamAIPayload(ex){
         correctAnswer:String(correctAns??''), studentAnswer:_studentAnsText(q, studentAns),
         ...(traps.length?{traps}:{}) });
     });
-    worksheets.push({ title:ws.title||'', unitTitle, done:!!r.isComplete, correctRate:rate, wrongItems });
+    worksheets.push({ title:ws.title||'', unitTitle, done:wsDone(ws,r), correctRate:rate, wrongItems });
   }
   return { worksheets, notStarted };
 }
@@ -2005,7 +2019,7 @@ function unitProgress(unit) {
   // 진도율은 일반 학습지(진도율 반영 ON)만 집계
   const progSheets = allSheets.filter(countsForProgress);
   const total = progSheets.length;
-  const done = progSheets.filter(ws=>!!wsProgress[ws.id]?.completedAt).length;
+  const done = progSheets.filter(ws=>wsDone(ws)).length;   // 그래프 문항까지 ⭕ 정답 채점돼야 완료 (v9.3)
   return {total, done, hasSheets, allCount: allSheets.length};
 }
 
@@ -2768,7 +2782,7 @@ window.rateDebug = async function(wsId){
         if(!s.exists()) continue;
         const d=s.data();
         r.기록 = r.기록==='없음' ? col : r.기록+'+'+col;
-        const done = d.isComplete||d.completedAt||d.passed||(d.totalCount>0&&d.answeredCount>=d.totalCount);
+        const done = (recordIsDone(d, ws?.questions)||!!d.passed) && graphsAllCorrect(ws?.questions, d.perQuestion);
         if(done) r.완료='✅';
         else if(!r.완료) r.완료='—';
         r.진행 = `${d.answeredCount??'?'}/${d.totalCount??'?'}`;
@@ -2835,7 +2849,8 @@ window.syncAutoProgress = async function(){
       const email=parts[1]?.toLowerCase();
       const wsId=parts[3];
       const cls=classByEmail[email];
-      const _done=data.isComplete||data.completedAt||data.passed||(data.totalCount>0&&data.answeredCount>=data.totalCount);
+      const _ws=WORKSHEETS.find(w=>w.id===wsId);
+      const _done=(recordIsDone(data,_ws?.questions)||!!data.passed) && graphsAllCorrect(_ws?.questions, data.perQuestion);   // 그래프 ⭕ 채점까지 완료 (v9.3)
       if(!_done) return;
       if(!cls||!wsId) return;
       if(!wsClassDoneSet[wsId]) wsClassDoneSet[wsId]={};
@@ -2937,8 +2952,9 @@ function showUnitPage(unit) {
   } else {
     sheets.forEach(ws => {
       const prog  = wsProgress[ws.id];
-      const done   = !!(prog?.isComplete);
-      const inProg = !!(prog && !prog.isComplete && ws.type!=="review");
+      const done   = wsDone(ws, prog);   // 그래프 문항이 모두 ⭕ 정답 채점돼야 완료 (v9.3)
+      const inProg = !!(prog && !done && ws.type!=="review");
+      const gState = (prog && !done && ws.type!=="review") ? graphPendState(ws, prog.perQuestion) : null;   // 'wrong' | 'wait' | null
       const empty = ws.type==="review" ? false : ws.questions.length === 0;
       const rate  = prog?.correctRate ?? 0;
       const isDraft  = ws.status === "draft";
@@ -2957,6 +2973,8 @@ function showUnitPage(unit) {
         ? `<span class="wslc-badge s-done">✅ ${reviewCompletions}회 완료</span>`
         : `<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">🔁 복습 가능</span>`;
       else if(done)    badgeHtml=`<span class="wslc-badge s-done">완료</span>`;
+      else if(gState==='wrong') badgeHtml=`<span class="wslc-badge" style="background:#fee2e2;color:var(--red)">❌ 그래프 다시 제출</span>`;
+      else if(gState==='wait')  badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">📤 그래프 채점 대기</span>`;
       else if(inProg)  badgeHtml=`<span class="wslc-badge s-partial">진행 중 (${prog.answeredCount||0}/${prog.totalCount||0})</span>`;
       else if(empty)   badgeHtml=`<span class="wslc-badge" style="background:var(--rule);color:var(--ink3)">준비 중</span>`;
       else             badgeHtml=`<span class="wslc-badge" style="background:var(--acc-lt);color:var(--accent)">미시작</span>`;
@@ -2976,7 +2994,7 @@ function showUnitPage(unit) {
                   : "🔁 무작위 10문제 복습 (매번 새로 출제)")
               : ws.type==="exam"
               ? `📝 시험지 · ${ws.questions.length}문항${ws.timeLimit?` · ${ws.timeLimit}분`:''}${done?' · 완료':inProg?` · 진행 중`:''}`
-              : ws.questions.length+"문제"+(done?` · 완료`:inProg?` · ${prog.answeredCount||0}/${prog.totalCount||ws.questions.length} 정답`:"")}
+              : ws.questions.length+"문제"+(done?` · 완료`:gState==='wrong'?` · 그래프 오답 — 다시 그려 제출`:gState==='wait'?` · 그래프 선생님 채점 대기`:inProg?` · ${prog.answeredCount||0}/${prog.totalCount||ws.questions.length} 정답`:"")}
           </div>
         </div>
         ${badgeHtml}`;
@@ -3321,15 +3339,15 @@ async function saveWorksheet(isComplete=false){
     return;
   }
   if(_wsIsCompleted && !isComplete) return; // 이미 완료된 학습지에 false 저장 차단
-  if(isComplete) _wsIsCompleted=true;
+  // (_wsIsCompleted 는 아래에서 실제로 완료로 저장될 때 켠다 — 그래프 문항이 ⭕ 정답 채점되기 전엔 완료가 아니다, v9.3)
   try{
     const nowISO = new Date().toISOString();
     const perQ={};   // 이 탭이 실제로 손댄(답을 낸) 문항만 담는다 — 안 건드린 문항은 아예 안 담아서
                       // 다른 탭·기기가 먼저 저장해 둔 답을 덮어쓰지 않게 한다.
-    // 모든 문항 정답이면 자동 완료 처리
+    // 모든 문항 정답이면 자동 완료 처리 — 그래프 문항은 그림을 냈다고 끝이 아니라 선생님이 ⭕ 정답으로 채점해야 센다 (v9.3)
     const _total=curWS.questions.filter(q=>q.type!=="link").length;
-    const _ans=answered.filter(v=>v&&(typeof v!=='object'||v.drawing)).length;
-    if(!isComplete && _total>0 && _ans>=_total){ isComplete=true; _wsIsCompleted=true; }
+    const _ans=answered.filter(v=>v&&(typeof v!=='object'||v.correct===true)).length;
+    if(!isComplete && _total>0 && _ans>=_total){ isComplete=true; }
     curWS.questions.forEach((q,i)=>{
       if(q.type==="link") return;
       if(q.type==='graph'){
@@ -3382,13 +3400,16 @@ async function saveWorksheet(isComplete=false){
     let serverData=null;
     try{ const snap=await getDoc(ref); if(snap.exists()) serverData=snap.data(); }catch(e){}
     const mergedPQ = {...(serverData?.perQuestion||{}), ...perQ};
-    const finalIsComplete = !!serverData?.isComplete || isComplete;  // 완료 상태는 한번 true면 되돌리지 않음
+    // 완료 상태는 한번 true면 되돌리지 않음. 새로 완료로 올릴 때는 그래프 문항이 모두 ⭕ 정답 채점돼 있어야 한다 (v9.3)
+    const _graphsOK = graphsAllCorrect(curWS.questions, mergedPQ);
+    const finalIsComplete = !!serverData?.isComplete || (isComplete && _graphsOK);
+    if(finalIsComplete && _graphsOK) _wsIsCompleted=true;
 
     const _totalQ=curWS.questions.filter(q=>q.type!=="link").length;
     const _ansQ=curWS.questions.reduce((s,q,i)=>{
       if(q.type==="link") return s;
       const v=mergedPQ[q.id];
-      return (q.type==='graph' ? !!v?.drawing : !!v?.correct) ? s+1 : s;
+      return (v?.correct===true) ? s+1 : s;   // 그래프도 ⭕ 정답 채점된 것만 센다 (v9.3)
     },0);
     const _wrongTotal=Object.values(mergedPQ).reduce((s,v)=>s+(v.attempts||0),0);
     const _correctRate=_totalQ?Math.min(100,Math.round(_ansQ/_totalQ*100)):0;
@@ -3582,7 +3603,7 @@ async function startQuiz(ws) {
           if(s.lastAnswer!==undefined&&s.lastAnswer!==null) lastAnswers[i]=s.lastAnswer;
           if(s.lastAnswerTokens) lastAnswerTokens[i]=s.lastAnswerTokens;
         }      });
-      if(_d.isComplete) _wsIsCompleted=true;
+      if(_d.isComplete && graphsAllCorrect(ws.questions,_pq)) _wsIsCompleted=true;   // 그래프가 ❌·미채점이면 아직 완료 아님 (v9.3)
       // ── 시험지 시작 시각 복원 (재접속해도 남은 시간 유지) ──
       if(ws.type==='exam' && _d.examStartedAt) window._examStartedAt=Number(_d.examStartedAt)||null;
 
@@ -4638,8 +4659,9 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     : prevCorrect===false
       ? 'background:#fee2e2;color:var(--red)'
       : prevDrawing ? 'background:#fef3c7;color:#b45309' : 'color:var(--ink3)';
-  const gradeBadgeText = prevCorrect===true ? '⭕ 정답'
-    : prevCorrect===false ? '❌ 오답'
+  const gradeLocked   = prevCorrect===true;   // ⭕ 정답으로 채점된 그래프는 다시 제출할 수 없다 (v9.3)
+  const gradeBadgeText = prevCorrect===true ? '⭕ 정답 · 제출 완료'
+    : prevCorrect===false ? '❌ 오답 — 다시 그려서 제출'
     : prevDrawing ? '📤 채점 대기 중' : '그래프를 그린 후 제출';
 
   panel.innerHTML=`${qHeadHtml}
@@ -4669,7 +4691,9 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
       ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px;white-space:pre-line">💬 <b>선생님 피드백:</b> ${_escHtml(prevFeedback)}</div>`:''}
       <div class="feedback-strip" id="feedback-strip"></div>
       <div class="ans-btns" onmousedown="event.preventDefault()">
-        <button class="btn-submit" onclick="submitQAns()" style="background:var(--green)">제출 ✓</button>
+        ${gradeLocked
+          ? `<div style="font-size:13px;color:var(--green);font-weight:600;padding:6px 0">⭕ 정답으로 채점된 그래프예요 — 다시 제출할 수 없어요</div>`
+          : `<button class="btn-submit" onclick="submitQAns()" style="background:var(--green)">제출 ✓</button>`}
       </div>
     </div>`;
 
@@ -4697,6 +4721,11 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     initGraphCanvas(ansC, W, H, isCon,
       prevDrawing ? {strokeCount:prevAns?.strokeCount, lastRadius:prevAns?.lastRadius,
                      ...(vec ? {items:vec.items, w:vec.w, h:vec.h} : {legacy:isCon})} : null);
+    if(gradeLocked){
+      // ⭕ 정답 채점된 답안은 보기만 — 캔버스 입력과 도구 버튼(펜·지우개·실행취소·전체 지우기 등)을 모두 막는다
+      ansC.style.pointerEvents='none'; ansC.style.cursor='default';
+      wrap.nextElementSibling?.querySelectorAll('button').forEach(b=>{ b.style.display='none'; });
+    }
   });
   requestAnimationFrame(()=>renderMath(panel));
 }
@@ -5985,6 +6014,7 @@ async function submitQAns(){
 
   // ── 링크 페이지: 항상 통과 ──
   if(q.type==="graph"){
+    if(answered[curQIdx]?.correct===true){ qToast('⭕ 정답으로 채점된 그래프는 다시 제출할 수 없어요'); return; }   // v9.3
     window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
     let _regraded=false;
@@ -6211,6 +6241,8 @@ async function finishQuiz(){
     curWS.questions[i]?.type==="link"?s:s+a, 0);
   // 시험 종료 시 _stopExamTimer가 _examMode를 끄므로 _examEnded도 함께 확인
   const _exView=window._examMode||window._examEnded;
+  // 그래프 문항이 모두 ⭕ 정답으로 채점됐는가 — 아니면 학습지는 아직 완료가 아니다 (v9.3)
+  const _gOK=curWS.questions.every((q,i)=>q.type!=='graph'||answered[i]?.correct===true);
   // 시험지는 재응시 불가 → '다시 풀기' 숨김 (재응시하려면 교사가 기록을 삭제해야 함)
   const _retryBtn=document.getElementById("btn-retry");
   if(_retryBtn) _retryBtn.style.display=(_exView && !isTeacherAcct())?'none':'';
@@ -6242,8 +6274,9 @@ async function finishQuiz(){
       wrongTotal===0?"완벽해요! 🏆":
       wrongTotal<=3?"훌륭해요! 🎉":"끝까지 포기하지 않았어요! 💪";
     document.getElementById("r-sub").textContent=
-      wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
-                     : `총 오답 ${wrongTotal}회`;
+      (wrongTotal===0 ? "모든 문제를 첫 번에 맞혔어요! 🏅"
+                      : `총 오답 ${wrongTotal}회`)
+      + (_gOK ? '' : ' · 📤 그래프 문항이 모두 ⭕ 정답으로 채점되면 학습지가 완료돼요');
   }
   const list=document.getElementById("r-list"); list.innerHTML="";
   curWS.questions.forEach((q,i)=>{
@@ -6262,12 +6295,17 @@ async function finishQuiz(){
           <div style="font-size:13px;color:var(--ink2);margin-top:2px"><span class="r-qtext">${q.text||""}</span></div>
         </div>`;
     } else {
-      row.innerHTML=`<span class="r-icon">${answered[i]&&answered[i]!==false?'✅':'⬜'}</span>
+      // 그래프 문항은 선생님 채점 상태로 표시 — ⭕ 정답 / ❌ 오답(다시 제출) / 📤 채점 대기 (v9.3)
+      const _gr=q.type==='graph' ? (answered[i]?.correct===true?'ok':answered[i]?.correct===false?'ng':answered[i]?.drawing?'wait':'none') : null;
+      const _icon=_gr ? ({ok:'⭕',ng:'❌',wait:'📤',none:'⬜'})[_gr] : (answered[i]&&answered[i]!==false?'✅':'⬜');
+      const _gmsg=_gr==='ng' ? `<div class="r-tries">❌ 오답 — 다시 그려서 제출하세요</div>`
+                 : _gr==='wait' ? `<div class="r-tries" style="color:#b45309">📤 선생님 채점 대기 중</div>` : '';
+      row.innerHTML=`<span class="r-icon">${_icon}</span>
         <div class="r-body">
           <div class="r-qnum">문제 ${i+1}&nbsp;
             <span class="r-qtext">${q.text||""}</span>
           </div>
-          ${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
+          ${_gmsg}${attempts[i]>0?`<div class="r-tries">❌ 오답 ${attempts[i]}회</div>`:''}
         </div>`;
     }
     list.appendChild(row);
@@ -6287,11 +6325,14 @@ async function finishQuiz(){
     _stopProgressTimer();
     document.removeEventListener("visibilitychange", _onVisibilityChange);
     window.removeEventListener("pagehide", saveWorksheet);
-    await saveWorksheet(true);
+    await saveWorksheet(_gOK);   // 그래프 문항이 모두 ⭕ 정답 채점된 경우에만 완료로 저장 (v9.3)
     const completedAt=new Date().toISOString();
     const _realAns=answered.filter(Boolean).length;
-    const _allDone=_realAns>=total;
-    wsProgress[curWS.id]={answeredCount:_realAns,totalCount:total,isComplete:_allDone,completedAt:_allDone?completedAt:null};
+    const _allDone=_realAns>=total && _gOK;
+    const _prevP=wsProgress[curWS.id]||{};
+    // 목록 화면이 새로고침 없이도 맞게 보이도록 perQuestion(그래프 채점 상태)을 함께 둔다 — wsDone 이 본다
+    wsProgress[curWS.id]={..._prevP, answeredCount:_realAns,totalCount:total,isComplete:!!(_prevP.isComplete||_allDone),
+                          completedAt:_allDone?completedAt:(_prevP.completedAt||null), perQuestion:{...(_prevP.perQuestion||{}),...perQ}};
   } catch(e){ console.error("저장 오류:",e); }
 }
 

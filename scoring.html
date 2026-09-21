@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.28">
+<meta name="app-version" content="scoring-v1.29">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -341,6 +341,7 @@ body.mode-feedback .f-q{display:none}
 
 <div class="toast" id="toast"></div>
 
+<script src="grading.js?v=9.3"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -628,6 +629,22 @@ function stillPendingGraph(email, wsId, gradedQid, judgeNow){
     const c = (q.id===gradedQid) ? (judgeNow===undefined?null:judgeNow) : v.correct;
     return c===null || c===undefined;                  // 미채점이면 남아 있음
   });
+}
+/* ⭕ 정답 판정으로 이 학생의 이 학습지가 완료되는가 (v1.29)
+   학습지 완료는 「모든 문항 정답 + 그래프 문항 모두 ⭕ 채점」이다(grading.js graphsAllCorrect). index 는 학생이
+   학습지를 다시 열어 저장할 때만 완료를 올리므로, 채점만으로 완료가 되게 하려면 채점 저장 때 여기서 올려야 한다.
+   시험지·복습 학습지는 완료 규칙이 따로 있어 건드리지 않는다. 판정을 ❌·보류로 바꿔도 완료를 되돌리지는 않는다
+   (표시 쪽에서 그래프 ⭕ 여부를 다시 보므로 학생·교사 화면에는 완료로 안 보인다). */
+function recordNowComplete(email, wsId, gradedQid, judgeNow){
+  if(judgeNow!==true) return false;
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const rec=(allRecords[wsId]||{})[email];
+  if(!ws || !rec || ws.type==='exam' || ws.type==='review') return false;
+  const pq0=rec.perQuestion||{};
+  const pq={...pq0, [gradedQid]:{...(pq0[gradedQid]||{}), correct:true}};
+  const qs=(ws.questions||[]).filter(q=>q.type!=='link');
+  if(!qs.length) return false;
+  return qs.every(q=>pq[q.id]?.correct===true);
 }
 /* 최근 발송 이력 (Apps Script 웹앱에서 로드) — [{at,email,wsId,q}]
    · 피드백(note) 안내는 365일 이내 1번만이므로 조회 기간을 365일로 잡는다 */
@@ -1644,6 +1661,14 @@ window.saveCurrent = async function(){
     }
     // 이 학생의 이 학습지에 아직 채점 안 된 그래프가 남았는지 표시 (아침 알림이 이 값을 봄)
     upd["hasPendingGraph"] = stillPendingGraph(stu.email, curWsId, curQid, _curJudgment);
+    // 이 ⭕ 판정으로 학습지의 모든 문항이 정답이 되면 여기서 완료로 올린다 (v1.29 — 학생이 다시 열지 않아도 완료 표시)
+    const _nowDone = recordNowComplete(stu.email, curWsId, curQid, _curJudgment);
+    if(_nowDone){
+      const _rec=(allRecords[curWsId]||{})[stu.email]||{};
+      upd["isComplete"] = true;
+      if(!_rec.completedAt) upd["completedAt"] = new Date().toISOString();
+      _rec.isComplete = true;
+    }
     if(teacherDrawing) upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
     try{
       await updateDoc(ref, upd);

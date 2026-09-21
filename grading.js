@@ -452,3 +452,26 @@ function judgeAnswer(q, ans, tokens){
   if(t==='graph') return null;   // scoring.html에서 수동 채점
   return false;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   학습지 완료 판정 (v9.3, index·teacher·scoring 공용)
+
+   그래프 문항은 선생님이 scoring.html 에서 손으로 채점한다. 그래서 학습지에 그래프 문항이 있으면
+   그림을 냈다고 끝이 아니라, 그래프 문항이 **모두 ⭕ 정답으로 채점된 뒤**에야 그 학습지가 완료다.
+   (저장된 isComplete 가 true 여도 — 옛 규칙으로 완료된 기록 포함 — 그래프가 ❌ 오답이거나
+    아직 채점 전이면 완료로 보여 주지 않는다. 다시 채점해 ⭕ 가 되면 그때 완료로 바뀐다.)
+   ═══════════════════════════════════════════════════════════════ */
+/* 이 학습지의 그래프 문항이 모두 정답으로 채점됐는가 (그래프 문항이 없으면 true) */
+function graphsAllCorrect(questions, perQuestion){
+  const pq = perQuestion || {};
+  return (questions || []).every(q => !q || q.type !== 'graph' || pq[q.id]?.correct === true);
+}
+/* records 문서(rec) 하나가 "완료"인가 — 완료 플래그·완료 시각·전부 응답 중 하나가 있고,
+   그래프 문항까지 모두 정답 채점된 경우. questions 가 없으면(학습지를 못 찾음) 옛 규칙 그대로. */
+function recordIsDone(rec, questions){
+  if(!rec) return false;
+  const flag = !!(rec.isComplete || rec.completedAt ||
+                  (rec.answeredCount && rec.totalCount && rec.answeredCount >= rec.totalCount));
+  if(!flag) return false;
+  return Array.isArray(questions) ? graphsAllCorrect(questions, rec.perQuestion) : true;
+}

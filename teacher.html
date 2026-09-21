@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="4.3">
+<meta name="app-version" content="4.4">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -232,7 +232,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=8.83"></script>
+<script src="grading.js?v=9.3"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -255,8 +255,9 @@ const VERSION = (document.querySelector('meta[name="app-version"]')?.content||""
 // SECRET 상수와 값이 같아야 함. URL 자체는 비밀번호가 아니라 장난 호출 차단용 토큰으로 보호됨.
 const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec";
 const AI_WEBAPP_TOKEN = "snug-ai-assist";
-// 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답)
-const isRecDone=r=>!!(r && (r.isComplete || r.completedAt || (r.answeredCount && r.totalCount && r.answeredCount>=r.totalCount)));
+// 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답) — 그래프 문항이 있으면 **모두 ⭕ 정답으로 채점**돼야 완료 (v4.4, grading.js recordIsDone)
+//   filter 콜백으로도 쓰이므로 인자는 r 하나만 받고, 학습지는 기록의 worksheetId 로 찾는다(못 찾으면 옛 규칙 그대로)
+const isRecDone=r=>{ if(!r) return false; const ws=r.worksheetId ? WORKSHEETS.find(w=>w.id===r.worksheetId) : null; return recordIsDone(r, ws?.questions); };
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
 const getAttempts=r=>r.perQuestion
   ? Object.values(r.perQuestion).reduce((s,v)=>s+(v.wrongInputs||[]).length,0)  // wrongInputs 기반(정답 포함 오류 방지)

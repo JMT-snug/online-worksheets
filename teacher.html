@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="4.2">
+<meta name="app-version" content="4.3">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1145,6 +1145,7 @@ async function renderExamSettings(){
   if(!units.length) h+='<div style="color:var(--ink3);font-size:13px">이 학년의 단원이 없습니다.</div>';
   units.forEach(u=>{
     // 복습 학습지(-FN)는 단원 맨 아래에 🔁 표시로 — AI 진단 조건(aiRequireReview)의 대상이 된다 (v3.44)
+    // 자동 생성된 복습 학습지는 제목 자체가 「🔁 단원 복습」이라 🔁 가 두 번 붙었다 → 제목이 🔁 로 시작하면 안 붙인다 (v4.3, 교사 지적)
     const sheets=WORKSHEETS.filter(ws=>ws.unitId===u.id).sort((a,b)=>(a.type==='review')-(b.type==='review'));
     if(!sheets.length) return;
     const allOn=sheets.every(ws=>sel.has(ws.id));
@@ -1156,7 +1157,7 @@ async function renderExamSettings(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:4px 16px;margin:6px 0 0 26px">
         ${sheets.map(ws=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" class="exam-ws-cb" data-unit="${u.id}" value="${ws.id}" ${sel.has(ws.id)?'checked':''} ${ro?'disabled':''} onchange="examSyncUnit('${u.id}')">
-          <span>${ws.type==='review'?'🔁 ':''}${ws.title}</span><span style="font-size:11px;color:var(--ink3)">${ws.type==='review'?'복습 · ':''}${ws.status==='draft'?'📝 준비 중':ws.status==='locked'?'🔒':''}</span></label>`).join('')}
+          <span>${ws.type==='review'&&!/^\s*🔁/.test(ws.title||'')?'🔁 ':''}${ws.title}</span><span style="font-size:11px;color:var(--ink3)">${ws.type==='review'?'복습 · ':''}${ws.status==='draft'?'📝 준비 중':ws.status==='locked'?'🔒':''}</span></label>`).join('')}
       </div></div>`;
   });
   h+=`</div>`;

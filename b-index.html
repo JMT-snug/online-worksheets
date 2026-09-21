@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.99">
+  <meta name="app-version" content="8.100">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1628,11 +1628,14 @@ function renderGradeTabs(){
 
 /* ══════════ 📝 시험 대비 (v8.78) ══════════
    교사가 teacher.html 「시험 대비 설정」에서 config/exam 에 학년별로 저장한다:
-     exams: { "1": {title,start,end,wsIds:[...],aiLimit}, "2":…, "3":… }
+     exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusAllDone}, "2":…, "3":… }
    · 오늘이 start~end(양 끝 포함) 안인 시험만 '진행 중'으로 본다 → 그 학년의 범위 학습지에
      📝 칩·호박색 배경, 종 🔔 공지, 단원 목록 위 배너(🤖 AI 학습 진단 버튼).
    · AI 진단은 시험 ID(학년-시작일)마다 aiLimit 회. 사용 횟수·결과는
      records/{내 이메일}/exam_ai/{시험ID} 에 둔다(기기 무관, 교사도 학생 상세에서 볼 수 있다).
+   · 🎁 완료 보너스 (v8.100): 교사가 aiBonusAllDone 을 켜면 범위 학습지를 **모두** 완료한 학생은 허용 횟수에 1회가 더해진다
+     (examBonus/examLimit). 완료 여부는 그때그때 진도로 판정하고 따로 저장하지 않는다 — 한 번 완료하면 되돌아가지 않으므로 충분하다.
+     aiLimit 0 + 보너스 켬 = "다 풀어야만 1회".
    · 교사 계정은 횟수 제한 없이 눌러 볼 수 있다(자기 기록 기준이라 대개 비어 있다 — 동작 확인용). */
 let EXAM_CONFIG = {};        // config/exam 의 exams 맵
 let EXAM_WS = {};            // wsId → 진행 중인 시험 (범위 판정용)
@@ -1663,13 +1666,17 @@ function activeExams(){
     if(today<ex.start||today>ex.end) continue;
     const known=new Set(WORKSHEETS.map(w=>w.id));
     out.push({ grade:g, id:g+'-'+ex.start, title:ex.title||(g+'학년 시험'), start:ex.start, end:ex.end,
-      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview,
+      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview, aiBonusAllDone:!!ex.aiBonusAllDone,
       wsIds:(ex.wsIds||[]).filter(id=>known.has(id)) });
   }
   return out;
 }
 function unitInExamRange(unit){ return WORKSHEETS.some(w=>w.unitId===unit.id && EXAM_WS[w.id]); }
-function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, ex.aiLimit-(st.count||0)); }
+/* 🎁 완료 보너스 — 범위 학습지를 모두 완료했으면 1, 아니면 0 (범위가 비어 있거나 조건이 꺼져 있으면 0) */
+function examBonus(ex){ return (ex.aiBonusAllDone && ex.wsIds.length>0 && ex.wsIds.every(examWsDone)) ? 1 : 0; }
+/* 이 학생의 허용 횟수 = 교사가 정한 횟수 + 완료 보너스 */
+function examLimit(ex){ return ex.aiLimit + examBonus(ex); }
+function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, examLimit(ex)-(st.count||0)); }
 /* 범위 학습지 '완료' — 일반 학습지는 isComplete, 복습 학습지(-FN)는 1회 이상 완료(completions) */
 function examWsDone(id){ const p=wsProgress[id]; if(!p) return false; const ws=WORKSHEETS.find(w=>w.id===id); return ws?.type==='review' ? (p.completions||0)>=1 : !!p.isComplete; }
 /* 🔁 AI 진단 조건 (v8.80): 교사가 aiRequireReview 를 켜면 범위 안 복습 학습지를 각각 1회 이상 완료해야 진단 가능.
@@ -1694,18 +1701,24 @@ function renderExamBanner(){
     const left=examRemaining(ex);
     const hasPrev=(st.results||[]).length>0;
     const gate=examReviewGate(ex);
+    const limit=examLimit(ex), bonus=examBonus(ex);
+    const bonusHint = (!teacher && ex.aiBonusAllDone && total>0)   // 🎁 완료 보너스 안내 (v8.100)
+      ? (bonus ? '🎁 시험 범위 학습지를 모두 완료해서 AI 진단 1회가 추가됐어요'
+               : `🎁 시험 범위 학습지를 모두 완료하면 AI 진단을 1회 ${ex.aiLimit>0?'더 ':''}받을 수 있어요 (${total-done}개 남음)`)
+      : '';
     let btns='';
-    if(ex.aiLimit>0 || teacher){
+    if(limit>0 || teacher){
       const can = teacher || (left>0 && gate.ok);
       const why = teacher ? '교사 계정 — 횟수·조건 제한 없이 실행돼요'
-        : left<=0 ? '이번 시험의 AI 진단을 모두 사용했어요'
+        : left<=0 ? '이번 시험의 AI 진단을 모두 사용했어요'+(ex.aiBonusAllDone&&!bonus&&total>0?' — 범위 학습지를 모두 완료하면 1회 더 받을 수 있어요':'')
         : !gate.ok ? '아직 안 한 복습 학습지: '+gate.missing.map(w=>w.title).join(', ')
         : '시험 범위 학습지의 기록을 바탕으로 AI가 학습 상태를 진단해요';
-      btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'} title="${escHtml(why)}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${ex.aiLimit})`}</button>`;
+      btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'} title="${escHtml(why)}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${limit})`}</button>`;
       if(!teacher && left>0 && !gate.ok)
         btns+=`<div style="flex-basis:100%;font-size:12px;color:#b45309">🔁 시험 범위의 복습 학습지 ${gate.required.length-gate.missing.length}/${gate.required.length}개 완료 — 각각 1회 이상 풀면 AI 진단을 받을 수 있어요</div>`;
       if(hasPrev) btns+=`<button type="button" class="eb-btn ghost" data-ex="${ex.id}" data-act="last">지난 진단 보기</button>`;
     }
+    if(bonusHint) btns+=`<div style="flex-basis:100%;font-size:12px;color:${bonus?'#166534':'#b45309'}">${bonusHint}</div>`;
     return `<div class="exam-banner">
       <div>
         <div class="eb-title">📝 ${ex.grade}학년 ${escHtml(ex.title)} 대비 <span style="font-weight:600;font-size:12px">${_mdStr(ex.start)} ~ ${_mdStr(ex.end)}</span></div>
@@ -1817,8 +1830,9 @@ async function runExamAI(ex){
   const payload=buildExamAIPayload(ex);
   if(!payload.worksheets.length && !payload.notStarted.length){ alert('시험 범위 학습지가 없어요.'); return; }
   const msg = teacher ? '교사 계정으로 AI 진단을 실행합니다 (횟수 제한 없음).'
-    : `AI 학습 진단은 이번 시험에 ${ex.aiLimit}회만 받을 수 있어요 (남은 횟수 ${left}회).\n`+
+    : `AI 학습 진단은 이번 시험에 ${examLimit(ex)}회만 받을 수 있어요 (남은 횟수 ${left}회).\n`+
       (payload.notStarted.length?`아직 안 푼 범위 학습지가 ${payload.notStarted.length}개 있어요 — 더 풀고 나서 받으면 진단이 더 정확해요.\n`:'')+
+      (ex.aiBonusAllDone&&!examBonus(ex)?'🎁 범위 학습지를 모두 완료하면 1회 더 받을 수 있어요.\n':'')+
       '\n지금 진단을 받을까요?';
   if(!confirm(msg)) return;
   showExamAIResult(ex, null, false, '🤖 진단 중… (몇십 초 걸릴 수 있어요)');
@@ -1877,7 +1891,7 @@ async function autoReportExamAIFail(ex, err, payload){
   const description='[자동 신고] 🤖 시험 대비 AI 진단 실패\n'
     +'• 시험: '+ex.grade+'학년 '+ex.title+' ('+ex.id+')\n'
     +'• 오류: '+msg+'\n'
-    +'• 사용 횟수: '+(st.count||0)+'/'+ex.aiLimit+' (이번 실패는 횟수에 안 들어감)\n'
+    +'• 사용 횟수: '+(st.count||0)+'/'+examLimit(ex)+' (이번 실패는 횟수에 안 들어감)\n'
     +'• 보낸 자료: 학습지 '+(payload?.worksheets?.length||0)+'개 · 미시작 '+(payload?.notStarted?.length||0)+'개'
     +(isTeacherAcct()?'\n• 교사 계정에서 실행':'');
   const base={
@@ -2124,7 +2138,8 @@ function activeNotices(){
     title:`${ex.grade}학년 ${ex.title} 대비 (${_mdStr(ex.start)}~${_mdStr(ex.end)})`,
     body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
          (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
-         (ex.aiLimit>0&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
+         (ex.aiBonusAllDone?` 🎁 범위 학습지를 모두 완료하면 AI 진단을 1회 ${ex.aiLimit>0?'더 ':''}받을 수 있어요.`:'')+
+         ((ex.aiLimit>0||ex.aiBonusAllDone)&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
   // 순서: 시험 공지 → 교사가 보낸 공지(최근 것이 위) → 코드에 박은 공지
   const remoteN=remoteNoticesForMe().slice().reverse();
   return [...examN, ...remoteN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')

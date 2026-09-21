@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.27">
+<meta name="app-version" content="scoring-v1.28">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -390,6 +390,38 @@ let curStuIdx = 0;
 let curCls = "", curStatus = "all";
 let classMap = {};  // email → 반 정보
 
+/* ── 문제 텍스트 렌더 규칙 (v1.28) — index/edit 의 _bqSpace·normTex 와 **같은 구현** ──
+   scoring 은 문제 텍스트를 innerHTML 에 그대로 넣고 MathJax 에 맡겨서, 교사가 수식 안에 띄우려고 넣은 backtick(`)이
+   글자 그대로 찍혔다(교사 지적 2026-09-21). index 와 같은 규칙으로: 수식 구분자 안의 backtick → 반칸 공백(\,),
+   인라인 수식 양끝에 반칸 자동, 이중 백슬래시 정규화. 그리는 순간에만 바꾸므로 저장된 문항은 그대로다. */
+function _bqSpace(text){
+  if(!text) return text;
+  const s=String(text);
+  if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
+  /* 첫 갈래 \\\$ 는 이스케이프한 달러(금액 표기 \$3)를 통째로 집어 그대로 돌려준다 — index 와 같은 이유 */
+  return s.replace(/\\\$|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^$\\\n])*?\$/g, m=>{
+    if(m==='\\$') return m;
+    const isBlock = m.startsWith('$$') || m.startsWith('\\[');
+    if(isBlock) return m.includes('`') ? m.replace(/`/g,'\\,') : m;
+    const inl = m.startsWith('\\(');
+    const open = inl ? '\\(' : '$', close = inl ? '\\)' : '$';
+    let body = m.slice(open.length, m.length-close.length).replace(/`/g,'\\,');
+    if(!body.trim()) return m;
+    if(!/^\s*\\,/.test(body)) body = '\\,' + body;
+    if(!/\\,\s*$/.test(body)) body = body + '\\,';
+    return open + body + close;
+  });
+}
+function normTex(text){
+  if(!text) return text;
+  return _bqSpace(String(text).replace(/\\\\/g,'\\'));
+}
+/* 문제 텍스트 → 화면 HTML: normTex + 줄바꿈(<br>\n 중복 정리 뒤 \n → <br>) — index fracText 의 앞부분과 같다 */
+function qTextHtml(text){
+  let t = normTex(String(text||''));
+  t = t.replace(/<br\s*\/?>\s*\n/gi,'<br>').replace(/\n\s*<br\s*\/?>/gi,'<br>').replace(/\n/g,'<br>');
+  return t;
+}
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1279,7 +1311,7 @@ function loadQuestion(opts){
 
   // 문제 텍스트
   const qTextEl = document.getElementById('q-text');
-  qTextEl.innerHTML = q.text || '(문제 텍스트 없음)';
+  qTextEl.innerHTML = q.text ? qTextHtml(q.text) : '(문제 텍스트 없음)';   // backtick → 반칸 등 index 와 같은 규칙 (v1.28)
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([qTextEl]).catch(()=>{});
 
   // 참조 격자

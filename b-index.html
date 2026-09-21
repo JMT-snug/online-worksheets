@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="9.0">
+  <meta name="app-version" content="9.1">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -90,7 +90,7 @@ header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:ce
 /* 📢 공지 — 눌러서 이동할 곳이 없으니 커서도 바꾸지 않는다 */
 .bell-item.notice{cursor:default;background:#fffbeb;border-left:3px solid var(--amber)}
 .bell-item.notice:hover{background:#fffbeb}
-.bell-notice-body{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.5;white-space:normal;word-break:break-word}
+.bell-notice-body{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.5;white-space:pre-line;word-break:break-word}   /* pre-line: 교사가 공지에 넣은 줄바꿈을 살린다 (v9.1) */
 .bell-item-top{font-size:13px;color:var(--ink);font-weight:600}
 .bell-item-mark{font-size:12px;color:var(--ink2);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px}
 /* 채점 결과 칩 (종 알림) — 색으로 정답/오답/의견을 구분 */

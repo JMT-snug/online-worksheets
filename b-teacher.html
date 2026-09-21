@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.53">
+<meta name="app-version" content="3.54">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1053,8 +1053,10 @@ window.renderStudentDetail=renderStudentDetail;
 
 /* ══════════ 📝 시험 대비 설정 (teacher v3.43) ══════════
    Firestore config/exam 문서 하나에 학년별로 시험을 둔다:
-     { exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusAllDone,updatedAt,updatedBy}, "2":…, "3":… } }
-   · aiBonusAllDone (v3.53): 범위 학습지를 모두 완료한 학생에게 AI 진단 1회 추가 (index v8.100 이 진도로 판정)
+     { exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusEvery,aiBonusMax,updatedAt,updatedBy}, "2":…, "3":… } }
+   · 🎁 aiBonusEvery(n, 0=끔) · aiBonusMax(m) (v3.54): 범위 학습지를 모두 완료한 뒤 범위의 복습 학습지를 각각 n회 완료할 때마다
+     AI 진단 1회 추가, 최대 m회 (index v9.0 이 진도로 판정 — 「각각」은 복습 학습지 완료 횟수의 최솟값). v3.53 의 aiBonusAllDone(boolean) 은
+     저장할 때 지우고, index 는 그것만 있으면 n=1·m=1 로 읽는다.
    · 학생 index 는 오늘이 start~end 안이면 그 학년의 범위 학습지에 📝 표시를 하고,
      종 🔔 공지 + 🤖 AI 학습 진단(aiLimit 회) 배너를 띄운다.
    · 시험 ID = 학년-start (예 1-2026-10-12). 학생의 진단 횟수는 이 ID 로 세므로
@@ -1112,15 +1114,18 @@ async function renderExamSettings(){
       🔁 범위에 넣은 <b>복습 학습지를 각각 1회 이상 완료</b>해야 AI 진단을 받을 수 있게
       <span style="font-size:11px;color:var(--ink3)">(아래 목록에서 복습 학습지도 범위에 넣어야 적용됩니다)</span>
     </label>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0 0 10px;cursor:pointer">
-      <input type="checkbox" id="exam-bonus-alldone" ${ex?.aiBonusAllDone?'checked':''} ${ro?'disabled':''}>
-      🎁 <b>시험 범위 학습지를 모두 완료</b>하면 AI 진단 <b>1회 추가</b>
-      <span style="font-size:11px;color:var(--ink3)">(허용 횟수와 별개 — 다 풀고 나서 마지막으로 한 번 더 받게. 허용 0회 + 이것만 켜면 「다 풀어야만 1회」)</span>
-    </label>
+    <div style="display:flex;align-items:center;gap:6px;font-size:13px;margin:0 0 10px;flex-wrap:wrap">
+      🎁 <b>추가 횟수</b>: 시험 범위 학습지를 <b>모두 완료</b>한 뒤, 범위의 🔁 복습 학습지를 각각
+      <input type="number" id="exam-bonus-every" min="0" max="10" value="${_examBonusEvery(ex)}" style="width:58px;padding:5px 8px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit" ${ro?'disabled':''}>
+      회 완료할 때마다 <b>1회 추가</b> (최대
+      <input type="number" id="exam-bonus-max" min="1" max="10" value="${_examBonusMax(ex)}" style="width:58px;padding:5px 8px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit" ${ro?'disabled':''}>
+      회)
+      <span style="font-size:11px;color:var(--ink3);flex-basis:100%">0회로 두면 추가 없음. 「각각」은 복습 학습지들의 완료 횟수 중 <b>가장 적은 값</b>으로 셉니다(여러 단원의 복습을 고르게). 범위에 복습 학습지가 있어야 합니다. 허용 0회 + 추가만 두면 「다 풀고 복습해야만」 받게 됩니다.</span>
+    </div>
     <div style="font-size:12px;color:var(--ink3);line-height:1.6">
       · 시작일부터 종료일까지(양 끝 포함) 학생 화면에 표시됩니다. 0회로 두면 AI 진단 버튼은 나오지 않고 범위 표시만 됩니다.<br>
       · 학생의 AI 진단 횟수는 「학년-시작일」을 시험 ID 로 셉니다. <b>시작일을 바꾸면 새 시험으로 보아 횟수가 다시 생깁니다.</b><br>
-      · 🎁 완료 추가를 켜면 학생 배너에 「범위 학습지를 모두 완료하면 1회 더 (N개 남음)」 안내가 뜨고, 모두 완료한 순간부터 허용 횟수에 1이 더해집니다(복습 학습지는 1회 이상 완료가 「완료」입니다).
+      · 🎁 추가 횟수를 켜면 학생 배너에 「모두 완료하면(N개 남음) … 각각 n회 완료할 때마다 1회씩 추가」 안내가 뜨고, 다 완료한 뒤에는 「복습 완료 r회 → k회 추가됨 · x회 더 완료하면 1회 추가」로 바뀝니다(복습 학습지는 1회 이상 완료가 「완료」).
       ${ex?'<br>· 현재 시험 ID: <code>'+examIdOf(g,ex.start)+'</code>'+(ex.updatedAt?' · 마지막 저장 '+String(ex.updatedAt).slice(0,16).replace('T',' ')+' ('+(ex.updatedBy||'')+')':''):''}
     </div>
   </div>
@@ -1156,6 +1161,9 @@ async function renderExamSettings(){
 }
 function escapeAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 window.examSelectGrade=function(g){ examSelGrade=g; renderExamSettings(); };
+/* 🎁 추가 횟수 칸의 값 — 새 필드가 있으면 그것, v3.53 의 aiBonusAllDone 만 있으면 n=1·m=1, 없으면 끔(0)·최대 3 */
+function _examBonusEvery(ex){ return ex?.aiBonusEvery!==undefined ? Math.max(0,+ex.aiBonusEvery||0) : (ex?.aiBonusAllDone?1:0); }
+function _examBonusMax(ex){ return ex?.aiBonusMax!==undefined ? Math.max(1,+ex.aiBonusMax||1) : (ex?.aiBonusAllDone?1:3); }
 function examUpdateCount(){
   const n=document.querySelectorAll('.exam-ws-cb:checked').length;
   const el=document.getElementById('exam-sel-count'); if(el) el.textContent=n+'개 선택';
@@ -1182,9 +1190,11 @@ window.saveExamSettings=async function(g){
   const aiLimit=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-ailimit')?.value,10)||0));
   const wsIds=[...document.querySelectorAll('.exam-ws-cb:checked')].map(cb=>cb.value);
   const aiRequireReview=!!document.getElementById('exam-require-review')?.checked;
-  const aiBonusAllDone=!!document.getElementById('exam-bonus-alldone')?.checked;
+  const aiBonusEvery=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-bonus-every')?.value,10)||0));
+  const aiBonusMax=Math.max(1,Math.min(10,parseInt(document.getElementById('exam-bonus-max')?.value,10)||1));
   if(!start||!end){ alert('시작일과 종료일을 모두 입력하세요.'); return; }
-  if(aiBonusAllDone && !wsIds.length && !confirm('완료 추가를 켰지만 범위 학습지가 없어 추가 횟수가 생기지 않습니다. 그대로 저장할까요?')) return;
+  if(aiBonusEvery>0 && !wsIds.some(id=>WORKSHEETS.find(w=>w.id===id)?.type==='review')
+     && !confirm('추가 횟수를 켰지만 범위에 🔁 복습 학습지가 없어 추가 횟수가 생기지 않습니다(복습 학습지 완료 횟수로 세기 때문). 그대로 저장할까요?')) return;
   if(aiRequireReview && aiLimit>0 && !wsIds.some(id=>WORKSHEETS.find(w=>w.id===id)?.type==='review')
      && !confirm('복습 학습지 완료 조건을 켰지만 범위에 복습 학습지가 하나도 없습니다. 이대로면 조건이 항상 통과됩니다. 그대로 저장할까요?')) return;
   if(start>end){ alert('종료일이 시작일보다 앞설 수 없습니다.'); return; }
@@ -1193,9 +1203,10 @@ window.saveExamSettings=async function(g){
   if(prev && prev.start!==start && !confirm('시작일이 바뀌면 새 시험으로 보아 학생들의 AI 진단 횟수가 다시 생깁니다. 계속할까요?')) return;
   const msg=document.getElementById('exam-save-msg'); if(msg) msg.textContent='저장 중…';
   try{
-    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit, aiRequireReview, aiBonusAllDone,
+    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit, aiRequireReview, aiBonusEvery, aiBonusMax,
       updatedAt:new Date().toISOString(), updatedBy:tUser.email };
-    await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:entry } },{ merge:true });
+    // v3.53 의 aiBonusAllDone 은 지운다 — merge 라 그냥 두면 남는다 (index 는 새 필드가 있으면 새 필드만 본다)
+    await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:{ ...entry, aiBonusAllDone:deleteField() } } },{ merge:true });
     examConfig.exams[String(g)]=entry;
     if(msg) msg.textContent='✅ 저장했습니다. 학생 화면은 다음 접속(새로고침)부터 반영됩니다.';
     renderExamSettings();

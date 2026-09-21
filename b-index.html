@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.100">
+  <meta name="app-version" content="9.0">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1628,14 +1628,16 @@ function renderGradeTabs(){
 
 /* ══════════ 📝 시험 대비 (v8.78) ══════════
    교사가 teacher.html 「시험 대비 설정」에서 config/exam 에 학년별로 저장한다:
-     exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusAllDone}, "2":…, "3":… }
+     exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusEvery,aiBonusMax}, "2":…, "3":… }
    · 오늘이 start~end(양 끝 포함) 안인 시험만 '진행 중'으로 본다 → 그 학년의 범위 학습지에
      📝 칩·호박색 배경, 종 🔔 공지, 단원 목록 위 배너(🤖 AI 학습 진단 버튼).
    · AI 진단은 시험 ID(학년-시작일)마다 aiLimit 회. 사용 횟수·결과는
      records/{내 이메일}/exam_ai/{시험ID} 에 둔다(기기 무관, 교사도 학생 상세에서 볼 수 있다).
-   · 🎁 완료 보너스 (v8.100): 교사가 aiBonusAllDone 을 켜면 범위 학습지를 **모두** 완료한 학생은 허용 횟수에 1회가 더해진다
-     (examBonus/examLimit). 완료 여부는 그때그때 진도로 판정하고 따로 저장하지 않는다 — 한 번 완료하면 되돌아가지 않으므로 충분하다.
-     aiLimit 0 + 보너스 켬 = "다 풀어야만 1회".
+   · 🎁 조건부 추가 횟수 (v9.0, 교사 요청): 교사 설정 aiBonusEvery(n, 0=끔) · aiBonusMax(m).
+     기본 조건 = 시험 범위 학습지를 **모두** 완료(examAllDone). 그 뒤 범위의 🔁 복습 학습지를 **각각** n회 완료할 때마다 1회 추가(최대 m회).
+     「각각」은 복습 학습지들의 완료 횟수 중 **가장 적은 값**(examReviewMin)으로 센다 — 여러 단원의 복습을 고르게 하게.
+     범위에 복습 학습지가 없으면 추가 없음. 그때그때 진도로 판정하고 저장하지 않는다(완료 횟수는 줄지 않는다).
+     n=1·m=1 이면 v8.100 의 「모두 완료하면 1회」와 같다(옛 aiBonusAllDone 은 그렇게 읽는다). aiLimit 0 + 추가만 = "다 풀고 복습해야만".
    · 교사 계정은 횟수 제한 없이 눌러 볼 수 있다(자기 기록 기준이라 대개 비어 있다 — 동작 확인용). */
 let EXAM_CONFIG = {};        // config/exam 의 exams 맵
 let EXAM_WS = {};            // wsId → 진행 중인 시험 (범위 판정용)
@@ -1666,15 +1668,25 @@ function activeExams(){
     if(today<ex.start||today>ex.end) continue;
     const known=new Set(WORKSHEETS.map(w=>w.id));
     out.push({ grade:g, id:g+'-'+ex.start, title:ex.title||(g+'학년 시험'), start:ex.start, end:ex.end,
-      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview, aiBonusAllDone:!!ex.aiBonusAllDone,
+      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview,
+      // 🎁 추가 횟수 — 새 필드가 있으면 그것, 없으면 옛 aiBonusAllDone(v8.100) 을 n=1·m=1 로 읽는다
+      aiBonusEvery: ex.aiBonusEvery!==undefined ? Math.max(0,+ex.aiBonusEvery||0) : (ex.aiBonusAllDone?1:0),
+      aiBonusMax: ex.aiBonusMax!==undefined ? Math.max(1,+ex.aiBonusMax||1) : (ex.aiBonusAllDone?1:3),
       wsIds:(ex.wsIds||[]).filter(id=>known.has(id)) });
   }
   return out;
 }
 function unitInExamRange(unit){ return WORKSHEETS.some(w=>w.unitId===unit.id && EXAM_WS[w.id]); }
-/* 🎁 완료 보너스 — 범위 학습지를 모두 완료했으면 1, 아니면 0 (범위가 비어 있거나 조건이 꺼져 있으면 0) */
-function examBonus(ex){ return (ex.aiBonusAllDone && ex.wsIds.length>0 && ex.wsIds.every(examWsDone)) ? 1 : 0; }
-/* 이 학생의 허용 횟수 = 교사가 정한 횟수 + 완료 보너스 */
+/* 🎁 조건부 추가 횟수 — 범위의 복습 학습지 목록 · 그 완료 횟수의 최솟값 · 범위 모두 완료 여부 */
+function examReviewWs(ex){ return ex.wsIds.map(id=>WORKSHEETS.find(w=>w.id===id)).filter(w=>w&&w.type==='review'); }
+function examReviewMin(ex){ const rs=examReviewWs(ex); return rs.length ? Math.min(...rs.map(w=>(wsProgress[w.id]?.completions)||0)) : 0; }
+function examAllDone(ex){ return ex.wsIds.length>0 && ex.wsIds.every(examWsDone); }
+/* 추가 횟수 = 모두 완료했고 복습 학습지가 있을 때, floor(복습 완료 최솟값 / n) 을 m 으로 자른 값 */
+function examBonus(ex){
+  if(!(ex.aiBonusEvery>0) || !examAllDone(ex) || !examReviewWs(ex).length) return 0;
+  return Math.min(ex.aiBonusMax, Math.floor(examReviewMin(ex)/ex.aiBonusEvery));
+}
+/* 이 학생의 허용 횟수 = 교사가 정한 횟수 + 추가 횟수 */
 function examLimit(ex){ return ex.aiLimit + examBonus(ex); }
 function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, examLimit(ex)-(st.count||0)); }
 /* 범위 학습지 '완료' — 일반 학습지는 isComplete, 복습 학습지(-FN)는 1회 이상 완료(completions) */
@@ -1702,15 +1714,20 @@ function renderExamBanner(){
     const hasPrev=(st.results||[]).length>0;
     const gate=examReviewGate(ex);
     const limit=examLimit(ex), bonus=examBonus(ex);
-    const bonusHint = (!teacher && ex.aiBonusAllDone && total>0)   // 🎁 완료 보너스 안내 (v8.100)
-      ? (bonus ? '🎁 시험 범위 학습지를 모두 완료해서 AI 진단 1회가 추가됐어요'
-               : `🎁 시험 범위 학습지를 모두 완료하면 AI 진단을 1회 ${ex.aiLimit>0?'더 ':''}받을 수 있어요 (${total-done}개 남음)`)
-      : '';
+    // 🎁 조건부 추가 횟수 안내 (v9.0) — 복습 학습지가 범위에 없으면 추가가 생기지 않으므로 안내도 없다
+    const n=ex.aiBonusEvery, m=ex.aiBonusMax, bonusOn = !teacher && n>0 && total>0 && examReviewWs(ex).length>0;
+    let bonusHint='';
+    if(bonusOn){
+      if(!examAllDone(ex)) bonusHint=`🎁 시험 범위 학습지를 모두 완료하면(${total-done}개 남음), 그 뒤 🔁 복습 학습지를 각각 ${n}회 완료할 때마다 AI 진단이 1회씩 추가돼요 (최대 ${m}회)`;
+      else if(bonus>=m) bonusHint=`🎁 복습 학습지 완료로 AI 진단 ${bonus}회 추가됨 (최대 ${m}회)`;
+      else { const r=examReviewMin(ex);
+        bonusHint=`🎁 🔁 복습 학습지 완료 ${r}회(가장 적게 한 것 기준) → AI 진단 ${bonus}회 추가됨 · 각각 ${n-(r%n)}회 더 완료하면 1회 추가 (최대 ${m}회)`; }
+    }
     let btns='';
     if(limit>0 || teacher){
       const can = teacher || (left>0 && gate.ok);
       const why = teacher ? '교사 계정 — 횟수·조건 제한 없이 실행돼요'
-        : left<=0 ? '이번 시험의 AI 진단을 모두 사용했어요'+(ex.aiBonusAllDone&&!bonus&&total>0?' — 범위 학습지를 모두 완료하면 1회 더 받을 수 있어요':'')
+        : left<=0 ? '이번 시험의 AI 진단을 모두 사용했어요'+(bonusOn&&bonus<m ? (examAllDone(ex)?' — 복습 학습지를 각각 '+n+'회 더 완료하면 1회 더 받을 수 있어요':' — 범위 학습지를 모두 완료한 뒤 복습 학습지를 각각 '+n+'회 완료하면 1회 더 받을 수 있어요') : '')
         : !gate.ok ? '아직 안 한 복습 학습지: '+gate.missing.map(w=>w.title).join(', ')
         : '시험 범위 학습지의 기록을 바탕으로 AI가 학습 상태를 진단해요';
       btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'} title="${escHtml(why)}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${limit})`}</button>`;
@@ -1832,7 +1849,8 @@ async function runExamAI(ex){
   const msg = teacher ? '교사 계정으로 AI 진단을 실행합니다 (횟수 제한 없음).'
     : `AI 학습 진단은 이번 시험에 ${examLimit(ex)}회만 받을 수 있어요 (남은 횟수 ${left}회).\n`+
       (payload.notStarted.length?`아직 안 푼 범위 학습지가 ${payload.notStarted.length}개 있어요 — 더 풀고 나서 받으면 진단이 더 정확해요.\n`:'')+
-      (ex.aiBonusAllDone&&!examBonus(ex)?'🎁 범위 학습지를 모두 완료하면 1회 더 받을 수 있어요.\n':'')+
+      ((ex.aiBonusEvery>0&&examReviewWs(ex).length&&examBonus(ex)<ex.aiBonusMax)
+        ? (examAllDone(ex)?`🎁 복습 학습지를 각각 ${ex.aiBonusEvery}회 완료할 때마다 1회 더 받을 수 있어요.\n`:`🎁 범위 학습지를 모두 완료한 뒤 복습 학습지를 각각 ${ex.aiBonusEvery}회 완료할 때마다 1회 더 받을 수 있어요.\n`) : '')+
       '\n지금 진단을 받을까요?';
   if(!confirm(msg)) return;
   showExamAIResult(ex, null, false, '🤖 진단 중… (몇십 초 걸릴 수 있어요)');
@@ -2138,8 +2156,8 @@ function activeNotices(){
     title:`${ex.grade}학년 ${ex.title} 대비 (${_mdStr(ex.start)}~${_mdStr(ex.end)})`,
     body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
          (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
-         (ex.aiBonusAllDone?` 🎁 범위 학습지를 모두 완료하면 AI 진단을 1회 ${ex.aiLimit>0?'더 ':''}받을 수 있어요.`:'')+
-         ((ex.aiLimit>0||ex.aiBonusAllDone)&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
+         (ex.aiBonusEvery>0?` 🎁 범위 학습지를 모두 완료한 뒤 🔁 복습 학습지를 각각 ${ex.aiBonusEvery}회 완료할 때마다 AI 진단이 1회씩 추가돼요(최대 ${ex.aiBonusMax}회).`:'')+
+         ((ex.aiLimit>0||ex.aiBonusEvery>0)&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
   // 순서: 시험 공지 → 교사가 보낸 공지(최근 것이 위) → 코드에 박은 공지
   const remoteN=remoteNoticesForMe().slice().reverse();
   return [...examN, ...remoteN, ...NOTICES].filter(n=>(!n.until||n.until>=today)&&st[n.id]!=='seen')

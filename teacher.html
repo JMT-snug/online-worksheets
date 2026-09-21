@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="3.50">
+<meta name="app-version" content="3.51">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -217,6 +217,17 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
       <button class="img-modal-close" onclick="document.getElementById('qd-modal').style.display='none'">닫기</button>
     </div>
     <div id="qd-body"></div>
+  </div>
+</div>
+
+<!-- 📊 빈출 오답 분석 팝업 (v3.51) -->
+<div id="wa-modal" class="img-modal-bg" style="display:none" onclick="if(event.target.id==='wa-modal')event.target.style.display='none'">
+  <div class="img-modal" style="max-width:760px">
+    <div class="img-modal-head">
+      <span class="img-modal-title" id="wa-title">🤖 빈출 오답 분석</span>
+      <button class="img-modal-close" onclick="document.getElementById('wa-modal').style.display='none'">닫기</button>
+    </div>
+    <div id="wa-body" style="font-size:13px"></div>
   </div>
 </div>
 
@@ -1338,11 +1349,13 @@ window._updateAIUnitSelVisibility=function(){
   if(sel) sel.style.display = scope==='unit' ? '' : 'none';
 };
 const AI_ANALYZE_SKIP_TYPES=new Set(['graph','link','pool_random']);
-/* ══════════ 🕳 예상 오답 경로 대조 (v3.48) ══════════
-   edit 의 🤖 AI 검토가 문항에 저장해 둔 `aiTraps:[{wrong,path,label}]` — "학생이 이렇게 틀릴 것 같다"는
-   예측과 그 오답이 나오는 경로 — 를 학생의 실제 오답과 맞춰 본다. 일치하면 hit:true 로 표시해 AI 에
-   함께 보내고(원인을 추측 대신 이 경로로 설명하게), 화면에는 우리가 직접 센 적중 횟수를 따로 보여 준다.
-   문항에 aiTraps 가 없으면 아무 일도 일어나지 않는다(예전과 동일). */
+/* ══════════ 🕳 오답 경로 대조 (v3.48 · v3.51) ══════════
+   두 출처의 오답 경로를 학생의 실제 오답과 맞춰 본다:
+     · aiTraps   — edit 의 🤖 AI 검토가 문항만 보고 "학생이 이렇게 틀릴 것 같다"고 예상해 둔 것 (src 'ai')
+     · freqTraps — 이 화면의 📊 빈출 오답 분석이 그 학습지를 푼 학생 전체의 **실제** 오답에서 찾은 원인 (src 'freq', students = 낸 학생 수)
+   같은 오답이 양쪽에 있으면 하나로 합친다(src 'both' — 원인 설명은 실제 데이터로 분석한 freq 쪽을 쓴다).
+   일치하면 hit:true 로 표시해 AI 에 함께 보내고(원인을 추측 대신 이 경로로 설명하게), 화면에는 우리가 직접 센 적중 횟수를 따로 보여 준다.
+   문항에 둘 다 없으면 아무 일도 일어나지 않는다(예전과 동일). index 의 시험 대비 진단(v8.98)도 같은 규칙이다. */
 /** 예상 오답·경로를 화면에 그릴 때 쓰는 escape — 답에 부등호(<)가 들어가면 태그로 읽혀 화면이 깨진다 */
 function _te(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 /** 답 비교용 정규화 — 공백·쉼표 제거, 전각/유니코드 기호를 보통 기호로, 대소문자 무시.
@@ -1354,22 +1367,49 @@ function _trapNorm(v){
     .replace(/[≤]/g,'<=').replace(/[≥]/g,'>=')
     .replace(/^\+/,'');
 }
-/** 이 문항의 예상 오답 목록 + 학생 답과 일치하는지 (최대 3개) */
-function _trapsFor(q, studentAns){
-  const list=q.aiTraps||[];   // 상한 없음 (v3.50) — 프롬프트에는 일치한 것만 자세히 가므로 많아도 비대해지지 않는다
-  if(!list.length) return [];
-  const sa=_trapNorm(studentAns);
-  return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),
-    hit: sa!=='' && _trapNorm(t.wrong)===sa }));
+/** 객관식 오답 기록은 0부터 세는 보기 번호("0,2")다 — 예상 오답·빈출 오답은 사람이 읽는 1부터 세는 번호("1,3")로
+    적으므로 맞춰서 비교한다 (v3.51. 그전엔 객관식은 한 번도 일치하지 않았다). 숫자·쉼표만으로 된 값만 바꾼다 */
+function _multiNums(raw){
+  const s=String(raw??'').trim();
+  if(!s || !/^\d+(,\d+)*$/.test(s)) return s;
+  return s.split(',').map(n=>String(+n+1)).join(',');
 }
-/** 적중한 경로를 이름(label)별로 묶어 센다 — 화면 표시용. [{label, path, count, answers:[...]}] */
+/** 학생 오답을 대조·표시용 형태로 — 객관식은 1부터 세는 보기 번호, 나머지는 그대로 */
+function _ansForCompare(q, raw){ return q?.type==='multi' ? _multiNums(raw) : String(raw??''); }
+/** 학생 답을 AI 에 보낼 글로 — 객관식은 "1,3번 (보기 글)" */
+function _studentAnsText(q, raw){
+  if(q?.type!=='multi') return String(raw??'');
+  const nums=_multiNums(raw);
+  if(!/^\d+(,\d+)*$/.test(nums)) return String(raw??'');
+  const texts=nums.split(',').map(n=>(q.options||[])[+n-1]).filter(t=>t!=null);
+  return nums+'번'+(texts.length?` (${texts.join(' / ')})`:'');
+}
+/** 이 문항의 오답 경로 목록(예상 + 빈출, 같은 오답은 합침 · 상한 없음) + 학생 답과 일치하는지 */
+function _trapsFor(q, studentAns){
+  const ai=q.aiTraps||[], fq=q.freqTraps||[];
+  if(!ai.length && !fq.length) return [];
+  const sa=_trapNorm(_ansForCompare(q, studentAns));
+  const out=[], byKey=new Map();
+  ai.forEach(t=>{ const o={ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''), src:'ai' }; out.push(o); byKey.set(_trapNorm(o.wrong), o); });
+  fq.forEach(t=>{
+    const key=_trapNorm(t.wrong); const prev=byKey.get(key);
+    if(prev){ prev.src='both'; if(t.path) prev.path=String(t.path); if(t.label) prev.label=String(t.label); prev.students=+t.students||0; return; }
+    const o={ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''), src:'freq', students:+t.students||0 };
+    out.push(o); byKey.set(key, o);
+  });
+  out.forEach(o=>{ o.hit = sa!=='' && _trapNorm(o.wrong)===sa; });
+  return out;
+}
+/** 적중한 경로를 이름(label)별로 묶어 센다 — 화면 표시용. [{label, path, count, answers:[...], peers}]
+    peers = 그 답을 실제로 낸 학생 수(빈출 오답 분석 기준, 가장 큰 값) — 학급에 흔한 실수인지 함께 보여 준다 */
 function _countTrapHits(worksheets){
   const map=new Map();
   worksheets.forEach(w=>(w.wrongItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{
     if(!t.hit) return;
     const key=t.label||t.path;
-    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0, answers:[]};
+    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0, answers:[], peers:0};
     cur.count++; if(cur.answers.length<5) cur.answers.push(t.wrong);
+    if((t.src==='freq'||t.src==='both') && (+t.students||0)>cur.peers) cur.peers=+t.students||0;
     map.set(key,cur);
   })));
   return [...map.values()].sort((a,b)=>b.count-a.count);
@@ -1394,13 +1434,13 @@ window.analyzeStudentWithAI=async function(uid){
       if(AI_ANALYZE_SKIP_TYPES.has(q.type)) return;
       const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
       const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
-      const correctAns=q.type==='multi'
-        ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
+      const correctAns=q.type==='multi'   // 객관식은 학생 답과 같은 꼴로 "2,4번 (보기 글)" (v3.51)
+        ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
         : q.answer;
       const traps=_trapsFor(q, studentAns);
       wrongItems.push({
         qText:(q.text||'').replace(/<br\s*\/?>/gi,'\n').slice(0,300),
-        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns),
+        correctAnswer:String(correctAns??''), studentAnswer:_studentAnsText(q, studentAns),
         ...(traps.length?{traps}:{}),
       });
     });
@@ -1421,17 +1461,17 @@ window.analyzeStudentWithAI=async function(uid){
     if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
     const a=out.analysis||{};
     const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${s}</li>`).join('')}</ul>`:'';
-    /* 🕳 예상 오답 경로와 일치한 것 — AI 가 아니라 우리가 직접 센 값이라 확실하다.
-       (AI 는 이 ★ 표시를 근거로 위의 반복되는 오류·지도 제안을 쓴다) */
+    /* 🕳 오답 경로와 일치한 것 — AI 가 아니라 우리가 직접 센 값이라 확실하다.
+       (AI 는 이 ★ 표시를 근거로 위의 반복되는 오류·지도 제안을 쓴다) 빈출 오답과 일치한 것은 학급에서 몇 명이 같은 답을 냈는지도 붙인다(v3.51) */
     const trapTotal=worksheets.reduce((n,w)=>n+(w.wrongItems||[]).filter(it=>(it.traps||[]).length).length,0);
     const hitHtml=pathHits.length
-      ? `<div style="margin-bottom:10px"><b>🕳 예상 오답 경로와 일치</b>
-          <span style="font-size:11px;color:var(--ink3)">(출제자가 edit 의 🤖 AI 검토로 미리 적어 둔 경로 — 이 학생의 오답이 실제로 걸린 것)</span>
+      ? `<div style="margin-bottom:10px"><b>🕳 오답 경로와 일치</b>
+          <span style="font-size:11px;color:var(--ink3)">(edit 의 🤖 AI 검토가 예상해 둔 경로 · 학습지별 🤖 빈출 오답 분석이 실제 오답에서 찾은 원인 — 이 학생의 오답이 실제로 걸린 것)</span>
           <ul style="margin:4px 0 0 18px;padding:0">${pathHits.map(h=>`<li style="margin-bottom:3px">
-            <b>${_te(h.label)}</b> <span style="color:#b91c1c">${h.count}회</span>
+            <b>${_te(h.label)}</b> <span style="color:#b91c1c">${h.count}회</span>${h.peers?` <span class="badge" style="background:var(--amb-lt);color:var(--amber)">학급에서도 ${h.peers}명이 같은 답</span>`:''}
             <span style="display:block;font-size:12px;color:var(--ink3)">${_te(h.path)} · 적어 낸 답: ${h.answers.map(_te).join(', ')}</span></li>`).join('')}</ul></div>`
       : (trapTotal
-        ? `<div style="margin-bottom:10px;font-size:12px;color:var(--ink3)">🕳 예상 오답 경로가 있는 오답 ${trapTotal}개를 대조했지만 일치한 것은 없습니다 — 예상과 다른 이유로 틀렸을 수 있습니다.</div>`
+        ? `<div style="margin-bottom:10px;font-size:12px;color:var(--ink3)">🕳 오답 경로가 있는 오답 ${trapTotal}개를 대조했지만 일치한 것은 없습니다 — 예상과 다른 이유로 틀렸을 수 있습니다.</div>`
         : '');
     resultEl.innerHTML=`
       <div class="card" style="margin-top:0;border-color:#c4b5fd;background:#faf5ff">
@@ -1447,6 +1487,226 @@ window.analyzeStudentWithAI=async function(uid){
     resultEl.innerHTML='<div class="card" style="margin-top:0">❌ 분석 실패: '+e.message+'</div>';
   }
 };
+
+/* ══════════ 📊 빈출 오답 분석 (v3.51, 학습지 단위) ══════════
+   이 학습지를 푼 학생 전체의 오답 기록(perQuestion[].wrongInputs)에서 **여러 학생이 낸 틀린 답**을 문항마다 모아
+   Apps Script 웹앱(Gemini 중계, action 'analyzeWrongAnswers')에 보내고, 답마다 왜 그렇게 틀렸는지(path)·짧은 이름(label)과
+   학습지 전체 요약·수업에서 짚어 줄 것(teachingPoints)을 받는다. edit 의 🤖 AI 검토(예상 오답)가 "문항만 보고 추측"이라면
+   이것은 "실제 데이터로 확인"이다 — 둘은 서로 보완한다(출제자가 예상해 둔 오답이 있으면 함께 보내 같은 실수엔 같은 이름을 쓰게 한다).
+   · 기록은 학습지 문서(curriculum/{wsId})에 wrongAnalysis = { at, count, students, by, summary, teachingPoints,
+       items:[{idx, qid, wrong, students, path, label, on, at}] } 로 저장한다(edit 의 aiReview 와 같은 꼴).
+   · 교사가 체크한(on) 것만 문항에 freqTraps:[{wrong, path, label, students}] 로 저장되어, 이 화면의 🤖 AI 학습 분석과
+     학생의 📝 시험 대비 진단(index)이 예상 오답(aiTraps)과 **함께** 오답 대조에 쓴다(_trapsFor).
+   · 새로 분석하면 원인 설명은 새 결과로 갱신하고(데이터가 늘었으니), 체크를 풀어 둔 오답은 계속 꺼진 채로 둔다.
+     더는 빈출이 아닌 오답(기록 삭제 등)은 빠진다. AI 가 분석을 못 돌려준 오답은 이전 설명이 있으면 그것을 유지한다.
+   · 저장은 학습지 문서를 **다시 읽어** 최신 문항에 붙인다(edit 가 그새 문항을 고쳤을 수 있다) — 문항은 id 로 맞춘다.
+     edit v3.39 도 저장할 때 wrongAnalysis·freqTraps 는 Firestore 최신 값을 따르므로 서로 덮어쓰지 않는다.
+   · graph·link·pool_random 유형과 단계형(오답 기록을 남기지 않는다)은 자연히 대상이 아니다. "(빈칸)" 제출은 원인 분석 대상이 아니라 뺀다. */
+const FREQ_MIN_STUDENTS=2;   // 이 수 이상의 학생이 낸 오답만 "빈출"로 본다
+const FREQ_MAX_PER_Q=5;      // 문항당 AI 에 보내는 빈출 오답 수 (학생 수 많은 순)
+/** 학습지의 문항별 오답 집계 — { students, byQ:{[qid]:[{wrong, students, blank}]} } (학생 수 많은 순)
+    같은 학생이 같은 답(정규화 기준)을 여러 번 내도 1명으로 센다. wrong 은 처음 본 형태(객관식은 1부터 세는 보기 번호).
+    📊 문항별 난이도 표의 「빈출 오답」 칸도 이 집계를 쓴다. */
+function _freqWrongStats(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId); const byQ={}; const stu=new Set();
+  const qById=new Map((ws?.questions||[]).map(q=>[q.id,q]));
+  Object.entries(allData).forEach(([uid,d])=>{
+    const r=d[wsId]; if(!r?.perQuestion) return;
+    stu.add(uid);
+    Object.entries(r.perQuestion).forEach(([qid,v])=>{
+      if(!Array.isArray(v.wrongInputs) || !v.wrongInputs.length) return;
+      const q=qById.get(qid);
+      const m=byQ[qid]||(byQ[qid]=new Map());
+      v.wrongInputs.forEach(w=>{
+        const raw=String(w??'').trim();
+        const blank = raw==='' || raw==='(빈칸)';
+        const shown = blank ? '(빈칸)' : _ansForCompare(q, raw).slice(0,40);
+        const key = blank ? '(빈칸)' : _trapNorm(shown);
+        const cur=m.get(key)||{wrong:shown, uids:new Set(), blank};
+        cur.uids.add(uid); m.set(key,cur);
+      });
+    });
+  });
+  const out={};
+  Object.entries(byQ).forEach(([qid,m])=>{
+    out[qid]=[...m.values()].map(x=>({wrong:x.wrong, students:x.uids.size, blank:x.blank})).sort((a,b)=>b.students-a.students);
+  });
+  return { students:stu.size, byQ:out };
+}
+/** AI 에 보낼 정답 요약 — edit 의 _aiAnswerSummary 와 같은 꼴 */
+function _aiAnswerSummaryT(q){
+  if(q.type==='multi'){
+    const opts=(q.options||[]).map((o,i)=>`${i+1}.${o}`).join(' / ');
+    return `보기: ${opts} / 정답 번호: ${(q.answer||[]).map(i=>i+1).join(',')}`;
+  }
+  if(q.type==='step3') return (q.steps||[]).map((s,i)=>`${i+1}단계 정답:${s.answer}`).join(' / ');
+  return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
+}
+/** 분석 대상 — 유형 제외 + 빈출 오답(빈칸 제외, FREQ_MIN_STUDENTS 명 이상)이 있는 문항만.
+    [{idx, qid, type, text, answer, wrongs:[{wrong,students}], predicted:[{wrong,path,label}]}] */
+function _freqQuestions(ws, stats){
+  return (ws.questions||[]).map((q,i)=>{
+    if(AI_ANALYZE_SKIP_TYPES.has(q.type)) return null;
+    const wrongs=(stats.byQ[q.id]||[]).filter(w=>!w.blank && w.students>=FREQ_MIN_STUDENTS).slice(0,FREQ_MAX_PER_Q).map(w=>({wrong:w.wrong, students:w.students}));
+    if(!wrongs.length) return null;
+    return { idx:i, qid:q.id, type:q.type, text:String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,400),
+      answer:_aiAnswerSummaryT(q), wrongs,
+      predicted:(q.aiTraps||[]).map(t=>({wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??'')})) };
+  }).filter(Boolean);
+}
+let _waRec=null, _waWsId=null, _waSaveTimer=null;
+window.analyzeWrongAnswersWithAI=async function(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
+  _waWsId=wsId;
+  const t=document.getElementById('wa-title'); if(t) t.textContent=`🤖 빈출 오답 분석 — ${ws.title||wsId}`;
+  const m=document.getElementById('wa-modal'); if(m) m.style.display='flex';
+  const saved=ws.wrongAnalysis;
+  if(saved && Array.isArray(saved.items)){ _renderWrongAnalysis(wsId, saved, {saved:true}); return; }   // 저장된 분석이 있으면 그것부터
+  await _runWrongAnalysis(wsId);
+};
+/** 🔄 새로 분석하기 */
+window.rerunWrongAnalysis=async function(){ if(_waWsId) await _runWrongAnalysis(_waWsId); };
+async function _runWrongAnalysis(wsId){
+  const ws=WORKSHEETS.find(w=>w.id===wsId); const body=document.getElementById('wa-body'); if(!ws||!body) return;
+  const stats=_freqWrongStats(wsId);
+  const qs=_freqQuestions(ws, stats);
+  const prev=(ws.wrongAnalysis && Array.isArray(ws.wrongAnalysis.items)) ? ws.wrongAnalysis : null;
+  const back=prev?`<div style="margin-top:10px"><button class="btn-sm" onclick="analyzeWrongAnswersWithAI('${wsId}')">저장된 분석 보기</button></div>`:'';
+  if(!qs.length){
+    body.innerHTML=`<div style="font-size:13px;color:var(--ink3)">아직 분석할 빈출 오답이 없습니다 — 같은 틀린 답을 <b>${FREQ_MIN_STUDENTS}명 이상</b>이 낸 문항이 없습니다 (학생 ${stats.students}명의 기록 기준).</div>`+back;
+    return;
+  }
+  body.innerHTML=`🤖 분석 중… 문항 ${qs.length}개 · 빈출 오답 ${qs.reduce((n,q)=>n+q.wrongs.length,0)}개 (몇십 초 걸릴 수 있습니다)`;
+  try{
+    const res=await fetch(AI_WEBAPP_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ token:AI_WEBAPP_TOKEN, action:'analyzeWrongAnswers', wsTitle:ws.title||'', students:stats.students,
+        questions: qs.map(q=>({idx:q.idx, type:q.type, text:q.text, answer:q.answer, wrongs:q.wrongs, predicted:q.predicted})) }) });
+    const out=await res.json();
+    if(!out||!out.ok) throw new Error(out?.error==='unknown action' ? 'AI 서버에 아직 이 기능이 없습니다 — AI기능 Apps Script 를 새 버전으로 배포해 주세요' : (out?.error||'서버 응답 오류'));
+    const rec=_mergeWrongAnalysis(prev, out, qs, stats);
+    await _saveWrongAnalysis(wsId, rec);
+    _renderWrongAnalysis(wsId, rec, {fresh:true, align:out.align||{}});
+  }catch(e){
+    body.innerHTML='❌ 분석 실패: '+_te(e.message)+back;
+  }
+}
+/** 새 결과를 기록으로 — 지금 빈출인 오답마다 항목 하나: AI 가 준 설명(없으면 이전 설명 유지), 체크 상태는 이전 것을 잇는다 */
+function _mergeWrongAnalysis(prev, out, qs, stats){
+  const now=new Date().toISOString();
+  const ai=new Map((out.items||[]).filter(t=>t&&t.path).map(t=>[t.idx+'|'+_trapNorm(t.wrong), t]));
+  const old=new Map((prev?.items||[]).map(t=>[t.qid+'|'+_trapNorm(t.wrong), t]));
+  const items=[]; let analyzed=0, kept=0, missing=0;
+  qs.forEach(q=>q.wrongs.forEach(w=>{
+    const key=_trapNorm(w.wrong);
+    const a=ai.get(q.idx+'|'+key), o=old.get(q.qid+'|'+key);
+    let path, label, at;
+    if(a){ path=String(a.path).slice(0,200); label=String(a.label||'').slice(0,20); at=now; analyzed++; }
+    else if(o){ path=o.path; label=o.label; at=o.at||''; kept++; }
+    else { missing++; return; }
+    items.push({ idx:q.idx, qid:q.qid, wrong:w.wrong, students:w.students, path, label, on: o ? o.on!==false : true, at });
+  }));
+  return { at:now, count:(prev?.count||0)+1, students:stats.students, by:tUser?.email||'', summary:String(out.summary||''),
+    teachingPoints:(out.teachingPoints||[]).map(String).filter(Boolean), items, _analyzed:analyzed, _kept:kept, _missing:missing };
+}
+/** 기록을 학습지 문서에 저장하고, 문항의 freqTraps(대조용)를 기록의 on 인 것으로 다시 만든다.
+    문서를 다시 읽어 최신 문항에 붙인다(edit 가 그새 고쳤을 수 있다) — 문항은 id 로 맞춘다 */
+async function _saveWrongAnalysis(wsId, rec){
+  const ws=WORKSHEETS.find(w=>w.id===wsId);
+  const stored={ at:rec.at, count:rec.count, students:rec.students, by:rec.by||'', summary:rec.summary||'', teachingPoints:rec.teachingPoints||[], items:rec.items };
+  const byQid=new Map();
+  rec.items.filter(t=>t.on).forEach(t=>{ if(!byQid.has(t.qid)) byQid.set(t.qid,[]); byQid.get(t.qid).push({ wrong:t.wrong, path:t.path, label:t.label||'', students:t.students||0 }); });
+  let fresh=null;
+  try{ fresh=(await getDoc(doc(db,'curriculum',wsId))).data()||null; }
+  catch(e){ console.warn('[빈출 오답 분석] 학습지 다시 읽기 실패 — 메모리의 문항으로 저장', e.message); }
+  const baseQs=(fresh?.questions)||(ws?.questions)||[];
+  const newQs=baseQs.map(q=>{ const c={...q}; const l=byQid.get(q.id); if(l?.length) c.freqTraps=l; else delete c.freqTraps; return c; });
+  await setDoc(doc(db,'curriculum',wsId), { wrongAnalysis:stored, questions:newQs }, { merge:true });
+  if(ws){ ws.wrongAnalysis=stored; ws.questions=newQs; }
+}
+/** 체크박스 — 바꾸면 잠시 뒤 자동 저장 */
+window.toggleFreqTrap=function(i,on){
+  if(!_waRec || !_waRec.items[i]) return;
+  _waRec.items[i].on=!!on;
+  const st=document.getElementById('wa-status'); if(st) st.textContent='저장 중…';
+  clearTimeout(_waSaveTimer);
+  _waSaveTimer=setTimeout(async()=>{
+    try{ await _saveWrongAnalysis(_waWsId, _waRec); const s2=document.getElementById('wa-status'); if(s2) s2.textContent='✅ 저장됨'; }
+    catch(e){ toast('저장 실패: '+e.message); console.error(e); }
+  },600);
+};
+/** 🗑 분석 기록 지우기 — 기록과 문항의 freqTraps 를 모두 지운다 */
+window.clearWrongAnalysis=async function(){
+  const wsId=_waWsId; const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return;
+  if(!confirm(`이 학습지의 빈출 오답 분석 기록(오답 ${(_waRec?.items||[]).length}개)을 지웁니다.\n(🤖 AI 학습 분석·학생 시험 대비 진단의 오답 대조에서 더는 쓰이지 않습니다)`)) return;
+  try{
+    let fresh=null; try{ fresh=(await getDoc(doc(db,'curriculum',wsId))).data()||null; }catch(e){}
+    const newQs=((fresh?.questions)||ws.questions||[]).map(q=>{ const c={...q}; delete c.freqTraps; return c; });
+    await setDoc(doc(db,'curriculum',wsId), { wrongAnalysis:deleteField(), questions:newQs }, { merge:true });
+    delete ws.wrongAnalysis; ws.questions=newQs; _waRec=null;
+    const m=document.getElementById('wa-modal'); if(m) m.style.display='none';
+    toast('🗑 빈출 오답 분석 기록을 지웠습니다');
+    renderWS(wsId);
+  }catch(e){ toast('삭제 실패: '+e.message); console.error(e); }
+};
+function _fmtAtT(iso){ return iso ? String(iso).slice(0,16).replace('T',' ') : ''; }
+/** 모달 본문 — 저장된 기록이든 방금 받은 결과든 같은 모양으로 그린다 */
+function _renderWrongAnalysis(wsId, rec, opts={}){
+  _waRec=rec; _waWsId=wsId;
+  const ws=WORKSHEETS.find(w=>w.id===wsId); const body=document.getElementById('wa-body'); if(!ws||!body) return;
+  const qIdxById=new Map((ws.questions||[]).map((q,i)=>[q.id,i]));
+  const qText=qid=>_te(String((ws.questions||[]).find(q=>q.id===qid)?.text||'').replace(/<[^>]+>/g,'').slice(0,80));
+  const head = opts.fresh
+    ? `방금 분석했습니다 (${rec.count}번째) · 학생 ${rec.students}명의 기록 · 오답 ${rec._analyzed||0}개 분석${rec._kept?` · ${rec._kept}개는 이전 설명 유지`:''}${rec._missing?` · ${rec._missing}개는 분석 안 됨`:''}`
+    : `저장된 분석 · 마지막 분석 ${_fmtAtT(rec.at)} (${rec.count}회 · 학생 ${rec.students}명의 기록${rec.by?` · ${_te(rec.by)}`:''})`;
+  const al=opts.align||{};
+  const alignMsg = (al.fixed&&al.dropped) ? `${al.fixed}건은 번호를 바로잡았고 ${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`
+    : al.fixed ? `${al.fixed}건은 번호를 바로잡았습니다` : `${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`;
+  const alignNote=(al.fixed||al.dropped)
+    ? `<div style="font-size:12px;color:#b45309;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+        ⚠️ AI가 가리킨 문항 번호를 문제 내용과 대조했습니다 — ${alignMsg}.
+        ${al.dropped?'다시 분석하면 나올 수 있습니다.':''}</div>` : '';
+  const list=arr=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(x=>`<li style="margin-bottom:3px">${_te(x)}</li>`).join('')}</ul>`:'';
+  // 지금 집계에는 있는데 기록에 없는 빈출 오답 — 「아직 분석 안 됨」으로 함께 보여 준다(새 학생이 풀어 새로 생긴 것 등)
+  const nowQs=_freqQuestions(ws, _freqWrongStats(wsId));
+  const recKeys=new Set(rec.items.map(t=>t.qid+'|'+_trapNorm(t.wrong)));
+  const byQ=new Map();
+  rec.items.forEach((t,i)=>{ if(!byQ.has(t.qid)) byQ.set(t.qid,[]); byQ.get(t.qid).push({...t,_i:i}); });
+  nowQs.forEach(q=>q.wrongs.forEach(w=>{
+    if(recKeys.has(q.qid+'|'+_trapNorm(w.wrong))) return;
+    if(!byQ.has(q.qid)) byQ.set(q.qid,[]); byQ.get(q.qid).push({qid:q.qid, idx:q.idx, wrong:w.wrong, students:w.students, _na:true});
+  }));
+  const onCount=rec.items.filter(t=>t.on).length;
+  const blocks=[...byQ.entries()].map(([qid,l])=>({qid, idx:qIdxById.has(qid)?qIdxById.get(qid):(l[0].idx??999), l}))
+    .sort((a,b)=>a.idx-b.idx).map(({qid,idx,l})=>{
+      const rows=l.map(t=>t._na
+        ? `<div style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;opacity:.7"><span style="width:13px;flex:none"></span><span style="font-size:13px">
+            <b style="color:#b91c1c;font-family:'DM Mono',monospace">${_te(t.wrong)}</b> <span class="badge" style="background:var(--red-lt);color:var(--red)">학생 ${t.students}명</span>
+            <span style="font-size:12px;color:var(--ink3)">— 아직 분석 안 됨 (🔄 새로 분석하기)</span></span></div>`
+        : `<label style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;cursor:pointer${t.on?'':';opacity:.55'}">
+            <input type="checkbox" ${t.on?'checked':''} style="margin-top:3px;flex:none" onchange="toggleFreqTrap(${t._i}, this.checked)">
+            <span style="font-size:13px"><b style="color:#b91c1c;font-family:'DM Mono',monospace">${_te(t.wrong)}</b>
+              <span class="badge" style="background:var(--red-lt);color:var(--red);margin-left:4px">학생 ${t.students}명</span>
+              ${t.label?`<span class="badge" style="background:#ede9fe;color:#5b21b6;margin-left:4px">${_te(t.label)}</span>`:''}
+              ${(opts.fresh && t.at===rec.at)?'<span class="badge" style="background:#dcfce7;color:#166534;margin-left:4px">NEW</span>':''}
+              <span style="display:block;color:var(--ink3);font-size:12px;margin-top:2px">${_te(t.path)}</span></span></label>`).join('');
+      return `<div style="border:1px solid var(--rule);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700">${idx+1}번 문항 <span style="color:var(--ink3);font-weight:400">${_te(qid)}</span></div>
+        <div style="font-size:12px;color:var(--ink3)">${qText(qid)}</div>${rows}</div>`;
+    }).join('');
+  body.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--ink3);margin-bottom:10px"><span>${head}</span><span id="wa-status"></span></div>
+    ${alignNote}
+    ${rec.summary?`<div style="font-weight:700;margin-bottom:10px">${_te(rec.summary)}</div>`:''}
+    ${rec.teachingPoints?.length?`<div style="margin-bottom:12px"><b>📌 수업에서 짚어 줄 것</b>${list(rec.teachingPoints)}</div>`:''}
+    <div style="font-weight:700;margin:14px 0 6px">📊 문항별 빈출 오답과 원인 (${rec.items.length}개)</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">같은 틀린 답을 <b>${FREQ_MIN_STUDENTS}명 이상</b>이 낸 것입니다(문항당 최대 ${FREQ_MAX_PER_Q}개). 원인은 AI 분석이라 그대로 믿지 마시고, 아니다 싶은 것은 <b>체크를 풀어 두세요</b>(바로 저장됩니다).
+      <b>체크한 것만</b>(지금 ${onCount}개) 🤖 AI 학습 분석과 학생의 📝 시험 대비 진단이 예상 오답과 함께 오답 대조에 씁니다.</div>
+    ${blocks||'<div style="font-size:13px;color:var(--ink3)">분석된 오답이 없습니다.</div>'}
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn-sm" style="font-size:12px" onclick="clearWrongAnalysis()">🗑 분석 기록 지우기</button>
+      <button class="btn-sm" style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95" onclick="rerunWrongAnalysis()">🔄 새로 분석하기</button>
+    </div>`;
+}
 
 // ── Fix 2: renderOverview - ws.grade/category → wsGrade/wsCategory 함수 사용 ──
 function renderOverview(){
@@ -2198,29 +2458,36 @@ function renderWS(wsId){
     </tr></thead><tbody id="ws-tbody"></tbody></table>
   </div>`;
   const qStats={};
-  const wrongCnt={};  // qid → {답: 빈도}
   recs.forEach(r=>{ if(!r.perQuestion) return;
     Object.entries(r.perQuestion).forEach(([qid,v])=>{
       if(!qStats[qid]) qStats[qid]={total:0,totalTries:0};
       qStats[qid].total++; qStats[qid].totalTries+=v.attempts||1;
-      // 빈출 오답 집계
-      if(Array.isArray(v.wrongInputs)){
-        if(!wrongCnt[qid]) wrongCnt[qid]={};
-        v.wrongInputs.forEach(w=>{
-          const key=String(w||'(빈칸)').slice(0,40);
-          wrongCnt[qid][key]=(wrongCnt[qid][key]||0)+1;
-        });
-      }
     });
   });
   if(Object.keys(qStats).length){
-    h+=`<div class="card"><div class="card-hdr"><span class="card-title">📊 문항별 난이도</span></div>
-    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th><th>빈출 오답 (TOP 3)</th></tr></thead><tbody>`;
+    // 빈출 오답 — 📊 빈출 오답 분석과 같은 집계(_freqWrongStats: 학생 수 기준, 객관식은 1부터 세는 보기 번호).
+    // 분석에서 채택한 원인 이름(freqTraps)이 있으면 답 옆에 보라색으로 붙인다 (v3.51)
+    const fstats=_freqWrongStats(wsId);
+    const wa=ws.wrongAnalysis;
+    const adopted=wa?.items?.filter(t=>t.on).length||0;
+    h+=`<div class="card"><div class="card-hdr"><span class="card-title">📊 문항별 난이도</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${wa?.at?`<span style="font-size:12px;color:var(--ink3)">마지막 분석 ${_fmtAtT(wa.at)} · 채택 ${adopted}개</span>`:''}
+        <button class="btn-sm" onclick="analyzeWrongAnswersWithAI('${wsId}')" title="여러 학생이 낸 같은 틀린 답의 원인을 AI가 분석합니다 (참고용). 채택한 것은 🤖 AI 학습 분석·학생 시험 대비 진단의 오답 대조에 쓰입니다"
+          style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95">🤖 빈출 오답 분석</button>
+      </div></div>
+    ${wa?.summary?`<div style="padding:10px 20px;border-bottom:1px solid var(--rule);background:#faf5ff;font-size:13px"><b>🤖 빈출 오답 분석</b> <span style="font-size:11px;color:var(--ink3)">(참고용 · 학생 ${wa.students||0}명의 기록)</span><div style="margin-top:4px">${_te(wa.summary)}</div>
+      ${wa.teachingPoints?.length?`<div style="margin-top:6px"><b>📌 수업에서 짚어 줄 것</b><ul style="margin:2px 0 0 18px;padding:0">${wa.teachingPoints.map(x=>`<li>${_te(x)}</li>`).join('')}</ul></div>`:''}</div>`:''}
+    <table><thead><tr><th>문항</th><th>응시</th><th>평균 시도</th><th>난이도</th><th>빈출 오답 (TOP 3 · 학생 수)</th></tr></thead><tbody>`;
     Object.entries(qStats).sort().forEach(([qid,s])=>{
       const avg=(s.totalTries/s.total).toFixed(1);
       const diff=avg<=1.2?"🟢 쉬움":avg<=2.0?"🟡 보통":"🔴 어려움";
-      const top3=Object.entries(wrongCnt[qid]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
-      const wrongHtml=top3.length?top3.map(([ans,cnt])=>`<span style="display:inline-block;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;font-family:monospace">${ans} <b>${cnt}</b></span>`).join(''):'<span style="color:var(--ink3);font-size:11px">-</span>';
+      const top3=(fstats.byQ[qid]||[]).slice(0,3);
+      const ft=(ws.questions||[]).find(q=>q.id===qid)?.freqTraps||[];
+      const wrongHtml=top3.length?top3.map(w=>{
+        const t=ft.find(x=>_trapNorm(x.wrong)===_trapNorm(w.wrong));
+        return `<span style="display:inline-block;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:10px;font-size:11px;margin-right:4px;font-family:monospace" title="${t?escapeAttr(t.path):''}">${_te(w.wrong)} <b>${w.students}</b>${t?.label?`<span style="color:#5b21b6;font-family:inherit;margin-left:4px">· ${_te(t.label)}</span>`:''}</span>`;
+      }).join(''):'<span style="color:var(--ink3);font-size:11px">-</span>';
       h+=`<tr><td>${qid}</td><td>${s.total}명</td>
         <td><span class="tries-badge ${avg<=1.2?'tries-1':avg<=2?'tries-2':'tries-many'}">${avg}회</span></td>
         <td>${diff}</td>

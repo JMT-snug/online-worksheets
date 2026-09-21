@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.97">
+  <meta name="app-version" content="8.98">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -1717,10 +1717,12 @@ function renderExamBanner(){
   }));
 }
 const EXAM_AI_SKIP_TYPES=new Set(['graph','link','pool_random']);   // teacher 의 AI_ANALYZE_SKIP_TYPES 와 같다
-/* 🕳 예상 오답 경로 (v8.90) — edit 의 🤖 AI 검토가 문항에 저장해 둔 `aiTraps:[{wrong,path,label}]` 를
-   내 오답과 맞춰 본다. 일치하면 hit:true 로 표시해 AI 에 함께 보내서, "왜 틀렸는지"를 추측이 아니라
-   선생님이 문제를 낼 때 적어 둔 경로로 설명하게 한다. teacher v3.48 의 _trapNorm/_trapsFor 와 같은 규칙.
-   문항에 aiTraps 가 없으면 아무 일도 일어나지 않는다(예전과 동일). */
+/* 🕳 오답 경로 (v8.90 · v8.98) — 두 출처의 오답 경로를 내 오답과 맞춰 본다:
+     · aiTraps   — edit 의 🤖 AI 검토가 문항만 보고 예상해 둔 것 (src 'ai')
+     · freqTraps — teacher 의 📊 빈출 오답 분석이 같은 학습지를 푼 학생들의 실제 오답에서 찾은 원인 (src 'freq', students = 낸 학생 수)
+   같은 오답이 양쪽에 있으면 하나로 합친다(src 'both'). 일치하면 hit:true 로 표시해 AI 에 함께 보내서, "왜 틀렸는지"를 추측이
+   아니라 미리 분석해 둔 경로로 설명하게 한다. teacher v3.51 의 _trapNorm/_trapsFor 와 같은 규칙.
+   문항에 둘 다 없으면 아무 일도 일어나지 않는다(예전과 동일). */
 function _trapNorm(v){
   return String(v??'').trim().toLowerCase()
     .replace(/\s+|,/g,'')
@@ -1728,21 +1730,47 @@ function _trapNorm(v){
     .replace(/[≤]/g,'<=').replace(/[≥]/g,'>=')
     .replace(/^\+/,'');
 }
-function _trapsFor(q, studentAns){
-  const list=q.aiTraps||[];   // 상한 없음 (v8.94) — 프롬프트에는 일치한 것만 자세히 가므로 많아도 비대해지지 않는다
-  if(!list.length) return [];
-  const sa=_trapNorm(studentAns);
-  return list.map(t=>({ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''),
-    hit: sa!=='' && _trapNorm(t.wrong)===sa }));
+/** 객관식 오답 기록은 0부터 세는 보기 번호("0,2")다 — 예상 오답·빈출 오답은 1부터 세는 번호("1,3")로 적으므로 맞춰 비교한다 (v8.98) */
+function _multiNums(raw){
+  const s=String(raw??'').trim();
+  if(!s || !/^\d+(,\d+)*$/.test(s)) return s;
+  return s.split(',').map(n=>String(+n+1)).join(',');
 }
-/** 걸린 경로를 이름별로 묶어 센다 (화면 표시용 — AI 가 아니라 우리가 센 값) */
+function _ansForCompare(q, raw){ return q?.type==='multi' ? _multiNums(raw) : String(raw??''); }
+/** 내 답을 AI 에 보낼 글로 — 객관식은 "1,3번 (보기 글)" */
+function _studentAnsText(q, raw){
+  if(q?.type!=='multi') return String(raw??'');
+  const nums=_multiNums(raw);
+  if(!/^\d+(,\d+)*$/.test(nums)) return String(raw??'');
+  const texts=nums.split(',').map(n=>(q.options||[])[+n-1]).filter(t=>t!=null);
+  return nums+'번'+(texts.length?` (${texts.join(' / ')})`:'');
+}
+/** 이 문항의 오답 경로 목록(예상 + 빈출, 같은 오답은 합침 · 상한 없음) + 내 답과 일치하는지 */
+function _trapsFor(q, studentAns){
+  const ai=q.aiTraps||[], fq=q.freqTraps||[];
+  if(!ai.length && !fq.length) return [];
+  const sa=_trapNorm(_ansForCompare(q, studentAns));
+  const out=[], byKey=new Map();
+  ai.forEach(t=>{ const o={ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''), src:'ai' }; out.push(o); byKey.set(_trapNorm(o.wrong), o); });
+  fq.forEach(t=>{
+    const key=_trapNorm(t.wrong); const prev=byKey.get(key);
+    if(prev){ prev.src='both'; if(t.path) prev.path=String(t.path); if(t.label) prev.label=String(t.label); prev.students=+t.students||0; return; }
+    const o={ wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??''), src:'freq', students:+t.students||0 };
+    out.push(o); byKey.set(key, o);
+  });
+  out.forEach(o=>{ o.hit = sa!=='' && _trapNorm(o.wrong)===sa; });
+  return out;
+}
+/** 걸린 경로를 이름별로 묶어 센다 (화면 표시용 — AI 가 아니라 우리가 센 값). peers = 그 답을 낸 다른 학생 수(빈출 오답이면) */
 function _countTrapHits(worksheets){
   const map=new Map();
   (worksheets||[]).forEach(w=>(w.wrongItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{
     if(!t.hit) return;
     const key=t.label||t.path;
-    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0};
-    cur.count++; map.set(key,cur);
+    const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0, peers:0};
+    cur.count++;
+    if((t.src==='freq'||t.src==='both') && (+t.students||0)>cur.peers) cur.peers=+t.students||0;
+    map.set(key,cur);
   })));
   return [...map.values()].sort((a,b)=>b.count-a.count);
 }
@@ -1766,12 +1794,12 @@ function buildExamAIPayload(ex){
       if(EXAM_AI_SKIP_TYPES.has(q.type)) return;
       const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
       const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
-      const correctAns=q.type==='multi'
-        ? (q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(', ')
+      const correctAns=q.type==='multi'   // 객관식은 내 답과 같은 꼴로 "2,4번 (보기 글)" (v8.98)
+        ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
         : q.answer;
       const traps=_trapsFor(q, studentAns);
       wrongItems.push({ qText:String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,300),
-        correctAnswer:String(correctAns??''), studentAnswer:String(studentAns),
+        correctAnswer:String(correctAns??''), studentAnswer:_studentAnsText(q, studentAns),
         ...(traps.length?{traps}:{}) });
     });
     worksheets.push({ title:ws.title||'', unitTitle, done:!!r.isComplete, correctRate:rate, wrongItems });
@@ -1899,7 +1927,7 @@ function showExamAIResult(ex, entry, isPrev, plain, warn){
     ${a.weaknesses?.length?`<div class="em-sec"><b>⚠️ 보완할 것</b>${list(a.weaknesses)}</div>`:''}
     ${a.commonMistakes?.length?`<div class="em-sec"><b>🔁 반복되는 실수</b>${list(a.commonMistakes)}</div>`:''}
     ${entry.hits?.length?`<div class="em-sec"><b>🕳 이런 실수에 자주 걸렸어요</b>
-      <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <b>${h.count}번</b><span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
+      <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <b>${h.count}번</b>${h.peers?' <span style="font-size:12px;color:#b45309">· 다른 친구들도 많이 하는 실수예요</span>':''}<span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
     ${a.studyPlan?.length?`<div class="em-sec"><b>📚 시험 전 공부 순서</b>${list(a.studyPlan)}</div>`:''}
     ${warn?`<div class="em-sec" style="color:#b45309;font-size:13px">${escHtml(warn)}</div>`:''}
     ${close}`;

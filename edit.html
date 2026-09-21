@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v3.38">
+<meta name="app-version" content="edit-v3.39">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
 <script>
@@ -1306,7 +1306,7 @@ function renderQList(){
       <span class="q-drag">⣿</span>
       <span class="q-num">${i+1}</span>
       <div class="q-info">
-        <span class="q-type-badge ${badgeClass}">${badgeLabel}</span>${item.noReview?'<span class="q-type-badge" style="background:#fee2e2;color:#b91c1c" title="단원 복습 학습지에서 제외됨">🔁✕ 복습 제외</span>':''}${item.aiTraps?.length?`<span class="q-type-badge" style="background:#ede9fe;color:#5b21b6" title="🤖 AI 검토가 예측한 오답 ${item.aiTraps.length}개 — teacher 의 AI 학습 분석이 학생 오답과 대조합니다">🕳 예상 오답 ${item.aiTraps.length}</span>`:''}
+        <span class="q-type-badge ${badgeClass}">${badgeLabel}</span>${item.noReview?'<span class="q-type-badge" style="background:#fee2e2;color:#b91c1c" title="단원 복습 학습지에서 제외됨">🔁✕ 복습 제외</span>':''}${item.aiTraps?.length?`<span class="q-type-badge" style="background:#ede9fe;color:#5b21b6" title="🤖 AI 검토가 예측한 오답 ${item.aiTraps.length}개 — teacher 의 AI 학습 분석이 학생 오답과 대조합니다">🕳 예상 오답 ${item.aiTraps.length}</span>`:''}${item.freqTraps?.length?`<span class="q-type-badge" style="background:#fef3c7;color:#92400e" title="teacher 의 🤖 빈출 오답 분석이 실제 학생 오답에서 찾은 원인 ${item.freqTraps.length}개 (teacher 학습지별 화면에서 관리)">📊 빈출 오답 ${item.freqTraps.length}</span>`:''}
         <div class="q-text-preview">${preview}</div>
       </div>
       <div class="q-actions">
@@ -1821,8 +1821,27 @@ function _withNoReview(q){
   return q;
 }
 /** 편집 화면에 칸이 없는 필드는 저장할 때 직접 옮기지 않으면 사라진다 — saveQuestion 이 문항 객체를
-    새로 만들기 때문이다(partStart 를 매번 따로 옮기는 것과 같은 이유). 🕳 예상 오답(aiTraps)이 그렇다. */
-function _keepAiTraps(q, prev){ if(prev?.aiTraps?.length) q.aiTraps=prev.aiTraps; return q; }
+    새로 만들기 때문이다(partStart 를 매번 따로 옮기는 것과 같은 이유). 🕳 예상 오답(aiTraps)과
+    teacher 의 📊 빈출 오답 분석이 붙여 둔 freqTraps(v3.39)가 그렇다. */
+function _keepAiTraps(q, prev){
+  if(prev?.aiTraps?.length) q.aiTraps=prev.aiTraps;
+  if(prev?.freqTraps?.length) q.freqTraps=prev.freqTraps;
+  return q;
+}
+/** teacher 가 학습지 문서에 써 두는 것 — 📊 빈출 오답 분석 기록(wrongAnalysis)과 문항의 freqTraps — 은 edit 가 만들지 않으므로
+    저장할 때 항상 **Firestore 의 최신 값**을 따른다(v3.39). edit 가 학습지를 열어 둔 사이 teacher 가 분석해도 덮어쓰지 않고,
+    teacher 가 지웠으면 edit 도 지운다. 문항은 id 로 맞춘다(그새 순서를 바꿨어도 된다). existing 이 없으면(새 학습지) 그대로 둔다 */
+function _withFreqTraps(questions, existing){
+  if(!existing) return questions;
+  const byId=new Map((existing.questions||[]).map(q=>[q.id,q]));
+  return (questions||[]).map(q=>{ const e=byId.get(q.id); const c={...q}; if(e?.freqTraps?.length) c.freqTraps=e.freqTraps; else delete c.freqTraps; return c; });
+}
+function _keepTeacherFields(saveData, existing){
+  if(!existing) return saveData;
+  if(existing.wrongAnalysis) saveData.wrongAnalysis=existing.wrongAnalysis; else delete saveData.wrongAnalysis;
+  saveData.questions=_withFreqTraps(saveData.questions, existing);
+  return saveData;
+}
 /** 힌트 칸의 값 (없거나 안 쓰는 유형이면 빈 문자열) */
 function _hintVal(){
   const el=document.getElementById('q-hint');
@@ -2254,6 +2273,7 @@ async function saveToFirestore(status, silent=false){
     // 잠금 필드는 Firestore 최신 값 기준 (문서가 없으면 = ID 변경/신규 → currentWs 값 유지)
     const latest = existing || currentWs;
     LOCK_FIELDS.forEach(k=>{ if(latest[k]!==undefined) saveData[k]=latest[k]; else delete saveData[k]; });
+    _keepTeacherFields(saveData, existing);   // 📊 빈출 오답 분석(teacher 소유)도 Firestore 최신 값 기준 (v3.39)
     if(explicitStatus){
       const changed = (latest.status||'draft')!==status;
       saveData.status=status;
@@ -2940,7 +2960,9 @@ function _reviewQuestions(){
      (같은 문항·같은 오답은 한 번만). 교사가 체크를 풀면 `on:false` 로 남겨 두어 다음 검토에서 다시 올라오지 않는다.
    · 문항의 `aiTraps`(teacher·index 의 분석이 쓰는 것)는 이 기록에서 `on` 인 것을 전부 모아 만든다 — 개수 상한은 없다
      (v3.38: 분석 프롬프트가 일치한 것(★)만 자세히 보내므로 많아도 비대해지지 않는다. 같은 오답은 한 번만 들어가 무한정 쌓이지도 않는다).
-   · v3.34~36 에서 저장한 예상 오답(aiTraps 만 있고 aiReview 가 없는 학습지)은 처음 열 때 기록으로 옮겨 온다. */
+   · v3.34~36 에서 저장한 예상 오답(aiTraps 만 있고 aiReview 가 없는 학습지)은 처음 열 때 기록으로 옮겨 온다.
+   · teacher 의 📊 빈출 오답 분석(v3.51)은 실제 학생 오답에서 찾은 원인을 문항에 `freqTraps` 로 따로 저장한다 — 여기서 questions 를
+     통째로 쓸 때 그것을 지우지 않도록 최신 문서에서 가져온다(_withFreqTraps). 여기 기록 지우기는 예상 오답(aiTraps)만 지운다. */
 let _aiRec = null;                 // 지금 모달에 떠 있는 검토 기록
 let _aiSaveTimer = null;
 function _esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -3012,7 +3034,9 @@ async function _saveReview(rec){
     const l=byIdx.get(t.idx);
     l.push({ wrong:t.wrong, path:t.path, label:t.label||'' });
   });
-  const newQs=(currentWs.questions||[]).map((q,i)=>{ const c={...q}; const l=byIdx.get(i); if(l?.length) c.aiTraps=l; else delete c.aiTraps; return c; });
+  let existing=null;
+  try{ existing=(await getDoc(doc(db,'curriculum',currentWs.id))).data()||null; }catch(e){ console.warn('[AI 검토 저장] 학습지 다시 읽기 실패', e.message); }
+  const newQs=_withFreqTraps((currentWs.questions||[]).map((q,i)=>{ const c={...q}; const l=byIdx.get(i); if(l?.length) c.aiTraps=l; else delete c.aiTraps; return c; }), existing);
   await setDoc(doc(db,'curriculum',currentWs.id), { aiReview:stored, questions:newQs }, { merge:true });
   currentWs.aiReview=stored; currentWs.questions=newQs;
   const ws=worksheets.find(w=>w.id===currentWs.id); if(ws){ ws.aiReview=stored; ws.questions=newQs; }
@@ -3034,8 +3058,10 @@ window.clearAIReview = async function(){
   if(!currentWs?.id) return;
   const n=(_aiRec?.traps||[]).length;
   if(!confirm(`이 학습지의 AI 검토 기록(오류 점검 · 예상 오답 ${n}개)을 모두 지웁니다.\n(teacher·학생 진단의 오답 대조에서 더는 쓰이지 않습니다)`)) return;
-  const newQs=(currentWs.questions||[]).map(q=>{ const c={...q}; delete c.aiTraps; return c; });
   try{
+    let existing=null;
+    try{ existing=(await getDoc(doc(db,'curriculum',currentWs.id))).data()||null; }catch(e){}
+    const newQs=_withFreqTraps((currentWs.questions||[]).map(q=>{ const c={...q}; delete c.aiTraps; return c; }), existing);
     await setDoc(doc(db,'curriculum',currentWs.id), { aiReview:deleteField(), questions:newQs }, { merge:true });
     delete currentWs.aiReview; currentWs.questions=newQs;
     const ws=worksheets.find(w=>w.id===currentWs.id); if(ws){ delete ws.aiReview; ws.questions=newQs; }
@@ -3056,9 +3082,11 @@ function _renderReview(rec, opts={}){
     ? `방금 검토했습니다 (${rec.count}번째) · 예상 오답 ${opts.added||0}개 추가${rec.count>1?' · 오류 점검은 새 결과로 갱신':''}`
     : (rec.at ? `저장된 검토 · 마지막 검토 ${_fmtAt(rec.at)} (${rec.count}회)` : `이전 버전에서 저장한 예상 오답 ${rec.traps.length}개 (아직 검토 기록 없음)`);
   const al=opts.align||{};
+  const alignMsg = (al.fixed&&al.dropped) ? `${al.fixed}건은 번호를 바로잡았고 ${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`
+    : al.fixed ? `${al.fixed}건은 번호를 바로잡았습니다` : `${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`;   // 보정만 있을 때 「…고 .」 로 끝나던 것 (v3.39)
   const alignNote=(al.fixed||al.dropped)
     ? `<div style="font-size:12px;color:#b45309;border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px 10px;margin-bottom:10px">
-        ⚠️ AI가 가리킨 문항 번호를 문제 내용과 대조했습니다 — ${al.fixed?`${al.fixed}건은 번호를 바로잡았고 `:''}${al.dropped?`${al.dropped}건은 어느 문항인지 확실하지 않아 제외했습니다`:''}.
+        ⚠️ AI가 가리킨 문항 번호를 문제 내용과 대조했습니다 — ${alignMsg}.
         ${al.dropped?'다시 검토하면 나올 수 있습니다.':''}</div>` : '';
   // ⚠️ 문항 점검 (마지막 검토 것)
   const sevLabel={high:'🔴 높음', medium:'🟡 보통', low:'⚪ 낮음'}, sevOrder={high:0, medium:1, low:2};

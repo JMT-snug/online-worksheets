@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="8.98">
+  <meta name="app-version" content="8.99">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -247,6 +247,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .exam-modal{background:var(--paper);color:var(--ink);border-radius:14px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;padding:18px 20px;box-shadow:0 16px 48px rgba(0,0,0,.25)}
 .exam-modal h3{margin:0 0 6px;font-size:16px}
 .exam-modal .em-note{font-size:11px;color:var(--ink3);margin-bottom:12px}
+.exam-modal .em-caution{background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:12px}
+.exam-modal .em-caution b{color:#b45309}
 .exam-modal .em-sec{margin-bottom:12px;font-size:14px;line-height:1.55}
 .exam-modal .em-sec b{display:block;margin-bottom:3px}
 .exam-modal .em-sec ul{margin:0 0 0 18px;padding:0}
@@ -1920,14 +1922,17 @@ function showExamAIResult(ex, entry, isPrev, plain, warn){
   if(!entry){ body.innerHTML=`<h3>🤖 AI 학습 진단</h3><div class="em-sec">아직 받은 진단이 없어요.</div>${close}`; bg.classList.add('show'); return; }
   const a=entry.analysis||{};
   const list=(arr)=>arr?.length?`<ul>${arr.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ul>`:'';
+  // ⚠️ 데이터에 근거했지만 AI 가 쓴 글이라 틀릴 수 있다 — 학생이 그대로 믿지 않도록 맨 위에 강조 (v8.99, 교사 요청)
   body.innerHTML=`<h3>🤖 AI 학습 진단 — ${ex.grade}학년 ${escHtml(ex.title)}</h3>
-    <div class="em-note">${isPrev?'지난 진단 · ':''}${String(entry.at||'').slice(0,16).replace('T',' ')} · 시험 범위 학습지 기록 기준이에요. 참고용이니 최종 판단은 스스로·선생님과 함께 해요.</div>
+    <div class="em-note">${isPrev?'지난 진단 · ':''}${String(entry.at||'').slice(0,16).replace('T',' ')} · 시험 범위 학습지 기록 기준이에요.</div>
+    <div class="em-caution">⚠️ <b>참고만 하세요</b> — 이 진단은 내가 푼 시험 범위 학습지의 기록(정답률·틀린 답)을 바탕으로 AI가 쓴 거예요.
+      데이터에 근거했지만 <b>AI가 쓴 글이라 틀릴 수도 있어요.</b> 공부 방향을 정할 때 참고만 하고, 확실하지 않은 건 선생님께 물어보세요.</div>
     <div class="em-sec" style="font-weight:700">${escHtml(a.summary||'')}</div>
     ${a.strengths?.length?`<div class="em-sec"><b>👍 잘하고 있는 것</b>${list(a.strengths)}</div>`:''}
     ${a.weaknesses?.length?`<div class="em-sec"><b>⚠️ 보완할 것</b>${list(a.weaknesses)}</div>`:''}
     ${a.commonMistakes?.length?`<div class="em-sec"><b>🔁 반복되는 실수</b>${list(a.commonMistakes)}</div>`:''}
     ${entry.hits?.length?`<div class="em-sec"><b>🕳 이런 실수에 자주 걸렸어요</b>
-      <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <b>${h.count}번</b>${h.peers?' <span style="font-size:12px;color:#b45309">· 다른 친구들도 많이 하는 실수예요</span>':''}<span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
+      <ul>${entry.hits.map(h=>`<li>${escHtml(h.label)} <span style="font-weight:700">${h.count}번</span>${h.peers?' <span style="font-size:12px;color:#b45309">· 다른 친구들도 많이 하는 실수예요</span>':''}<span style="display:block;font-size:12px;color:#6b7280">${escHtml(h.path)}</span></li>`).join('')}</ul></div>`:''}
     ${a.studyPlan?.length?`<div class="em-sec"><b>📚 시험 전 공부 순서</b>${list(a.studyPlan)}</div>`:''}
     ${warn?`<div class="em-sec" style="color:#b45309;font-size:13px">${escHtml(warn)}</div>`:''}
     ${close}`;

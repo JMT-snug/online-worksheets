@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="9.1">
+  <meta name="app-version" content="9.2">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -99,7 +99,7 @@ header{display:grid !important;grid-template-columns:1fr auto 1fr;align-items:ce
 .bell-chip.gm-x{background:#fee2e2;color:#b91c1c}
 .bell-chip.gm-n{background:#fef3c7;color:#b45309}
 .bell-chip.gm-i{background:var(--acc-lt);color:var(--accent)}
-.bell-fb{font-size:12px;color:var(--ink2);margin-top:3px;background:var(--acc-lt);border-radius:6px;padding:4px 7px;white-space:normal;word-break:break-word}
+.bell-fb{font-size:12px;color:var(--ink2);margin-top:3px;background:var(--acc-lt);border-radius:6px;padding:4px 7px;white-space:pre-line;word-break:break-word}   /* pre-line: 선생님이 피드백에 넣은 줄바꿈 유지 (v9.2) */
 .bell-clear{text-align:center;font-size:12px;color:var(--accent);font-weight:700;padding:9px;cursor:pointer;border-top:1px solid var(--rule);margin-top:2px}
 .bell-clear:hover{background:var(--acc-lt);border-radius:0 0 8px 8px}
 .notif-dot-in{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:middle;animation:notifPulse 1.6s infinite}
@@ -1628,7 +1628,7 @@ function renderGradeTabs(){
 
 /* ══════════ 📝 시험 대비 (v8.78) ══════════
    교사가 teacher.html 「시험 대비 설정」에서 config/exam 에 학년별로 저장한다:
-     exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusEvery,aiBonusMax}, "2":…, "3":… }
+     exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiLimitAfterDone,aiBonusEvery,aiBonusMax}, "2":…, "3":… }
    · 오늘이 start~end(양 끝 포함) 안인 시험만 '진행 중'으로 본다 → 그 학년의 범위 학습지에
      📝 칩·호박색 배경, 종 🔔 공지, 단원 목록 위 배너(🤖 AI 학습 진단 버튼).
    · AI 진단은 시험 ID(학년-시작일)마다 aiLimit 회. 사용 횟수·결과는
@@ -1638,6 +1638,8 @@ function renderGradeTabs(){
      「각각」은 복습 학습지들의 완료 횟수 중 **가장 적은 값**(examReviewMin)으로 센다 — 여러 단원의 복습을 고르게 하게.
      범위에 복습 학습지가 없으면 추가 없음. 그때그때 진도로 판정하고 저장하지 않는다(완료 횟수는 줄지 않는다).
      n=1·m=1 이면 v8.100 의 「모두 완료하면 1회」와 같다(옛 aiBonusAllDone 은 그렇게 읽는다). aiLimit 0 + 추가만 = "다 풀고 복습해야만".
+   · 🔒 aiLimitAfterDone (v9.2): 켜면 허용 횟수(aiLimit)도 범위 학습지를 **모두** 완료한 뒤부터 쓸 수 있다 — 다 풀기 전에 써 버리는 것을 막는다.
+     그 전엔 examLimit 이 추가 횟수만 세므로 버튼 대신 「모두 완료하면 N회를 쓸 수 있어요」 안내만 보인다.
    · 교사 계정은 횟수 제한 없이 눌러 볼 수 있다(자기 기록 기준이라 대개 비어 있다 — 동작 확인용). */
 let EXAM_CONFIG = {};        // config/exam 의 exams 맵
 let EXAM_WS = {};            // wsId → 진행 중인 시험 (범위 판정용)
@@ -1668,7 +1670,7 @@ function activeExams(){
     if(today<ex.start||today>ex.end) continue;
     const known=new Set(WORKSHEETS.map(w=>w.id));
     out.push({ grade:g, id:g+'-'+ex.start, title:ex.title||(g+'학년 시험'), start:ex.start, end:ex.end,
-      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview,
+      aiLimit:Math.max(0,+ex.aiLimit||0), aiRequireReview:!!ex.aiRequireReview, aiLimitAfterDone:!!ex.aiLimitAfterDone,
       // 🎁 추가 횟수 — 새 필드가 있으면 그것, 없으면 옛 aiBonusAllDone(v8.100) 을 n=1·m=1 로 읽는다
       aiBonusEvery: ex.aiBonusEvery!==undefined ? Math.max(0,+ex.aiBonusEvery||0) : (ex.aiBonusAllDone?1:0),
       aiBonusMax: ex.aiBonusMax!==undefined ? Math.max(1,+ex.aiBonusMax||1) : (ex.aiBonusAllDone?1:3),
@@ -1686,8 +1688,8 @@ function examBonus(ex){
   if(!(ex.aiBonusEvery>0) || !examAllDone(ex) || !examReviewWs(ex).length) return 0;
   return Math.min(ex.aiBonusMax, Math.floor(examReviewMin(ex)/ex.aiBonusEvery));
 }
-/* 이 학생의 허용 횟수 = 교사가 정한 횟수 + 추가 횟수 */
-function examLimit(ex){ return ex.aiLimit + examBonus(ex); }
+/* 이 학생의 허용 횟수 = 교사가 정한 횟수(🔒 aiLimitAfterDone 이면 범위를 모두 완료한 뒤부터) + 추가 횟수 */
+function examLimit(ex){ return ((ex.aiLimitAfterDone && !examAllDone(ex)) ? 0 : ex.aiLimit) + examBonus(ex); }
 function examRemaining(ex){ const st=EXAM_AI_STATE[ex.id]||{count:0}; return Math.max(0, examLimit(ex)-(st.count||0)); }
 /* 범위 학습지 '완료' — 일반 학습지는 isComplete, 복습 학습지(-FN)는 1회 이상 완료(completions) */
 function examWsDone(id){ const p=wsProgress[id]; if(!p) return false; const ws=WORKSHEETS.find(w=>w.id===id); return ws?.type==='review' ? (p.completions||0)>=1 : !!p.isComplete; }
@@ -1716,8 +1718,12 @@ function renderExamBanner(){
     const limit=examLimit(ex), bonus=examBonus(ex);
     // 🎁 조건부 추가 횟수 안내 (v9.0) — 복습 학습지가 범위에 없으면 추가가 생기지 않으므로 안내도 없다
     const n=ex.aiBonusEvery, m=ex.aiBonusMax, bonusOn = !teacher && n>0 && total>0 && examReviewWs(ex).length>0;
+    // 🔒 허용 횟수 조건 (v9.2) — 모두 완료하기 전엔 허용 횟수를 못 쓴다. 🎁 안내와 겹치면 한 문장으로
+    const lockOn = !teacher && ex.aiLimitAfterDone && ex.aiLimit>0 && total>0 && !examAllDone(ex);
     let bonusHint='';
-    if(bonusOn){
+    if(lockOn && bonusOn) bonusHint=`🔒 시험 범위 학습지를 모두 완료하면(${total-done}개 남음) 🤖 AI 진단 ${ex.aiLimit}회를 쓸 수 있고, 그 뒤 🔁 복습 학습지를 각각 ${n}회 완료할 때마다 1회씩 추가돼요 (최대 ${m}회)`;
+    else if(lockOn) bonusHint=`🔒 🤖 AI 진단 ${ex.aiLimit}회는 시험 범위 학습지를 모두 완료하면 쓸 수 있어요 (${total-done}개 남음)`;
+    else if(bonusOn){
       if(!examAllDone(ex)) bonusHint=`🎁 시험 범위 학습지를 모두 완료하면(${total-done}개 남음), 그 뒤 🔁 복습 학습지를 각각 ${n}회 완료할 때마다 AI 진단이 1회씩 추가돼요 (최대 ${m}회)`;
       else if(bonus>=m) bonusHint=`🎁 복습 학습지 완료로 AI 진단 ${bonus}회 추가됨 (최대 ${m}회)`;
       else { const r=examReviewMin(ex);
@@ -1733,8 +1739,8 @@ function renderExamBanner(){
       btns+=`<button type="button" class="eb-btn" data-ex="${ex.id}" data-act="run" ${can?'':'disabled'} title="${escHtml(why)}">🤖 AI 학습 진단${teacher?' (교사 · 제한 없음)':` (남은 횟수 ${left}/${limit})`}</button>`;
       if(!teacher && left>0 && !gate.ok)
         btns+=`<div style="flex-basis:100%;font-size:12px;color:#b45309">🔁 시험 범위의 복습 학습지 ${gate.required.length-gate.missing.length}/${gate.required.length}개 완료 — 각각 1회 이상 풀면 AI 진단을 받을 수 있어요</div>`;
-      if(hasPrev) btns+=`<button type="button" class="eb-btn ghost" data-ex="${ex.id}" data-act="last">지난 진단 보기</button>`;
     }
+    if(hasPrev) btns+=`<button type="button" class="eb-btn ghost" data-ex="${ex.id}" data-act="last">지난 진단 보기</button>`;   // 받은 게 있으면 버튼이 없어도(🔒) 보인다
     if(bonusHint) btns+=`<div style="flex-basis:100%;font-size:12px;color:${bonus?'#166534':'#b45309'}">${bonusHint}</div>`;
     return `<div class="exam-banner">
       <div>
@@ -1841,6 +1847,7 @@ function buildExamAIPayload(ex){
 async function runExamAI(ex){
   const teacher=isTeacherAcct();
   const left=examRemaining(ex);
+  if(!teacher && ex.aiLimitAfterDone && !examAllDone(ex) && examLimit(ex)<=0){ alert('시험 범위 학습지를 모두 완료하면 AI 진단을 쓸 수 있어요.'); return; }   // 🔒 (v9.2)
   if(!teacher && left<=0){ alert('이번 시험의 AI 진단을 모두 사용했어요.'); return; }
   const gate=examReviewGate(ex);
   if(!teacher && !gate.ok){ alert('시험 범위의 복습 학습지를 각각 1회 이상 풀어야 AI 진단을 받을 수 있어요.\n\n아직 안 한 복습 학습지:\n· '+gate.missing.map(w=>w.title).join('\n· ')); return; }
@@ -2155,7 +2162,7 @@ function activeNotices(){
   const examN=activeExams().map(ex=>({ id:'exam-notice::'+ex.id, until:ex.end,
     title:`${ex.grade}학년 ${ex.title} 대비 (${_mdStr(ex.start)}~${_mdStr(ex.end)})`,
     body:`시험 범위 학습지 ${ex.wsIds.length}개에 📝 시험 범위 표시가 붙어 있어요.`+
-         (ex.aiLimit>0?` 단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
+         (ex.aiLimit>0?` ${ex.aiLimitAfterDone?'시험 범위 학습지를 모두 완료하면 ':''}단원 목록 위 배너에서 🤖 AI 학습 진단을 ${ex.aiLimit}회 받을 수 있어요.`:'')+
          (ex.aiBonusEvery>0?` 🎁 범위 학습지를 모두 완료한 뒤 🔁 복습 학습지를 각각 ${ex.aiBonusEvery}회 완료할 때마다 AI 진단이 1회씩 추가돼요(최대 ${ex.aiBonusMax}회).`:'')+
          ((ex.aiLimit>0||ex.aiBonusEvery>0)&&ex.aiRequireReview?' 범위의 🔁 복습 학습지를 각각 1회 이상 풀어야 진단을 받을 수 있어요.':'') }));
   // 순서: 시험 공지 → 교사가 보낸 공지(최근 것이 위) → 코드에 박은 공지
@@ -4659,7 +4666,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
         <button onclick="graphClear()" class="btn-back" style="font-size:12px">전체 지우기</button>
         <span style="margin-left:auto;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;${gradeBadgeStyle}">${gradeBadgeText}</span>
       </div>
-      ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px">💬 <b>선생님 피드백:</b> ${prevFeedback}</div>`:''}
+      ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px;white-space:pre-line">💬 <b>선생님 피드백:</b> ${_escHtml(prevFeedback)}</div>`:''}
       <div class="feedback-strip" id="feedback-strip"></div>
       <div class="ans-btns" onmousedown="event.preventDefault()">
         <button class="btn-submit" onclick="submitQAns()" style="background:var(--green)">제출 ✓</button>

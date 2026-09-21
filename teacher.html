@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="4.0">
+<meta name="app-version" content="4.1">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1053,7 +1053,8 @@ window.renderStudentDetail=renderStudentDetail;
 
 /* ══════════ 📝 시험 대비 설정 (teacher v3.43) ══════════
    Firestore config/exam 문서 하나에 학년별로 시험을 둔다:
-     { exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiBonusEvery,aiBonusMax,updatedAt,updatedBy}, "2":…, "3":… } }
+     { exams: { "1": {title,start,end,wsIds:[...],aiLimit,aiRequireReview,aiLimitAfterDone,aiBonusEvery,aiBonusMax,updatedAt,updatedBy}, "2":…, "3":… } }
+   · 🔒 aiLimitAfterDone (v4.1): 허용 횟수도 범위 학습지를 모두 완료한 뒤부터 (index v9.2)
    · 🎁 aiBonusEvery(n, 0=끔) · aiBonusMax(m) (v3.54): 범위 학습지를 모두 완료한 뒤 범위의 복습 학습지를 각각 n회 완료할 때마다
      AI 진단 1회 추가, 최대 m회 (index v9.0 이 진도로 판정 — 「각각」은 복습 학습지 완료 횟수의 최솟값). v3.53 의 aiBonusAllDone(boolean) 은
      저장할 때 지우고, index 는 그것만 있으면 n=1·m=1 로 읽는다.
@@ -1110,6 +1111,11 @@ async function renderExamSettings(){
         <input type="number" id="exam-ailimit" min="0" max="10" value="${ex?.aiLimit??1}" style="width:100%;padding:7px 10px;border:1.5px solid var(--rule);border-radius:7px;font-size:13px;font-family:inherit" ${ro?'disabled':''}></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 10px;cursor:pointer">
+      <input type="checkbox" id="exam-limit-afterdone" ${ex?.aiLimitAfterDone?'checked':''} ${ro?'disabled':''}>
+      🔒 <b>허용 횟수도 시험 범위 학습지를 모두 완료한 뒤부터</b> 쓸 수 있게
+      <span style="font-size:11px;color:var(--ink3)">(끄면 시험 기간 시작부터 바로 쓸 수 있습니다 — 다 풀기 전에 써 버리는 것을 막으려면 켜세요)</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:0 0 10px;cursor:pointer">
       <input type="checkbox" id="exam-require-review" ${ex?.aiRequireReview?'checked':''} ${ro?'disabled':''}>
       🔁 범위에 넣은 <b>복습 학습지를 각각 1회 이상 완료</b>해야 AI 진단을 받을 수 있게
       <span style="font-size:11px;color:var(--ink3)">(아래 목록에서 복습 학습지도 범위에 넣어야 적용됩니다)</span>
@@ -1125,6 +1131,7 @@ async function renderExamSettings(){
     <div style="font-size:12px;color:var(--ink3);line-height:1.6">
       · 시작일부터 종료일까지(양 끝 포함) 학생 화면에 표시됩니다. 0회로 두면 AI 진단 버튼은 나오지 않고 범위 표시만 됩니다.<br>
       · 학생의 AI 진단 횟수는 「학년-시작일」을 시험 ID 로 셉니다. <b>시작일을 바꾸면 새 시험으로 보아 횟수가 다시 생깁니다.</b><br>
+      · 🔒 허용 횟수 조건을 켜면 학생 배너에 「모두 완료하면 N회를 쓸 수 있어요 (M개 남음)」만 보이고, 다 완료한 뒤 버튼이 생깁니다(받아 둔 지난 진단은 그전에도 볼 수 있습니다).<br>
       · 🎁 추가 횟수를 켜면 학생 배너에 「모두 완료하면(N개 남음) … 각각 n회 완료할 때마다 1회씩 추가」 안내가 뜨고, 다 완료한 뒤에는 「복습 완료 r회 → k회 추가됨 · x회 더 완료하면 1회 추가」로 바뀝니다(복습 학습지는 1회 이상 완료가 「완료」).
       ${ex?'<br>· 현재 시험 ID: <code>'+examIdOf(g,ex.start)+'</code>'+(ex.updatedAt?' · 마지막 저장 '+String(ex.updatedAt).slice(0,16).replace('T',' ')+' ('+(ex.updatedBy||'')+')':''):''}
     </div>
@@ -1190,6 +1197,7 @@ window.saveExamSettings=async function(g){
   const aiLimit=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-ailimit')?.value,10)||0));
   const wsIds=[...document.querySelectorAll('.exam-ws-cb:checked')].map(cb=>cb.value);
   const aiRequireReview=!!document.getElementById('exam-require-review')?.checked;
+  const aiLimitAfterDone=!!document.getElementById('exam-limit-afterdone')?.checked;
   const aiBonusEvery=Math.max(0,Math.min(10,parseInt(document.getElementById('exam-bonus-every')?.value,10)||0));
   const aiBonusMax=Math.max(1,Math.min(10,parseInt(document.getElementById('exam-bonus-max')?.value,10)||1));
   if(!start||!end){ alert('시작일과 종료일을 모두 입력하세요.'); return; }
@@ -1203,7 +1211,7 @@ window.saveExamSettings=async function(g){
   if(prev && prev.start!==start && !confirm('시작일이 바뀌면 새 시험으로 보아 학생들의 AI 진단 횟수가 다시 생깁니다. 계속할까요?')) return;
   const msg=document.getElementById('exam-save-msg'); if(msg) msg.textContent='저장 중…';
   try{
-    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit, aiRequireReview, aiBonusEvery, aiBonusMax,
+    const entry={ title:title||(g+'학년 시험'), start, end, wsIds, aiLimit, aiRequireReview, aiLimitAfterDone, aiBonusEvery, aiBonusMax,
       updatedAt:new Date().toISOString(), updatedBy:tUser.email };
     // v3.53 의 aiBonusAllDone 은 지운다 — merge 라 그냥 두면 남는다 (index 는 새 필드가 있으면 새 필드만 본다)
     await setDoc(doc(db,"config","exam"),{ exams:{ [String(g)]:{ ...entry, aiBonusAllDone:deleteField() } } },{ merge:true });

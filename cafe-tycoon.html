@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 /* ══════════════════════════════════════════════════════════════
-   카페 타이쿤 v1.0 — 스타일
+   카페 타이쿤 v2.0 — 스타일
    ══════════════════════════════════════════════════════════════ */
 :root{
   --bg:#fdf6ec; --bg2:#f6ead9; --panel:#ffffff; --panel2:#fffaf3;
@@ -207,9 +207,47 @@ table.rank tr.me td{font-weight:800}
   border-radius:24px;font-size:14px;font-weight:700;z-index:200;opacity:0;transition:.25s;pointer-events:none}
 .toast.on{opacity:1}
 
+/* ── 도전 과제 (v2.0) ── */
+.ach{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px}
+.ach.done{border-color:var(--gold);background:#fffaf0}
+.ach.secret{border-style:dashed;opacity:.8}
+.ach .nm{font-weight:900;font-size:16px}
+.ach .desc{font-size:13px;color:var(--dim);line-height:1.6;flex:1}
+.ach .prog{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;line-height:1.4}
+.ach .prog span{white-space:nowrap}
+.ach .prog .blocks{letter-spacing:1px;color:var(--gold);font-size:15px}
+.ach .memo{font-size:12px;color:var(--red);font-weight:700}
+.pbar{flex:1;height:9px;border-radius:5px;background:#eee3d4;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--gold);border-radius:5px}
+.ach .gift{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;padding-top:8px;border-top:1px dashed var(--line)}
+.ach .gift .thumb.small{width:44px;height:44px;flex:0 0 44px}
+.ach-pop .item-a{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--panel2)}
+.ach-pop .item-a .nm{font-size:18px;font-weight:900}
+.ach-pop .item-a p{margin:4px 0 8px}
+.ach-pop .gift{display:flex;align-items:center;gap:10px;font-weight:800;color:#8a5a12}
+.ach-pop .gift .thumb.small{width:56px;height:56px;flex:0 0 56px}
+.tag.reward{background:#fff1cc;color:#8a5a12}
+
+/* ── 오늘의 챌린지 (v2.0) ── */
+.daily-head{background:linear-gradient(135deg,#f5ecdc,#eadcc3);border:1px solid var(--line2);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+.daily-head .date{font-size:13px;color:#8a6c45;font-weight:800}
+.daily-head .nm{font-size:24px;font-weight:900;margin:4px 0 6px;letter-spacing:-.5px}
+.daily-head .lvl{font-size:14px;font-weight:800;color:#8a5a12}
+.daily-head p{margin:6px 0 0;font-size:14px;color:#6b5946;line-height:1.7}
+.cond{font-size:14px;line-height:2;padding:2px 0}
+.cond.rule{color:var(--red);font-weight:700}
+.goal{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14.5px;line-height:1.7}
+.goal:last-child{border-bottom:none}
+.goal .stars{white-space:nowrap;min-width:62px;font-size:14px}
+.goal .mark{margin-left:auto;font-size:16px}
+.goal.ok{color:var(--green);font-weight:700}
+.goal.no{color:var(--dim)}
+.stars-big{font-size:38px;letter-spacing:2px;line-height:1.2}
+
 @media(max-width:520px){
   header h1{font-size:16px} .stat{font-size:12px;padding:4px 9px}
   .result-hero .n{font-size:44px}
+  .stars-big{font-size:30px}
 }
 </style>
 </head>
@@ -227,8 +265,10 @@ table.rank tr.me td{font-weight:800}
 <nav id="nav" class="hidden">
   <button data-scr="s-home" onclick="탭('s-home')">🏠 내 카페</button>
   <button data-scr="s-assign" onclick="탭('s-assign')">📋 업무 배정</button>
+  <button data-scr="s-daily" onclick="탭('s-daily')">☕ 오늘의 챌린지</button>
+  <button data-scr="s-achieve" onclick="탭('s-achieve')">🏆 도전 과제</button>
   <button data-scr="s-shop" onclick="탭('s-shop')">🛒 상점</button>
-  <button data-scr="s-rank" onclick="탭('s-rank')">🏆 랭킹</button>
+  <button data-scr="s-rank" onclick="탭('s-rank')">🥇 랭킹</button>
   <button data-scr="s-log" onclick="탭('s-log')">📈 기록</button>
 </nav>
 
@@ -262,14 +302,22 @@ table.rank tr.me td{font-weight:800}
 <!-- ── 기록 ────────────────────────────────────────────────── -->
 <div class="screen" id="s-log"></div>
 
+<!-- ── 도전 과제 (v2.0) ────────────────────────────────────── -->
+<div class="screen" id="s-achieve"></div>
+
+<!-- ── 오늘의 챌린지 (v2.0) ────────────────────────────────── -->
+<div class="screen" id="s-daily"></div>
+<div class="screen" id="s-daily-result"></div>
+
 <div class="toast" id="toast"></div>
 
-<script src="cafe-catalog.js?v=1.0"></script>
-<script src="cafe-engine.js?v=1.0"></script>
+<script src="cafe-catalog.js?v=2.0"></script>
+<script src="cafe-engine.js?v=2.0"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════
-   카페 타이쿤 v1.0 — 화면 코드
+   카페 타이쿤 v2.0 — 화면 코드
    계산은 전부 cafe-engine.js 가 한다. 이 파일은 "보여 주기"만 한다.
+   v2.0: 🏆 도전 과제(13개, 보상 인테리어) · ☕ 오늘의 챌린지(날짜마다 하나) 화면이 들어왔다.
    ══════════════════════════════════════════════════════════════ */
 'use strict';
 const CG = window.CafeGame;
@@ -280,6 +328,7 @@ const 저장키 = 'cafeTycoon.v1';
 let st = null;          // 게임 상태
 let 배정 = {};          // 지금 편집 중인 업무 배정 { 직원id: [업무id...] }
 let 상점탭 = 'hire';
+let 보관이월 = null;    // [처음부터]로 지운 뒤에도 새 시즌에 가져갈 도전 과제·챌린지 기록
 
 /* ── 도우미 ─────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -423,6 +472,8 @@ function 탭(id) {
   if (id === 's-shop') 상점그리기();
   if (id === 's-rank') 랭킹그리기();
   if (id === 's-log') 기록그리기();
+  if (id === 's-achieve') 도전과제그리기();
+  if (id === 's-daily') 챌린지그리기();
   화면(id);
 }
 
@@ -484,18 +535,34 @@ async function 로그인상태(u) {
   try { 원격 = await window.CafeCloud.불러오기(); }
   catch (e) { console.warn('[클라우드 읽기 실패]', e); 알림('저장 기록을 불러오지 못했습니다.'); }
   const 로컬 = 불러오기();
-  const 진행 = s => (s && s.기록) ? s.기록.length : -1;
+  // 새 시즌을 시작하면 기록이 0으로 돌아가므로, 시즌 번호(v2.0)를 앞자리로 두고 견준다
+  const 진행 = s => (s && s.기록) ? ((s.시즌번호 || 1) * 100 + s.기록.length) : -1;
 
   if (진행(원격) < 0 && 진행(로컬) < 0) { 시작그리기(); 화면('s-start'); return; }
 
   if (진행(원격) > 진행(로컬)) { st = 원격; 알림('저장해 둔 카페를 불러왔습니다.'); }
   else { st = 로컬 || 원격; if (진행(로컬) > 진행(원격)) 클라우드저장(true); }
 
+  // 도전 과제 칸을 갖추고(예전 저장 데이터면 기록을 되짚어 채운다), 다른 쪽 저장본의 과제도 합친다
+  const 새과제 = 과제준비(st, st === 원격 ? 로컬 : 원격);
+
   배정 = st._배정 || {};
   저장();
   $('nav').classList.remove('hidden');
   탭(st.끝남 ? 's-log' : 's-home');
+  과제팝업(새과제);
   좋아요반영();                                // 친구들이 눌러 준 좋아요를 매력도에 반영
+}
+
+/**
+ * 불러온 상태에 도전 과제·오늘의 챌린지 칸을 갖춘다 (v2.0).
+ * 예전 저장 데이터라면 지금까지의 기록을 되짚어 이미 해낸 과제를 바로 인정하고, 그 목록을 돌려준다(팝업용).
+ * 다른 저장본(서버/이 기기)이 있으면 그쪽의 달성 기록도 합친다 — 어느 쪽을 골랐든 과제가 사라지지 않게.
+ */
+function 과제준비(상태, 다른) {
+  const 새것 = CG.도전과제준비(상태);
+  if (다른) CG.도전과제합치기(상태, 다른);
+  return 새것;
 }
 
 /**
@@ -518,7 +585,8 @@ function 요약(s) {
     staffCount: s.직원.length,
     profit: 순.toString(),                          // 분수 그대로 (예: "177/5")
     profitValue: 순.numerator / 순.denominator,     // 순위를 매기기 위한 수
-    finished: !!s.끝남
+    finished: !!s.끝남,
+    achievements: Object.keys((s.도전과제 && s.도전과제.달성) || {}).length   // v2.0 달성한 도전 과제 수 (친구 카페 구경에 표시)
   };
 }
 
@@ -577,7 +645,10 @@ function 새게임() {
   const inp = $('cafename');
   const 이름 = ((inp && inp.value) || '').trim() || '이름 없는 카페';
   if (st && !confirm('지금까지의 기록이 사라집니다. 새로 시작할까요?')) return;
-  st = CG.newGame();
+  // 도전 과제·오늘의 챌린지 기록은 시즌을 넘어 이어진다 (v2.0)
+  const 기존 = st || 불러오기();
+  const 이월 = 기존 ? CG.이월정보(기존) : 보관이월;
+  st = CG.newGame({ 이월: 이월 });
   st.카페이름 = 이름;
   배정 = {};
   저장(); 클라우드저장(true);
@@ -588,8 +659,11 @@ function 이어하기() {
   const s = 불러오기();
   if (!s) { 알림('저장된 기록이 없습니다.'); return; }
   st = s; 배정 = st._배정 || {};
+  const 새과제 = 과제준비(st);
+  저장();
   $('nav').classList.remove('hidden');
   탭(st.끝남 ? 's-log' : 's-home');
+  과제팝업(새과제);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -612,10 +686,32 @@ function 홈그리기() {
   const 인테리어 = st.인테리어.length
     ? '<div class="grid g3">' + st.인테리어.map(id => {
         const d = CAT.인테리어별[id];
+        if (!d) return '';
         return '<div>' + 그림(d.이미지, d.이름) +
-          '<div style="text-align:center;font-size:12.5px;font-weight:700;margin-top:5px">' + esc(d.이름) + '</div></div>';
+          '<div style="text-align:center;font-size:12.5px;font-weight:700;margin-top:5px">' +
+          (d.보상 ? '<span class="tag reward">🏆 보상</span> ' : '') + esc(d.이름) + '</div></div>';
       }).join('') + '</div>'
     : '<p class="sub" style="margin:0">아직 꾸미지 않았어요. 상점에서 인테리어를 사면 매력도가 올라가고 SNS에 오를 확률이 높아집니다.</p>';
+
+  // v2.0 — 오늘의 챌린지 · 도전 과제 요약
+  챌린지준비();
+  const 오늘기록 = (st.오늘의챌린지 && st.오늘의챌린지.기록 && st.오늘의챌린지.기록[챌린지.날짜]) || null;
+  const 달성수 = Object.keys((st.도전과제 && st.도전과제.달성) || {}).length;
+  const 새소식 =
+    '<div class="grid g2" style="margin-bottom:14px">' +
+    '<div class="card" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:150px"><div style="font-size:13px;color:var(--dim)">☕ 오늘의 챌린지 · ' + 날짜표시(챌린지.날짜) + '</div>' +
+      '<div style="font-size:17px;font-weight:900;margin:2px 0">' + esc(챌린지.아이콘 + ' ' + 챌린지.이름) +
+        ' <span style="font-size:13px;color:#8a5a12">' + '★'.repeat(챌린지.난이도) + '☆'.repeat(3 - 챌린지.난이도) + '</span></div>' +
+      '<div style="font-size:13px;color:var(--dim)">' +
+        (오늘기록 ? '오늘 최고 ' + (오늘기록.별 ? '⭐'.repeat(오늘기록.별) : '별 없음') + ' · 도전 ' + 오늘기록.시도 + '회' : '아직 도전하지 않았어요') + '</div></div>' +
+      '<button class="btn sm" onclick="탭(\'s-daily\')">도전하기 →</button></div>' +
+    '<div class="card" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:150px"><div style="font-size:13px;color:var(--dim)">🏆 도전 과제</div>' +
+      '<div style="font-size:17px;font-weight:900;margin:2px 0">' + 달성수 + ' / ' + CAT.도전과제.length + ' 달성</div>' +
+      '<div style="font-size:13px;color:var(--dim)">달성하면 특별 인테리어를 받아요</div></div>' +
+      '<button class="btn sec sm" onclick="탭(\'s-achieve\')">목록 보기 →</button></div>' +
+    '</div>';
 
   const 세트 = CG.완성세트(st);
   const 시설 = st.시설.length
@@ -632,6 +728,8 @@ function 홈그리기() {
       '<div style="font-size:26px;font-weight:900">' + (st.예보.숨김 ? '예약 주문 ?명' : st.예보.손님수 + '명') + '</div></div>' +
       '<div class="spacer" style="flex:1"></div>' +
       '<button class="btn big" onclick="탭(\'s-assign\')">업무 배정하러 가기 →</button></div>') +
+
+    새소식 +
 
     '<div class="card"><h3>직원 ' + st.직원.length + '명 <span class="sub" style="font-weight:400">(주급 합계 ' +
       분수(CG.주급합(st)) + ')</span></h3><div class="grid g2">' + 직원들 + '</div></div>' +
@@ -650,26 +748,97 @@ function 홈그리기() {
    ══════════════════════════════════════════════════════════════ */
 function 열린업무목록() { return CG.열린업무(st); }
 
-function 배정정리() {
+function 배정정리(상태, 배정객체) {
+  상태 = 상태 || st; 배정객체 = 배정객체 || 배정;
   // 지금 열려 있는 업무만 남긴다 (시설을 사서 업무가 늘어난 경우 등)
-  const 열린 = 열린업무목록().map(t => t.id);
-  st.직원.forEach(s => {
-    배정[s.id] = (배정[s.id] || []).filter(id => 열린.indexOf(id) >= 0);
+  const 열린 = CG.열린업무(상태).map(t => t.id);
+  상태.직원.forEach(s => {
+    배정객체[s.id] = (배정객체[s.id] || []).filter(id => 열린.indexOf(id) >= 0);
   });
-  Object.keys(배정).forEach(k => { if (!st.직원.some(s => s.id === k)) delete 배정[k]; });
+  Object.keys(배정객체).forEach(k => { if (!상태.직원.some(s => s.id === k)) delete 배정객체[k]; });
 }
 
-function 업무토글(직원id, 업무id) {
-  const cur = 배정[직원id] || [];
+/** 칩을 눌러 업무를 켜고 끈다. 성공하면 true (직원당 상한을 넘으면 알리고 false) */
+function 토글적용(배정객체, 직원id, 업무id) {
+  const cur = 배정객체[직원id] || [];
   const i = cur.indexOf(업무id);
   if (i < 0 && cur.length >= CAT.규칙.직원당최대업무) {
     알림('한 사람에게는 업무를 최대 ' + CAT.규칙.직원당최대업무 + '가지까지만 맡길 수 있어요.');
-    return;
+    return false;
   }
   if (i >= 0) cur.splice(i, 1); else cur.push(업무id);
-  배정[직원id] = cur;
+  배정객체[직원id] = cur;
+  return true;
+}
+
+function 업무토글(직원id, 업무id) {
+  if (!토글적용(배정, 직원id, 업무id)) return;
   st._배정 = 배정; 저장();
   배정그리기();
+}
+
+/**
+ * 직원 카드(칩)와 업무별 처리량 막대를 그린다. 업무 배정 화면과 오늘의 챌린지가 같이 쓴다.
+ *   상태: 게임 상태(또는 챌린지 상태), 배정객체: 편집 중인 배정, 토글: 칩을 눌렀을 때 부를 함수 이름
+ * 챌린지 상태에는 업무능력 배수·업무량 배수가 있을 수 있어 "12 × 3/2 = 18" 처럼 곱셈을 함께 보여 준다.
+ */
+function 배정판HTML(상태, 배정객체, 토글) {
+  const 열린 = CG.열린업무(상태);
+  const p = CG.계획(상태, 배정객체);
+
+  const 직원들 = 상태.직원.map(s => {
+    const t = CAT.직원유형별[s.유형];
+    const 맡은 = 배정객체[s.id] || [];
+    const n = 맡은.length;
+    const 능력 = CG.능력(상태, s);
+    const 배수 = CG.능력배수(상태, s);
+    const 기본능력 = CAT.능력표[s.레벨 - 1].업무능력;
+    const chips = 열린.map(task => {
+      const on = 맡은.indexOf(task.id) >= 0;
+      const 몫 = on ? CG.처리량(상태, s, 맡은, task.id) : null;
+      const 보정 = t.보정[task.id];
+      return '<button class="chip' + (on ? ' on' : '') + '" style="' + (on ? 'color:' + task.색 : '') + '"' +
+        ' onclick="' + 토글 + '(\'' + s.id + '\',\'' + task.id + '\')">' + 업무아이콘(task) + esc(task.이름) +
+        (보정 ? ' <span style="font-size:11px">×' + 수(보정.toString()) + '</span>' : '') +
+        (on ? '<span class="q">' + 수(능력.toString() + ' ÷ ' + n + (보정 ? ' × ' + 보정.toString() : '') + ' = ' + 몫.toString()) + '</span>' : '') +
+        '</button>';
+    }).join('');
+    return '<div class="staff"><div class="top">' + 그림(t.이미지, t.이름, 'small') +
+      '<div><div class="nm">' + esc(s.이름) + '</div>' +
+      '<div class="meta">업무능력 ' + (배수 ? 수(기본능력.toString() + ' × ' + 배수.toString() + ' = ' + 능력.toString()) : 수(능력.toString())) +
+      ' · 맡은 업무 ' + n + '가지' +
+      (n ? ' → 업무 하나당 ' + 수(능력.div(F(n)).toString()) : '') + '</div></div></div>' +
+      '<div class="chips">' + chips + '</div>' +
+      (n === 0 ? '<div class="warn">아무 업무도 맡지 않았어요.</div>' : '') + '</div>';
+  }).join('');
+
+  // 막대 눈금: 예상 손님과 업무별 가능 손님 중 가장 큰 값에 맞춘다 (업무끼리 길이를 비교할 수 있게)
+  const 숨김 = !!CAT.규칙.계산.업무별가능손님숨김;   // 보통 모드: 답은 감추고 처리량까지만
+  const 최대 = Math.max(p.예상손님, 1, ...p.업무.map(r => r.가능손님정수));
+  const 업무들 = p.업무.map(r => {
+    const t = CAT.업무별[r.id];
+    const 병목 = p.병목 === r.id && p.가능손님 < p.예상손님;
+    const w = Math.min(100, Math.round(r.가능손님정수 / 최대 * 100));
+    return '<div class="taskrow' + (!숨김 && 병목 ? ' bottleneck' : '') + '">' +
+      '<div class="hd" onclick="this.parentNode.classList.toggle(\'open\')">' +
+      업무아이콘(t) + '<span class="nm" style="color:' + t.색 + '">' + esc(r.이름) + '</span>' +
+      '<span class="need">손님 1명당 ' + (r.업무배수 ? 수(r.기본필요.toString() + ' × ' + r.업무배수.toString() + ' = ' + r.필요.toString()) : 수(r.필요.toString())) + '</span>' +
+      (숨김 ? '' : (병목 ? '<span class="badge">병목</span>' : '')) +
+      (숨김
+        ? '<span class="cnt">처리량 ' + 수(r.처리량.toString()) + '</span>'
+        : '<span class="cnt">' + r.가능손님정수 + '명 가능</span>') +
+      '<span style="color:var(--dim);font-size:12px">▾</span></div>' +
+      (숨김 ? '' : '<div class="bar"><i style="width:' + w + '%;background:' + t.색 + '"></i></div>') +
+      '<div class="detail">' +
+      (r.식.담당.length ? r.식.담당.map(x => '<div>' + 수(esc(x)) + '</div>').join('') : '<div>맡은 직원이 없습니다.</div>') +
+      (r.식.합계 ? '<div>합계 ' + 수(r.식.합계) + '</div>' : '') +
+      (숨김
+        ? '<div class="fin">받을 수 있는 손님 = ' + 수(r.처리량.toString()) + ' ÷ ' + 수(r.필요.toString()) + ' = <b>?</b></div>'
+        : '<div class="fin">받을 수 있는 손님 = 처리량 ÷ 필요 업무량 = ' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div>') +
+      '</div></div>';
+  }).join('');
+
+  return { 직원들: 직원들, 업무들: 업무들, p: p, 숨김: 숨김 };
 }
 
 function 추천배치누르기() {
@@ -713,56 +882,8 @@ function 배정그리기() {
   수치그리기();
   if (st.끝남) { $('s-assign').innerHTML = '<h2 class="title">시즌이 끝났습니다</h2><p class="sub">기록 탭에서 결과를 확인하세요.</p>'; return; }
   배정정리();
-  const 열린 = 열린업무목록();
-  const p = CG.계획(st, 배정);
-
-  const 직원들 = st.직원.map(s => {
-    const t = CAT.직원유형별[s.유형];
-    const 맡은 = 배정[s.id] || [];
-    const n = 맡은.length;
-    const chips = 열린.map(task => {
-      const on = 맡은.indexOf(task.id) >= 0;
-      const 몫 = on ? CG.처리량(st, s, 맡은, task.id) : null;
-      const 보정 = t.보정[task.id];
-      return '<button class="chip' + (on ? ' on' : '') + '" style="' + (on ? 'color:' + task.색 : '') + '"' +
-        ' onclick="업무토글(\'' + s.id + '\',\'' + task.id + '\')">' + 업무아이콘(task) + esc(task.이름) +
-        (보정 ? ' <span style="font-size:11px">×' + 수(보정.toString()) + '</span>' : '') +
-        (on ? '<span class="q">' + 수(CG.능력(st, s).toString() + ' ÷ ' + n + (보정 ? ' × ' + 보정.toString() : '') + ' = ' + 몫.toString()) + '</span>' : '') +
-        '</button>';
-    }).join('');
-    return '<div class="staff"><div class="top">' + 그림(t.이미지, t.이름, 'small') +
-      '<div><div class="nm">' + esc(s.이름) + '</div>' +
-      '<div class="meta">업무능력 ' + 수(CG.능력(st, s).toString()) + ' · 맡은 업무 ' + n + '가지' +
-      (n ? ' → 업무 하나당 ' + 수(CG.능력(st, s).div(F(n)).toString()) : '') + '</div></div></div>' +
-      '<div class="chips">' + chips + '</div>' +
-      (n === 0 ? '<div class="warn">아무 업무도 맡지 않았어요.</div>' : '') + '</div>';
-  }).join('');
-
-  // 막대 눈금: 예상 손님과 업무별 가능 손님 중 가장 큰 값에 맞춘다 (업무끼리 길이를 비교할 수 있게)
-  const 숨김 = !!CAT.규칙.계산.업무별가능손님숨김;   // 보통 모드: 답은 감추고 처리량까지만
-  const 최대 = Math.max(p.예상손님, 1, ...p.업무.map(r => r.가능손님정수));
-  const 업무들 = p.업무.map((r, i) => {
-    const t = CAT.업무별[r.id];
-    const 병목 = p.병목 === r.id && p.가능손님 < p.예상손님;
-    const w = Math.min(100, Math.round(r.가능손님정수 / 최대 * 100));
-    return '<div class="taskrow' + (!숨김 && 병목 ? ' bottleneck' : '') + '" id="tr' + i + '">' +
-      '<div class="hd" onclick="document.getElementById(\'tr' + i + '\').classList.toggle(\'open\')">' +
-      업무아이콘(t) + '<span class="nm" style="color:' + t.색 + '">' + esc(r.이름) + '</span>' +
-      '<span class="need">손님 1명당 ' + 수(r.필요.toString()) + '</span>' +
-      (숨김 ? '' : (병목 ? '<span class="badge">병목</span>' : '')) +
-      (숨김
-        ? '<span class="cnt">처리량 ' + 수(r.처리량.toString()) + '</span>'
-        : '<span class="cnt">' + r.가능손님정수 + '명 가능</span>') +
-      '<span style="color:var(--dim);font-size:12px">▾</span></div>' +
-      (숨김 ? '' : '<div class="bar"><i style="width:' + w + '%;background:' + t.색 + '"></i></div>') +
-      '<div class="detail">' +
-      (r.식.담당.length ? r.식.담당.map(x => '<div>' + 수(esc(x)) + '</div>').join('') : '<div>맡은 직원이 없습니다.</div>') +
-      (r.식.합계 ? '<div>합계 ' + 수(r.식.합계) + '</div>' : '') +
-      (숨김
-        ? '<div class="fin">받을 수 있는 손님 = ' + 수(r.처리량.toString()) + ' ÷ ' + 수(r.필요.toString()) + ' = <b>?</b></div>'
-        : '<div class="fin">받을 수 있는 손님 = 처리량 ÷ 필요 업무량 = ' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div>') +
-      '</div></div>';
-  }).join('');
+  const 판 = 배정판HTML(st, 배정, '업무토글');
+  const p = 판.p, 직원들 = 판.직원들, 업무들 = 판.업무들, 숨김 = 판.숨김;
 
   const 부족 = p.가능손님 < p.예상손님;
   $('s-assign').innerHTML =
@@ -812,8 +933,8 @@ function 가게그림(상태, 꼬리표) {
                        'background-size:cover;background-position:center;';
     return s;
   };
-  // 물건이 많아지면 작게 그려 한 줄에 들어가게 한다
-  const 높이 = n => (n <= 3 ? 82 : n <= 5 ? 66 : n <= 7 ? 54 : 44);
+  // 물건이 많아지면 작게 그려 한 줄에 들어가게 한다 (보상 인테리어까지 모으면 한 줄에 13개까지 놓인다)
+  const 높이 = n => (n <= 3 ? 82 : n <= 5 ? 66 : n <= 7 ? 54 : n <= 9 ? 44 : 36);
   const 줄 = (목록, cls) => '<div class="' + cls + '">' + 목록.map(d =>
     '<img src="' + esc(CAT.이미지.폴더 + d.이미지) + '" alt="' + esc(d.이름) + '" title="' + esc(d.이름) + '"' +
     ' style="height:' + 높이(목록.length) + 'px" loading="lazy" onerror="this.remove()">').join('') + '</div>';
@@ -837,7 +958,7 @@ function 가게그림(상태, 꼬리표) {
    ────────────────────────────────────────────────────────────── */
 let 연출중 = null;      // 진행 중인 연출을 끝내는 함수. 인자가 true면 뒷정리만 하고 다음 화면으로 넘어가지 않는다.
 
-function 연출(log, 끝나면) {
+function 연출(log, 끝나면, 제목) {
   if (연출중) 연출중(true);                 // 앞의 연출이 남아 있으면 조용히 걷어낸다
   const 총시간 = 4200;
   const 느린거싫음 = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -845,7 +966,7 @@ function 연출(log, 끝나면) {
 
   const 받은 = log.받은손님, 놓친 = log.놓친손님, 전체 = 받은 + 놓친;
   $('s-play').innerHTML =
-    '<h2 class="title">' + log.주차 + '주차 영업 중…</h2>' +
+    '<h2 class="title">' + (제목 || (log.주차 + '주차 영업 중…')) + '</h2>' +
     '<p class="sub">' + esc(st.카페이름 || '내 카페') + '에 손님이 들어옵니다.</p>' +
     가게그림({ 인테리어: (log.인테리어 || (st && st.인테리어) || []) }) +
     '<div class="playbar"><i id="playbar"></i></div>' +
@@ -977,20 +1098,15 @@ function 실제영업(예측) {
   const 그때인테리어 = st.인테리어.slice();   // 연출에 쓸 카페 모습 (영업 뒤에도 그대로)
   const log = CG.영업(st, 배정, undefined, 예측);
   log.인테리어 = 그때인테리어;
+  const 새과제 = CG.도전과제갱신(st, { 종류: '영업', 기록: log });   // v2.0 도전 과제 판정 (계산은 건드리지 않는다)
   st._배정 = 배정; 저장();
   클라우드저장(true);              // 한 주가 끝날 때마다 서버에 올린다 (랭킹 갱신 시점)
-  연출(log, function () { 결과그리기(log); 화면('s-result'); });
+  연출(log, function () { 결과그리기(log); 화면('s-result'); 과제팝업(새과제); });
 }
 
-function 결과그리기(log) {
-  수치그리기();
-  const 성공 = log.받은손님 >= log.예상손님;
-  // 예전 판에서 저장한 기록에도 안전하게 맞춘다
-  const 매출원 = log.매출원 || log.매출;
-  const 실지급 = log.실지급 || log.급여;
-  const 미지급 = log.미지급 || F(0);
-  const 버림 = !매출원.eq(log.매출);
-  const 업무표 = log.업무.map(r => {
+/** 영업 결과의 업무별 계산식 (결과 화면과 오늘의 챌린지 결과가 같이 쓴다) */
+function 업무표HTML(log, 성공) {
+  return log.업무.map(r => {
     const t = CAT.업무별[r.id];
     const 병목 = log.병목 === r.id && !성공;
     return '<div class="taskrow' + (병목 ? ' bottleneck' : '') + '">' +
@@ -1002,6 +1118,17 @@ function 결과그리기(log) {
       (r.식.합계 ? '<div>합계 ' + 수(r.식.합계) + '</div>' : '') +
       '<div class="fin">' + 수(r.식.손님) + ' → ' + r.가능손님정수 + '명</div></div></div>';
   }).join('');
+}
+
+function 결과그리기(log) {
+  수치그리기();
+  const 성공 = log.받은손님 >= log.예상손님;
+  // 예전 판에서 저장한 기록에도 안전하게 맞춘다
+  const 매출원 = log.매출원 || log.매출;
+  const 실지급 = log.실지급 || log.급여;
+  const 미지급 = log.미지급 || F(0);
+  const 버림 = !매출원.eq(log.매출);
+  const 업무표 = 업무표HTML(log, 성공);
 
   const 미션 = log.미션 ? (function () {
     const m = CAT.예약별[log.미션.주차];
@@ -1076,8 +1203,25 @@ function 결과그리기(log) {
 function 상점그리기(tab) {
   if (tab) 상점탭 = tab;
   수치그리기();
-  const 탭들 = [['hire', '직원 고용'], ['up', '직원 업그레이드'], ['decor', '인테리어'], ['bg', '벽지·바닥'], ['fac', '카페 시설']];
+  const 탭들 = [['hire', '직원 고용'], ['up', '직원 업그레이드'], ['decor', '인테리어'], ['bg', '벽지·바닥'], ['fac', '카페 시설'], ['reward', '🏆 특별']];
   let 본문 = '';
+
+  if (상점탭 === 'reward') {
+    // 도전 과제 보상 인테리어 — 돈으로는 못 사고, 어떤 과제로 얻는지만 보여 준다 (히든 과제 것은 달성 전엔 ???)
+    const 진행 = CG.도전과제진행(st);
+    본문 = '<p class="sub">도전 과제를 달성하면 <b>자동으로</b> 생기는 특별 인테리어입니다. 코인으로는 살 수 없어요. ' +
+      '매력도는 보통 인테리어처럼 카페 매력도에 더해집니다.</p>' +
+      '<div class="grid g3">' + CAT.보상인테리어.map(d => {
+        const a = 진행.filter(p => p.보상id === d.id)[0] || null;     // 히든 과제의 보상은 달성 전엔 보상id 가 비어 있다
+        const 보유 = st.인테리어.indexOf(d.id) >= 0;
+        return '<div class="item' + (보유 ? ' owned' : '') + '">' + (a ? 그림(d.이미지, d.이름) : 그림(null, '???')) +
+          '<div class="nm">' + (a ? esc(d.이름) : '???') + '</div>' +
+          '<div class="desc">매력도 +' + d.매력도 + '<br>' + (a ? '🏆 ' + esc(a.이름) : '❓ 숨겨진 도전 과제') + '</div>' +
+          (보유 ? '<div class="price" style="color:var(--green)">획득!</div>'
+                : '<div class="price" style="color:var(--dim)">아직 없음</div>') + '</div>';
+      }).join('') + '</div>' +
+      '<button class="btn sec sm" style="margin-top:12px" onclick="탭(\'s-achieve\')">🏆 도전 과제 보러 가기</button>';
+  }
 
   if (상점탭 === 'hire') {
     본문 = '<div class="grid g2">' + CAT.직원유형.map(t => {
@@ -1191,9 +1335,11 @@ function 사기(종류, id) {
   if (!r.ok) { 알림(r.이유); return; }
   알림(종류 === 'bguse' ? '바꿨습니다.' : '구매했습니다.');
   if (종류 === 'fac' && r.여는업무) 알림('새 업무가 열렸습니다: ' + CAT.업무별[r.여는업무].이름);
+  const 새과제 = CG.도전과제갱신(st, { 종류: '상태' });     // 매력도 과제 등
   배정정리();
   st._배정 = 배정; 저장(); 클라우드저장();
   상점그리기();
+  과제팝업(새과제);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1288,6 +1434,7 @@ function 친구카페(uid) {
     '<tr><td>벽지 · 바닥</td><td>' + esc(배경이름('벽지')) + ' · ' + esc(배경이름('바닥')) + '</td></tr>' +
     '<tr><td>꾸민 물건</td><td>' + (r.decor || []).length + '개</td></tr>' +
     (세트.length ? '<tr><td>완성한 세트</td><td>' + 세트.map(esc).join(', ') + '</td></tr>' : '') +
+    (typeof r.achievements === 'number' ? '<tr><td>🏆 달성한 도전 과제</td><td>' + r.achievements + ' / ' + CAT.도전과제.length + '</td></tr>' : '') +
     '</table>' +
     '<p class="sub" style="margin:12px 0 0">매출이나 직원 배치 같은 경영 속사정은 보이지 않습니다.</p></div>' +
 
@@ -1297,7 +1444,8 @@ function 친구카페(uid) {
           const d = CAT.인테리어별[id];
           if (!d) return '';
           return '<div>' + 그림(d.이미지, d.이름) +
-            '<div style="text-align:center;font-size:12.5px;font-weight:700;margin-top:5px">' + esc(d.이름) + '</div></div>';
+            '<div style="text-align:center;font-size:12.5px;font-weight:700;margin-top:5px">' +
+            (d.보상 ? '<span class="tag reward">🏆 보상</span> ' : '') + esc(d.이름) + '</div></div>';
         }).join('') + '</div></div>'
       : '') +
 
@@ -1328,10 +1476,16 @@ async function 좋아요반영() {
   try {
     const n = await window.CafeCloud.받은좋아요();
     const 보너스 = Math.min(좋아요최대, n);
+    let 바뀜 = false;
     if (st.좋아요매력도 !== 보너스) {
-      st.좋아요매력도 = 보너스;
-      저장(); 클라우드저장();
+      st.좋아요매력도 = 보너스; 바뀜 = true;
       if (보너스 > 0) 알림('친구들이 좋아요를 눌러 줬어요! 매력도 +' + 보너스);
+    }
+    if ((st.좋아요수 || 0) !== n) { st.좋아요수 = n; 바뀜 = true; }   // v2.0 인기 카페 과제는 상한 없이 실제 개수로 센다
+    if (바뀜) {
+      const 새과제 = CG.도전과제갱신(st, { 종류: '상태' });
+      저장(); 클라우드저장();
+      과제팝업(새과제);
     }
   } catch (e) { console.warn('[좋아요 읽기 실패]', e); }
 }
@@ -1367,7 +1521,8 @@ function 기록그리기() {
 }
 
 function 처음부터() {
-  if (!confirm('지금까지의 기록이 모두 사라집니다. 정말 다시 시작할까요?')) return;
+  if (!confirm('지금까지의 기록이 모두 사라집니다. 정말 다시 시작할까요?\n(달성한 도전 과제와 오늘의 챌린지 기록은 남습니다.)')) return;
+  보관이월 = CG.이월정보(st);                    // 도전 과제·챌린지 기록은 다음 시즌으로
   try { localStorage.removeItem(저장키); } catch (e) {}
   st = null; 배정 = {};
   $('nav').classList.add('hidden');
@@ -1405,9 +1560,261 @@ function 도움말() {
     '<p><b>4. SNS 흥행</b><br>인테리어로 매력도를 올리면 SNS에 오를 확률이 높아집니다. ' +
     '터지면 다음 주 손님이 ' + 수('3/2') + '배가 되는데, <b>손님이 늘어난 배수만큼 업무량도 똑같이 늘어납니다.</b>(정비례) 준비가 안 되어 있으면 오히려 손해예요.</p>' +
     '<p><b>5. 순위</b><br>10주 동안의 <b>누적 순이익 = 매출 − 급여 − 투자</b> 하나로 겨룹니다.</p>' +
+    '<p><b>6. 🏆 도전 과제</b><br>시즌을 넘어 계속 쌓이는 목표 13개(숨겨진 것 3개)입니다. 달성하면 상점에서 살 수 없는 ' +
+    '<b>특별 인테리어</b>를 받아요. 새 시즌을 시작해도 사라지지 않습니다.</p>' +
+    '<p><b>7. ☕ 오늘의 챌린지</b><br>날짜마다 하나씩 나오는 문제예요. 같은 날이면 누가 열어도 같은 문제이고, 몇 번이든 다시 도전할 수 있습니다. ' +
+    '정해진 직원·업무·조건으로 배치해 별 ⭐⭐⭐ 을 노려 보세요. 내 시즌 진행에는 영향이 없고, 예측 성공·전원 수용 같은 도전 과제에는 들어갑니다.</p>' +
     '<div class="row"><button class="btn" onclick="this.closest(\'.modal\').remove()">알겠어요</button></div></div>';
   document.body.appendChild(box);
   box.addEventListener('click', e => { if (e.target === box) box.remove(); });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   🏆 도전 과제 (v2.0)
+   ══════════════════════════════════════════════════════════════
+   판정은 전부 cafe-engine.js 의 도전과제갱신() 이 한다. 여기서는 목록·진행도를 그리고, 새로 달성한 것을 팝업으로 알린다.
+   ────────────────────────────────────────────────────────────── */
+function 날짜표시(키) {                      // '2026-09-22' → '2026. 9. 22.'
+  const m = String(키 || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[1] + '. ' + parseInt(m[2], 10) + '. ' + parseInt(m[3], 10) + '.' : String(키 || '');
+}
+
+function 진행HTML(진행) {
+  if (!진행) return '';
+  const 비율 = 진행.목표 > 0 ? Math.min(100, Math.round(진행.현재 / 진행.목표 * 100)) : 0;
+  const 막대 = 진행.목표 <= 5                      // 칸이 많으면 막대로 (좁은 카드에서 줄이 넘어가지 않게)
+    ? '<span class="blocks">' + '■'.repeat(진행.현재) + '□'.repeat(Math.max(0, 진행.목표 - 진행.현재)) + '</span>'
+    : '<div class="pbar"><i style="width:' + 비율 + '%"></i></div>';
+  return '<div class="prog">' + 막대 + '<span>' + 진행.현재 + ' / ' + 진행.목표 + esc(진행.단위 || '') + '</span></div>' +
+         (진행.메모 ? '<div class="memo">' + esc(진행.메모) + '</div>' : '');
+}
+
+function 도전과제그리기() {
+  수치그리기();
+  const 목록 = CG.도전과제진행(st);
+  const 달성수 = 목록.filter(p => p.달성).length;
+  const 카드 = p => {
+    if (p.달성) {
+      return '<div class="ach done"><div class="nm">✅ ' + esc(p.아이콘 + ' ' + p.이름) + '</div>' +
+        '<div class="desc">' + esc(p.달성문구) + (p.날짜 ? '<br><span style="font-size:12px">' + 날짜표시(p.날짜) + ' 달성</span>' : '') + '</div>' +
+        (p.진행 ? '<div class="prog"><span>' + p.진행.목표 + '/' + p.진행.목표 + esc(p.진행.단위 || '') + ' 완료</span></div>' : '') +
+        '<div class="gift">' + 그림(p.보상.이미지, p.보상.이름, 'small') + '<span>🎁 ' + esc(p.보상이름) + ' 획득</span></div></div>';
+    }
+    if (!p.공개) {
+      return '<div class="ach secret"><div class="nm">❓ ???</div>' +
+        '<div class="desc">숨겨진 도전 과제입니다.<br>달성하는 순간 정체가 드러나요.</div>' +
+        '<div class="gift">' + 그림(null, '???', 'small') + '<span>🎁 ???</span></div></div>';
+    }
+    return '<div class="ach"><div class="nm">' + esc(p.아이콘 + ' ' + p.이름) + '</div>' +
+      '<div class="desc">' + esc(p.설명) + '<br><span style="font-size:12px">조건: ' + esc(p.조건) + '</span></div>' +
+      진행HTML(p.진행) +
+      '<div class="gift">' + 그림(p.보상.이미지, p.보상.이름, 'small') + '<span>보상: ' + esc(p.보상이름) + '</span></div></div>';
+  };
+  $('s-achieve').innerHTML =
+    '<h2 class="title">🏆 도전 과제</h2>' +
+    '<p class="sub">시즌을 넘어 계속 쌓이는 목표예요. 달성하면 상점에서 살 수 없는 <b>특별 인테리어</b>를 받습니다. ' +
+    '<b>' + 달성수 + ' / ' + 목록.length + '</b> 달성</p>' +
+    '<div class="grid g3">' + 목록.map(카드).join('') + '</div>' +
+    '<p class="sub" style="margin-top:14px">오늘의 챌린지에서 한 일도 예측 성공·전원 수용 같은 과제에 들어갑니다. ' +
+    '(시즌 완주·시즌 순이익·급여 체불처럼 시즌을 전제로 하는 과제는 제외)</p>';
+}
+
+/** 새로 달성한 과제를 한 번에 알린다. 여러 개면 한 창에 목록으로 (겹치지 않게). */
+function 과제팝업(목록) {
+  if (!목록 || !목록.length || 잠김) return;
+  const box = document.createElement('div');
+  box.className = 'modal';
+  box.innerHTML = '<div class="box ach-pop"><h3>🏆 도전 과제 달성!</h3>' +
+    목록.map(a => {
+      const d = CAT.인테리어별[a.보상];
+      return '<div class="item-a"><div class="nm">' + esc(a.아이콘 + ' ' + a.이름) + '</div>' +
+        '<p>' + esc(a.달성문구) + '</p>' +
+        (d ? '<div class="gift">' + 그림(d.이미지, d.이름, 'small') + '<span>🎁 ' + esc(d.이름) + ' 획득!</span></div>' : '') + '</div>';
+    }).join('') +
+    '<div class="row"><button class="btn gold" onclick="this.closest(\'.modal\').remove()">좋아요!</button></div></div>';
+  document.body.appendChild(box);
+  box.addEventListener('click', e => { if (e.target === box) box.remove(); });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ☕ 오늘의 챌린지 (v2.0)
+   ══════════════════════════════════════════════════════════════
+   날짜(대한민국 기준)를 씨앗으로 cafe-engine.js 가 챌린지를 만든다 — 같은 날이면 누가 언제 열어도 같다.
+   챌린지 상태(cst)는 내 시즌 상태(st)와 별개의 임시 상태이고, 결과(별·시도)만 st.오늘의챌린지 에 남긴다.
+   배정 화면은 시즌 것(배정판HTML)을 그대로 쓴다. 추천 배치 버튼은 없다(답을 알려 주는 셈이라).
+   ────────────────────────────────────────────────────────────── */
+let 챌린지 = null;      // 오늘의 챌린지(JSON)
+let cst = null;         // 챌린지용 임시 게임 상태
+let c배정 = {};         // 챌린지 배정 (저장하지 않는다)
+
+function 챌린지준비() {
+  const 오늘 = CG.오늘키();
+  if (!챌린지 || 챌린지.날짜 !== 오늘) { 챌린지 = CG.오늘의챌린지생성(오늘); cst = null; c배정 = {}; }
+  if (!cst) cst = CG.챌린지상태만들기(챌린지);
+}
+
+function 챌린지토글(직원id, 업무id) {
+  if (!토글적용(c배정, 직원id, 업무id)) return;
+  챌린지그리기();
+}
+
+function 목표HTML(단계들) {
+  return 단계들.map(t => '<div class="goal' + (t.달성 === true ? ' ok' : t.달성 === false ? ' no' : '') + '">' +
+    '<span class="stars">' + '⭐'.repeat(t.별) + '</span><span>' + 수(esc(t.문구)) + '</span>' +
+    (t.달성 === true ? '<span class="mark">✅</span>' : t.달성 === false ? '<span class="mark">❌</span>' : '') + '</div>').join('');
+}
+
+function 챌린지그리기() {
+  수치그리기();
+  챌린지준비();
+  if (cst.끝남) { cst = CG.챌린지상태만들기(챌린지); }          // 영업을 마친 상태면 다시 만든다 (다시 도전)
+  배정정리(cst, c배정);
+  const 판 = 배정판HTML(cst, c배정, '챌린지토글');
+  const 위반 = CG.챌린지제약검사(챌린지, cst, c배정);
+  const 오늘기록 = (st.오늘의챌린지 && st.오늘의챌린지.기록 && st.오늘의챌린지.기록[챌린지.날짜]) || null;
+  const 설명들 = CG.챌린지설명(챌린지);
+
+  $('s-daily').innerHTML =
+    '<div class="daily-head">' +
+      '<div class="date">☕ 오늘의 카페 챌린지 · ' + 날짜표시(챌린지.날짜) + '</div>' +
+      '<div class="nm">' + esc(챌린지.아이콘 + ' ' + 챌린지.이름) + '</div>' +
+      '<div class="lvl">난이도 ' + '★'.repeat(챌린지.난이도) + '☆'.repeat(3 - 챌린지.난이도) +
+        (오늘기록 ? ' · 오늘 최고 ' + (오늘기록.별 ? '⭐'.repeat(오늘기록.별) : '별 없음') + ' · 도전 ' + 오늘기록.시도 + '회' : ' · 첫 도전') + '</div>' +
+      '<p>' + esc(챌린지.소개) + '</p>' +
+      '<p style="font-size:12.5px">같은 날에는 몇 번이든 다시 도전할 수 있고 조건은 똑같아요. 내 시즌 카페(코인·직원·평판)에는 영향이 없습니다.</p>' +
+    '</div>' +
+
+    '<div class="grid g2">' +
+    '<div class="card"><h3>오늘의 상황</h3>' +
+      '<div class="cond">👥 오늘의 직원: ' + cst.직원.map(s => esc(s.이름) + ' <span class="sub">(Lv' + s.레벨 + ')</span>').join(' · ') + '</div>' +
+      '<div class="cond">📋 열린 업무: ' + CG.열린업무(cst).map(t => esc(t.이름)).join(' · ') + '</div>' +
+      '<div class="cond">🧑‍🤝‍🧑 방문 손님: <b style="font-size:20px">' + 챌린지.방문손님 + '명</b></div>' +
+      '<div style="margin-top:6px;font-weight:800;font-size:13px;color:var(--dim)">특별 조건</div>' +
+      설명들.map(x => '<div class="cond' + (/^제약:/.test(x) ? ' rule' : '') + '">' + 수(esc(x)) + '</div>').join('') +
+    '</div>' +
+    '<div class="card"><h3>목표</h3>' + 목표HTML(챌린지.목표) +
+      '<p class="sub" style="margin:10px 0 0;font-size:12.5px">별은 아래 단계부터 차례로 채워집니다. 영업 전 예측은 시즌과 같이 [영업 시작]을 누를 때 묻습니다.</p></div>' +
+    '</div>' +
+
+    '<div class="card"><h3>직원 배치</h3><div class="grid g2">' + 판.직원들 + '</div>' +
+    (위반.length ? '<div class="warn" style="margin-top:12px">⚠️ ' + 위반.map(esc).join('<br>⚠️ ') + '</div>' : '') + '</div>' +
+
+    '<div class="card"><h3>업무별 받을 수 있는 손님 <span class="sub" style="font-weight:400">(눌러서 계산식 펼치기)</span></h3>' +
+    판.업무들 +
+    '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    (판.숨김
+      ? '<div><div style="font-size:13px;color:var(--dim)">받을 수 있는 손님</div><div style="font-size:26px;font-weight:900">?</div>' +
+        '<div style="font-size:13px;color:var(--dim)">방문 손님 ' + 챌린지.방문손님 + '명</div></div>'
+      : '<div><div style="font-size:13px;color:var(--dim)">받을 수 있는 손님</div>' +
+        '<div style="font-size:26px;font-weight:900;color:' + (판.p.가능손님 < 챌린지.방문손님 ? 'var(--red)' : 'var(--green)') + '">' + 판.p.가능손님 + '명</div>' +
+        '<div style="font-size:13px;color:var(--dim)">방문 손님 ' + 챌린지.방문손님 + '명</div></div>') +
+    '<div style="flex:1"></div>' +
+    '<button class="btn sec" onclick="탭(\'s-home\')">← 내 카페</button>' +
+    '<button class="btn big green" ' + (위반.length ? 'disabled' : '') + ' onclick="챌린지영업하기()">영업 시작 ▶</button></div></div>';
+}
+
+function 챌린지영업하기() {
+  const 위반 = CG.챌린지제약검사(챌린지, cst, c배정);
+  if (위반.length) { 알림(위반[0]); return; }
+  const p = CG.계획(cst, c배정);
+  if (p.빈업무.length && !confirm('아무도 맡지 않은 업무가 있어요. 이대로면 손님을 한 명도 받을 수 없습니다.\n그래도 영업을 시작할까요?')) return;
+  챌린지예측묻기(예측 => 챌린지실제영업(예측));
+}
+
+/** 시즌의 예측 창과 같지만, 챌린지가 요구하면 병목 업무·순이익도 함께 묻는다 */
+function 챌린지예측묻기(다음) {
+  let 항목들 = [];
+  챌린지.목표.forEach(t => t.조건.forEach(c => { if (c.종류 === '예측' && 항목들.indexOf(c.항목) < 0) 항목들.push(c.항목); }));
+  const 병목묻기 = 항목들.indexOf('병목') >= 0, 순이익묻기 = 항목들.indexOf('순이익') >= 0;
+  const 열린 = CG.열린업무(cst);
+  const box = document.createElement('div');
+  box.className = 'modal';
+  box.innerHTML = '<div class="box">' +
+    '<h3>영업 시작 전에</h3>' +
+    '<p style="margin:0 0 6px">오늘 손님을 <b>몇 명</b> 받게 될까요?</p>' +
+    '<p class="sub" style="margin:0 0 10px">업무마다 <b>처리량 ÷ 손님 1명당 업무량</b> 을 구해 가장 작은 값을 찾고, 방문 손님 ' + 챌린지.방문손님 + '명과 견주어 보세요.</p>' +
+    '<input id="c예측손님" type="number" inputmode="numeric" min="0" max="999" placeholder="예: 16"' +
+    ' style="width:100%;padding:12px;font-size:18px;font-weight:800;font-family:inherit;border:1.5px solid var(--line2);border-radius:10px;text-align:center">' +
+    (병목묻기
+      ? '<p style="margin:14px 0 6px"><b>병목</b>은 어느 업무일까요? <span class="sub">(받을 수 있는 손님이 가장 적은 업무)</span></p>' +
+        '<select id="c예측병목" style="width:100%;padding:11px;font-size:15px;font-family:inherit;border:1.5px solid var(--line2);border-radius:10px">' +
+        '<option value="">고르지 않음</option>' + 열린.map(t => '<option value="' + t.id + '">' + esc(t.이름) + '</option>').join('') + '</select>'
+      : '') +
+    (순이익묻기
+      ? '<p style="margin:14px 0 6px"><b>순이익</b>은 얼마일까요? <span class="sub">(매출 − 급여, 매출은 소수점 아래를 버린 정수)</span></p>' +
+        '<input id="c예측순이익" type="number" inputmode="numeric" min="-999" max="9999" placeholder="예: 40"' +
+        ' style="width:100%;padding:12px;font-size:18px;font-weight:800;font-family:inherit;border:1.5px solid var(--line2);border-radius:10px;text-align:center">'
+      : '') +
+    '<p class="sub" style="margin:10px 0 0">예측이 맞으면 별 조건에 들어가고, 도전 과제 「인간 계산기」에도 셉니다. 틀려도 영업은 그대로 진행돼요.</p>' +
+    '<div class="row">' +
+    '<button class="btn sec" id="c예측건너">모르겠어요 (그냥 시작)</button>' +
+    '<button class="btn" id="c예측확인">영업 시작 ▶</button></div></div>';
+  document.body.appendChild(box);
+  const 칸 = box.querySelector('#c예측손님');
+  setTimeout(() => { try { 칸.focus(); } catch (e) {} }, 50);
+  const 닫기 = 값 => { box.remove(); 다음(값); };
+  box.querySelector('#c예측건너').onclick = () => 닫기({});
+  box.querySelector('#c예측확인').onclick = () => {
+    const v = parseInt(칸.value, 10);
+    const 병 = box.querySelector('#c예측병목'), 순 = box.querySelector('#c예측순이익');
+    const 순값 = 순 ? parseInt(순.value, 10) : NaN;
+    닫기({
+      손님: Number.isFinite(v) && v >= 0 ? v : null,
+      병목: 병 && 병.value ? 병.value : null,
+      순이익: Number.isFinite(순값) ? 순값 : null
+    });
+  };
+  칸.addEventListener('keydown', e => { if (e.key === 'Enter') box.querySelector('#c예측확인').click(); });
+}
+
+function 챌린지실제영업(예측) {
+  const r = CG.챌린지영업(챌린지, cst, c배정, 예측);
+  if (!r.ok) { 알림(r.위반[0]); return; }
+  r.기록.인테리어 = st.인테리어.slice();                              // 연출은 내 카페 모습으로
+  const 새과제 = CG.도전과제갱신(st, { 종류: '챌린지', 기록: r.기록 });   // 예측 성공·전원 수용 같은 과제에 들어간다
+  const 오늘기록 = CG.챌린지기록저장(st, 챌린지, r);
+  저장(); 클라우드저장();
+  연출(r.기록, function () { 챌린지결과그리기(r, 오늘기록); 화면('s-daily-result'); 과제팝업(새과제); }, '오늘의 챌린지 영업 중…');
+}
+
+function 챌린지결과그리기(r, 오늘기록) {
+  수치그리기();
+  const log = r.기록;
+  const 성공 = r.받은 >= r.방문;
+  const 예측표 = ['손님', '병목', '순이익'].filter(k => r.예측결과[k]).map(k => {
+    const x = r.예측결과[k];
+    const 실제 = k === '병목' ? x.실제.map(id => CAT.업무별[id].이름).join(' · ') : (k === '손님' ? x.실제 + '명' : x.실제 + '코인');
+    const 입력 = k === '병목' ? (CAT.업무별[x.입력] ? CAT.업무별[x.입력].이름 : x.입력) : (k === '손님' ? x.입력 + '명' : x.입력 + '코인');
+    return '<tr><td>' + { 손님: '받을 손님 수', 병목: '병목 업무', 순이익: '순이익' }[k] + ' 예측</td>' +
+      '<td>' + esc(String(입력)) + ' → 실제 ' + esc(String(실제)) + ' ' + (x.맞음 ? '<span class="pos">🎯 적중</span>' : '<span class="neg">❌</span>') + '</td></tr>';
+  }).join('');
+
+  $('s-daily-result').innerHTML =
+    '<h2 class="title">☕ 오늘의 챌린지 결과</h2>' +
+    '<p class="sub">' + esc(챌린지.아이콘 + ' ' + 챌린지.이름) + ' · ' + 날짜표시(챌린지.날짜) + '</p>' +
+    '<div class="card result-hero">' +
+      '<div class="stars-big">' + (r.별 ? '⭐'.repeat(r.별) : '☆') + '</div>' +
+      '<div style="font-size:20px;font-weight:900;margin-top:4px">' + (r.별 ? '별 ' + r.별 + '개 달성!' : '아쉽지만 별을 얻지 못했어요') + '</div>' +
+      '<div class="cap" style="margin-top:6px">오늘 최고 ' + (오늘기록.별 ? '⭐'.repeat(오늘기록.별) : '별 없음') + ' · ' + 오늘기록.시도 + '번째 도전</div>' +
+    '</div>' +
+    '<div class="card"><h3>목표</h3>' + 목표HTML(r.단계) + '</div>' +
+    '<div class="card"><h3>영업 결과</h3><table class="money">' +
+      '<tr><td>방문 손님</td><td>' + r.방문 + '명</td></tr>' +
+      '<tr><td>받은 손님</td><td class="' + (성공 ? 'pos' : 'neg') + '">' + r.받은 + '명' + (r.놓친 ? ' <span class="sub">(' + r.놓친 + '명 놓침)</span>' : '') + '</td></tr>' +
+      '<tr><td>최대 수용 인원 (병목 기준)</td><td>' + r.가능손님 + '명</td></tr>' +
+      '<tr><td>병목</td><td>' + esc(r.병목이름.join(' · ') || '-') + '</td></tr>' +
+      '<tr><td>매출 (' + r.받은 + '명 × ' + 분수(log.단가) + ' = ' + 분수(log.매출원) + (log.매출원.eq(log.매출) ? '' : ' → 버림') + ')</td><td class="pos">+' + r.매출 + '코인</td></tr>' +
+      '<tr><td>급여' + (r.미지급 ? '<br><span class="sub" style="font-size:12px">가진 돈이 모자라 ' + r.실지급 + '만 줬어요 (체불 ' + r.미지급 + ')</span>' : '') + '</td><td class="neg">−' + r.실지급 + '코인</td></tr>' +
+      '<tr><td><b>순이익</b></td><td class="' + (r.순익 < 0 ? 'neg' : 'pos') + '"><b>' + r.순익 + '코인</b></td></tr>' +
+      '<tr><td>급여를 주고 남은 코인 (시작 ' + 챌린지.시작코인 + ')</td><td>' + r.코인후 + '코인</td></tr>' +
+      예측표 +
+    '</table></div>' +
+    '<div class="card"><h3>업무별 처리 결과</h3>' + 업무표HTML(log, 성공) + '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn big gold" onclick="탭(\'s-daily\')">🔁 다시 도전</button>' +
+      '<button class="btn sec big" onclick="탭(\'s-home\')">일반 카페로 돌아가기</button>' +
+      '<button class="btn sec big" onclick="탭(\'s-achieve\')">🏆 도전 과제</button>' +
+    '</div>';
 }
 
 /* ══════════════════════════════════════════════════════════════

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="9.4">
+  <meta name="app-version" content="10.0">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -936,7 +936,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=9.3"></script>
+<script src="grading.js?v=10.0"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1841,20 +1841,39 @@ function buildExamAIPayload(ex){
       continue;
     }
     const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
-    const wrongItems=[];
+    /* 풀이 이력 (v10.0, teacher v5.0 과 같은 규칙 — grading.js questionHistory):
+       지금 틀린 문항(여러 번 낸 오답 포함) · 틀렸다가 고친 문항 · 안 푼 문항을 나눠 보낸다.
+       예전에는 지금 틀린 문항의 마지막 오답만 보내서, 고친 문항과 안 푼 문항이 진단에 안 보였다. */
+    const wrongItems=[], recoveredItems=[], unansweredItems=[];
+    const qTextOf=(q,n)=>String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,n);
+    const correctAnsOf=q=>q.type==='multi'   // 객관식은 내 답과 같은 꼴로 "2,4번 (보기 글)" (v8.98)
+      ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
+      : q.answer;
     (ws.questions||[]).forEach(q=>{
       if(EXAM_AI_SKIP_TYPES.has(q.type)) return;
-      const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
-      const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
-      const correctAns=q.type==='multi'   // 객관식은 내 답과 같은 꼴로 "2,4번 (보기 글)" (v8.98)
-        ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
-        : q.answer;
-      const traps=_trapsFor(q, studentAns);
-      wrongItems.push({ qText:String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,300),
-        correctAnswer:String(correctAns??''), studentAnswer:_studentAnsText(q, studentAns),
-        ...(traps.length?{traps}:{}) });
+      const h=questionHistory(q, r.perQuestion?.[q.id]);
+      if(h.status==='wrong'){
+        const studentAns=h.wrongs.length?h.wrongs[h.wrongs.length-1]:'(기록 없음)';
+        const traps=_trapsFor(q, studentAns);
+        wrongItems.push({ qText:qTextOf(q,300),
+          correctAnswer:String(correctAnsOf(q)??''), studentAnswer:_studentAnsText(q, studentAns),
+          wrongCount:h.wrongCount, wrongHistory:h.wrongs.slice(0,-1).slice(-5).map(w=>_studentAnsText(q,w)),
+          ...(traps.length?{traps}:{}) });
+      } else if(h.status==='recovered'){
+        const traps=[]; const seen=new Set();   // 중간 오답 중 오답 경로와 맞은 것 — 같은 경로는 한 번만
+        h.wrongs.forEach(w=>_trapsFor(q, w).forEach(t=>{ if(t.hit && !seen.has(t.wrong)){ seen.add(t.wrong); traps.push(t); } }));
+        recoveredItems.push({ qText:qTextOf(q,300), correctAnswer:String(correctAnsOf(q)??''),
+          wrongCount:h.wrongCount, wrongHistory:h.wrongs.slice(-5).map(w=>_studentAnsText(q,w)),
+          ...(traps.length?{traps}:{}) });
+      } else if(h.status==='unanswered' || h.status==='partial'){
+        unansweredItems.push({ qText:qTextOf(q,120), ...(h.status==='partial'?{partial:`단계형 ${h.stepsDone}/${h.stepsTotal}단계까지 해결`}:{}) });
+      }
     });
-    worksheets.push({ title:ws.title||'', unitTitle, done:wsDone(ws,r), correctRate:rate, wrongItems });
+    const st=recordHistoryStats(ws.questions, r.perQuestion);
+    recoveredItems.sort((a,b)=>b.wrongCount-a.wrongCount);
+    worksheets.push({ title:ws.title||'', unitTitle, done:wsDone(ws,r), correctRate:rate,
+      firstTryRate:st.firstTryRate, unansweredCount:st.notAnswered,
+      wrongItems, recoveredItems:recoveredItems.slice(0,12), unansweredItems:unansweredItems.slice(0,12) });
   }
   return { worksheets, notStarted };
 }

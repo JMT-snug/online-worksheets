@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="4.5">
+<meta name="app-version" content="5.0">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -232,7 +232,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=9.3"></script>
+<script src="grading.js?v=10.0"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -268,6 +268,20 @@ const isRecDone=r=>{ if(!r) return false; const id=REC_WS.get(r)||r.worksheetId;
 const getAttempts=r=>r.perQuestion
   ? Object.values(r.perQuestion).reduce((s,v)=>s+(v.wrongInputs||[]).length,0)  // wrongInputs 기반(정답 포함 오류 방지)
   : (r.totalAttempts||0);
+/* 풀이 이력 요약 (v5.0, grading.js recordHistoryStats) — 정답률은 「마지막에 맞힌 문항」만 세서
+   여러 번 틀리다 맞혀도, 안 푼 문항이 있어도 드러나지 않는다. 일반 학습지만(복습·시험지는 null) */
+function histStats(ws, r){
+  if(!ws || !r || !r.perQuestion || ws.type==='review' || ws.type==='exam') return null;
+  return recordHistoryStats(ws.questions, r.perQuestion);
+}
+/** 정답률 막대 아래 작은 줄: 첫 시도 정답률 · 고친 문항 · 미답변 */
+function histSubLine(st){
+  if(!st || st.firstTryRate==null) return '';
+  const parts=[`첫 시도 <b style="color:${rateColor(st.firstTryRate)}">${st.firstTryRate}%</b>`];
+  if(st.recovered) parts.push(`고침 ${st.recovered}`);
+  if(st.notAnswered) parts.push(`<span style="color:var(--amber)">미답변 ${st.notAnswered}</span>`);
+  return `<div style="font-size:11px;color:var(--ink3);margin-top:2px" title="첫 시도: 처음 낸 답이 바로 맞은 문항 비율 · 고침: 틀렸다가 다시 풀어 맞힌 문항 수 · 미답변: 답을 내지 않은(단계형은 끝까지 못 푼) 문항 수">${parts.join(' · ')}</div>`;
+}
 // 문항 ID 표시 정규화 (q00a→Q00①, q01→Q01)
 const STEP_MARK={a:'①',b:'②',c:'③',d:'④',e:'⑤',f:'⑥'};
 function fmtQid(qid){
@@ -974,6 +988,10 @@ function renderStudentDetail(uid){
   const rates=recs.filter(r=>typeof r.correctRate==="number").map(r=>r.correctRate);
   const avg=rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null;
   const totalTries=recs.reduce((s,r)=>s+getAttempts(r),0);
+  // 첫 시도 정답률 평균·미답변 합계 (v5.0) — 일반 학습지 기록만
+  const _hs=WORKSHEETS.filter(ws=>wsMap[ws.id]).map(ws=>histStats(ws,wsMap[ws.id])).filter(s=>s&&s.firstTryRate!=null);
+  const avgFirst=_hs.length?Math.round(_hs.reduce((a,s)=>a+s.firstTryRate,0)/_hs.length):null;
+  const sumNotAns=_hs.reduce((a,s)=>a+s.notAnswered,0);
 
   // 학습지별 행 (WORKSHEETS 정의 순서, 학생이 시작한 것만)
   const ordered=WORKSHEETS.filter(ws=>wsMap[ws.id]);
@@ -993,7 +1011,7 @@ function renderStudentDetail(uid){
     return `<tr>
       <td><strong>${ws.title||"-"}</strong><br><span style="font-size:11px;color:var(--ink3)">${unit}</span></td>
       <td style="font-size:12px">${statusBadge}<br><span style="font-size:11px;color:var(--ink3)">${ts}</span></td>
-      <td>${ws.type==='review'?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):(rate!=null?rateBar(rate):'-')}</td>
+      <td>${ws.type==='review'?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):(rate!=null?rateBar(rate)+histSubLine(histStats(ws,r)):'-')}</td>
       <td style="text-align:center">${ws.type==='review'?'<span style="color:var(--ink3);font-size:12px">-</span>':`<span class="tries-badge ${tries===0?'tries-1':tries<=3?'tries-2':'tries-many'}">${tries}회</span>`}</td>
       <td style="min-width:200px">${perQCells(r,uid,ws.id)}</td>
     </tr>`;
@@ -1034,7 +1052,8 @@ function renderStudentDetail(uid){
       </div>
       <div class="summary-row" style="margin-bottom:16px">
         <div class="sum-card"><div class="sum-label">진도율</div><div class="sum-num" style="color:${progPct!=null?rateColor(progPct):'var(--ink3)'}">${progPct!=null?progPct+'%':'-'}<span style="font-size:14px;color:var(--ink3)"> (${done}/${progTotal})</span></div><div style="font-size:11px;color:var(--ink3)">반 시작 학습지 기준</div></div>
-        <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div></div>
+        <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${avg!=null&&avg>=70?'var(--green)':'var(--amber)'}">${avg!=null?avg+'%':'-'}</div><div style="font-size:11px;color:var(--ink3)">마지막에 맞힌 문항 기준</div></div>
+        <div class="sum-card" title="처음 낸 답이 바로 맞은 문항 비율의 평균 (일반 학습지)"><div class="sum-label">평균 첫 시도 정답률</div><div class="sum-num" style="color:${avgFirst!=null?rateColor(avgFirst):'var(--ink3)'}">${avgFirst!=null?avgFirst+'%':'-'}</div><div style="font-size:11px;color:var(--ink3)">${sumNotAns?`미답변 ${sumNotAns}문항`:'미답변 없음'}</div></div>
         <div class="sum-card"><div class="sum-label">총 시도</div><div class="sum-num">${totalTries}<span style="font-size:14px;color:var(--ink3)">회</span></div></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
@@ -1043,7 +1062,7 @@ function renderStudentDetail(uid){
           <option value="all">전체 학습 기준</option>
           <option value="unit" ${aiUnitOptions?'':'disabled'}>대단원 선택</option>
         </select>
-        <select id="ai-unit-sel" style="display:none;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">${aiUnitOptions}</select>
+        <select id="ai-unit-sel" onchange="_updateAIUnitSelVisibility()" style="display:none;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;font-size:13px">${aiUnitOptions}</select>
         <button class="btn" onclick="analyzeStudentWithAI('${uid}')" title="정답률·오답을 바탕으로 학습 상태를 AI가 요약합니다 (참고용)"
           style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95">🤖 AI 학습 분석</button>
       </div>
@@ -1393,6 +1412,8 @@ window._updateAIUnitSelVisibility=function(){
   const scope=document.getElementById('ai-scope-sel')?.value;
   const sel=document.getElementById('ai-unit-sel');
   if(sel) sel.style.display = scope==='unit' ? '' : 'none';
+  // 범위를 바꾸면 보이던 분석(다른 범위의 것)을 치운다 (v5.0 — 범위마다 따로 저장된다)
+  const res=document.getElementById('ai-analysis-result'); if(res){ res.style.display='none'; res.innerHTML=''; }
 };
 const AI_ANALYZE_SKIP_TYPES=new Set(['graph','link','pool_random']);
 /* ══════════ 🕳 오답 경로 대조 (v3.48 · v3.51) ══════════
@@ -1450,7 +1471,7 @@ function _trapsFor(q, studentAns){
     peers = 그 답을 실제로 낸 학생 수(빈출 오답 분석 기준, 가장 큰 값) — 학급에 흔한 실수인지 함께 보여 준다 */
 function _countTrapHits(worksheets){
   const map=new Map();
-  worksheets.forEach(w=>(w.wrongItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{
+  worksheets.forEach(w=>(w.wrongItems||[]).concat(w.recoveredItems||[]).forEach(it=>(it.traps||[]).forEach(t=>{   // 고친 문항의 중간 오답도 (v5.0)
     if(!t.hit) return;
     const key=t.label||t.path;
     const cur=map.get(key)||{label:t.label||'(이름 없음)', path:t.path, count:0, answers:[], peers:0};
@@ -1460,9 +1481,40 @@ function _countTrapHits(worksheets){
   })));
   return [...map.values()].sort((a,b)=>b.count-a.count);
 }
+/* ── 저장된 분석 먼저 보기 (v5.0, 📊 빈출 오답 분석과 같은 방식) ──
+   버튼을 누르면 저장된 분석이 있으면 그것부터 보여 주고 [🔄 새로 분석하기]를 묻는다. 없으면 바로 분석한다.
+   · 저장 위치: records/{학생 이메일}/teacher_ai/{범위} — 범위 = 'all' 또는 'unit_{대단원 ID}'.
+     firestore.rules 의 records/{document=**} 로 교사는 읽고 쓰고, 학생 규칙에는 이 경로가 없어 **학생은 못 읽는다**(규칙 수정 불필요).
+     teacher_data 는 여러 곳에서 컬렉션 전체를 읽어 학급 명단으로 쓰므로 거기 두면 안 된다.
+   · 문서: { at, count, by, scope, unitId, unitTitle, analysis:{summary,…}, pathHits:[…], trapTotal, basisAt }
+     basisAt = 분석에 쓴 기록들의 가장 늦은 lastUpdated — 그 뒤에 새로 푼 기록이 있으면 「분석 이후 새 풀이 기록」을 알린다. */
+const _stuAiKey=(scope,unitId)=>scope==='unit'?('unit_'+String(unitId||'').replace(/[\/.#\[\]]/g,'_')):'all';
+function _stuAiTargets(uid, scope, unitId){
+  const wsMap=allData[uid]||{};
+  return WORKSHEETS.filter(ws=>wsMap[ws.id] && (scope!=='unit' || ws.unitId===unitId));
+}
+function _stuAiBasisAt(uid, targets){
+  const wsMap=allData[uid]||{};
+  return targets.reduce((m,ws)=>{ const t=String(wsMap[ws.id]?.lastUpdated||''); return t>m?t:m; },'');
+}
 window.analyzeStudentWithAI=async function(uid){
   const scope=document.getElementById('ai-scope-sel')?.value||'all';
   const unitId=document.getElementById('ai-unit-sel')?.value||'';
+  const resultEl=document.getElementById('ai-analysis-result');
+  if(!resultEl) return;
+  resultEl.style.display='block';
+  resultEl.innerHTML='<div class="card" style="margin-top:0">🤖 저장된 분석을 찾는 중…</div>';
+  let saved=null;
+  try{
+    const snap=await getDoc(doc(db,'records',uid,'teacher_ai',_stuAiKey(scope,unitId)));
+    if(snap.exists()) saved=snap.data();
+  }catch(e){ console.warn('[AI 학습 분석] 저장된 분석 읽기 실패 — 새로 분석합니다', e.message); }
+  if(saved && saved.analysis){ _renderStudentAI(uid, saved, {saved:true}); return; }
+  await _runStudentAI(uid, scope, unitId);
+};
+/** 🔄 새로 분석하기 — 저장된 분석이 보이는 상태에서 누른다 */
+window.rerunStudentAI=async function(uid, scope, unitId){ await _runStudentAI(uid, scope, unitId); };
+async function _runStudentAI(uid, scope, unitId){
   const resultEl=document.getElementById('ai-analysis-result');
   if(!resultEl) return;
   resultEl.style.display='block';
@@ -1475,41 +1527,99 @@ window.analyzeStudentWithAI=async function(uid){
   const worksheets=target.map(ws=>{
     const r=wsMap[ws.id];
     const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
-    const wrongItems=[];
+    /* 풀이 이력 (v5.0): 예전에는 「지금 틀린 문항의 마지막 오답」만 보내서 틀렸다가 고친 문항·여러 번 낸 오답·
+       안 푼 문항이 AI 에 전혀 안 보였고, 오답 없이 correct:false 로 남은 미응답 문항이 「틀린 문항(기록 없음)」으로 섞여 갔다.
+       이제 grading.js questionHistory 로 문항 상태를 나눠 보낸다 — 시험지·복습 학습지는 예전 그대로. */
+    const regular = ws.type!=='review' && ws.type!=='exam';
+    const wrongItems=[], recoveredItems=[], unansweredItems=[];
+    const qTextOf=(q,n)=>(q.text||'').replace(/<br\s*\/?>/gi,'\n').slice(0,n);
+    const correctAnsOf=q=>q.type==='multi'   // 객관식은 학생 답과 같은 꼴로 "2,4번 (보기 글)" (v3.51)
+      ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
+      : q.answer;
     (ws.questions||[]).forEach(q=>{
       if(AI_ANALYZE_SKIP_TYPES.has(q.type)) return;
-      const v=r.perQuestion?.[q.id]; if(!v || v.correct!==false) return;
-      const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
-      const correctAns=q.type==='multi'   // 객관식은 학생 답과 같은 꼴로 "2,4번 (보기 글)" (v3.51)
-        ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
-        : q.answer;
-      const traps=_trapsFor(q, studentAns);
-      wrongItems.push({
-        qText:(q.text||'').replace(/<br\s*\/?>/gi,'\n').slice(0,300),
-        correctAnswer:String(correctAns??''), studentAnswer:_studentAnsText(q, studentAns),
-        ...(traps.length?{traps}:{}),
-      });
+      const v=r.perQuestion?.[q.id];
+      if(!regular){   // 시험지 — 예전 방식
+        if(!v || v.correct!==false) return;
+        const studentAns=(v.wrongInputs&&v.wrongInputs.length)?v.wrongInputs[v.wrongInputs.length-1]:(v.lastAnswer??'(기록 없음)');
+        const traps=_trapsFor(q, studentAns);
+        wrongItems.push({ qText:qTextOf(q,300), correctAnswer:String(correctAnsOf(q)??''), studentAnswer:_studentAnsText(q, studentAns), ...(traps.length?{traps}:{}) });
+        return;
+      }
+      const h=questionHistory(q, v);
+      if(h.status==='wrong'){
+        const studentAns=h.wrongs.length?h.wrongs[h.wrongs.length-1]:'(기록 없음)';
+        const traps=_trapsFor(q, studentAns);
+        wrongItems.push({
+          qText:qTextOf(q,300),
+          correctAnswer:String(correctAnsOf(q)??''), studentAnswer:_studentAnsText(q, studentAns),
+          wrongCount:h.wrongCount, wrongHistory:h.wrongs.slice(0,-1).slice(-5).map(w=>_studentAnsText(q,w)),
+          ...(traps.length?{traps}:{}),
+        });
+      } else if(h.status==='recovered'){
+        // 중간 오답 중 하나라도 오답 경로와 맞으면 ★ — 같은 경로는 한 번만
+        const traps=[]; const seen=new Set();
+        h.wrongs.forEach(w=>_trapsFor(q, w).forEach(t=>{ if(t.hit && !seen.has(t.wrong)){ seen.add(t.wrong); traps.push(t); } }));
+        recoveredItems.push({
+          qText:qTextOf(q,300), correctAnswer:String(correctAnsOf(q)??''),
+          wrongCount:h.wrongCount, wrongHistory:h.wrongs.slice(-5).map(w=>_studentAnsText(q,w)),
+          ...(traps.length?{traps}:{}),
+        });
+      } else if(h.status==='unanswered' || h.status==='partial'){
+        unansweredItems.push({ qText:qTextOf(q,120), ...(h.status==='partial'?{partial:`단계형 ${h.stepsDone}/${h.stepsTotal}단계까지 해결`}:{}) });
+      }
     });
-    return { title: ws.title||'', correctRate: rate, wrongItems };
+    if(!regular) return { title: ws.title||'', correctRate: rate, wrongItems };
+    const st=recordHistoryStats(ws.questions, r.perQuestion);
+    recoveredItems.sort((a,b)=>b.wrongCount-a.wrongCount);   // 많이 틀린 것부터 (Apps Script 가 앞의 몇 개만 쓴다)
+    return { title: ws.title||'', done: isRecDone(r), correctRate: rate, firstTryRate: st.firstTryRate, unansweredCount: st.notAnswered,
+             wrongItems, recoveredItems: recoveredItems.slice(0,15), unansweredItems: unansweredItems.slice(0,15) };
   });
   const pathHits=_countTrapHits(worksheets);   // 예상 오답 경로별 적중 횟수 (AI 없이 우리가 센 값)
 
   const any=Object.values(wsMap).find(r=>r.studentName)||{};
   const unitTitle = scope==='unit' ? (UNIT_MAP[unitId]?.title||'') : '';
+  const key=_stuAiKey(scope,unitId);
+  let prevCount=0;
+  try{ const ps=await getDoc(doc(db,'records',uid,'teacher_ai',key)); if(ps.exists()) prevCount=ps.data().count||0; }catch(e){}
 
+  let out;
   try{
     const res=await fetch(AI_WEBAPP_URL,{
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ token:AI_WEBAPP_TOKEN, action:'analyzeStudent',
         studentName: any.studentName||'', scope, unitTitle, worksheets }),
     });
-    const out=await res.json();
+    out=await res.json();
     if(!out||!out.ok) throw new Error(out?.error||'서버 응답 오류');
-    const a=out.analysis||{};
-    const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${s}</li>`).join('')}</ul>`:'';
-    /* 🕳 오답 경로와 일치한 것 — AI 가 아니라 우리가 직접 센 값이라 확실하다.
-       (AI 는 이 ★ 표시를 근거로 위의 반복되는 오류·지도 제안을 쓴다) 빈출 오답과 일치한 것은 학급에서 몇 명이 같은 답을 냈는지도 붙인다(v3.51) */
-    const trapTotal=worksheets.reduce((n,w)=>n+(w.wrongItems||[]).filter(it=>(it.traps||[]).length).length,0);
+  }catch(e){
+    resultEl.innerHTML='<div class="card" style="margin-top:0">❌ 분석 실패: '+_te(e.message)
+      +(prevCount?`<div style="margin-top:8px"><button class="btn-sm" onclick="analyzeStudentWithAI('${uid}')">저장된 분석 보기</button></div>`:'')+'</div>';
+    return;
+  }
+  /* 🕳 오답 경로와 일치한 것 — AI 가 아니라 우리가 직접 센 값이라 확실하다. 분석과 함께 저장해 다시 열어도 그대로 보인다 */
+  const trapTotal=worksheets.reduce((n,w)=>n+(w.wrongItems||[]).filter(it=>(it.traps||[]).length).length,0);
+  const rec={ at:new Date().toISOString(), count:prevCount+1, by:tUser?.email||'', scope, unitId:scope==='unit'?unitId:'', unitTitle,
+    analysis:out.analysis||{}, pathHits, trapTotal, basisAt:_stuAiBasisAt(uid, target) };
+  try{ await setDoc(doc(db,'records',uid,'teacher_ai',key), rec); }
+  catch(e){ console.warn('[AI 학습 분석] 저장 실패', e); rec._saveError=e.message; }
+  _renderStudentAI(uid, rec, {fresh:true});
+}
+/** 결과 카드 — 저장된 기록이든 방금 받은 결과든 같은 모양. AI 글은 부등호가 섞일 수 있어 escape 한다 */
+function _renderStudentAI(uid, rec, opts={}){
+  const resultEl=document.getElementById('ai-analysis-result'); if(!resultEl) return;
+  resultEl.style.display='block';
+  const a=rec.analysis||{}, pathHits=rec.pathHits||[], trapTotal=rec.trapTotal||0;
+  const scope=rec.scope||'all', unitId=rec.unitId||'', unitTitle=rec.unitTitle||'';
+  const list=(arr)=>arr?.length?`<ul style="margin:4px 0 0 18px;padding:0">${arr.map(s=>`<li style="margin-bottom:3px">${_te(s)}</li>`).join('')}</ul>`:'';
+  const newer = opts.saved && rec.basisAt && _stuAiBasisAt(uid, _stuAiTargets(uid, scope, unitId)) > rec.basisAt;
+  const head = opts.fresh
+    ? `방금 분석했습니다 (${rec.count}번째)${rec._saveError?` · <span style="color:#b91c1c">저장 실패: ${_te(rec._saveError)}</span>`:''}`
+    : `저장된 분석 · 마지막 분석 ${_fmtAtT(rec.at)} (${rec.count||1}회${rec.by?` · ${_te(rec.by)}`:''})`
+      + (newer?` · <b style="color:var(--amber)">분석 이후 새 풀이 기록이 있습니다</b>`:'');
+  const rerunBtn=`<button class="btn-sm" onclick="rerunStudentAI('${uid}','${scope}','${_te(unitId).replace(/'/g,'&#39;')}')"
+      title="지금까지의 기록으로 AI 분석을 새로 합니다 (이 분석을 덮어씁니다)" style="background:#4c1d95;color:#e9d5ff;border-color:#4c1d95">🔄 새로 분석하기</button>`;
+  {
     const hitHtml=pathHits.length
       ? `<div style="margin-bottom:10px"><b>🕳 오답 경로와 일치</b>
           <span style="font-size:11px;color:var(--ink3)">(edit 의 🤖 AI 검토가 예상해 둔 경로 · 학습지별 🤖 빈출 오답 분석이 실제 오답에서 찾은 원인 — 이 학생의 오답이 실제로 걸린 것)</span>
@@ -1521,19 +1631,20 @@ window.analyzeStudentWithAI=async function(uid){
         : '');
     resultEl.innerHTML=`
       <div class="card" style="margin-top:0;border-color:#c4b5fd;background:#faf5ff">
-        <div style="font-size:12px;color:var(--ink3);margin-bottom:6px">🤖 AI 학습 분석 (${scope==='unit'?unitTitle:'전체 학습'} 기준)</div>
-        <div style="background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5;margin-bottom:10px">⚠️ <b>참고용입니다</b> — 이 학생의 정답률·오답 기록에 근거해 AI가 쓴 글이며, 데이터에 근거했더라도 <b>틀릴 수 있습니다</b>. 그대로 믿지 마시고 최종 판단은 선생님이 해주세요.</div>
-        <div style="font-weight:700;margin-bottom:10px">${a.summary||''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <div style="font-size:12px;color:var(--ink3)">🤖 AI 학습 분석 (${scope==='unit'?_te(unitTitle):'전체 학습'} 기준)<br>${head}</div>
+          ${rerunBtn}
+        </div>
+        <div style="background:#fffbeb;border:1.5px solid #f59e0b;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5;margin-bottom:10px">⚠️ <b>참고용입니다</b> — 이 학생의 정답률·오답·풀이 이력에 근거해 AI가 쓴 글이며, 데이터에 근거했더라도 <b>틀릴 수 있습니다</b>. 그대로 믿지 마시고 최종 판단은 선생님이 해주세요.</div>
+        <div style="font-weight:700;margin-bottom:10px">${_te(a.summary||'')}</div>
         ${a.strengths?.length?`<div style="margin-bottom:10px"><b>👍 강점</b>${list(a.strengths)}</div>`:''}
         ${a.weaknesses?.length?`<div style="margin-bottom:10px"><b>⚠️ 약점</b>${list(a.weaknesses)}</div>`:''}
         ${a.commonMistakes?.length?`<div style="margin-bottom:10px"><b>🔁 반복되는 오류</b>${list(a.commonMistakes)}</div>`:''}
         ${hitHtml}
-        ${a.suggestion?`<div><b>💡 다음 지도 제안</b><div style="margin-top:4px">${a.suggestion}</div></div>`:''}
+        ${a.suggestion?`<div><b>💡 다음 지도 제안</b><div style="margin-top:4px">${_te(a.suggestion)}</div></div>`:''}
       </div>`;
-  }catch(e){
-    resultEl.innerHTML='<div class="card" style="margin-top:0">❌ 분석 실패: '+e.message+'</div>';
   }
-};
+}
 
 /* ══════════ 📊 빈출 오답 분석 (v3.51, 학습지 단위) ══════════
    이 학습지를 푼 학생 전체의 오답 기록(perQuestion[].wrongInputs)에서 **여러 학생이 낸 틀린 답**을 문항마다 모아
@@ -2371,7 +2482,7 @@ window.renderWSTable=function(wsId){
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:isReview?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):rateBar(rate)}</td>
+      <td>${isVoca?`<span style="color:var(--green);font-weight:700">✅ ${passCount}회 PASS</span>`:isReview?reviewStatsHtml(r):ws.type==='exam'?examCountsHtml(ws,r):rateBar(rate)+histSubLine(histStats(ws,r))}</td>
       <td>${(isVoca||isReview)?`<span style="color:var(--ink3);font-size:12px">-</span>`:`<span class="tries-badge ${wcls}">${wrong}회</span>`}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--green);font-weight:600">✅ 완료</span><br>${ts}</td>
@@ -2392,7 +2503,7 @@ window.renderWSTable=function(wsId){
       <td><strong>${r.studentName||"-"}</strong></td>
       <td style="font-size:12px;color:var(--ink3)">${r.studentEmail||"-"}</td>
       <td style="font-size:12px">${classInfo}</td>
-      <td>${ws.type==='exam'?examCountsHtml(ws,r):`<div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div>`}</td>
+      <td>${ws.type==='exam'?examCountsHtml(ws,r):`<div class="rate-row"><div class="rate-bg"><div class="rate-fill" style="width:${pct}%;background:var(--amber)"></div></div><span class="rate-n" style="color:var(--amber)">${r.answeredCount||0}/${r.totalCount||"?"}</span></div>${histSubLine(histStats(ws,r))}`}</td>
       <td>${tries>0?`<span class="tries-badge ${wcls}">${tries}회</span>`:"-"}</td>
       <td style="min-width:180px">${perQHtml||"-"}</td>
       <td style="font-size:12px"><span style="color:var(--amber);font-weight:600">⏳ 진행 중</span><br>${upd}</td>
@@ -2418,6 +2529,9 @@ function renderWS(wsId){
   const done=recs.filter(r=>isRecDone(r));
   const avgR=done.length?Math.round(done.reduce((s,r)=>s+(r.correctRate||0),0)/done.length):0;
   const avgT=done.length?(done.reduce((s,r)=>s+getAttempts(r),0)/done.length).toFixed(1):"-";
+  // 완료 학생의 첫 시도 정답률 평균 (v5.0)
+  const _fr=done.map(r=>histStats(ws,r)).filter(s=>s&&s.firstTryRate!=null);
+  const avgFirst=_fr.length?Math.round(_fr.reduce((a,s)=>a+s.firstTryRate,0)/_fr.length):null;
   // Fix: 하드코딩 5 → ws.qCount 사용
   const qc=ws.qCount||(ws.questions?.length)||0;
   const perfect=qc>0?done.filter(r=>getAttempts(r)===0).length:"-";
@@ -2431,6 +2545,7 @@ function renderWS(wsId){
   <div class="sum-grid">
     <div class="sum-card"><div class="sum-label">완료 학생</div><div class="sum-num">${done.length}<span style="font-size:14px;color:var(--amber)"> + ${recs.length-done.length}진행중</span></div></div>
     <div class="sum-card"><div class="sum-label">평균 정답률</div><div class="sum-num" style="color:${rateColor(avgR)}">${avgR}%</div></div>
+    ${avgFirst!=null?`<div class="sum-card" title="완료 학생이 처음 낸 답이 바로 맞은 문항 비율의 평균"><div class="sum-label">평균 첫 시도 정답률</div><div class="sum-num" style="color:${rateColor(avgFirst)}">${avgFirst}%</div><div class="sum-sub">완료 학생 기준</div></div>`:''}
     <div class="sum-card"><div class="sum-label">평균 시도 횟수</div><div class="sum-num">${avgT}</div><div class="sum-sub">문제당</div></div>
     <div class="sum-card"><div class="sum-label">첫 번에 완료</div><div class="sum-num" style="color:var(--green)">${perfect}</div><div class="sum-sub">모두 1회 정답</div></div>
   </div>`;

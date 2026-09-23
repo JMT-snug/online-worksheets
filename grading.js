@@ -475,3 +475,46 @@ function recordIsDone(rec, questions){
   if(!flag) return false;
   return Array.isArray(questions) ? graphsAllCorrect(questions, rec.perQuestion) : true;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   문항별 풀이 이력 (grading v10.0 — teacher v5.0 · index v10.0 공용)
+
+   정답률(correctRate)은 「마지막에 맞힌 문항 ÷ 전체 문항」이라 여러 번 틀리다 맞혀도
+   한 번에 맞힌 것과 같고, 안 푼 문항은 틀린 것과 구별되지 않는다. 그래서 문항마다 상태를 나눈다:
+     first      — 첫 시도에 바로 맞힘
+     recovered  — 틀렸다가 다시 풀어 맞힘
+     wrong      — 지금도 틀린 상태 (오답을 낸 적 있고 아직 못 맞힘)
+     partial    — 단계형을 몇 단계만 풀고 멈춤 (오답은 없음)
+     pending    — 그래프를 냈지만 아직 선생님 채점 전
+     unanswered — 답을 한 번도 내지 않음
+   오답 횟수는 wrongInputs(서로 다른 오답) 개수 — teacher 의 「시도」 열·✓(n) 표시와 같은 기준.
+   attempts 는 쓰지 않는다: 옛 기록에는 정답 제출까지 센 것이 있어 한 번에 맞힌 문항도 「고침」으로 잘못 나뉜다.
+   시험지 문항(examAnswer)은 다시 풀기가 없으므로 여기서 다루지 않는다 — 부르는 쪽이 일반 학습지에만 쓴다.
+   ═══════════════════════════════════════════════════════════════ */
+function questionHistory(q, v){
+  const wrongs = Array.isArray(v?.wrongInputs) ? v.wrongInputs.map(x => String(x ?? '')) : [];
+  const wrongCount = wrongs.length;
+  if(!v) return { status:'unanswered', wrongCount:0, wrongs:[] };
+  if(q && q.type === 'graph'){
+    if(!v.drawing) return { status:'unanswered', wrongCount:0, wrongs:[] };
+    return { status: v.correct === true ? 'first' : v.correct === false ? 'wrong' : 'pending', wrongCount:0, wrongs:[] };
+  }
+  if(v.correct === true) return { status: wrongCount > 0 ? 'recovered' : 'first', wrongCount, wrongs };
+  // 아직 못 맞힌 문항의 attempts 에는 정답 제출이 섞일 수 없으니 함께 본다(오답 글이 없어진 옛 기록 대비)
+  const wrongCountNow = Math.max(wrongCount, Number(v.attempts) || 0);
+  if(wrongCountNow > 0) return { status:'wrong', wrongCount: wrongCountNow, wrongs };
+  const sd = Array.isArray(v.stepDone) ? v.stepDone : null;
+  if(sd && sd.some(Boolean)) return { status:'partial', wrongCount:0, wrongs:[], stepsDone: sd.filter(Boolean).length, stepsTotal: sd.length };
+  return { status:'unanswered', wrongCount:0, wrongs:[] };
+}
+/* 기록 하나의 요약 — 분모는 correctRate 와 같이 링크 문항을 뺀 전체 문항 수.
+   firstTryRate = 첫 시도에 맞힌 문항 비율(%), unanswered = 미답변 + 단계형 미완(끝까지 답하지 못한 문항) */
+function recordHistoryStats(questions, perQuestion){
+  const pq = perQuestion || {};
+  const qs = (questions || []).filter(q => q && q.type !== 'link');
+  const c = { total: qs.length, first:0, recovered:0, wrong:0, partial:0, pending:0, unanswered:0 };
+  qs.forEach(q => { c[questionHistory(q, pq[q.id]).status]++; });
+  c.firstTryRate = c.total ? Math.round(c.first / c.total * 100) : null;
+  c.notAnswered = c.unanswered + c.partial;
+  return c;
+}

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="4.4">
+<meta name="app-version" content="4.5">
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -257,7 +257,13 @@ const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7
 const AI_WEBAPP_TOKEN = "snug-ai-assist";
 // 완료 판정 (완료 플래그 OR 완료시각 OR 전부 정답) — 그래프 문항이 있으면 **모두 ⭕ 정답으로 채점**돼야 완료 (v4.4, grading.js recordIsDone)
 //   filter 콜백으로도 쓰이므로 인자는 r 하나만 받고, 학습지는 기록의 worksheetId 로 찾는다(못 찾으면 옛 규칙 그대로)
-const isRecDone=r=>{ if(!r) return false; const ws=r.worksheetId ? WORKSHEETS.find(w=>w.id===r.worksheetId) : null; return recordIsDone(r, ws?.questions); };
+/* 기록이 어느 학습지 것인지는 기록 문서의 ID(records/{uid}/worksheets/{wsId})로 정한다 (v4.5).
+   기록 안의 worksheetId 필드는 예전 순서 변경 때 옛 ID 가 그대로 남은 것이 많아서(teacher v3.x 이전),
+   그 값으로 학습지를 찾으면 엉뚱한 학습지의 그래프 문항과 대조해 다 맞힌 학생도 완료로 안 보였다.
+   불러올 때 기록 객체 → 문서 ID 를 REC_WS 에 적어 두고(기록을 다시 저장할 때 섞이지 않게 필드로 넣지 않는다),
+   없으면 worksheetId 필드로. */
+const REC_WS=new WeakMap();
+const isRecDone=r=>{ if(!r) return false; const id=REC_WS.get(r)||r.worksheetId; const ws=id ? WORKSHEETS.find(w=>w.id===id) : null; return recordIsDone(r, ws?.questions); };
 // perQuestion 합산 우선, 없으면 저장된 totalAttempts 사용
 const getAttempts=r=>r.perQuestion
   ? Object.values(r.perQuestion).reduce((s,v)=>s+(v.wrongInputs||[]).length,0)  // wrongInputs 기반(정답 포함 오류 방지)
@@ -433,10 +439,10 @@ async function loadAll(){
       if(scopeEmails && !scopeEmails.has(String(uid).toLowerCase())) return; // 담당 학급 학생만
       if(col==="records"){                        // 새 통합 구조
         if(!allData[uid]) allData[uid]={};
-        allData[uid][wsId]=d.data();
+        allData[uid][wsId]=d.data(); REC_WS.set(allData[uid][wsId], wsId);
       } else if(col==="results"){                 // 구 완료 데이터
         if(!allData[uid]) allData[uid]={};
-        if(!allData[uid][wsId]) allData[uid][wsId]=d.data(); // records 우선
+        if(!allData[uid][wsId]){ allData[uid][wsId]=d.data(); REC_WS.set(allData[uid][wsId], wsId); } // records 우선
       } else if(col==="progress"){                // 구 진행 중 데이터
         if(!progressData[uid]) progressData[uid]={};
         progressData[uid][wsId]=d.data();
@@ -1960,7 +1966,7 @@ window.migrateWsIds=async function(){
         const rec=d[ws.id]; if(!rec) continue;
         await bw.set(doc(db,'records',uid,'worksheets',tmpId),rec);
         await bw.delete(doc(db,'records',uid,'worksheets',ws.id));
-        d[tmpId]=rec; delete d[ws.id];
+        d[tmpId]=rec; delete d[ws.id]; REC_WS.set(rec, tmpId);
       }
       ws._tmpId=tmpId;
     }
@@ -1981,7 +1987,7 @@ window.migrateWsIds=async function(){
         const moved={...rec, worksheetId:newId};
         await bw.set(doc(db,'records',uid,'worksheets',newId),moved);
         await bw.delete(doc(db,'records',uid,'worksheets',ws._tmpId));
-        d[newId]=moved; delete d[ws._tmpId];
+        d[newId]=moved; delete d[ws._tmpId]; REC_WS.set(moved, newId);
       }
       ws.id=newId; delete ws._tmpId; ok++;
     }
@@ -2287,8 +2293,8 @@ window.renderWSTable=function(wsId){
   const recs=[];
   Object.entries(allData).forEach(([uid,d])=>{ if(d[wsId]) recs.push({uid,...d[wsId]}); });
 
-  // 완료 / 진행 중 분리
-  const isDone=isRecDone;
+  // 완료 / 진행 중 분리 — recs 는 {uid,...기록} 으로 새로 만든 객체라 REC_WS 에 없다 → 이 학습지(ws)로 직접 판정 (v4.5)
+  const isDone=r=>recordIsDone(r, ws.questions);
   let done=recs.filter(isDone);
   let inProg=recs.filter(r=>!isDone(r));
 

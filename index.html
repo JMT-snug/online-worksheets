@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="9.3">
+  <meta name="app-version" content="9.4">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -5004,26 +5004,93 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
     g.fillStyle=color; g.fillText(text,tx,y);
     if(withLock) drawLock(g, tx+tw/2+2+LOCK_W/2, y, color);
   };
-  /* 번호 후보 자리 — 획 모양에 맞춰 여러 개 만든다. 순서 = 선호도(가까운 곳부터).
-     선: 가운데 → 앞뒤로 옮겨 가며 × 양옆·더 바깥.  호: 손으로 잡은 방향(m) 바깥쪽이 1순위, 좌우로 벌려 가며 × 바깥·더 바깥·안쪽.
-     (선이 4px 로 굵어져 옆 간격도 15→16, 28→30 으로 조금 띄웠다) */
-  const labelCands=it=>{
-    const cands=[];
+  /* 번호 자리 규칙 (v9.4, 교사 요청) — 우선순위 순서대로
+       ① 다른 획·펜 글씨·먼저 놓은 번호와 겹치지 않는다(겹치는 자리는 거의 고르지 않는다).
+       ② 어느 획의 번호인지 헷갈리지 않는다 — 번호에서 제 획보다 다른 획이 더 가깝거나 비슷하게 가까우면 감점.
+       ③ 획의 끝에 붙인다 — 끝 바로 너머(선이 이어지는 방향) → 끝 바로 옆.
+       ④ 끝이 막혀 있으면 획의 가운데 옆, 그래도 안 되면 그 사이 어딘가.
+     후보마다 벌점(겹침 × 1000 + 헷갈림 + 자리 선호)을 매겨 가장 작은 자리를 고른다. 같으면 먼저 만든 후보(결정적). */
+  /* 선의 '보이는 부분' — 캔버스 밖까지 늘린 직선은 캔버스 테두리에서 자른 선분을 획으로 본다(끝 = 화면에 보이는 끝). */
+  const clipSeg=it=>{
+    let t0=0, t1=1; const dx=it.x1-it.x0, dy=it.y1-it.y0;
+    for(const [p,q] of [[-dx,it.x0],[dx,W-it.x0],[-dy,it.y0],[dy,H-it.y0]]){
+      if(p===0){ if(q<0) return null; continue; }
+      const r=q/p;
+      if(p<0){ if(r>t1) return null; if(r>t0) t0=r; } else { if(r<t0) return null; if(r<t1) t1=r; }
+    }
+    return [it.x0+dx*t0, it.y0+dy*t0, it.x0+dx*t1, it.y0+dy*t1];
+  };
+  const arcPt=(it,a,off)=>[it.cx+Math.cos(a)*(it.rx+off), it.cy+Math.sin(a)*(it.ry+off)];
+  /* 획 위의 점(약 4px 간격) — 번호에서 획까지 거리를 잴 때 쓴다. 캔버스 밖 점은 뺀다. */
+  const strokePts=it=>{
+    const pts=[];
     if(it.t==='L'){
-      const dx=it.x1-it.x0, dy=it.y1-it.y0, len=Math.hypot(dx,dy)||1;
-      const nx=-dy/len, ny=dx/len;                              // 선에 수직인 방향
-      for(const t of [0.5,0.3,0.7,0.15,0.85]){
-        const px=it.x0+dx*t, py=it.y0+dy*t;
-        for(const off of [16,-16,30,-30]) cands.push([px+nx*off, py+ny*off]);
+      const s=clipSeg(it); if(!s) return pts;
+      const n=Math.max(1,Math.ceil(Math.hypot(s[2]-s[0],s[3]-s[1])/4));
+      for(let i=0;i<=n;i++) pts.push([s[0]+(s[2]-s[0])*i/n, s[1]+(s[3]-s[1])*i/n]);
+    } else {
+      const n=Math.max(2,Math.ceil(Math.abs(it.a1-it.a0)*Math.max(it.rx,it.ry)/4));
+      for(let i=0;i<=n;i++){
+        const p=arcPt(it, it.a0+(it.a1-it.a0)*i/n, 0);
+        if(p[0]>=0&&p[1]>=0&&p[0]<=W&&p[1]<=H) pts.push(p);
+      }
+    }
+    return pts;
+  };
+  /* 번호 상자(가운데 cx,cy · 반폭 hw · 반높이 hh)에서 점들까지 가장 가까운 거리 — 상자 테두리 기준(안에 있으면 0). */
+  const boxDist=(pts,cx,cy,hw,hh)=>{
+    let best=1e9;
+    for(const p of pts){
+      const ex=Math.max(0,Math.abs(p[0]-cx)-hw), ey=Math.max(0,Math.abs(p[1]-cy)-hh);
+      const d=ex*ex+ey*ey; if(d<best) best=d;
+    }
+    return Math.sqrt(best);
+  };
+  /* 번호 후보 자리 [x, y, 자리 벌점] — w·h 는 번호 상자 크기. 상자가 획에 닿지 않도록 방향마다 상자 반폭만큼 띄운다.
+     선: 두 끝(나중에 끝낸 쪽 먼저) 각각 너머·옆 → 가운데 옆 → 1/3·2/3 → 1/6·5/6 옆.
+     호: 두 끝 각각 너머(원을 따라)·바깥 옆·안쪽 옆 → 가운데 바깥·안쪽 → 1/4·3/4.  온원(한 바퀴)은 끝이 없으니 손으로 잡은 방향(m)부터. */
+  const labelCands=(it,w,h)=>{
+    const cands=[], G=5;                                        // G: 획과 번호 상자 사이 빈틈(px)
+    const ext=(ux,uy)=>Math.abs(ux)*w/2+Math.abs(uy)*h/2;         // (ux,uy) 방향으로 잰 상자 반폭
+    if(it.t==='L'){
+      const s=clipSeg(it)||[it.x0,it.y0,it.x1,it.y1];
+      const dx=s[2]-s[0], dy=s[3]-s[1], len=Math.hypot(dx,dy)||1;
+      const ux=dx/len, uy=dy/len, nx=-uy, ny=ux;                // 선 방향 · 수직 방향
+      const side=ext(nx,ny)+G, tip=ext(ux,uy)+G;
+      const at=d=>[s[0]+ux*d, s[1]+uy*d];                       // 시작점에서 선을 따라 d px
+      for(const [e,dir] of [[len,1],[0,-1]]){                   // 끝(x1 쪽) → 시작(x0 쪽)
+        const p=at(e+dir*tip); cands.push([p[0],p[1],0]);       // 끝 바로 너머
+        const q=at(e-dir*Math.min(len/2,Math.max(10,tip)));      // 끝에서 조금 안쪽의 옆
+        for(const sg of [1,-1]) cands.push([q[0]+nx*side*sg, q[1]+ny*side*sg, 6]);
+        const p2=at(e+dir*(tip+14)); cands.push([p2[0],p2[1],14]);
+        for(const sg of [1,-1]) cands.push([q[0]+nx*(side+14)*sg, q[1]+ny*(side+14)*sg, 22]);
+      }
+      for(const [t,pen] of [[0.5,40],[1/3,55],[2/3,55],[1/6,65],[5/6,65]]){
+        const q=at(len*t);
+        for(const sg of [1,-1]) cands.push([q[0]+nx*side*sg, q[1]+ny*side*sg, pen]);
+        for(const sg of [1,-1]) cands.push([q[0]+nx*(side+14)*sg, q[1]+ny*(side+14)*sg, pen+16]);
       }
     } else {
-      const sweep=Math.abs(_angDelta(it.a0,it.a1))||Math.PI;
-      const spread=Math.min(0.6, sweep/3);                      // 호를 따라 좌우로 옮겨 볼 각도
-      for(const da of [0, spread, -spread, spread*2, -spread*2]){
-        const a=it.m+da;
-        for(const off of [16, 31, -17]){                        // 바깥 → 더 바깥 → 안쪽
-          if(it.rx+off<8 || it.ry+off<8) continue;
-          cands.push([it.cx+Math.cos(a)*(it.rx+off), it.cy+Math.sin(a)*(it.ry+off)]);
+      const r=Math.max(8,(it.rx+it.ry)/2), sweep=it.a1-it.a0;
+      const rad=a=>ext(Math.cos(a),Math.sin(a))+G;               // 반지름 방향으로 띄울 거리
+      const push=(a,off,pen)=>{ if(it.rx+off>=8 && it.ry+off>=8){ const p=arcPt(it,a,off); cands.push([p[0],p[1],pen]); } };
+      if(sweep < Math.PI*2-0.05){
+        for(const [a,dir] of [[it.a1,1],[it.a0,-1]]){
+          const tipA=a+dir*(ext(-Math.sin(a),Math.cos(a))+G)/r;  // 원을 따라 끝 바로 너머
+          push(tipA,0,0);
+          const inA=a-dir*Math.min(sweep/2,Math.max(10,rad(a))/r);   // 끝에서 조금 안쪽
+          push(inA, rad(inA), 6); push(inA, -rad(inA), 10);
+          push(a+dir*(ext(-Math.sin(a),Math.cos(a))+G+14)/r, 0, 14);
+          push(inA, rad(inA)+14, 22);
+        }
+        for(const [t,pen] of [[0.5,40],[0.25,55],[0.75,55]]){
+          const a=it.a0+sweep*t;
+          push(a, rad(a), pen); push(a, -rad(a), pen+4); push(a, rad(a)+14, pen+16);
+        }
+      } else {
+        for(let k=0;k<8;k++){
+          const a=it.m+k*Math.PI/4, pen=k===0?0:20+k;
+          push(a, rad(a), pen); push(a, -rad(a), pen+4); push(a, rad(a)+14, pen+16);
         }
       }
     }
@@ -5074,21 +5141,29 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
       return n;
     };
     lctx.font=LABEL_FONT;
+    const ptsOf=new Map(alive.map(it=>[it,strokePts(it)]));
     for(const it of alive){
       const text=_stepGlyph(it.n), withLock=!!it.k, color=CON_COLORS[it.n % CON_COLORS.length];
       const w=lctx.measureText(text).width+8+(withLock?LOCK_W+2:0), h=LABEL_H;
+      const own=ptsOf.get(it);
       let best=null;
-      for(const [x,y] of labelCands(it)){
+      for(const [x,y,pen] of labelCands(it,w,h)){
         const cx=Math.max(w/2,Math.min(W-w/2,x)), cy=Math.max(h/2,Math.min(H-h/2,y));
         const x0=Math.max(0,Math.round(cx-w/2)), y0=Math.max(0,Math.round(cy-h/2));
         const x1=Math.min(W,Math.round(cx+w/2)), y1=Math.min(H,Math.round(cy+h/2));
         const hit=(x1<=x0||y1<=y0) ? 1e9 : hits(x0,y0,x1,y1);
-        if(!best||hit<best[2]) best=[cx,cy,hit,x0,y0,x1,y1];
-        if(hit===0) break;
+        /* 헷갈림: 번호 상자에서 제 획까지(dOwn)보다 다른 획까지(dOther)가 12px 이상 더 멀어야 벌점 없음.
+           캔버스 가장자리에 밀려 제 획에서 멀어진 자리도 벌점(dOwn 이 클수록). */
+        const dOwn=own.length?boxDist(own,cx,cy,w/2,h/2):0;
+        let dOther=1e9;
+        for(const o of alive) if(o!==it){ const d=boxDist(ptsOf.get(o),cx,cy,w/2,h/2); if(d<dOther) dOther=d; }
+        const amb=Math.max(0,dOwn+12-dOther)*8 + Math.max(0,dOwn-8)*3;
+        const cost=hit*1000+amb+pen;
+        if(!best||cost<best[2]) best=[cx,cy,cost,x0,y0,x1,y1,hit];
       }
       if(!best) continue;
       stampLabel(lctx,best[0],best[1],text,color,withLock);
-      placed.push([best[3],best[4],best[5],best[6],text,best[2]]);
+      placed.push([best[3],best[4],best[5],best[6],text,best[7]]);
     }
     window._graphLabelsForTest=placed;   // 자동 검증용: 놓인 번호 상자 [x0,y0,x1,y1,글자,겹친 픽셀 수]
   };

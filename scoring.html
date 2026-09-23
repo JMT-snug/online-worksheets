@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.29">
+<meta name="app-version" content="scoring-v1.30">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1333,6 +1333,7 @@ function loadQuestion(opts){
 
   // 참조 격자
   drawRefGrid(q);
+  refreshWsDoc(curWsId, curQid);   // 이 화면을 연 뒤 편집기에서 고친 내용이 있으면 반영 (v1.30)
 
   if(students.length === 0){
     document.getElementById('stu-name').textContent = '(응답한 학생 없음)';
@@ -1344,6 +1345,29 @@ function loadQuestion(opts){
     showStudent(0);
   }
   renderStats();
+}
+
+/* 학습지 한 개 새로 읽기 (v1.30) — 이 화면은 처음 열 때 학습지(curriculum)를 한 번만 읽기 때문에,
+   채점 화면을 연 채로 편집기에서 문항(작도 배경 이미지·문제 텍스트 등)을 고치면 옛 내용이 그대로 보였다.
+   문항을 열 때마다 그 학습지 문서 하나를 다시 읽어 바뀌었으면 문제 텍스트·참조 격자·학생 답안 배경을 다시 그린다. */
+async function refreshWsDoc(wsId, qid){
+  try{
+    const ws = WORKSHEETS.find(w=>w.id===wsId);
+    if(!ws) return;
+    const before = JSON.stringify((ws.questions||[]).find(x=>x.id===qid)||null);
+    const snap = await getDoc(doc(db,'curriculum',wsId));
+    if(!snap.exists()) return;
+    Object.assign(ws, snap.data());                  // WORKSHEETS·ALL_WORKSHEETS 가 같은 객체를 가리킨다
+    const q = (ws.questions||[]).find(x=>x.id===qid);
+    if(!q || JSON.stringify(q)===before) return;
+    if(curWsId!==wsId || curQid!==qid) return;       // 그 사이 다른 문항으로 옮겼으면 다시 그리지 않는다
+    console.log('[학습지 새로 읽기] 바뀐 문항 반영', wsId, qid);
+    const qTextEl = document.getElementById('q-text');
+    qTextEl.innerHTML = q.text ? qTextHtml(q.text) : '(문제 텍스트 없음)';
+    if(window.MathJax?.typesetPromise) MathJax.typesetPromise([qTextEl]).catch(()=>{});
+    drawRefGrid(q);
+    if(students.length) showStudent(curStuIdx);
+  }catch(e){ console.warn('[학습지 새로 읽기 실패]', e.message); }
 }
 
 function drawRefGrid(q){
@@ -1369,8 +1393,15 @@ function drawConstructionBg(ctx,W,H,imageUrl){
   if(imageUrl){
     const img=new Image();
     img.onload=()=>{ ctx.drawImage(img,0,0,W,H); ctx.strokeRect(0.5,0.5,W-1,H-1); };
-    img.src=imageUrl;
+    img.src=imgNoCache(imageUrl);
   }
+}
+/* 배경 이미지 주소에 이 화면을 연 시각을 붙인다 (v1.30) — Drive 에서 같은 파일을 새 판으로 바꿔 올린 경우
+   주소가 그대로라 브라우저가 옛 그림을 보여 주던 것을 막는다. 화면을 열 때마다 한 번만 새로 받는다. */
+const IMG_LOAD_TS = Date.now();
+function imgNoCache(url){
+  if(!url || url.startsWith('data:')) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'v=' + IMG_LOAD_TS;
 }
 
 function drawCoordPlane(ctx,W,H,xMin,xMax,yMin,yMax){

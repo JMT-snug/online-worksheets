@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.0">
+<meta name="app-version" content="1.1">
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -139,7 +139,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.0"></script>
+<script src="ai-lab.js?v=1.1"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -292,6 +292,13 @@ function typeOptions(cur){
     c.subs.forEach(s=>{ if(s.hidden && s.code!==cur) return; h+=`<option value="${s.code}" ${s.code===cur?'selected':''}>${esc(s.name)}${s.custom?' ✚':''}</option>`; });
     h+='</optgroup>'; });
   if(cur && !TAX.byCode[cur]) h+=`<option value="${esc(cur)}" selected>${esc(cur)}</option>`;
+  return h;
+}
+/** 옮길 곳 고르기 — 자기 자신과 숨긴 유형은 뺀다 (v1.1) */
+function targetOptions(exclude, cur){
+  let h=`<option value="">— 옮길 유형 고르기 —</option>`;
+  TAX.cats.forEach(c=>{ const subs=c.subs.filter(s=>!s.hidden && s.code!==exclude); if(!subs.length) return;
+    h+=`<optgroup label="${esc(c.icon+' '+c.name)}">${subs.map(s=>`<option value="${s.code}" ${s.code===cur?'selected':''}>${esc(s.name)}${s.custom?' ✚':''}</option>`).join('')}</optgroup>`; });
   return h;
 }
 function typeBadge(code){
@@ -770,10 +777,10 @@ function renderTypes(){
         return `<tr style="background:#fcfbf7"><td colspan="2"><span class="cat-h"><span class="cat-dot" style="background:${cat.color}"></span>${cat.icon} ${esc(cat.name)}</span></td>
           <td><b>${cc.ai}</b></td><td><b>${cc.freq}</b> <span class="muted small">(${cc.stu}명)</span></td><td></td></tr>`
         + cat.subs.map(s=>{ const v=c.bySub[s.code]||{ai:0,freq:0,stu:0};
-          return `<tr style="${s.hidden?'opacity:.5':''}"><td style="padding-left:30px">${esc(s.name)} ${s.custom?'<span class="badge" style="background:#ecfdf5;color:#047857" title="'+esc('교사가 더한 유형 · '+fmtAt(s.at))+'">✚ 추가</span>':''}${s.hidden?' <span class="badge" style="background:#f5f5f4;color:#78716c">숨김</span>':''}
+          return `<tr style="${s.hidden?'opacity:.5':''}"><td style="padding-left:30px">${esc(s.name)} ${s.custom?'<span class="badge" style="background:#ecfdf5;color:#047857" title="'+esc('교사가 더한 유형 · '+fmtAt(s.at))+'">✚ 추가</span>':''}${s.hidden?' <span class="badge" style="background:#f5f5f4;color:#78716c">숨김</span>':''}${s.mergedInto?` <span class="small muted">→ ${esc(typeName(TAX,s.mergedInto))}에 합침</span>`:''}
             <div class="small muted" style="font-family:'DM Mono',monospace">${esc(s.code)}</div></td>
             <td class="hide-sm small">${esc(s.desc)}</td><td>${v.ai||''}</td><td>${v.freq?`${v.freq} <span class="muted small">(${v.stu}명)</span>`:''}</td>
-            <td class="row" style="flex-wrap:nowrap">${v.ai+v.freq?`<button class="btn" onclick="showTypeItems('${esc(s.code)}')">보기</button>`:''}
+            <td class="row" style="flex-wrap:nowrap">${v.ai+v.freq?`<button class="btn" onclick="showTypeItems('${esc(s.code)}')">보기</button><button class="btn" onclick="openMoveAll('${esc(s.code)}')" title="${s.custom?'이 유형의 오답을 모두 기존 유형에 넣고 이 유형은 숨깁니다(합치기)':'이 유형의 오답을 모두 다른 유형으로 옮깁니다'}">${s.custom?'↪ 합치기':'↪ 옮기기'}</button>`:''}
               ${s.custom?`<button class="btn" onclick="editSub('${esc(s.code)}')">이름</button><button class="btn" onclick="hideSub('${esc(s.code)}')">${s.hidden?'보이기':'숨기기'}</button>`:''}</td></tr>`; }).join('');
       }).join('')}
       <tr><td colspan="2"><span class="muted">미분류</span></td><td>${c.none.ai||''}</td><td>${c.none.freq?`${c.none.freq} <span class="muted small">(${c.none.stu}명)</span>`:''}</td>
@@ -815,14 +822,19 @@ window.hideSub=async code=>{
   try{ const cur=await latestCustomSubs(); await saveCustomSubs(cur.map(x=>x.code===code?{...x, hidden:!x.hidden}:x)); renderTypes(); }
   catch(e){ toast(e.message); }
 };
-/** 이 유형의 오답들 — 하나씩 다른 유형으로 옮길 수 있다 */
+/** 이 유형의 오답들 — 하나씩(옆 목록) 또는 여러 개를 골라(체크 → 아래 [옮기기]) 다른 유형으로 옮긴다 (v1.1) */
 window.showTypeItems=code=>{
   const items=allTypedItems().filter(it=>code?it.sub===code:!it.sub);
   _md={ typeItems:items, code };
   const byWs=new Map(); items.forEach(it=>{ if(!byWs.has(it.wsId)) byWs.set(it.wsId,[]); byWs.get(it.wsId).push(it); });
-  openModal(`🏷 ${code?typeName(TAX,code):'미분류'} — ${items.length}개`, `<div class="small muted" style="margin-bottom:8px">유형을 고르면 바로 저장되고, 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다.</div>`
-    + [...byWs.entries()].map(([wsId,l])=>`<div class="qblock"><b class="small">${esc(WORKSHEETS.find(w=>w.id===wsId)?.title||wsId)}</b>${l.map(it=>`
-      <div class="it"><span class="badge" style="background:${it.kind==='ai'?'#ede9fe;color:#5b21b6':'var(--red-lt);color:var(--red)'}">${it.kind==='ai'?'🕳 예상':'📊 빈출 '+it.students+'명'}</span>
+  const bar=`<div class="row small" style="position:sticky;top:0;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--rule);margin-bottom:8px;z-index:1">
+      <label class="row"><input type="checkbox" onchange="tiAll(this.checked)"> 모두 고르기</label>
+      <span id="ti-count" class="muted">0개 고름</span>
+      <select id="ti-target" class="typesel" style="max-width:240px">${targetOptions(code)}</select>
+      <button class="btn btn-ai" onclick="tiMoveSel()">↪ 고른 것 옮기기</button></div>`;
+  openModal(`🏷 ${code?typeName(TAX,code):'미분류'} — ${items.length}개`, `<div class="small muted" style="margin-bottom:4px">하나만 바꾸려면 옆 목록에서 고르고, 여러 개는 체크한 뒤 위에서 옮길 유형을 골라 [옮기기]를 누르세요. 바로 저장되고, 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다.</div>`
+    + bar + [...byWs.entries()].map(([wsId,l])=>`<div class="qblock"><b class="small">${esc(WORKSHEETS.find(w=>w.id===wsId)?.title||wsId)}</b>${l.map(it=>`
+      <div class="it"><input type="checkbox" class="ti-ck" data-id="${it.id}" onchange="tiCount()" style="margin-top:4px"><span class="badge" style="background:${it.kind==='ai'?'#ede9fe;color:#5b21b6':'var(--red-lt);color:var(--red)'}">${it.kind==='ai'?'🕳 예상':'📊 빈출 '+it.students+'명'}</span>
         <div style="flex:1"><span class="small muted">${it.idx+1}번</span> <span class="wrong">${esc(it.wrong)}</span>
           <select class="typesel" onchange="moveItem('${it.id}',this.value)">${typeOptions(it.sub)}</select>
           <span class="path">${esc(it.path)}</span></div></div>`).join('')}</div>`).join(''));
@@ -831,6 +843,46 @@ window.moveItem=async(id,code)=>{
   const it=_md?.typeItems?.find(x=>x.id===id); if(!it) return;
   try{ await applyChanges({ [it.wsId]:[{ kind:it.kind, qid:it.qid, key:it.key, sub:code, manual:true }] }); it.sub=code; toast('✅ 옮겼습니다'); if(TAB==='types') renderTypes(); $('modal').style.display='flex'; }
   catch(e){ toast('저장 실패: '+e.message); }
+};
+window.tiCount=()=>{ const n=document.querySelectorAll('.ti-ck:checked').length; const el=$('ti-count'); if(el) el.textContent=n+'개 고름'; };
+window.tiAll=on=>{ document.querySelectorAll('.ti-ck').forEach(c=>{ c.checked=on; }); tiCount(); };
+window.tiMoveSel=async()=>{
+  const to=$('ti-target')?.value; if(!to){ toast('옮길 유형을 고르세요'); return; }
+  const ids=new Set([...document.querySelectorAll('.ti-ck:checked')].map(c=>c.dataset.id));
+  const items=(_md?.typeItems||[]).filter(it=>ids.has(it.id));
+  if(!items.length){ toast('옮길 오답을 체크하세요'); return; }
+  if(running) return; running=true;
+  const code=_md.code;
+  try{ const n=await applyChanges(changesByWs(items.map(it=>[it,to,true]))); running=false;
+    toast(`✅ ${n}개를 「${typeName(TAX,to)}」(으)로 옮겼습니다`); if(TAB==='types') renderTypes(); showTypeItems(code); }
+  catch(e){ running=false; toast('옮기기 실패: '+e.message); }
+};
+/** 유형 하나의 오답을 모두 다른 유형으로 (v1.1). 교사가 더한 유형이면 「합치기」 — 옮긴 뒤 숨기고 mergedInto 를 남긴다
+    (유형은 지우지 않는다: 코드가 기록에 남아 있을 수 있고, 합친 곳을 나중에 확인할 수 있게) */
+window.openMoveAll=code=>{
+  const s=TAX.byCode[code]; const items=allTypedItems().filter(it=>it.sub===code);
+  const nA=items.filter(i=>i.kind==='ai').length;
+  openModal(`↪ ${typeName(TAX,code)} — ${items.length}개 ${s?.custom?'합치기':'옮기기'}`, `
+    <div class="small" style="margin-bottom:10px">이 유형으로 분류된 오답 <b>${items.length}개</b>(🕳 예상 ${nA} · 📊 빈출 ${items.length-nA})를 모두 고른 유형으로 옮깁니다.
+      옮긴 것은 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다. 일부만 옮기려면 [보기]에서 체크해 옮기세요.</div>
+    <div class="row"><b class="small">옮길 유형</b><select id="mv-target" class="typesel" style="max-width:280px">${targetOptions(code)}</select></div>
+    ${s?.custom?`<label class="small row" style="margin-top:10px"><input type="checkbox" id="mv-hide" checked> 옮긴 뒤 「${esc(s.name)}」 유형 숨기기 — 합치기 (AI 가 더는 이 유형을 고르지 않습니다. 나중에 [보이기]로 되살릴 수 있습니다)</label>`:''}
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-ai" onclick="doMoveAll('${esc(code)}')">↪ 모두 옮기기</button></div>`);
+};
+window.doMoveAll=async code=>{
+  const to=$('mv-target')?.value; if(!to){ toast('옮길 유형을 고르세요'); return; }
+  if(to===code || running) return;
+  const hide=!!$('mv-hide')?.checked;
+  const items=allTypedItems().filter(it=>it.sub===code);
+  running=true;
+  try{
+    const n=await applyChanges(changesByWs(items.map(it=>[it,to,true])));
+    if(hide){ const cur=await latestCustomSubs();
+      await saveCustomSubs(cur.map(x=>x.code===code?{...x, hidden:true, mergedInto:to, mergedAt:new Date().toISOString(), mergedBy:tUser.email}:x)); }
+    running=false; closeModal();
+    toast(`✅ ${n}개를 「${typeName(TAX,to)}」(으)로 옮겼습니다${hide?' · 합친 유형은 숨겼습니다':''}`); renderTypes();
+  }catch(e){ running=false; toast('옮기기 실패: '+e.message); console.error(e); }
 };
 /** 학습지별 유형 변경을 저장 — 문서를 다시 읽어 applyTypeChanges */
 async function applyChanges(byWs){
@@ -875,16 +927,22 @@ window.runClassify=async()=>{
 function drawClassifyResult(){
   const r=classifyResult;
   const ex=l=>l.slice(0,4).map(it=>`<div class="small" style="margin-left:22px"><span class="wrong">${esc(it.wrong)}</span> <span class="muted">${esc((WORKSHEETS.find(w=>w.id===it.wsId)?.title||'')+' '+(it.idx+1)+'번')} — ${esc(it.path)}</span></div>`).join('')+(l.length>4?`<div class="small muted" style="margin-left:22px">… 외 ${l.length-4}개</div>`:'');
-  const props=r.proposals.map((p,i)=>{ const l=r.toProposal.get(p.key)||[]; return `<div class="qblock">
-    <label class="row"><input type="checkbox" ${p.on?'checked':''} onchange="clProp(${i},'on',this.checked)"> <b>새 유형</b>
-      <select onchange="clProp(${i},'cat',this.value)">${TAX.cats.map(c=>`<option value="${c.code}" ${c.code===p.cat?'selected':''}>${c.icon} ${esc(c.name)}</option>`).join('')}</select> ›
-      <input type="text" value="${esc(p.name)}" onchange="clProp(${i},'name',this.value)" style="width:150px">
-      <span class="badge" style="background:var(--vio-lt);color:var(--violet)">오답 ${l.length}개</span></label>
-    <input type="text" value="${esc(p.desc)}" onchange="clProp(${i},'desc',this.value)" style="width:100%;margin-top:6px">
+  /* v1.1: 새 유형 제안은 「✚ 새 유형으로 만들기」 대신 기존 유형에 넣을 수 있고(p.target), 기존 유형으로 옮길 묶음은 목적지를 바꿀 수 있다(g.target) */
+  const props=r.proposals.map((p,i)=>{ const l=r.toProposal.get(p.key)||[]; const into=!!p.target; return `<div class="qblock">
+    <div class="row"><input type="checkbox" ${p.on?'checked':''} onchange="clProp(${i},'on',this.checked)">
+      <select onchange="clProp(${i},'target',this.value)" title="새 유형을 만들지, 기존 유형에 넣을지">
+        <option value="" ${into?'':'selected'}>✚ 새 유형으로 만들기</option>
+        <optgroup label="↪ 기존 유형에 넣기">${targetOptions('', p.target).replace('<option value="">— 옮길 유형 고르기 —</option>','')}</optgroup></select>
+      <span class="badge" style="background:var(--vio-lt);color:var(--violet)">오답 ${l.length}개</span></div>
+    <div class="row" style="margin-top:6px;${into?'opacity:.45':''}"><span class="small muted">${into?'(AI 제안 — 기존 유형에 넣으므로 만들지 않음)':'새 유형'}</span>
+      <select ${into?'disabled':''} onchange="clProp(${i},'cat',this.value)">${TAX.cats.map(c=>`<option value="${c.code}" ${c.code===p.cat?'selected':''}>${c.icon} ${esc(c.name)}</option>`).join('')}</select> ›
+      <input type="text" ${into?'disabled':''} value="${esc(p.name)}" onchange="clProp(${i},'name',this.value)" style="width:150px"></div>
+    <input type="text" ${into?'disabled':''} value="${esc(p.desc)}" onchange="clProp(${i},'desc',this.value)" style="width:100%;margin-top:6px;${into?'opacity:.45':''}">
     ${ex(l)}</div>`; }).join('');
-  const moves=r.toExisting.map((g,i)=>`<div class="qblock"><label class="row"><input type="checkbox" ${g.on?'checked':''} onchange="clMove(${i},this.checked)">
-      ${typeBadge(g.code)} <span class="small">으로 ${g.items.length}개</span></label>${ex(g.items)}</div>`).join('');
-  const nOn=r.proposals.filter(p=>p.on).length, mOn=r.toExisting.filter(g=>g.on).reduce((n,g)=>n+g.items.length,0)
+  const moves=r.toExisting.map((g,i)=>`<div class="qblock"><div class="row"><input type="checkbox" ${g.on?'checked':''} onchange="clMove(${i},this.checked)">
+      <select class="typesel" style="max-width:260px" onchange="clMoveTo(${i},this.value)" title="AI 가 고른 유형 — 다른 유형으로 바꿀 수 있습니다">${targetOptions('', g.target||g.code).replace('<option value="">— 옮길 유형 고르기 —</option>','')}</select>
+      <span class="small">으로 ${g.items.length}개</span>${g.target&&g.target!==g.code?` <span class="small muted">(AI 제안: ${esc(typeName(TAX,g.code))})</span>`:''}</div>${ex(g.items)}</div>`).join('');
+  const nOn=r.proposals.filter(p=>p.on && !p.target).length, mOn=r.toExisting.filter(g=>g.on).reduce((n,g)=>n+g.items.length,0)
     + r.proposals.filter(p=>p.on).reduce((n,p)=>n+(r.toProposal.get(p.key)||[]).length,0);
   return `<div style="margin-top:12px">
     ${props?`<div style="font-weight:700;margin-bottom:6px">✚ 새 유형 제안 ${r.proposals.length}개 <span class="small muted">— 이름·대분류·설명을 고쳐서 채택할 수 있습니다</span></div>${props}`:'<div class="small muted">새 유형 제안은 없습니다.</div>'}
@@ -895,12 +953,13 @@ function drawClassifyResult(){
 window.clDiscard=()=>{ classifyResult=null; renderTypes(); };
 window.clProp=(i,k,v)=>{ classifyResult.proposals[i][k]=k==='on'?!!v:String(v).trim(); $('cl-result').innerHTML=drawClassifyResult(); };
 window.clMove=(i,on)=>{ classifyResult.toExisting[i].on=!!on; $('cl-result').innerHTML=drawClassifyResult(); };
+window.clMoveTo=(i,code)=>{ const g=classifyResult.toExisting[i]; g.target=code&&code!==g.code?code:''; $('cl-result').innerHTML=drawClassifyResult(); };
 window.applyClassify=async()=>{
   const r=classifyResult; if(!r || running) return;
   running=true;
   try{
     const pairs=[];
-    const adopted=r.proposals.filter(p=>p.on && p.name);
+    const adopted=r.proposals.filter(p=>p.on && !p.target && p.name);
     if(adopted.length){
       let cur=await latestCustomSubs();
       adopted.forEach(p=>{ const t=buildTaxonomy(cur); p.code=nextCustomCode(t,p.cat);
@@ -908,7 +967,9 @@ window.applyClassify=async()=>{
       await saveCustomSubs(cur);
       adopted.forEach(p=>(r.toProposal.get(p.key)||[]).forEach(it=>pairs.push([it,p.code])));
     }
-    r.toExisting.filter(g=>g.on).forEach(g=>g.items.forEach(it=>pairs.push([it,g.code])));
+    // 기존 유형에 넣기로 한 제안 · 목적지를 바꾼 묶음은 교사가 정한 것(manual)
+    r.proposals.filter(p=>p.on && p.target).forEach(p=>(r.toProposal.get(p.key)||[]).forEach(it=>pairs.push([it,p.target,true])));
+    r.toExisting.filter(g=>g.on).forEach(g=>g.items.forEach(it=>pairs.push([it, g.target||g.code, !!g.target])));
     const n=await applyChanges(changesByWs(pairs));
     classifyResult=null; running=false;
     toast(`✅ 적용했습니다 — 새 유형 ${adopted.length}개 · 오답 ${n}개`); renderTypes();

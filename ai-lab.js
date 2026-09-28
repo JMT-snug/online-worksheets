@@ -10,6 +10,7 @@
      · 기본 유형(TAX_BASE)은 코드에 고정 — **코드를 바꾸거나 지우지 말 것**(쌓인 기록이 그 코드를 가리킨다).
      · 교사가 더한 유형은 Firestore config/errorTaxonomy.subs:[{code,cat,name,desc,hidden,at,by}] — 코드는 '{대분류}.u{번호}'.
        지우지 않고 숨기기(hidden)만 한다. 숨긴 유형은 AI 에 보내지 않지만 이미 붙은 기록은 그대로 보인다.
+     · 합치기(v1.1) — 교사 유형의 오답을 모두 기존 유형으로 옮기고 그 유형은 hidden + mergedInto:'옮긴 곳' 으로 남긴다.
      · subManual:true — 교사가 직접 고른 유형. 다시 분석해도 AI 가 덮어쓰지 않는다.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -57,7 +58,7 @@ function buildTaxonomy(custom){
     if(!s || !s.code || !s.name) return;
     const c = catMap.get(s.cat) || catMap.get(String(s.code).split('.')[0]);
     if(!c || c.subs.some(x=>x.code===s.code)) return;
-    c.subs.push({ code:String(s.code), name:String(s.name), desc:String(s.desc||''), cat:c.code, custom:true, hidden:!!s.hidden, at:s.at||'', by:s.by||'' });
+    c.subs.push({ code:String(s.code), name:String(s.name), desc:String(s.desc||''), cat:c.code, custom:true, hidden:!!s.hidden, at:s.at||'', by:s.by||'', mergedInto:s.mergedInto||'' });
   });
   const byCode = {};
   cats.forEach(c=>c.subs.forEach(s=>{ byCode[s.code]={ ...s, catName:c.name, icon:c.icon, color:c.color }; }));
@@ -523,10 +524,11 @@ function groupAssignments(items, res){
   });
   return { toExisting, toProposal };
 }
-/** 학습지별 바꿀 목록 — { wsId: [{kind, qid, key, sub}] } */
+/** 학습지별 바꿀 목록 — pairs = [[항목, 새 유형, 교사가 정함?], …] → { wsId: [{kind, qid, key, sub, manual?}] }
+    manual 이면 subManual 로 남아 다시 분석해도 AI 가 덮어쓰지 않는다 (v1.1 — 옮기기·합치기·재분류 결과를 교사가 바꾼 것) */
 function changesByWs(pairs){
   const out={};
-  pairs.forEach(([it,sub])=>{ (out[it.wsId]||(out[it.wsId]=[])).push({ kind:it.kind, qid:it.qid, key:it.key, sub }); });
+  pairs.forEach(([it,sub,manual])=>{ (out[it.wsId]||(out[it.wsId]=[])).push({ kind:it.kind, qid:it.qid, key:it.key, sub, ...(manual?{manual:true}:{}) }); });
   return out;
 }
 

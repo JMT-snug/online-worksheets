@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="10.0">
+  <meta name="app-version" content="10.1">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -2403,6 +2403,32 @@ function wsBlockedFor(ws, email){
   return !allowed.includes(String(email||'').toLowerCase());
 }
 
+/* 들어가기 직전 잠금 재확인 (v10.1)
+   학생 목록은 잠금 여부를 표시하지 않고(모든 카드가 똑같이 보이고 눌림), 들어갈 때
+   서버에서 그 학습지 문서를 다시 읽어 판정한다. 로그인 때 읽어 둔 값이 수업 중
+   잠금/해제로 낡아도 새로고침 없이 맞게 동작한다. 교사는 항상 통과라 읽지 않는다.
+   읽기 실패(오프라인 등)면 로그인 때 읽어 둔 값으로 판정한다. */
+function applyLockFields(ws,d){
+  ws.status=d.status;
+  ws.unlockedClasses=d.unlockedClasses||{};
+  ws.allowedEmails=d.allowedEmails||[];
+  ws.partUnlocked=d.partUnlocked||{};
+  ws.partAllowed=d.partAllowed||{};
+}
+async function refreshWsLock(ws){
+  if(!ws?.id || (user && TEACHER_EMAILS.includes(user.email))) return;
+  try{
+    const snap=await getDoc(doc(db,'curriculum',ws.id));
+    if(snap.exists()) applyLockFields(ws,snap.data());
+  }catch(e){ console.warn('[잠금 재확인 실패 — 저장된 값으로 판정]',e?.message||e); }
+}
+/* 막혔을 때: 목록에서 누른 경우엔 목록에 그대로 두고, 새로고침 복원·알림 바로가기 등은 단원 화면으로 */
+function wsBlockedAlert(ws){
+  try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
+  alert(ws?.status==='draft' ? '📝 아직 준비 중인 학습지입니다.' : '🔒 선생님이 잠근 학습지입니다.');
+  if(!document.getElementById('unit-page')?.classList.contains('active')) showPage("dash-page");
+}
+
 /* 해제된 반 목록으로 allowedEmails 재계산 */
 function calcAllowedEmails(unlockedClasses){
   const set=new Set();
@@ -2979,14 +3005,13 @@ function showUnitPage(unit) {
       const isDraft  = ws.status === "draft";
       const isLocked = ws.status === "locked";
       const isTeacher = user && TEACHER_EMAILS.includes(user.email);
-      const isBlocked = wsBlockedFor(ws, user?.email); // 반별 잠금: 해제된 반 학생은 통과, 교사는 항상 통과
+      // 학생 화면은 잠금 여부를 표시하지 않는다 — 누를 때 startQuiz/startReviewQuiz 에서 서버 값으로 판정 (v10.1)
 
       let badgeHtml = "";
       const tPrev = isTeacher ? ' · 교사 미리보기' : '';
       const unlockedCnt = isLocked ? Object.values(ws.unlockedClasses||{}).filter(Boolean).length : 0;
       const reviewCompletions = ws.type==="review" ? (prog?.completions||0) : 0;
-      if(isLocked && isBlocked) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금</span>`;
-      else if(isLocked && isTeacher) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금${unlockedCnt?` · ${unlockedCnt}반 해제`:''}${tPrev}</span>`;
+      if(isLocked && isTeacher) badgeHtml=`<span class="wslc-badge" style="background:#fef3c7;color:#b45309">🔒 잠금${unlockedCnt?` · ${unlockedCnt}반 해제`:''}${tPrev}</span>`;
       else if(isDraft) badgeHtml=`<span class="wslc-badge" style="background:#f1f5f9;color:#64748b">📝 준비 중${tPrev}</span>`;
       else if(ws.type==="review") badgeHtml = reviewCompletions>0
         ? `<span class="wslc-badge s-done">✅ ${reviewCompletions}회 완료</span>`
@@ -3000,8 +3025,7 @@ function showUnitPage(unit) {
 
       const inExam = !!EXAM_WS[ws.id];   // 📝 시험 범위 (v8.78)
       const card = document.createElement("div");
-      card.className = "ws-list-card" + (empty||isBlocked?" empty":"") + (inExam?" exam-range":"");
-      if(isBlocked) card.style.cssText="opacity:.55;cursor:not-allowed;filter:grayscale(.4)";
+      card.className = "ws-list-card" + (empty?" empty":"") + (inExam?" exam-range":"");
       card.innerHTML = `
         <div class="wslc-icon" style="background:${gc}18;color:${gc}">📄</div>
         <div class="wslc-body">
@@ -3079,7 +3103,7 @@ function showUnitPage(unit) {
         }
         card.appendChild(row);
       }
-      if(!empty && !isBlocked) card.addEventListener("click", ()=> ws.type==="review" ? startReviewQuiz(ws) : startQuiz(ws));
+      if(!empty) card.addEventListener("click", ()=> ws.type==="review" ? startReviewQuiz(ws) : startQuiz(ws));
       grid.appendChild(card);
     });
   }
@@ -3510,15 +3534,14 @@ async function ensureLatestVersion(){
    접속 시점에 curriculum 전체를 다시 읽어오므로, 잠금 해제·학습지 추가가
    따로 손대지 않아도 다음 접속(또는 '다시 풀기')에 바로 반영된다. */
 async function startReviewQuiz(ws){
-  if(wsBlockedFor(ws, user?.email)){
-    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
-    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
-  }
   let sourceDocs;
   try{
     const snap=await getDocs(collection(db,'curriculum'));
     sourceDocs=snap.docs.map(d=>({...d.data()}));
+    const self=snap.docs.find(d=>d.id===ws.id);   // 복습 학습지 자신의 잠금도 방금 읽은 값으로 (v10.1)
+    if(self && !(user && TEACHER_EMAILS.includes(user.email))) applyLockFields(ws, self.data());
   }catch(e){ sourceDocs=WORKSHEETS; } // 오프라인 등 실패 시 로그인 때 읽어 둔 캐시로 대체
+  if(wsBlockedFor(ws, user?.email)){ wsBlockedAlert(ws); return; }
   const pool=[];
   sourceDocs.filter(w=>w.unitId===ws.unitId && w.type==='regular')
     .forEach(src=>{
@@ -3540,10 +3563,8 @@ async function startReviewQuiz(ws){
 
 let _activeWsId=null;
 async function startQuiz(ws) {
-  if(wsBlockedFor(ws, user?.email)){ // 새로고침 복원·알림 바로가기 경로 포함 차단
-    try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
-    alert('🔒 선생님이 잠근 학습지입니다.'); showPage("dash-page"); return;
-  }
+  if(!ws._reviewBase) await refreshWsLock(ws);   // 목록 클릭·새로고침 복원·알림 바로가기 모두 여기서 최신 잠금 확인 (v10.1)
+  if(wsBlockedFor(ws, user?.email)){ wsBlockedAlert(ws); return; }
   _activeWsId=ws.id; _wsIsCompleted=false; _reviewAttemptSaved=false;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
   // 구버전 탭이면 여기서 새로고침 (reload 후 lastQuizWsId로 이 학습지에 자동 재진입)

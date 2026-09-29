@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="10.1">
+  <meta name="app-version" content="10.2">
+  <script src="site-nav.js?v=1.0"></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -739,13 +740,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
     <span id="hdr-version" style="font-size:10px;font-weight:400;color:var(--ink3);opacity:0.5;font-family:monospace"></span>
   </div>
   <div class="hdr-right" id="hdr-user">
-    <div class="hdr-nav">
-      <a href="teacher.html" class="hdr-btn hdr-teacher" id="hdr-teacher-link" style="display:none">관리</a>
-      <a href="scoring.html" class="hdr-btn hdr-teacher" id="hdr-scoring-link" style="display:none">채점</a>
-      <a href="edit.html" class="hdr-btn hdr-teacher" id="hdr-edit-link" style="display:none">편집</a>
-      <a href="qna.html" class="hdr-btn hdr-teacher" id="hdr-qna-link" style="display:none" title="학생 질문 답변">질문</a>
-      <a href="report.html" class="hdr-btn hdr-teacher" id="hdr-report-link" style="display:none" title="오류 신고 목록 (기본 교사 전용)">신고</a>
-    </div>
+    <span id="site-nav" data-current="index"></span>
     <div class="hdr-bell-wrap" id="hdr-bell-wrap" style="display:none">
       <button class="hdr-btn hdr-bell-btn" id="hdr-bell" title="채점 알림">🔔<span id="hdr-bell-count" class="bell-count" style="display:none"></span></button>
       <div class="bell-panel" id="hdr-bell-panel"></div>
@@ -1253,15 +1248,7 @@ function updateTeacherLinks(pageId){
     try{ wsId = sessionStorage.getItem('lastQuizWsId') || curWS?.id || ''; }
     catch(e){ wsId = curWS?.id || ''; }
   }
-  const qs = wsId ? '?ws='+encodeURIComponent(wsId) : '';
-  [['hdr-teacher-link','teacher.html','관리'],
-   ['hdr-scoring-link','scoring.html','채점'],
-   ['hdr-edit-link','edit.html','편집']].forEach(([id,base,name])=>{
-    const a=document.getElementById(id);
-    if(!a) return;
-    a.href = base + qs;
-    a.title = wsId ? `지금 학습지의 ${name} 화면으로 이동` : `${name} 화면으로 이동`;
-  });
+  if(window.SiteNav) SiteNav.setWs(wsId); // 헤더 「이동 ▾」의 관리·채점·편집에 ?ws= 를 붙인다 (site-nav.js)
 }
 
 function showPage(id) {
@@ -1490,19 +1477,16 @@ function updateHeader(u) {
   const dock = document.getElementById("fab-dock");
   if(dock) dock.style.display = u ? "flex" : "none"; // 오류 신고: 로그인한 모든 사용자
   updateFabDock();
-  if (!u) { hi.style.display = "none"; if(manual) manual.style.display = "none"; return; }
+  if (!u) { hi.style.display = "none"; if(manual) manual.style.display = "none"; if(window.SiteNav) SiteNav.setRole(null); return; }
   hi.style.display = "flex";
   const av = document.getElementById("hdr-avatar");
   if (u.photoURL) { av.src = u.photoURL; av.style.display = "block"; }
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   const isT = TEACHER_EMAILS.includes(u.email);
-  document.getElementById("hdr-teacher-link").style.display = isT ? "inline-flex" : "none";
-  document.getElementById("hdr-scoring-link").style.display = isT ? "inline-flex" : "none";
-  document.getElementById("hdr-edit-link").style.display    = isT ? "inline-flex" : "none";
   const isBase = BASE_TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-sync-progress").style.display= (isT && isBase) ? "inline-flex" : "none"; // 진도 동기화는 기본 교사 전용
-  document.getElementById("hdr-report-link").style.display = isBase ? "inline-flex" : "none"; // 오류 신고 목록은 기본 교사 전용
-  { const ql=document.getElementById("hdr-qna-link"); if(ql) ql.style.display = isT ? "inline-flex" : "none"; } // 질문 답변은 담당 교사도
+  // 헤더 「이동 ▾」: 페이지 목록·권한은 site-nav.js 한 곳에서 (학생은 갈 곳이 없어 버튼이 숨는다)
+  if(window.SiteNav) SiteNav.setRole(isBase ? 'base' : isT ? 'teacher' : 'student');
   // 매뉴얼 버튼: 학생 → 학생용, 담당 교사 → 교사용 (기본 교사는 진도 동기화 버튼 자리 유지)
   if(manual){
     if(isBase){ manual.style.display = "none"; }

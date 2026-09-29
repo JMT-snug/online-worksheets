@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="report-v1.3">
+<meta name="app-version" content="report-v1.4">
+<script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오류 신고 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -84,11 +85,7 @@ details.rep-log pre .l-warn{color:#fde68a}
     <span class="hdr-ver" id="hdr-version"></span>
   </div>
   <div class="hdr-right" id="hdr-user" style="display:none">
-    <a href="index.html" class="hdr-btn">학습지</a>
-    <a href="teacher.html" class="hdr-btn">관리</a>
-    <a href="scoring.html" class="hdr-btn">채점</a>
-    <a href="edit.html" class="hdr-btn">편집</a>
-    <a href="qna.html" class="hdr-btn" title="학생 질문 답변">질문</a>
+    <span id="site-nav" data-current="report"></span>
     <span id="hdr-name"></span>
     <button class="hdr-btn" id="btn-logout">로그아웃</button>
   </div>
@@ -143,6 +140,7 @@ onAuthStateChanged(auth, async u=>{
   if(!u){ showGate(true); return; }
   if(!BASE_TEACHER_EMAILS.includes(u.email)){ alert("기본 교사 계정만 접속할 수 있습니다."); await signOut(auth); return; }
   tUser=u;
+  if(window.SiteNav) SiteNav.setRole('base'); // 헤더 「이동 ▾」 (site-nav.js) — 이 화면은 기본 교사만 들어온다
   document.getElementById("hdr-user").style.display="flex";
   document.getElementById("hdr-name").textContent=u.displayName||u.email;
   showGate(false);

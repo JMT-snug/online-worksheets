@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.2">
+<meta name="app-version" content="1.3">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,6 +89,14 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .wrong{color:#b91c1c;font-weight:700;font-family:'DM Mono',monospace}
 .path{display:block;color:var(--ink2);font-size:12px;margin-top:1px}
 .typesel{font-size:12px;padding:2px 6px;max-width:210px}
+.grp-row td{background:#f5f3ee;border-bottom:1px solid var(--rule);cursor:pointer;user-select:none}
+.grp-row.lv1 td{background:#ece8df;font-size:14px}
+.grp-row:hover td{background:#e8e3d8}
+.grp-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.grp-row.lv2 .grp-t{padding-left:18px}
+.chev{display:inline-block;width:12px;font-size:11px;color:var(--ink2);transition:transform .15s}
+.chev.open{transform:rotate(90deg)}
+tr.in-grp td:nth-child(2){padding-left:34px}
 .cat-h{display:flex;align-items:center;gap:8px;font-weight:800;margin:4px 0 6px}
 .cat-dot{width:12px;height:12px;border-radius:3px;flex:none}
 @media(max-width:760px){
@@ -321,6 +329,33 @@ function render(){
 }
 window.setTab=k=>{ if(running){ toast('분석이 끝난 뒤에 옮겨 주세요'); return; } TAB=k; history.replaceState(null,'','?tab='+k); render(); };
 
+/* ══════════ 묶음 목록 (v1.3) ══════════
+   학습지는 학년 → 단원, 학생은 학년 → 학급으로 묶어 접고 편다. 묶음 줄의 체크박스는 그 안의 것을 모두 고른다/푼다
+   (일부만 골랐으면 반쯤 찬 표시). 연 것·닫은 것은 이 화면에 있는 동안 기억한다(새로고침하면 기본값).
+   묶음 줄은 렌더할 때마다 GKEYS 에 [키, 안의 id 목록] 을 적고 핸들러는 그 번호로 부른다 — 학급 키 같은 값을 onclick 글자에 넣지 않으려고. */
+const G_OPEN=new Set(), G_CLOSED=new Set();
+let GKEYS=[];
+const grpIsOpen=(key,dflt)=>G_OPEN.has(key)?true:G_CLOSED.has(key)?false:dflt;
+/** 묶음 줄 한 줄 — cols = 표의 칸 수 */
+function grpRow(kind, key, level, title, sub, ids, sel, open, cols){
+  const gi=GKEYS.push({kind, key, ids})-1;
+  const n=ids.filter(id=>sel.has(id)).length;
+  return `<tr class="grp-row lv${level}" onclick="grpToggle(${gi},${open?1:0})">
+    <td><input type="checkbox" onclick="event.stopPropagation()" onchange="grpPick(${gi},this.checked)" ${ids.length&&n===ids.length?'checked':''} ${n&&n<ids.length?'data-ind="1"':''} ${ids.length?'':'disabled'}></td>
+    <td colspan="${cols-1}"><div class="grp-t"><span class="chev ${open?'open':''}">▸</span><b>${title}</b><span class="small muted">${sub}</span>
+      ${n?`<span class="badge" style="background:var(--vio-lt);color:var(--violet);margin-left:auto">선택 ${n}/${ids.length}</span>`:''}</div></td></tr>`;
+}
+window.grpToggle=(gi,wasOpen)=>{ const g=GKEYS[gi]; if(!g) return;
+  if(wasOpen){ G_OPEN.delete(g.key); G_CLOSED.add(g.key); } else { G_CLOSED.delete(g.key); G_OPEN.add(g.key); } render(); };
+window.grpPick=(gi,on)=>{ const g=GKEYS[gi]; if(!g) return; const set=g.kind==='w'?selWs:selStu;
+  g.ids.forEach(id=>{ if(on) set.add(id); else set.delete(id); }); render(); };
+/** 모두 펼치기·접기 — 지금 목록의 묶음 전부 */
+window.grpAll=(kind,open)=>{ GKEYS.filter(g=>g.kind===kind).forEach(g=>{ if(open){ G_CLOSED.delete(g.key); G_OPEN.add(g.key); } else { G_OPEN.delete(g.key); G_CLOSED.add(g.key); } }); render(); };
+/** 렌더 뒤 반쯤 고른 묶음의 체크박스를 indeterminate 로 */
+function markIndeterminate(){ document.querySelectorAll('input[data-ind="1"]').forEach(e=>{ e.indeterminate=true; }); }
+const gradeOfUnit=u=>u?.grade!=null&&u.grade!==''?String(u.grade):'';
+const gradeLabel=g=>g?`${g}학년`:'학년 미지정';
+
 /* ══════════ 📝 학습지 오답 분석 ══════════ */
 function wsRowsData(){
   return WORKSHEETS.filter(ws=>ws.type!=='review' && (!F.grade || String(UNIT_MAP[ws.unitId]?.grade)===F.grade) && (!F.unit || ws.unitId===F.unit))
@@ -349,7 +384,7 @@ function renderWs(){
     <div class="card"><div class="card-body">
       <div class="row" style="margin-bottom:8px">
         <select onchange="setF('grade',this.value)"><option value="">전체 학년</option>${[1,2,3].map(g=>`<option value="${g}" ${F.grade==g?'selected':''}>${g}학년</option>`).join('')}</select>
-        <select onchange="setF('unit',this.value)"><option value="">전체 단원</option>${units.map(u=>`<option value="${esc(u.id)}" ${F.unit===u.id?'selected':''}>${esc(u.title)}</option>`).join('')}</select>
+        <select onchange="setF('unit',this.value)"><option value="">전체 단원</option>${unitOptgroups(units, F.unit)}</select>
         <label class="small"><input type="checkbox" ${F.onlyRec?'checked':''} onchange="setF('onlyRec',this.checked)"> 풀이 기록 있는 학습지만</label>
       </div>
       <div class="row small" style="margin-bottom:4px"><b>🕳 예상 오답</b>
@@ -369,24 +404,52 @@ function renderWs(){
     </div></div>
     ${progressBox()}
     <div class="card" style="overflow-x:auto">
-      <div class="card-hdr"><span class="card-title">학습지 ${rows.length}개</span>${legendHtml()}</div>
+      <div class="card-hdr"><span class="card-title">학습지 ${rows.length}개</span>
+        <span class="row"><button class="btn" onclick="grpAll('w',true)">모두 펼치기</button><button class="btn" onclick="grpAll('w',false)">모두 접기</button></span>${legendHtml()}</div>
       <table><thead><tr>
         <th><input type="checkbox" onchange="pickWs(this.checked?'all':'none')" ${rows.length&&rows.every(r=>selWs.has(r.ws.id))?'checked':''}></th>
         <th>학습지</th><th class="hide-sm">푼 학생</th><th>🕳 예상 오답</th><th>📊 빈출 오답</th><th class="hide-sm" style="min-width:110px">유형 분포 (빈출·학생 수)</th>
-      </tr></thead><tbody>${rows.map(r=>{
+      </tr></thead><tbody>${wsTreeHtml(rows, r=>{
         const needP=needsPred(r), needF=needsFreq(r);
-        return `<tr>
+        return `<tr class="in-grp">
           <td><input type="checkbox" ${selWs.has(r.ws.id)?'checked':''} onchange="toggleWs('${esc(r.ws.id)}',this.checked)"></td>
           <td><a href="#" onclick="openWsDetail('${esc(r.ws.id)}');return false" style="color:var(--ink);font-weight:600">${esc(r.ws.title||r.ws.id)}</a>
-            <div class="small muted">${esc(UNIT_MAP[r.ws.unitId]?.title||'')} · 문항 ${(r.ws.questions||[]).length}</div></td>
+            <div class="small muted">문항 ${(r.ws.questions||[]).length}${r.ws.type==='exam'?' · 시험지':''}</div></td>
           <td class="hide-sm">${r.fs.students}명</td>
           <td>${r.pred?`${r.pred}개${r.predUntyped?` <span class="badge" style="background:#f5f5f4;color:#78716c">미분류 ${r.predUntyped}</span>`:''}<div class="small muted">${fmtAt(r.rv?.at).slice(0,10)}</div>`:'<span class="muted">없음</span>'}
             ${needP?'<div><span class="badge" style="background:var(--vio-lt);color:var(--violet)">분석 대상</span></div>':''}</td>
           <td>${r.fs.total?`지금 ${r.fs.total}개${r.wa?` · 분석 ${r.wa.items.length}`:''}${r.fs.fresh&&r.wa?` <span class="badge" style="background:var(--amb-lt);color:var(--amber)">새로 ${r.fs.fresh}</span>`:''}${r.waUntyped?` <span class="badge" style="background:#f5f5f4;color:#78716c">미분류 ${r.waUntyped}</span>`:''}
               <div class="small muted">${r.wa?fmtAt(r.wa.at).slice(0,10):'아직 분석 안 함'}</div>`:`<span class="muted small">${r.fs.students?`같은 오답 ${FREQ_MIN_STUDENTS}명 이상 없음`:'풀이 없음'}</span>`}
             ${needF?'<div><span class="badge" style="background:var(--vio-lt);color:var(--violet)">분석 대상</span></div>':''}</td>
-          <td class="hide-sm">${typeBar(r.counts.byCat,'stu')}</td></tr>`; }).join('') || '<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">조건에 맞는 학습지가 없습니다</td></tr>'}</tbody></table>
+          <td class="hide-sm">${typeBar(r.counts.byCat,'stu')}</td></tr>`; }) || '<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">조건에 맞는 학습지가 없습니다</td></tr>'}</tbody></table>
     </div>`;
+  markIndeterminate();
+}
+/** 학습지 목록을 학년 → 단원으로 묶어 그린다 (v1.3). 단원 순서는 units 의 order, 학습지는 단원 안 order.
+    기본: 학년은 펼침, 단원은 학습지가 12개 이하로 보이거나 단원을 골라 두었으면 펼침 */
+function wsTreeHtml(rows, rowHtml){
+  if(!rows.length) return '';
+  GKEYS=GKEYS.filter(g=>g.kind!=='w');
+  const byGrade=new Map();
+  rows.forEach(r=>{ const u=UNIT_MAP[r.ws.unitId]; const g=gradeOfUnit(u)||String(r.ws.grade||'');
+    if(!byGrade.has(g)) byGrade.set(g,new Map()); const m=byGrade.get(g); const uk=r.ws.unitId||'';
+    if(!m.has(uk)) m.set(uk,[]); m.get(uk).push(r); });
+  const unitOrder=new Map(UNITS.map((u,i)=>[u.id,i]));
+  const openUnitDflt=rows.length<=12 || !!F.unit;
+  const sumTxt=l=>{ const need=l.filter(r=>needsPred(r)||needsFreq(r)).length; const stu=Math.max(0,...l.map(r=>r.fs.students));
+    return `학습지 ${l.length}개${need?` · 분석 대상 ${need}개`:''}${stu?` · 푼 학생 최대 ${stu}명`:''}`; };
+  let h='';
+  [...byGrade.keys()].sort((a,b)=>(a||'9').localeCompare(b||'9')).forEach(g=>{
+    const units=byGrade.get(g); const all=[...units.values()].flat();
+    const gk='wg:'+g, gOpen=grpIsOpen(gk,true);
+    h+=grpRow('w', gk, 1, esc(gradeLabel(g)), sumTxt(all), all.map(r=>r.ws.id), selWs, gOpen, 6);
+    [...units.keys()].sort((a,b)=>(unitOrder.get(a)??999)-(unitOrder.get(b)??999)).forEach(uk=>{
+      const l=units.get(uk); const uKey='wu:'+uk, uOpen=grpIsOpen(uKey,openUnitDflt);
+      const row=grpRow('w', uKey, 2, '📂 '+esc(UNIT_MAP[uk]?.title||uk||'단원 미지정'), sumTxt(l), l.map(r=>r.ws.id), selWs, uOpen, 6);   // 접힌 학년 안의 단원도 등록(모두 펼치기용)
+      if(gOpen){ h+=row; if(uOpen) h+=l.map(rowHtml).join(''); }
+    });
+  });
+  return h;
 }
 window.setF=(k,v)=>{ F[k]=v; if(k==='grade') F.unit=''; render(); };
 window.setOpt=(k,v)=>{ OPT[k]=v; render(); };
@@ -559,10 +622,45 @@ window.mdClear=async kind=>{
 
 /* ══════════ 👤 학생 성취 분석 ══════════ */
 const clsLabel=c=>`${c.grade}학년 ${c.classNum}반`;
+/** 학생 → 학급 {key, label, grade, num, year} — 학급이 여러 해에 걸쳐 있으면 이름에 연도를 붙인다 */
 function stuClassOf(email){
   const e=String(email).toLowerCase();
-  for(const [k,c] of Object.entries(classes)) if((c.students||[]).some(x=>String(x).toLowerCase()===e)) return {key:k, label:clsLabel(c)};
-  return {key:'', label:'학급 미지정'};
+  const years=new Set(Object.values(classes).map(c=>c?.year).filter(Boolean));
+  for(const [k,c] of Object.entries(classes)) if((c.students||[]).some(x=>String(x).toLowerCase()===e))
+    return {key:k, label:(years.size>1&&c.year?c.year+' ':'')+clsLabel(c), grade:String(c.grade??''), num:+c.classNum||0, year:c.year||''};
+  return {key:'', label:'학급 미지정', grade:'', num:0, year:''};
+}
+/** 단원 목록을 학년별 optgroup 으로 */
+function unitOptgroups(units, cur, prefix=''){
+  const by=new Map(); units.forEach(u=>{ const g=gradeOfUnit(u); if(!by.has(g)) by.set(g,[]); by.get(g).push(u); });
+  return [...by.keys()].sort((a,b)=>(a||'9').localeCompare(b||'9')).map(g=>`<optgroup label="${esc(gradeLabel(g))}">${by.get(g).map(u=>
+    `<option value="${prefix}${esc(u.id)}" ${cur===u.id?'selected':''}>${esc(u.title)}</option>`).join('')}</optgroup>`).join('');
+}
+/** 학생 목록을 학년 → 학급으로 묶어 그린다 (v1.3). 학급은 반 번호 순, 학급이 없는 학생은 맨 끝 「학급 미지정」.
+    기본: 학년은 펼침, 학급은 학생이 15명 이하로 보이거나 학급을 골랐거나 이름을 검색 중이면 펼침 */
+function stuTreeHtml(rows, rowHtml, newer){
+  if(!rows.length) return '';
+  GKEYS=GKEYS.filter(g=>g.kind!=='s');
+  const byGrade=new Map();
+  rows.forEach(r=>{ const g=r.cls.key?r.cls.grade:'-'; if(!byGrade.has(g)) byGrade.set(g,new Map());
+    const m=byGrade.get(g); if(!m.has(r.cls.key)) m.set(r.cls.key,[]); m.get(r.cls.key).push(r); });
+  const openClsDflt=rows.length<=15 || !!F.cls || !!F.q.trim();
+  const sumTxt=l=>{ const f=l.filter(r=>r.sum.avgFirst!=null); const saved=l.filter(r=>r.saved).length; const nw=l.filter(newer).length;
+    return `학생 ${l.length}명${f.length?` · 평균 첫 시도 ${Math.round(f.reduce((s,r)=>s+r.sum.avgFirst,0)/f.length)}%`:''} · 분석 ${saved}명${nw?` · 새 기록 ${nw}명`:''}`; };
+  let h='';
+  [...byGrade.keys()].sort((a,b)=>(a==='-'?'9':a).localeCompare(b==='-'?'9':b)).forEach(g=>{
+    const clsMap=byGrade.get(g); const all=[...clsMap.values()].flat();
+    const noClass=g==='-';
+    const gk='sg:'+g, gOpen=grpIsOpen(gk,true);
+    h+=grpRow('s', gk, 1, noClass?'학급 미지정':esc(gradeLabel(g)), sumTxt(all), all.map(r=>r.uid), selStu, gOpen, 7);
+    if(noClass){ if(gOpen) h+=all.map(rowHtml).join(''); return; }
+    [...clsMap.entries()].sort((a,b)=>(a[1][0].cls.year||'').localeCompare(b[1][0].cls.year||'') || a[1][0].cls.num-b[1][0].cls.num).forEach(([ck,l])=>{
+      const cKey='sc:'+ck, cOpen=grpIsOpen(cKey,openClsDflt);
+      const row=grpRow('s', cKey, 2, '🏫 '+esc(l[0].cls.label), sumTxt(l), l.map(r=>r.uid), selStu, cOpen, 7);   // 접힌 학년 안의 학급도 등록
+      if(gOpen){ h+=row; if(cOpen) h+=l.map(rowHtml).join(''); }
+    });
+  });
+  return h;
 }
 const stuName=uid=>Object.values(allData[uid]||{}).find(r=>r.studentName)?.studentName||uid.split('@')[0];
 function stuTargets(uid){
@@ -577,7 +675,7 @@ function stuRowsData(){
     return { uid, name:stuName(uid), cls:c, targets, sum:studentSummary(allData[uid], targets, CLASS_AVG),
       saved:savedStu[uid]?.[stuAiKey(F.scope,F.scopeUnit)]||null };
   }).filter(r=>(!F.cls || r.cls.key===F.cls) && r.targets.length && (!q || r.name.toLowerCase().includes(q) || r.uid.includes(q)))
-    .sort((a,b)=>a.cls.label.localeCompare(b.cls.label,'ko') || a.name.localeCompare(b.name,'ko'));
+    .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 }
 async function renderStu(){
   if(!savedStuLoaded || savedStuLoaded==='each'){ $('content').innerHTML='<div class="muted" style="padding:30px;text-align:center">저장된 분석을 불러오는 중…</div>'; await loadSavedStu(Object.keys(allData)); }
@@ -607,9 +705,10 @@ async function renderStu(){
     <div class="pg-sub">학생을 체크해 한꺼번에 분석합니다. 정답률·풀이 이력·<b>오답 유형 분포</b>와 <b>시간에 따른 변화</b>(학습지마다 난이도가 달라 <b>학급 평균과의 차이</b>로 봅니다)를 바탕으로 AI 가 성취와 지도 방향을 정리합니다.</div>
     <div class="card"><div class="card-body">
       <div class="row" style="margin-bottom:8px">
-        <select onchange="setF('cls',this.value)"><option value="">전체 학급</option>${Object.entries(classes).sort((a,b)=>clsLabel(a[1]).localeCompare(clsLabel(b[1]),'ko')).map(([k,c])=>`<option value="${esc(k)}" ${F.cls===k?'selected':''}>${esc(clsLabel(c))}</option>`).join('')}</select>
+        <select onchange="setF('cls',this.value)"><option value="">전체 학급</option>${[...new Set(Object.values(classes).map(c=>String(c?.grade??'')))].sort().map(g=>`<optgroup label="${esc(gradeLabel(g))}">${
+          Object.entries(classes).filter(([,c])=>String(c?.grade??'')===g).sort((a,b)=>(+a[1].classNum||0)-(+b[1].classNum||0)).map(([k,c])=>`<option value="${esc(k)}" ${F.cls===k?'selected':''}>${esc(clsLabel(c))}</option>`).join('')}</optgroup>`).join('')}</select>
         <input type="text" placeholder="이름 검색" value="${esc(F.q)}" onchange="setF('q',this.value)" style="width:130px">
-        <select onchange="setScope(this.value)"><option value="all" ${F.scope==='all'?'selected':''}>전체 학습 기준</option>${scopeUnits.map(u=>`<option value="unit:${esc(u.id)}" ${F.scope==='unit'&&F.scopeUnit===u.id?'selected':''}>대단원: ${esc(u.title)}</option>`).join('')}</select>
+        <select onchange="setScope(this.value)"><option value="all" ${F.scope==='all'?'selected':''}>전체 학습 기준</option>${unitOptgroups(scopeUnits, F.scope==='unit'?F.scopeUnit:'', 'unit:')}</select>
       </div>
       <div class="row">
         <button class="btn" onclick="pickStu('new')">분석이 없거나 새 기록이 있는 학생 고르기</button>
@@ -621,21 +720,23 @@ async function renderStu(){
     ${progressBox()}
     ${agg}
     <div class="card" style="overflow-x:auto">
-      <div class="card-hdr"><span class="card-title">학생 ${rows.length}명</span><span class="small muted">첫 시도 = 처음 낸 답이 바로 맞은 비율 · 대비 = 같은 학습지를 푼 학생 평균과의 차이</span></div>
+      <div class="card-hdr"><span class="card-title">학생 ${rows.length}명</span>
+        <span class="row"><button class="btn" onclick="grpAll('s',true)">모두 펼치기</button><button class="btn" onclick="grpAll('s',false)">모두 접기</button></span>
+        <span class="small muted">첫 시도 = 처음 낸 답이 바로 맞은 비율 · 대비 = 같은 학습지를 푼 학생 평균과의 차이</span></div>
       <table><thead><tr>
         <th><input type="checkbox" onchange="pickStu(this.checked?'all':'none')" ${rows.length&&rows.every(r=>selStu.has(r.uid))?'checked':''}></th>
-        <th>학생</th><th class="hide-sm">학급</th><th>학습지</th><th>첫 시도</th><th>학급 대비</th><th class="hide-sm">최근 풀이</th><th>저장된 분석</th>
-      </tr></thead><tbody>${rows.map(r=>`<tr>
+        <th>학생</th><th>학습지</th><th>첫 시도</th><th>학급 대비</th><th class="hide-sm">최근 풀이</th><th>저장된 분석</th>
+      </tr></thead><tbody>${stuTreeHtml(rows, r=>`<tr class="in-grp">
         <td><input type="checkbox" ${selStu.has(r.uid)?'checked':''} onchange="toggleStu('${esc(r.uid)}',this.checked)"></td>
         <td><a href="#" onclick="openStuDetail('${esc(r.uid)}');return false" style="color:var(--ink);font-weight:600">${esc(r.name)}</a></td>
-        <td class="hide-sm small">${esc(r.cls.label)}</td>
         <td>${r.sum.n}</td>
         <td>${r.sum.avgFirst!=null?r.sum.avgFirst+'%':'-'}</td>
         <td>${r.sum.avgDiff!=null?fmtDiff(r.sum.avgDiff):'-'}</td>
         <td class="hide-sm small">${esc(r.sum.last)}</td>
         <td class="small">${r.saved?`${fmtAt(r.saved.at).slice(0,10)}${newer(r)?' <span class="badge" style="background:var(--amb-lt);color:var(--amber)">새 기록</span>':''}`:'<span class="muted">없음</span>'}</td>
-      </tr>`).join('')||'<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">조건에 맞는 학생이 없습니다</td></tr>'}</tbody></table>
+      </tr>`, newer)||'<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">조건에 맞는 학생이 없습니다</td></tr>'}</tbody></table>
     </div>`;
+  markIndeterminate();
 }
 const fmtDiff=d=>`<span style="color:${d>=0?'var(--green)':'var(--red)'};font-weight:700">${d>0?'+':''}${d}</span>`;
 window.setScope=v=>{ if(v==='all'){ F.scope='all'; F.scopeUnit=''; } else { F.scope='unit'; F.scopeUnit=v.slice(5); } render(); };

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="qna-v2.0">
+<meta name="app-version" content="qna-v2.1">
 <script src="site-nav.js?v=1.1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>질문·답변 · 수학 학습지+</title>
@@ -190,12 +190,13 @@ const db = getFirestore(fbApp);
    질문 문서(questions/{id}) 필드:
      createdAt · email · name · unitTitle · wsId · wsTitle · qId · qNo · text · driveFileId · driveUrl · status('open'|'answered')
      교사 답변: replyText · replyDrawing(투명 PNG) · repliedAt · repliedBy · replyKind('oral' 이면 직접 설명)
-     학생 반응: seenAt · understood(true|false|null) · understoodAt · hidden */
+     학생 반응: seenAt · understood(true|false|null) · understoodAt · studentNote(「아직 모르겠어요」 뒤 짧은 메모, 200자) · hidden */
 let user=null, isTeacher=false, questions=[], unsub=null;
 let tab="wait", stuFilter="", groupBy=false;   // 교사 보기 상태
 const drafts={};          // 교사가 쓰던 답변 {id:{text,drawing,open}} — 실시간 갱신으로 화면이 다시 그려져도 살아남는다
 let pendingRender=false;  // 글 쓰는 중에 새 질문이 오면 다시 그리기를 미룬다
 let edId=null;            // 지금 필기 편집기가 열려 있는 질문
+const noteOpen={}, noteDraft={};   // 학생: 「아직 모르겠어요」 메모 입력칸 열림 · 쓰던 글
 const seenMarked=new Set();
 let seenObserver=null;
 
@@ -424,9 +425,19 @@ function cardHTML(q){
   }else if(answered){
     extra=`<div class="u-row">이제 이해했나요?
         <button class="btn ${q.understood===true?"done":""}" onclick="setUnderstood('${id}',true)">✅ 이해했어요</button>
-        <button class="btn ${q.understood===false?"warn":""}" onclick="setUnderstood('${id}',false)">🤔 아직 모르겠어요</button>
+        <button class="btn ${q.understood===false?"warn":""}" onclick="openNote('${id}')">🤔 아직 모르겠어요</button>
       </div>
-      ${q.understood===false?`<div class="u-row" style="color:var(--amber)">선생님께 다시 알렸어요. 답변이 새로 오면 🔔로 알려 드려요.</div>`:""}`;
+      ${noteOpen[q.id]
+        ? `<div class="composer">
+            <textarea id="sn-${id}" maxlength="200" placeholder="어디가 아직 어려운지 짧게 적어 주세요 (안 써도 보낼 수 있어요)"
+              oninput="noteText('${id}',this.value)">${esc(noteDraft[q.id]!==undefined ? noteDraft[q.id] : (q.studentNote||""))}</textarea>
+            <div class="c-row"><button class="btn warn" onclick="sendNote('${id}')">선생님께 보내기</button>
+              <button class="btn" onclick="closeNote('${id}')">취소</button></div></div>`
+        : (q.understood===false
+            ? `<div class="u-row" style="color:var(--amber)">선생님께 다시 알렸어요. 답변이 새로 오면 🔔로 알려 드려요.</div>
+               ${q.studentNote?`<div class="reply-box" style="background:#fffbeb;border-color:#fde68a"><div class="reply-head" style="color:#b45309">내 메모</div><div class="reply-text">${esc(q.studentNote)}</div></div>`:""}
+               <div class="u-row"><button class="btn" onclick="openNote('${id}')">${q.studentNote?"메모 고치기":"메모 남기기"}</button></div>`
+            : "")}`;
   }
 
   const foot=isTeacher
@@ -452,6 +463,7 @@ function cardHTML(q){
       <div class="q-text ${q.text?"":"empty"}">${q.text?esc(q.text):"(질문 글 없이 보냈습니다 — 필기를 봐 주세요)"}</div>
       ${shotHTML(q)}
       ${replyHTML(q)}
+      ${isTeacher && q.understood===false && q.studentNote ? `<div class="reply-box" style="background:#fef2f2;border-color:#fecaca"><div class="reply-head" style="color:#b91c1c">🤔 학생 메모</div><div class="reply-text">${esc(q.studentNote)}</div></div>` : ""}
       ${extra}
       ${foot}
     </div>`;
@@ -464,7 +476,7 @@ window.toggleOv=function(id){ $("sw-"+id)?.classList.toggle("hide-ov"); };
 /* 학생: 답변 카드가 화면에 보이면 「읽음」으로 표시 → 🔔 배지가 꺼진다 */
 function observeUnseen(){
   if(seenObserver){ try{seenObserver.disconnect();}catch(e){} seenObserver=null; }
-  if(isTeacher || !("IntersectionObserver" in window)) return;
+  if(isTeacher || typeof IntersectionObserver!=="function") return;
   const cards=[...document.querySelectorAll('.q-card[data-unseen="1"]')];
   if(!cards.length) return;
   seenObserver=new IntersectionObserver(entries=>{
@@ -499,7 +511,7 @@ window.sendReply=async function(id){
     await updateDoc(doc(db,"questions",id),{
       status:"answered", replyText:text, replyDrawing:d.drawing||null, replyKind:"written",
       repliedAt:nowIso(), repliedBy:(user.displayName||user.email),
-      seenAt:null, understood:null, understoodAt:null      // 새 답변이므로 학생 반응은 처음부터
+      seenAt:null, understood:null, understoodAt:null, studentNote:null      // 새 답변이므로 학생 반응은 처음부터
     });
     delete drafts[id];
     pendingRender=false; render();
@@ -516,7 +528,7 @@ window.markOral=async function(id){
     await updateDoc(doc(db,"questions",id),{
       status:"answered", replyText:"", replyDrawing:null, replyKind:"oral",
       repliedAt:nowIso(), repliedBy:(user.displayName||user.email),
-      seenAt:null, understood:null, understoodAt:null
+      seenAt:null, understood:null, understoodAt:null, studentNote:null
     });
     delete drafts[id];
   }catch(e){ alert("처리 실패: "+e.message); }
@@ -536,7 +548,26 @@ window.teacherDelete=async function(id){
 window.setUnderstood=async function(id,v){
   const q=questions.find(x=>x.id===id); if(!q) return;
   try{
-    await updateDoc(doc(db,"questions",id),{ understood:v, understoodAt:nowIso(), seenAt:q.seenAt||nowIso() });
+    await updateDoc(doc(db,"questions",id),{ understood:v, understoodAt:nowIso(), seenAt:q.seenAt||nowIso(), studentNote:null });
+    delete noteOpen[id]; delete noteDraft[id];
+  }catch(e){ alert("저장하지 못했어요: "+e.message); }
+};
+
+/* 🤔 아직 모르겠어요 — 짧은 메모(선택)와 함께 알린다 */
+window.openNote=function(id){
+  noteOpen[id]=true; render();
+  setTimeout(()=>{ const t=$("sn-"+id); if(t) t.focus(); },0);
+};
+window.closeNote=function(id){ delete noteOpen[id]; delete noteDraft[id]; render(); };
+window.noteText=function(id,v){ noteDraft[id]=v; };
+window.sendNote=async function(id){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  const ta=$("sn-"+id);
+  const note=String(ta ? ta.value : (noteDraft[id]||"")).trim().slice(0,200);
+  try{
+    await updateDoc(doc(db,"questions",id),{ understood:false, understoodAt:nowIso(), seenAt:q.seenAt||nowIso(), studentNote:note||null });
+    delete noteOpen[id]; delete noteDraft[id];
+    pendingRender=false; render();
   }catch(e){ alert("저장하지 못했어요: "+e.message); }
 };
 

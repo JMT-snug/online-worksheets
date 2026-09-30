@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="11.0">
-  <script src="site-nav.js?v=1.1"></script>
+  <meta name="app-version" content="11.1">
+  <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -938,8 +938,6 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, where, orderBy, updateDoc, onSnapshot, increment}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const FB = {
   apiKey:            "AIzaSyAW6nJ_r0PXyWc5II6QzrOuljBsyWhX4dA",
@@ -974,7 +972,6 @@ const GRADE_COLOR = {1:"#1d4ed8",2:"#15803d",3:"#b91c1c"};
 const fbApp   = initializeApp(FB);
 const auth    = getAuth(fbApp);
 const db      = initializeFirestore(fbApp,{localCache:persistentLocalCache()});
-const storage = getStorage(fbApp);
 
 let user = null, wsProgress = {}, curWS = null;
 window._dbg=()=>({curWS,curQIdx,answered,attempts,wrongAnswers,_wsDataLoaded});
@@ -1436,14 +1433,21 @@ onAuthStateChanged(auth, async u => {
   user = u;
   try{ claimSingleWindow(); }catch(e){ console.warn('[창 하나만 준비 실패]', e); }   // 🪟 이 창이 이 계정의 유일한 창이라고 알린다 (v8.95)
   // 준비 단계는 각각 독립적으로 보호 — 하나가 실패해도 학생이 로그인 화면에 갇히지 않도록
+  /* v11.1: 서로 기다릴 필요 없는 읽기는 한꺼번에 시작한다 (예전에는 교사 목록→커리큘럼→시험 설정→교사 데이터→진도를 차례로 기다렸다).
+     · 교사 목록(TEACHER_EMAILS 병합)은 헤더·교사 데이터가 쓰므로 그것만 먼저 기다린다
+     · 커리큘럼·내 진도는 교사 목록과 무관 → 처음부터 같이 시작
+     · 시험 설정은 커리큘럼(WORKSHEETS)이 있어야 하고, 교사 데이터는 교사 목록이 있어야 한다 */
+  const pCur = loadCurriculum().catch(e=>{ console.error('[커리큘럼 로드 실패]', e); });
+  try{ window._progPre = fetchMyProgress(pCur); window._progPre.catch(()=>{}); }catch(e){ window._progPre = null; }
   try{ await loadExtraTeachers(); }catch(e){ console.warn('[교사 목록 준비 실패]', e); } // 담당 교사 병합 후 헤더 렌더
   try{ loadErrorReportConfig(); }catch(e){ console.warn('[오류신고 설정 준비 실패]', e); } // 신고 스크린샷 Drive 폴더 ID 미리 확보
   try{ updateHeader(u); }catch(e){ console.warn('[헤더 렌더 실패]', e); }
-  try{ await loadCurriculum(); }catch(e){ console.error('[커리큘럼 로드 실패]', e); }
-  try{ await loadExamConfig(); }catch(e){ console.warn('[시험 설정 로드 실패]', e); }   // 📝 시험 대비 (v8.78)
+  const pTeacher = loadTeacherData().catch(e=>{ console.warn('[교사 데이터 로드 실패]', e); });
+  await pCur;
+  const pExam = loadExamConfig().catch(e=>{ console.warn('[시험 설정 로드 실패]', e); });   // 📝 시험 대비 (v8.78)
   try{ watchRemoteNotices(); }catch(e){ console.warn('[교사 공지 구독 실패]', e); }   // 📢 교사가 보내는 공지 (v8.88)
   try{ watchMyQuestions(); }catch(e){ console.warn('[내 질문 구독 실패]', e); }   // ❓ 선생님 답변 알림 (v11.0)
-  try{ await loadTeacherData(); }catch(e){ console.warn('[교사 데이터 로드 실패]', e); }
+  await Promise.all([pExam, pTeacher]);
   try{
     await loadDash();
   }catch(e){
@@ -1500,24 +1504,41 @@ function updateHeader(u) {
 }
 
 /* ── DASHBOARD ── */
+/* 내 학습지 기록 전부 {wsId: 데이터} — 컬렉션 한 번 읽기 (실패하면 학습지별 읽기로 대체) */
+async function fetchMyProgress(curReady){
+  const byId = {};
+  try{
+    const snap = await getDocs(collection(db,"records",user.email,"worksheets"));
+    snap.forEach(d=>{ byId[d.id] = d.data(); });
+  }catch(e){
+    console.warn("[진도 일괄 읽기 실패 — 학습지별로 읽습니다]", e.message);
+    if(curReady) await curReady;   // 학습지 목록(WORKSHEETS)이 있어야 어느 문서를 읽을지 안다
+    await Promise.all(WORKSHEETS.map(async ws=>{
+      if (ws.type!=="review" && !ws.questions?.length) return;
+      try{
+        const snap = await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
+        if (snap.exists()) byId[ws.id] = snap.data();
+      }catch(inner){ /* 개별 문서 오류 무시 */ }
+    }));
+  }
+  return byId;
+}
 async function loadDash() {
   showPage("dash-page");
   const name = user.displayName?.split(" ")[0] || "학생";
   document.getElementById("dash-greet").textContent = `안녕하세요, ${name}님! 👋`;
   wsProgress = {};
   try {
+    // records: 통합 진도/결과 — 내 기록 컬렉션을 한 번에 읽는다 (v11.1: 학습지마다 getDoc 을 차례로 기다리던 것을 대체.
+    // 로그인 직후 준비와 겹치도록 onAuthStateChanged 가 미리 시작해 둔 것이 있으면 그것을 쓴다)
+    const pre = window._progPre; window._progPre = null;
+    const byId = await (pre || fetchMyProgress());
     for (const ws of WORKSHEETS) {
       if (ws.type!=="review" && !ws.questions?.length) continue;
-      try {
-        // records: 통합 진도/결과
-        const snap = await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
-        if (snap.exists()){
-          const d=snap.data();
-          wsProgress[ws.id] = (d.isComplete||d.passed||d.completions) ? d : {...d, _inProgress:true};
-          console.log("[진도읽기]", ws.id, (d.isComplete||d.passed)?"완료":"진행중", (d.answeredCount||0)+"/"+(d.totalCount||"?"));
-        }
-      } catch(inner){ /* 개별 문서 오류 무시 */ }
+      const d = byId[ws.id];
+      if (d) wsProgress[ws.id] = (d.isComplete||d.passed||d.completions) ? d : {...d, _inProgress:true};
     }
+    console.log("[진도읽기]", Object.keys(wsProgress).length+"개");
   } catch(e) { console.warn("진도 로드 실패:", e.message); }
   refreshGradeNotif();
   if(curGrade===null){
@@ -6370,7 +6391,9 @@ async function submitQAns(){
       // 파일명: uid-이름-wsId-qId-시도번호.png
       const name=user.displayName||user.email.split("@")[0];
       const fileName=`${user.uid}-${name}-${curWS.id}-${q.id}-try${attempts[curQIdx]}.png`;
-      const storageRef=ref(storage,`wrongAnswers/${user.uid}/${fileName}`);
+      // v11.1: 쓰지 않는 모듈을 매번 받지 않도록 켜져 있을 때만 그 자리에서 불러온다
+      const { getStorage, ref, uploadString, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+      const storageRef=ref(getStorage(fbApp),`wrongAnswers/${user.uid}/${fileName}`);
       await uploadString(storageRef, imgData, "data_url");
       const url=await getDownloadURL(storageRef);
       wrongAnswers[curQIdx].imagePath=url; // 최신 오답 이미지로 덮어씀

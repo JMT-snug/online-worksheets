@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.31">
+<meta name="app-version" content="scoring-v1.32">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -438,19 +438,18 @@ onAuthStateChanged(auth, async u => {
   document.getElementById("hdr-user").style.display = "flex";
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   showPage("main-page");
-  await loadCurriculum();
-  await loadAllRecords();
+  await Promise.all([loadCurriculum(), loadClassInfo()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords)
   buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
   refreshFilterOptions();    // 네 목록을 서로 반응하도록 채움
   // 주소로 학습지를 지정해 왔으면(index 헤더의 '채점' 버튼) 그것을 우선한다
-  if(!applyWsFromUrl()) restoreState();
+  if(!(await applyWsFromUrl())) await restoreState();
 });
 
 /* index 의 헤더 '채점' 버튼이 ?ws=<학습지id> 를 달고 온다 — 그 학습지를 골라 둔다.
    (teacher.html·edit.html 도 같은 이름의 파라미터를 쓴다. 이름을 바꾸지 말 것.)
    문항까지는 못 고른다 — 어느 문항을 채점할지는 여기서 사람이 정하는 것이라
    sel-q 는 비워 두고 목록만 그 학습지 것으로 좁혀 준다. */
-function applyWsFromUrl(){
+async function applyWsFromUrl(){
   const wsId=new URLSearchParams(location.search).get('ws');
   if(!wsId) return false;
   const sel=document.getElementById('sel-ws');
@@ -461,7 +460,11 @@ function applyWsFromUrl(){
     return false;
   }
   sel.value=wsId;
-  onWsChange();
+  await onWsChange();   // 이 학습지의 기록을 읽은 뒤 목록을 다시 짠다
+  if(!graphRows.some(r=>r.wsId===wsId)){
+    toast('이 학습지는 채점할 그래프 답안이 없습니다');
+    return false;
+  }
   return true;
 }
 
@@ -487,42 +490,118 @@ async function loadCurriculum(){
   }catch(e){ console.error(e); }
 }
 
+/* 반 정보(teacher_data) — 학급 이름·담당 교사 범위. 기록을 읽기 전에 있어야 학습지별 읽기가 학생 목록을 안다 */
+async function loadClassInfo(){
+  try{
+    const clsSnap = await getDocs(collection(db, 'teacher_data'));
+    const map = {};
+    const clsTeacher = {}; // 반 이름 → 담당 교사 이메일
+    clsSnap.forEach(d => {
+      const data = d.data();
+      if(data.classes){
+        // 실제 구조: classes[key] = {year, grade, classNum, students:[이메일], teacher?}
+        Object.entries(data.classes).forEach(([key, c]) => {
+          if(!c || typeof c !== 'object') return;
+          const name = `${c.year}/${c.grade}학년 ${c.classNum}반`;
+          (c.students||[]).forEach(email => { map[String(email).toLowerCase()] = name; });
+          if(c.teacher) clsTeacher[name] = String(c.teacher).toLowerCase();
+        });
+      }
+    });
+    classMap = map;
+    console.log("[반 정보] 로드 완료", Object.keys(classMap).length, "명");
+    // 담당 교사(기본 교사 아님)는 담당 학급 학생의 답안만 채점 가능
+    myClsNames = BASE_TEACHER_EMAILS.includes(currentUser.email) ? null
+      : new Set(Object.keys(clsTeacher).filter(n => clsTeacher[n] === currentUser.email.toLowerCase()));
+    if(myClsNames) console.log("[담당 교사 범위]", [...myClsNames]);
+  }catch(e){ console.warn("[반 정보 로드 실패]", e.message); }
+}
+
+/* ── 기록 읽기 (v1.32) ──
+   예전에는 로그인 때 collectionGroup('worksheets') 로 **전교생 × 모든 학습지** 문서를 한꺼번에 읽었다
+   (그림 데이터가 든 문서라 느리고, 읽기 횟수도 학생 수 × 학습지 수).
+   지금은 학습지를 고를 때 그 학습지 것만 읽는다: 반 명단의 학생마다 records/{이메일}/worksheets/{학습지} 한 문서씩.
+   그래서 ① 반 명단에 없는 학생의 기록은 전체 읽기 전에는 보이지 않는다
+        ② 학생 기준으로 학습지를 넘나드는 피드백 모드와 💬 챗 안내는 전체가 필요해 그때 한 번 전체를 읽는다(ensureAllLoaded).
+   loadedWs: 읽은 학습지 id / allLoaded: 전체를 읽었는가 */
+let loadedWs = new Set();
+let allLoaded = false;
+const _wsLoading = {};      // wsId → 진행 중인 읽기
+let _allLoading = null;
+const WS_READ_CONCURRENCY = 24;
+
+function wsRecordsReady(wsId){ return allLoaded || loadedWs.has(wsId); }
+
+/* 한 학습지의 기록을 반 명단 학생마다 읽는다. force=true 면 이미 읽었어도 다시 읽는다(🔄 답안 최신화) */
+async function loadWsRecords(wsId, force){
+  if(!force && wsRecordsReady(wsId)) return;
+  if(_wsLoading[wsId]) return _wsLoading[wsId];
+  const p = (async()=>{
+    const emails = Object.keys(classMap);
+    const recs = {};
+    let next = 0, failed = 0;
+    const worker = async()=>{
+      while(next < emails.length){
+        const em = emails[next++];
+        try{
+          const snap = await getDoc(doc(db, 'records', em, 'worksheets', wsId));
+          if(snap.exists()) recs[em] = snap.data();
+        }catch(e){ failed++; }
+      }
+    };
+    await Promise.all(Array.from({length: Math.min(WS_READ_CONCURRENCY, emails.length)}, worker));
+    if(failed) console.warn('[기록] 읽기 실패', failed, '건 —', wsId);
+    if(emails.length && failed === emails.length) throw new Error('기록을 읽지 못했습니다');
+    if(!allLoaded) allRecords[wsId] = recs;   // 그 사이 전체 읽기가 끝났으면 그 결과(반 명단 밖 학생 포함)를 지키지 않는다
+    loadedWs.add(wsId);
+    console.log('[기록] 학습지 로드', wsId, Object.keys(recs).length + '건');
+  })();
+  _wsLoading[wsId] = p;
+  try{ await p; } finally{ delete _wsLoading[wsId]; }
+}
+
+/* 학습지 기록을 읽고 필터 색인을 다시 만든다 (읽는 동안 안내를 띄운다) */
+async function ensureWsLoaded(wsId){
+  if(wsRecordsReady(wsId)) return true;
+  toast('📥 답안 불러오는 중…', 60000);
+  try{
+    await loadWsRecords(wsId);
+    buildGraphRows();
+    toastHide();
+    return true;
+  }catch(e){
+    console.error(e);
+    toast('답안을 불러오지 못했습니다: ' + e.message, 4000);
+    return false;
+  }
+}
+
+/* 전체 기록(collectionGroup) — 반 명단 밖 학생까지 전교생 전부 */
 async function loadAllRecords(){
   try{
     const snap = await getDocs(collectionGroup(db, 'worksheets'));
-    allRecords = {};
+    const all = {};
     snap.forEach(d => {
       const parts = d.ref.path.split('/');
       const email = parts[1];
       const wsId = parts[3];
-      if(!allRecords[wsId]) allRecords[wsId] = {};
-      allRecords[wsId][email] = d.data();
+      if(!all[wsId]) all[wsId] = {};
+      all[wsId][email] = d.data();
     });
-    console.log("[기록] 로드 완료");
-    // 반 정보 로드 (teacher_data)
-    try{
-      const clsSnap = await getDocs(collection(db, 'teacher_data'));
-      classMap = {};
-      const clsTeacher = {}; // 반 이름 → 담당 교사 이메일
-      clsSnap.forEach(d => {
-        const data = d.data();
-        if(data.classes){
-          // 실제 구조: classes[key] = {year, grade, classNum, students:[이메일], teacher?}
-          Object.entries(data.classes).forEach(([key, c]) => {
-            if(!c || typeof c !== 'object') return;
-            const name = `${c.year}/${c.grade}학년 ${c.classNum}반`;
-            (c.students||[]).forEach(email => { classMap[String(email).toLowerCase()] = name; });
-            if(c.teacher) clsTeacher[name] = String(c.teacher).toLowerCase();
-          });
-        }
-      });
-      console.log("[반 정보] 로드 완료", Object.keys(classMap).length, "명");
-      // 담당 교사(기본 교사 아님)는 담당 학급 학생의 답안만 채점 가능
-      myClsNames = BASE_TEACHER_EMAILS.includes(currentUser.email) ? null
-        : new Set(Object.keys(clsTeacher).filter(n => clsTeacher[n] === currentUser.email.toLowerCase()));
-      if(myClsNames) console.log("[담당 교사 범위]", [...myClsNames]);
-    }catch(e){ console.warn("[반 정보 로드 실패]", e.message); }
-  }catch(e){ console.error(e); }
+    allRecords = all;
+    Object.keys(all).forEach(id => loadedWs.add(id));
+    allLoaded = true;
+    console.log("[기록] 전체 로드 완료");
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+async function ensureAllLoaded(){
+  if(allLoaded) return true;
+  if(!_allLoading){
+    toast('📥 전체 답안 불러오는 중… (처음 한 번만 오래 걸려요)', 120000);
+    _allLoading = loadAllRecords().then(ok=>{ _allLoading = null; ok ? toastHide() : toast('전체 답안을 불러오지 못했습니다', 4000); if(ok) buildGraphRows(); return ok; });
+  }
+  return _allLoading;
 }
 
 
@@ -844,6 +923,7 @@ function buildChatGridHtml(){
 
 window.openChatNotify=async function(){
   closeChatNotify();                       // 이미 열려 있으면 정리 (팝업이 겹쳐 보이던 문제 방지)
+  if(!(await ensureAllLoaded())) return;   // 모든 학습지의 안 푼 문제·오답을 모으므로 전체 기록이 필요하다 (v1.32)
   await loadChatHistory();                 // 24시간 중복 발송 방지용 이력
   window._wrongMap=collectWrongGraph();
 
@@ -1001,13 +1081,18 @@ window.resetFilters = function(){
   saveState();
   toast?.('필터를 초기화했습니다');
 };
-window.setMode = function(m){
+window.setMode = async function(m){
   curMode = (m==='feedback') ? 'feedback' : 'grade';
   document.body.classList.toggle('mode-feedback', curMode==='feedback');
   document.getElementById('mode-grade').classList.toggle('active', curMode==='grade');
   document.getElementById('mode-feedback').classList.toggle('active', curMode==='feedback');
   saveState();
   if(curMode==='feedback'){
+    if(!allLoaded){   // 학생 한 명의 여러 학습지 문항을 넘기므로 전체 기록이 필요하다 (v1.32)
+      await ensureAllLoaded();
+      if(curMode!=='feedback') return;
+      refreshFilterOptions();
+    }
     buildStuSelector();
     if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView();
   }else{
@@ -1120,7 +1205,17 @@ function refreshFilterOptions(){
   const wsRows=rowsFiltered('ws');
   const wsMap={};
   wsRows.forEach(r=>{ (wsMap[r.wsId]=wsMap[r.wsId]||{t:(r.unitTitle?r.unitTitle+' · ':'')+r.wsTitle, n:0}).n++; });
-  curWsId = fill('sel-ws', Object.entries(wsMap).map(([v,o])=>({v, t:`${o.t} (${o.n})`})), curWsId, '-- 학습지 선택 --');
+  // 학습지 순서대로: 읽은 학습지는 답안 건수와 함께, 아직 읽지 않은 학습지는 건수 없이 (고르면 그때 읽는다 — v1.32)
+  const wsOpts=[];
+  WORKSHEETS.forEach(ws=>{
+    const o=wsMap[ws.id];
+    if(o) wsOpts.push({v:ws.id, t:`${o.t} (${o.n})`});
+    else if(!wsRecordsReady(ws.id)){
+      const unit=UNITS.find(u=>u.id===ws.unitId);
+      wsOpts.push({v:ws.id, t:(unit?unit.title+' · ':'')+ws.title});
+    }
+  });
+  curWsId = fill('sel-ws', wsOpts, curWsId, '-- 학습지 선택 --');
 
   // 문항: 학습지가 정해졌을 때만 의미 있음
   const qRows=rowsFiltered('q').filter(r=>!curWsId || r.wsId===curWsId);
@@ -1203,7 +1298,9 @@ window.refreshRecords = async function(btn){
   const prevIdx = curStuIdx;
   if(btn){ btn.disabled=true; btn.textContent='🔄 불러오는 중...'; }
   try{
-    await loadAllRecords();
+    await loadClassInfo();
+    if(allLoaded){ if(!(await loadAllRecords())) throw new Error('기록을 읽지 못했습니다'); }
+    else await Promise.all([...loadedWs].map(id=>loadWsRecords(id, true)));   // v1.32: 읽어 둔 학습지만 다시 읽는다
     buildGraphRows();   // 색인도 다시 만들어야 필터·상태 건수(미채점 등)에 새 답안이 반영된다
     if(curMode==='feedback'){
       buildStuSelector();
@@ -1228,21 +1325,19 @@ function saveState(){
   }catch(e){}
 }
 
-function restoreState(){
+async function restoreState(){
   try{
     const raw = sessionStorage.getItem('scoring_state');
     if(!raw) return false;
     const s = JSON.parse(raw);
     if(s.wsId && WORKSHEETS.find(w=>w.id===s.wsId)){
       document.getElementById('sel-ws').value = s.wsId;
-      onWsChange();
+      await onWsChange();   // 기록을 읽고 문항 목록이 채워진 뒤에 문항·학급·상태를 되돌린다
       if(s.qid){
-        setTimeout(()=>{
-          document.getElementById('sel-q').value = s.qid;
-          if(s.cls) document.getElementById('sel-cls').value = s.cls;
-          if(s.status) document.getElementById('sel-status').value = s.status;
-          onQChange();
-        }, 100);
+        document.getElementById('sel-q').value = s.qid;
+        if(s.cls) document.getElementById('sel-cls').value = s.cls;
+        if(s.status) document.getElementById('sel-status').value = s.status;
+        onQChange();
       }
       return true;
     }
@@ -1250,9 +1345,14 @@ function restoreState(){
   return false;
 }
 
-window.onWsChange = function(){
+window.onWsChange = async function(){
   curWsId = document.getElementById('sel-ws').value;
   curQid = '';                      // 학습지가 바뀌면 문항 선택 초기화
+  if(curWsId && !wsRecordsReady(curWsId)){
+    const want = curWsId;
+    await ensureWsLoaded(want);
+    if(curWsId !== want) return;    // 기다리는 사이 다른 학습지를 골랐으면 그쪽이 이어서 처리한다
+  }
   refreshFilterOptions();           // 나머지 목록도 이 선택에 맞춰 갱신
   saveState();
   if(curMode==='feedback'){ buildStuSelector(); if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView(); return; }
@@ -1792,12 +1892,15 @@ function renderStats(){
   `;
 }
 
-function toast(msg){
+let _toastTimer = null;
+function toast(msg, ms){
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 2000);
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>el.classList.remove('show'), ms || 2000);
 }
+function toastHide(){ clearTimeout(_toastTimer); document.getElementById('toast')?.classList.remove('show'); }
 
 // 키보드 단축키
 document.addEventListener('keydown', e=>{

@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="10.2">
-  <script src="site-nav.js?v=1.0"></script>
+  <meta name="app-version" content="11.0">
+  <script src="site-nav.js?v=1.1"></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>수학 학습지+</title>
@@ -936,7 +936,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, orderBy, updateDoc, onSnapshot, increment}
+import { initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, collectionGroup, getDocs, query, where, orderBy, updateDoc, onSnapshot, increment}
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage, ref, uploadString, getDownloadURL }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -1185,7 +1185,8 @@ window.sendAsk=async function(){
       `<div class="ask-msg">선생님께 질문을 보냈어요.<br>
         답을 기다리는 동안 <b>다음 문제</b>를 풀어 볼까요?</div>
        <div class="ask-quota">오늘 질문 ${out.used}/${out.limit}개</div>
-       <div class="ask-btns"><button class="ask-go" onclick="closeAsk()">확인</button></div>`;
+       <div class="ask-msg" style="font-size:12px;color:var(--ink3);margin-top:8px">선생님 답변은 이 🔔 알림과 위쪽 메뉴의 「질문」에서 볼 수 있어요.</div>
+       <div class="ask-btns"><button class="ask-sub" onclick="window.open(qnaUrl(),'_blank')">내 질문 보기</button><button class="ask-go" onclick="closeAsk()">확인</button></div>`;
   }catch(e){
     console.error('[질문하기]',e);
     if(btn){ btn.disabled=false; btn.textContent='선생님께 보내기'; }
@@ -1267,7 +1268,7 @@ document.getElementById("btn-login").addEventListener("click", async () => {
   try { await signInWithPopup(auth, p); }
   catch(e) { alert("로그인 오류: " + e.message); }
 });
-document.getElementById("btn-logout").addEventListener("click", () => { try{ sessionStorage.removeItem('dashGrade'); }catch(e){} try{ stopRemoteNotices(); }catch(e){} signOut(auth); });
+document.getElementById("btn-logout").addEventListener("click", () => { try{ sessionStorage.removeItem('dashGrade'); }catch(e){} try{ stopRemoteNotices(); }catch(e){} try{ stopMyQuestions(); }catch(e){} signOut(auth); });
 
 // 로그인 화면 버전 표시
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1431,7 +1432,7 @@ function kickThisWindow(why){
 
 onAuthStateChanged(auth, async u => {
   if(window._reportBusy && u && user && u.uid===user.uid) return; // 신고 처리 중 재인증으로 인한 화면 재로딩 방지
-  if (!u) { releaseSingleWindow(); showPage("login-page"); updateHeader(null); return; }
+  if (!u) { releaseSingleWindow(); showPage("login-page"); updateHeader(null); try{ stopMyQuestions(); }catch(e){} return; }
   user = u;
   try{ claimSingleWindow(); }catch(e){ console.warn('[창 하나만 준비 실패]', e); }   // 🪟 이 창이 이 계정의 유일한 창이라고 알린다 (v8.95)
   // 준비 단계는 각각 독립적으로 보호 — 하나가 실패해도 학생이 로그인 화면에 갇히지 않도록
@@ -1441,6 +1442,7 @@ onAuthStateChanged(auth, async u => {
   try{ await loadCurriculum(); }catch(e){ console.error('[커리큘럼 로드 실패]', e); }
   try{ await loadExamConfig(); }catch(e){ console.warn('[시험 설정 로드 실패]', e); }   // 📝 시험 대비 (v8.78)
   try{ watchRemoteNotices(); }catch(e){ console.warn('[교사 공지 구독 실패]', e); }   // 📢 교사가 보내는 공지 (v8.88)
+  try{ watchMyQuestions(); }catch(e){ console.warn('[내 질문 구독 실패]', e); }   // ❓ 선생님 답변 알림 (v11.0)
   try{ await loadTeacherData(); }catch(e){ console.warn('[교사 데이터 로드 실패]', e); }
   try{
     await loadDash();
@@ -1485,7 +1487,7 @@ function updateHeader(u) {
   const isT = TEACHER_EMAILS.includes(u.email);
   const isBase = BASE_TEACHER_EMAILS.includes(u.email);
   document.getElementById("hdr-sync-progress").style.display= (isT && isBase) ? "inline-flex" : "none"; // 진도 동기화는 기본 교사 전용
-  // 헤더 「이동 ▾」: 페이지 목록·권한은 site-nav.js 한 곳에서 (학생은 갈 곳이 없어 버튼이 숨는다)
+  // 헤더 「이동 ▾」: 페이지 목록·권한은 site-nav.js 한 곳에서 (v11.0 부터 학생에게도 「질문」이 있어 버튼이 보인다)
   if(window.SiteNav) SiteNav.setRole(isBase ? 'base' : isT ? 'teacher' : 'student');
   // 매뉴얼 버튼: 학생 → 학생용, 담당 교사 → 교사용 (기본 교사는 진도 동기화 버튼 자리 유지)
   if(manual){
@@ -2126,6 +2128,9 @@ function _escHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&am
         종 배지가 늘 켜져 있는 일이 없게 하려는 것. 지난 공지는 배열에서 지워도 된다
    id 는 한 번 정하면 바꾸지 않는다 — 학생이 '읽음' 처리한 기록의 열쇠다. */
 const NOTICES=[
+  {id:'n-2026-09-30-qna-reply', until:'2026-10-30',
+   title:'❓ 질문에 선생님 답변이 달려요',
+   body:'질문하기로 보낸 질문과 선생님 답변(필기 포함)을 위쪽 메뉴의 「질문」에서 다시 볼 수 있어요. 답변이 오면 이 🔔에 알려 줍니다. 답변을 읽고 「이해했어요」 또는 「아직 모르겠어요」를 눌러 주세요. 스스로 해결한 질문은 지울 수도 있어요.'},
   {id:'n-2026-09-17-line-two-tap', until:'2026-10-17',
    title:'작도의 📏 직선 그리는 법이 바뀌었어요',
    body:'컴퍼스처럼 두 번 찍습니다. ① 첫 점을 콕 찍고 ② 둘째 점을 찍으면 두 점 사이에 선분이 그어져요. ②에서 손을 떼지 않고 끌면 그 직선을 따라 끈 만큼 길어집니다(앞으로도, 첫 점 뒤로도). 다 됐으면 [✓ 확인]을 누르세요.'},
@@ -2278,12 +2283,44 @@ function _refreshNotifViews(){
   if(document.getElementById('dash-page').classList.contains('active')) renderCards();
   if(document.getElementById('unit-page').classList.contains('active')&&window._currentUnit) showUnitPage(window._currentUnit);
 }
+/* ── ❓ 질문 답변 알림 (v11.0) ──
+   내가 보낸 질문(questions 중 email==내 이메일)을 구독해서, 선생님 답변이 달렸는데 아직 안 읽은 것을 종에 띄운다.
+   읽음(seenAt)은 qna.html 에서 답변 카드를 보면 저장되고, 종의 ✓ 로도 저장된다.
+   firestore.rules 의 questions 블록이 게시돼 있어야 읽을 수 있다 — 아니면 조용히 넘어간다(종에 안 뜰 뿐). */
+let MY_QUESTIONS=[];
+let _myQUnsub=null;
+function watchMyQuestions(){
+  if(_myQUnsub || !user?.email) return;
+  try{
+    _myQUnsub=onSnapshot(query(collection(db,'questions'), where('email','==',user.email)), snap=>{
+      MY_QUESTIONS=snap.docs.map(d=>({id:d.id,...d.data()}));
+      try{ refreshGradeNotif(); }catch(e){}
+    }, err=>console.warn('[내 질문 구독 실패]', err.message));
+  }catch(e){ console.warn('[내 질문]', e); }
+}
+function stopMyQuestions(){
+  if(_myQUnsub){ try{_myQUnsub();}catch(e){} _myQUnsub=null; }
+  MY_QUESTIONS=[]; window._qReplies=[];
+  try{ if(window.SiteNav&&SiteNav.setBadge) SiteNav.setBadge('qna',0); }catch(e){}
+}
+function unreadReplies(){
+  return MY_QUESTIONS.filter(q=>q.status==='answered' && !q.seenAt && !q.hidden)
+    .sort((a,b)=>String(b.repliedAt||'').localeCompare(String(a.repliedAt||'')));
+}
+function markReplySeen(id){
+  return updateDoc(doc(db,'questions',id),{seenAt:new Date().toISOString()}).catch(e=>console.warn('[답변 읽음 표시]',e.message));
+}
+/* b-index.html 에서 열어도 질문 화면은 하나뿐이다 (b-qna.html 은 저장소에 없다) */
+function qnaUrl(){ return 'qna.html'; }
+window.qnaUrl=qnaUrl;
 /* 알림 상태 재계산 + 종 렌더
    배지 개수와 카드 빨간 점은 '확인 안 한 것(dim 아님)'만 센다 */
 function refreshGradeNotif(){
   window._newGrades=computeNewGrades();
   window._newGradeWs=new Set(window._newGrades.filter(g=>!g.dim).map(g=>g.wsId));
   window._notices=activeNotices();   // 공지는 학습지와 무관하므로 카드 빨간 점에는 넣지 않는다
+  window._qReplies=unreadReplies();  // ❓ 선생님 답변 (v11.0) — 카드 빨간 점과는 무관
+  try{ if(window.SiteNav&&SiteNav.setBadge) SiteNav.setBadge('qna',window._qReplies.length); }catch(e){}   // 헤더 「이동 ▾」 의 질문 옆 숫자
   renderGradeBell();
 }
 function renderGradeBell(){
@@ -2295,11 +2332,12 @@ function renderGradeBell(){
   wrap.style.display='inline-flex';
   const list=window._newGrades||[];
   const notices=window._notices||[];
-  // 배지는 공지·채점 알림 통틀어 '확인 안 한 것'만 센다
-  const unread=notices.filter(n=>!n.dim).length+list.filter(g=>!g.dim).length;
+  const replies=window._qReplies||[];
+  // 배지는 공지·채점 알림·질문 답변 통틀어 '확인 안 한 것'만 센다
+  const unread=notices.filter(n=>!n.dim).length+list.filter(g=>!g.dim).length+replies.length;
   if(unread){ cnt.style.display='inline-block'; cnt.textContent=unread>99?'99+':unread; }
   else { cnt.style.display='none'; cnt.textContent=''; }
-  if(!list.length&&!notices.length){ panel.innerHTML='<div class="bell-empty">🔔 새 알림이 없어요</div>'; return; }
+  if(!list.length&&!notices.length&&!replies.length){ panel.innerHTML='<div class="bell-empty">🔔 새 알림이 없어요</div>'; return; }
   const howto='<span style="font-weight:600;font-size:11px;color:var(--ink3)">✓ 한 번 = 확인함(회색) · 한 번 더 = 알림 지우기</span>';
   const noticeHtml=notices.length
     ? '<div class="bell-head">📢 공지<br>'+howto+'</div>'+
@@ -2311,7 +2349,21 @@ function renderGradeBell(){
         <button type="button" class="bell-check" data-n="${i}"
           title="${n.dim?'한 번 더 누르면 공지를 지웁니다':'확인함으로 표시 (회색)'}">✓</button></div>`).join('')
     : '';
-  panel.innerHTML=noticeHtml+
+  const replyHtml=replies.length
+    ? '<div class="bell-head">❓ 선생님 답변 <span style="font-weight:600;font-size:11px;color:var(--ink3)">눌러서 보기 · ✓ = 읽음</span></div>'+
+      replies.map((q,i)=>{
+        const at=[q.wsTitle,(q.qNo!=null?q.qNo+'번':'')].filter(Boolean).join(' · ')||'질문';
+        const rt=String(q.replyText||'').trim();
+        return `<div class="bell-item" data-q="${i}">
+          <div class="bell-item-body">
+            <div class="bell-item-top">${_escHtml(at)}</div>
+            <div class="bell-item-mark"><span class="bell-chip gm-i">💬 답변이 왔어요</span>${q.replyDrawing?'<span class="bell-chip gm-i">✏️ 필기</span>':''}</div>
+            ${rt?`<div class="bell-fb">${_escHtml(rt.slice(0,80))}${rt.length>80?'…':''}</div>`:''}
+          </div>
+          <button type="button" class="bell-check" data-q="${i}" title="읽음으로 표시">✓</button></div>`;
+      }).join('')
+    : '';
+  panel.innerHTML=replyHtml+noticeHtml+
     (list.length ? '<div class="bell-head">✍️ 그래프 채점 알림'+(notices.length?'':'<br>'+howto)+'</div>' : '')+
     list.map((g,i)=>{
       const chips=[gradeResultChip(g.pq)];
@@ -2327,6 +2379,10 @@ function renderGradeBell(){
           title="${g.dim?'한 번 더 누르면 알림을 지웁니다':'확인함으로 표시 (회색)'}">✓</button></div>`;
     }).join('')+
     '<div class="bell-clear" id="bell-clear">모두 읽음 표시</div>';
+  // ❓ 답변 알림: 누르면 질문 화면을 새 탭으로 연다 (풀던 학습지를 떠나지 않게)
+  panel.querySelectorAll('.bell-item[data-q]').forEach(el=>{
+    el.addEventListener('click',()=>{ panel.classList.remove('show'); window.open(qnaUrl(),'_blank'); });
+  });
   // 채점 알림만 눌러서 이동한다 (공지는 갈 곳이 없다)
   panel.querySelectorAll('.bell-item[data-i]').forEach(el=>{
     el.addEventListener('click',()=>openGradeNotif((window._newGrades||[])[+el.dataset.i]));
@@ -2335,6 +2391,10 @@ function renderGradeBell(){
   panel.querySelectorAll('.bell-check').forEach(btn=>{
     btn.addEventListener('click',(e)=>{
       e.stopPropagation();
+      if(btn.dataset.q!==undefined){        // ❓ 답변 — 읽음으로 (구독이 목록을 다시 그린다)
+        const rq=(window._qReplies||[])[+btn.dataset.q]; if(rq) markReplySeen(rq.id);
+        return;
+      }
       if(btn.dataset.n!==undefined){        // 공지
         const n=(window._notices||[])[+btn.dataset.n]; if(!n) return;
         _setNoticeState(n.id, n.dim?'seen':'dim');
@@ -2348,7 +2408,7 @@ function renderGradeBell(){
   const cl=panel.querySelector('#bell-clear');
   if(cl) cl.addEventListener('click',(e)=>{
     e.stopPropagation();
-    markGradesSeen(null); markNoticesSeen(); refreshGradeNotif(); _refreshNotifViews();
+    markGradesSeen(null); markNoticesSeen(); (window._qReplies||[]).forEach(q=>markReplySeen(q.id)); refreshGradeNotif(); _refreshNotifViews();
     panel.classList.remove('show');
   });
 }

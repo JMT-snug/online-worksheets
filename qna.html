@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="qna-v1.2">
-<script src="site-nav.js?v=1.0"></script>
+<meta name="app-version" content="qna-v2.0">
+<script src="site-nav.js?v=1.1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>질문 답변 · 수학 학습지+</title>
+<title>질문·답변 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{
   --ink:#111827;--ink2:#374151;--ink3:#9ca3af;--paper:#fff;--cream:#faf9f6;--rule:#e5e7eb;
-  --accent:#2563eb;--acc-lt:#eff6ff;--red:#dc2626;--green:#16a34a;--r:12px;
+  --accent:#2563eb;--acc-lt:#eff6ff;--red:#dc2626;--green:#16a34a;--amber:#d97706;--r:12px;
 }
 *{box-sizing:border-box}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--cream);color:var(--ink);font-size:14px;line-height:1.6;margin:0}
@@ -39,26 +39,74 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:52px;displ
 .pg-sub{font-size:13px;color:var(--ink3);margin-bottom:16px}
 .live{font-size:12px;color:var(--green);font-weight:700;margin-left:6px}
 
+/* 교사 도구줄 */
+.tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tab{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink2)}
+.tab.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.tools select{padding:6px 8px;border:1.5px solid var(--rule);border-radius:8px;font-family:inherit;font-size:13px;background:var(--paper)}
+.tools label{font-size:13px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.grp-head{font-size:14px;font-weight:900;color:var(--ink2);margin:18px 2px 8px;padding-bottom:4px;border-bottom:2px solid var(--rule)}
+
 .q-card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-.q-card.done{opacity:.5}
+.q-card.unseen{border-color:var(--accent);box-shadow:0 0 0 3px var(--acc-lt)}
 .q-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .pill{display:inline-block;border-radius:10px;padding:1px 10px;font-size:11px;font-weight:800;background:#fef3c7;color:#b45309}
+.pill.ans{background:#dbeafe;color:#1d4ed8}
+.pill.ok{background:#dcfce7;color:#15803d}
+.pill.no{background:#fee2e2;color:#b91c1c}
+.pill.gray{background:#f3f4f6;color:#6b7280}
 .q-time{font-size:12px;color:var(--ink3)}
 .q-who{font-size:13px;font-weight:800;color:var(--ink2)}
 .q-where{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
 .q-text{font-size:14px;margin:6px 0;white-space:pre-wrap;word-break:break-word}
 .q-text.empty{color:var(--ink3);font-style:italic}
-.q-shot{max-width:100%;max-height:320px;border:1px solid var(--rule);border-radius:8px;cursor:zoom-in;display:block;margin:8px 0;background:var(--cream)}
-.q-shot.zoom{max-height:none;cursor:zoom-out}
+
+/* 스크린샷 + 선생님 필기(투명 레이어) — 래퍼가 그림 크기에 딱 맞아야 필기가 어긋나지 않는다 */
+.shot-wrap{position:relative;display:inline-block;max-width:100%;margin:8px 0;line-height:0;vertical-align:top}
+.q-shot{max-width:100%;max-height:320px;border:1px solid var(--rule);border-radius:8px;cursor:zoom-in;display:block;background:var(--cream)}
+.shot-wrap.zoom .q-shot{max-height:none;cursor:zoom-out}
+.q-ov{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;border-radius:8px}
+.shot-wrap.hide-ov .q-ov{display:none}
 .q-noshot{font-size:12px;color:var(--ink3);background:var(--cream);border:1px dashed var(--rule);border-radius:8px;padding:10px;margin:8px 0}
+
+.reply-box{background:var(--acc-lt);border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin:10px 0}
+.reply-head{font-size:12px;font-weight:800;color:#1d4ed8;margin-bottom:4px}
+.reply-text{white-space:pre-wrap;word-break:break-word;font-size:14px}
+.reply-text.muted{color:var(--ink3);font-style:italic}
+.u-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink2)}
+
+.composer{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-top:10px}
+.composer textarea{width:100%;min-height:70px;padding:8px 10px;border:1px solid var(--rule);border-radius:8px;font-family:inherit;font-size:14px;resize:vertical}
+.composer textarea:focus{outline:none;border-color:var(--accent)}
+.c-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.c-draw{font-size:12px;color:var(--green);font-weight:700}
+.c-draw a{color:var(--red);cursor:pointer;margin-left:6px;font-weight:600}
+
 .q-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .btn{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid var(--rule);background:var(--paper);color:var(--ink2);text-decoration:none;display:inline-flex;align-items:center}
 .btn.done{background:var(--green);border-color:var(--green);color:#fff}
-.btn.done:disabled{opacity:.6;cursor:default}
-.btn:hover{filter:brightness(.97)}
+.btn.warn{background:var(--amber);border-color:var(--amber);color:#fff}
+.btn.danger{color:var(--red);border-color:#fecaca}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:hover:not(:disabled){filter:brightness(.97)}
 .empty-msg{text-align:center;color:var(--ink3);padding:60px 0;font-size:15px}
 .loading{text-align:center;color:var(--ink3);padding:40px 0}
-.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+.warn-box{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+
+/* 필기 편집기 (교사) */
+#ed-modal{display:none;position:fixed;inset:0;z-index:2000;background:#1f2937;flex-direction:column}
+#ed-modal.on{display:flex}
+.ed-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#111827}
+.ed-bar .btn{padding:5px 11px}
+.ed-bar .btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.ed-color{width:24px;height:24px;border-radius:50%;border:3px solid transparent;cursor:pointer;flex:none}
+.ed-color.on{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+.ed-body{flex:1;overflow:auto;padding:12px;text-align:center}
+.ed-stage{position:relative;display:inline-block;max-width:100%;line-height:0;background:#fff;vertical-align:top}
+.ed-stage img{display:block;max-width:100%;height:auto;-webkit-user-select:none;user-select:none;pointer-events:none}
+#ed-cv{position:absolute;left:0;top:0;width:100%;height:100%;cursor:crosshair;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.ed-hint{font-size:12px;color:#9ca3af;padding:0 4px}
+@media(max-width:520px){header{padding:0 10px}.gate-card{padding:28px 22px}}
 </style>
 </head>
 <body>
@@ -78,23 +126,48 @@ header{position:sticky;top:0;z-index:100;background:var(--ink);height:52px;displ
 
 <div id="auth-gate">
   <div class="gate-card">
-    <h2>❓ 질문 답변</h2>
-    <p>교사 계정으로 로그인하세요.</p>
+    <h2>❓ 질문·답변</h2>
+    <p>학교 Google 계정으로 로그인하세요.</p>
     <button class="btn-login" id="btn-login">Google 로그인</button>
   </div>
 </div>
 
 <div id="app">
-  <div class="pg-title">❓ 학생 질문<span class="live" id="live-badge" style="display:none">● 실시간</span></div>
-  <div class="pg-sub">학습지의 ❓ 질문하기로 들어온 질문입니다. <b>답변 완료</b>를 누르면 목록에서 사라지고 스크린샷도 Drive에서 지워집니다. (누가 언제 무엇을 물었는지는 <b>질문_기록</b> 시트에 남습니다.)</div>
+  <div class="pg-title"><span id="pg-title">❓ 질문</span><span class="live" id="live-badge" style="display:none">● 실시간</span></div>
+  <div class="pg-sub" id="pg-sub"></div>
+  <div class="tools" id="q-tools" style="display:none"></div>
   <div id="q-list"><div class="loading">불러오는 중…</div></div>
+</div>
+
+<!-- ✏️ 선생님 필기 편집기: 학생 스크린샷 위에 투명 레이어로 그린다 -->
+<div id="ed-modal">
+  <div class="ed-bar">
+    <button class="btn on" id="ed-pen">✏️ 펜</button>
+    <button class="btn" id="ed-erase">지우개</button>
+    <span class="ed-color on" data-color="#dc2626" style="background:#dc2626"></span>
+    <span class="ed-color" data-color="#2563eb" style="background:#2563eb"></span>
+    <span class="ed-color" data-color="#15803d" style="background:#15803d"></span>
+    <span class="ed-color" data-color="#1c1917" style="background:#1c1917"></span>
+    <button class="btn" onclick="edUndo()">↩ 실행취소</button>
+    <button class="btn" onclick="edClear()">전체 지우기</button>
+    <button class="btn" id="ed-penonly" onclick="edTogglePenOnly()" title="켜면 손가락은 화면 이동만, 펜(Apple Pencil 등)·마우스로만 그립니다">🖊 펜 전용</button>
+    <span style="flex:1"></span>
+    <button class="btn" onclick="edCancel()">취소</button>
+    <button class="btn done" onclick="edDone()">✔ 필기 완료</button>
+  </div>
+  <div class="ed-body">
+    <div class="ed-stage" id="ed-stage">
+      <img id="ed-img" alt="학생 스크린샷">
+      <canvas id="ed-cv" oncontextmenu="return false"></canvas>
+    </div>
+  </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, deleteDoc, onSnapshot }
+import { getFirestore, collection, doc, getDoc, deleteDoc, updateDoc, onSnapshot, query, where }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -111,13 +184,31 @@ const fbApp = initializeApp(FB);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 
-let tUser=null, questions=[], unsub=null;
+/* 이 화면은 두 가지로 쓰인다.
+   · 교사: 모든 질문을 보고 답변(글 + 스크린샷 위 필기)을 단다. 답변해도 스크린샷은 지우지 않고 쌓아 둔다.
+   · 학생: 내가 보낸 질문과 선생님 답변만 본다. 이해 여부를 알리고, 스스로 해결한 질문은 지운다.
+   질문 문서(questions/{id}) 필드:
+     createdAt · email · name · unitTitle · wsId · wsTitle · qId · qNo · text · driveFileId · driveUrl · status('open'|'answered')
+     교사 답변: replyText · replyDrawing(투명 PNG) · repliedAt · repliedBy · replyKind('oral' 이면 직접 설명)
+     학생 반응: seenAt · understood(true|false|null) · understoodAt · hidden */
+let user=null, isTeacher=false, questions=[], unsub=null;
+let tab="wait", stuFilter="", groupBy=false;   // 교사 보기 상태
+const drafts={};          // 교사가 쓰던 답변 {id:{text,drawing,open}} — 실시간 갱신으로 화면이 다시 그려져도 살아남는다
+let pendingRender=false;  // 글 쓰는 중에 새 질문이 오면 다시 그리기를 미룬다
+let edId=null;            // 지금 필기 편집기가 열려 있는 질문
+const seenMarked=new Set();
+let seenObserver=null;
 
-document.getElementById("hdr-version").textContent=document.querySelector('meta[name="app-version"]').content;
-document.getElementById("btn-login").addEventListener("click", async ()=>{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const thumb=fid=>`https://drive.google.com/thumbnail?id=${encodeURIComponent(fid)}&sz=w1600`;
+const nowIso=()=>new Date().toISOString();
+
+$("hdr-version").textContent=document.querySelector('meta[name="app-version"]').content;
+$("btn-login").addEventListener("click", async ()=>{
   try{ await signInWithPopup(auth,new GoogleAuthProvider()); }catch(e){ alert("로그인 오류: "+e.message); }
 });
-document.getElementById("btn-logout").addEventListener("click", ()=>signOut(auth));
+$("btn-logout").addEventListener("click", ()=>signOut(auth));
 
 /* 기본 교사 + config/teachers 에 등록된 담당 교사 (Firestore 규칙의 isTeacher 와 같은 기준) */
 async function isTeacherEmail(email){
@@ -131,36 +222,48 @@ async function isTeacherEmail(email){
 
 onAuthStateChanged(auth, async u=>{
   if(unsub){ try{unsub();}catch(e){} unsub=null; }
-  if(!u){ showGate(true); return; }
-  if(!(await isTeacherEmail(u.email))){ alert("교사 계정만 접속할 수 있습니다."); await signOut(auth); return; }
-  tUser=u;
-  if(window.SiteNav) SiteNav.setRole(BASE_TEACHER_EMAILS.includes(u.email) ? 'base' : 'teacher'); // 헤더 「이동 ▾」 (site-nav.js)
-  document.getElementById("hdr-user").style.display="flex";
-  document.getElementById("hdr-name").textContent=u.displayName||u.email;
+  questions=[]; seenMarked.clear();
+  if(!u){
+    user=null;
+    if(window.SiteNav) SiteNav.setRole(null);
+    showGate(true); return;
+  }
+  user=u;
+  isTeacher=await isTeacherEmail(u.email);
+  if(window.SiteNav) SiteNav.setRole(BASE_TEACHER_EMAILS.includes(u.email) ? 'base' : isTeacher ? 'teacher' : 'student'); // 헤더 「이동 ▾」 (site-nav.js)
+  $("hdr-user").style.display="flex";
+  $("hdr-name").textContent=u.displayName||u.email;
+  $("pg-title").textContent=isTeacher ? "❓ 학생 질문" : "❓ 내 질문";
+  $("pg-sub").innerHTML=isTeacher
+    ? "학습지의 ❓ 질문하기로 들어온 질문입니다. 글과 <b>✏️ 필기</b>로 답변하면 학생이 자기 화면과 🔔 알림에서 봅니다. 답변해도 <b>스크린샷은 지우지 않고 쌓아 둡니다</b>(필요하면 카드마다 🗑 삭제)."
+    : "학습지에서 ❓ 질문하기로 보낸 질문과 <b>선생님 답변</b>을 볼 수 있어요. 답변을 읽고 <b>이해했어요 / 아직 모르겠어요</b>를 눌러 주세요.";
   showGate(false);
   watchQuestions();
 });
 
 function showGate(on){
-  document.getElementById("auth-gate").style.display=on?"flex":"none";
-  document.getElementById("app").style.display=on?"none":"block";
+  $("auth-gate").style.display=on?"flex":"none";
+  $("app").style.display=on?"none":"block";
 }
 
-/* 질문은 수업 중에 들어오므로 새로고침 없이 바로 뜨게 실시간 구독한다 */
+/* 질문은 수업 중에 들어오므로 새로고침 없이 바로 뜨게 실시간 구독한다.
+   교사 = 전체, 학생 = 내 것만(규칙이 where('email','==',내 이메일) 조회만 허용한다). */
 function watchQuestions(){
-  unsub=onSnapshot(collection(db,"questions"), snap=>{
+  const src=isTeacher
+    ? collection(db,"questions")
+    : query(collection(db,"questions"), where("email","==",user.email));
+  unsub=onSnapshot(src, snap=>{
     questions=snap.docs.map(d=>({id:d.id,...d.data()}))
       .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
-    document.getElementById("live-badge").style.display="inline";
-    render();
+    $("live-badge").style.display="inline";
+    requestRender();
   }, err=>{
-    document.getElementById("q-list").innerHTML=
-      `<div class="warn">질문을 불러오지 못했습니다: ${esc(err.message)}<br>
-       Firestore 규칙에 <code>questions</code> 블록이 게시됐는지 확인해 주세요.</div>`;
+    $("q-list").innerHTML=
+      `<div class="warn-box">질문을 불러오지 못했습니다: ${esc(err.message)}<br>
+       Firestore 규칙의 <code>questions</code> 블록이 최신으로 게시됐는지 확인해 주세요.</div>`;
   });
 }
 
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function fmtTime(iso){
   if(!iso) return "";
   const d=new Date(iso); if(isNaN(d)) return String(iso);
@@ -170,53 +273,288 @@ function fmtTime(iso){
   return sameDay ? `오늘 ${hm}` : `${d.getMonth()+1}/${d.getDate()} ${hm}`;
 }
 
+const isAnswered=q=>(q.status||"open")==="answered";
+/* 교사의 「기다리는 중」 = 아직 답 안 한 질문 + 답했는데 학생이 「아직 모르겠어요」라고 한 질문 */
+const isWaiting=q=>!isAnswered(q) || q.understood===false;
+const hasReplyBody=q=>!!((q.replyText&&String(q.replyText).trim())||q.replyDrawing);
+
+/* 글 쓰는 중이거나 필기 편집기가 열려 있으면 다시 그리기를 미룬다 (입력이 날아가지 않게) */
+function requestRender(){
+  const ae=document.activeElement;
+  const typing=ae && ae.tagName==="TEXTAREA" && $("q-list").contains(ae);
+  if(typing || edId){ pendingRender=true; return; }
+  pendingRender=false; render();
+}
+$("q-list").addEventListener("focusout",()=>{
+  if(pendingRender) setTimeout(()=>{ if(pendingRender) requestRender(); },700);
+});
+
+/* ───────────── 그리기 ───────────── */
 function render(){
-  const el=document.getElementById("q-list");
-  if(!questions.length){
-    el.innerHTML=`<div class="empty-msg">기다리는 질문이 없습니다. 🎉</div>`;
+  const list=$("q-list");
+  if(isTeacher) renderTools();
+  else $("q-tools").style.display="none";
+
+  const base=isTeacher ? questions : questions.filter(q=>!q.hidden);
+  let rows=base;
+  if(isTeacher){
+    if(stuFilter) rows=rows.filter(q=>(q.email||"")===stuFilter);
+    if(tab==="wait") rows=rows.filter(isWaiting);
+    else if(tab==="done") rows=rows.filter(q=>!isWaiting(q));
+  }else{
+    // 안 읽은 답변을 맨 위로
+    rows=rows.slice().sort((a,b)=>{
+      const ua=isAnswered(a)&&!a.seenAt?1:0, ub=isAnswered(b)&&!b.seenAt?1:0;
+      return ub-ua;
+    });
+  }
+
+  if(!rows.length){
+    list.innerHTML=`<div class="empty-msg">${
+      isTeacher ? (tab==="wait" ? "기다리는 질문이 없습니다. 🎉" : "표시할 질문이 없습니다.")
+                : "아직 보낸 질문이 없어요.<br><span style='font-size:13px'>문제를 풀다 막히면 학습지에서 ❓ 질문하기를 눌러 보세요.</span>"}</div>`;
     return;
   }
-  el.innerHTML=questions.map(q=>{
-    const where=[q.unitTitle,q.wsTitle,(q.qNo!=null?q.qNo+"번":"")].filter(Boolean).map(esc).join(" · ");
-    const shot=q.driveFileId
-      ? `<img class="q-shot" src="https://drive.google.com/thumbnail?id=${esc(q.driveFileId)}&sz=w1600"
-             alt="학생 필기" onclick="this.classList.toggle('zoom')"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-         <div class="q-noshot" style="display:none">🖼 미리보기를 불러오지 못했습니다 — 아래 <b>원본 보기</b>로 열어 주세요.</div>`
-      : `<div class="q-noshot">📷 스크린샷 없음</div>`;
-    return `<div class="q-card" id="qc-${esc(q.id)}">
+
+  if(isTeacher && groupBy){
+    const groups=new Map();
+    rows.forEach(q=>{
+      const k=q.email||"(미상)";
+      if(!groups.has(k)) groups.set(k,[]);
+      groups.get(k).push(q);
+    });
+    list.innerHTML=[...groups.entries()].map(([email,arr])=>
+      `<div class="grp-head">👤 ${esc(arr[0].name||email)} <span style="font-weight:600;color:var(--ink3)">· ${arr.length}개</span></div>`+
+      arr.map(cardHTML).join("")).join("");
+  }else{
+    list.innerHTML=rows.map(cardHTML).join("");
+  }
+  observeUnseen();
+}
+
+function renderTools(){
+  const box=$("q-tools");
+  box.style.display="flex";
+  const stuMap=new Map();
+  questions.forEach(q=>{ if(q.email && !stuMap.has(q.email)) stuMap.set(q.email,q.name||q.email); });
+  const nWait=questions.filter(isWaiting).length;
+  const nDone=questions.length-nWait;
+  box.innerHTML=
+    `<button class="tab ${tab==="wait"?"on":""}" data-t="wait">기다리는 중 ${nWait}</button>
+     <button class="tab ${tab==="done"?"on":""}" data-t="done">답변 완료 ${nDone}</button>
+     <button class="tab ${tab==="all"?"on":""}" data-t="all">전체 ${questions.length}</button>
+     <select id="stu-sel"><option value="">학생 전체</option>${
+       [...stuMap.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1]),"ko"))
+         .map(([e,n])=>`<option value="${esc(e)}" ${e===stuFilter?"selected":""}>${esc(n)}</option>`).join("")}</select>
+     <label><input type="checkbox" id="grp-chk" ${groupBy?"checked":""}> 학생별로 묶기</label>`;
+  box.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{ tab=b.dataset.t; render(); }));
+  $("stu-sel").addEventListener("change",e=>{ stuFilter=e.target.value; render(); });
+  $("grp-chk").addEventListener("change",e=>{ groupBy=e.target.checked; render(); });
+}
+
+function getDraft(q){
+  if(!drafts[q.id]){
+    drafts[q.id]=isAnswered(q)
+      ? {text:q.replyText||"", drawing:q.replyDrawing||null, open:false}
+      : {text:"", drawing:null, open:true};
+  }else if(!drafts[q.id].open && isAnswered(q)){
+    // 고치는 중이 아니면 저장된 답변을 그대로 따라간다 (다른 교사가 고쳤을 수 있다)
+    drafts[q.id].text=q.replyText||""; drafts[q.id].drawing=q.replyDrawing||null;
+  }
+  return drafts[q.id];
+}
+
+function shotHTML(q){
+  if(!q.driveFileId) return `<div class="q-noshot">📷 스크린샷 없음</div>`;
+  const ov=q.replyDrawing ? `<img class="q-ov" src="${esc(q.replyDrawing)}" alt="선생님 필기">` : "";
+  return `<div class="shot-wrap" id="sw-${esc(q.id)}">
+      <img class="q-shot" src="${thumb(q.driveFileId)}" alt="학생 필기" onclick="toggleZoom('${esc(q.id)}')"
+        onerror="this.parentNode.style.display='none';this.parentNode.nextElementSibling.style.display='block'">${ov}</div>
+    <div class="q-noshot" style="display:none">🖼 미리보기를 불러오지 못했습니다${q.driveUrl?` — 아래 <b>원본 보기</b>로 열어 주세요`:""}.</div>`;
+}
+
+function replyHTML(q){
+  if(!isAnswered(q)) return "";
+  const by=isTeacher ? esc(q.repliedBy||"") : "선생님";
+  const oral=q.replyKind==="oral" || !hasReplyBody(q);
+  const text=oral && !(q.replyText&&String(q.replyText).trim())
+    ? `<div class="reply-text muted">교실에서 직접 설명해 주셨어요.</div>`
+    : (q.replyText&&String(q.replyText).trim() ? `<div class="reply-text">${esc(q.replyText)}</div>` : "");
+  const drawNote=q.replyDrawing
+    ? `<div class="u-row" style="margin-top:6px"><span>✏️ 선생님 필기가 위 그림에 겹쳐 있어요.</span>
+         <button class="btn" onclick="toggleOv('${esc(q.id)}')">필기 켜기/끄기</button></div>` : "";
+  return `<div class="reply-box"><div class="reply-head">👩‍🏫 ${by} 답변 · ${esc(fmtTime(q.repliedAt))}</div>${text}${drawNote}</div>`;
+}
+
+function cardHTML(q){
+  const where=[q.unitTitle,q.wsTitle,(q.qNo!=null?q.qNo+"번":"")].filter(Boolean).map(esc).join(" · ");
+  const id=esc(q.id);
+  const answered=isAnswered(q);
+  const unseen=!isTeacher && answered && !q.seenAt;
+
+  // 상태 표시
+  let pills;
+  if(isTeacher){
+    pills=(answered ? `<span class="pill ans">💬 답변함</span>` : `<span class="pill">❓ 기다리는 중</span>`)+
+      (q.understood===true ? `<span class="pill ok">✅ 학생: 이해했어요</span>` : "")+
+      (q.understood===false ? `<span class="pill no">🤔 학생: 아직 모르겠어요</span>` : "")+
+      (answered && !q.seenAt ? `<span class="pill gray">학생 안 읽음</span>` : "");
+  }else{
+    pills=!answered ? `<span class="pill">⏳ 답변을 기다리는 중</span>`
+      : q.understood===true ? `<span class="pill ok">✅ 이해했어요</span>`
+      : q.understood===false ? `<span class="pill no">🤔 아직 모르겠어요</span>`
+      : `<span class="pill ans">💬 답변이 왔어요</span>`;
+  }
+
+  // 교사: 답변 작성칸 / 학생: 이해 표시·지우기
+  let extra="";
+  if(isTeacher){
+    const d=getDraft(q);
+    if(!answered || d.open){
+      extra=`<div class="composer">
+        <textarea id="rt-${id}" placeholder="학생에게 보낼 답변 (글) — 필기만 해도 됩니다" maxlength="2000"
+          oninput="draftText('${id}',this.value)">${esc(d.text)}</textarea>
+        <div class="c-row">
+          <button class="btn" onclick="openEditor('${id}')" ${q.driveFileId?"":"disabled title='스크린샷이 없어서 필기할 수 없어요'"}>✏️ 필기하기</button>
+          ${d.drawing ? `<span class="c-draw">✓ 필기 있음<a onclick="clearDraw('${id}')">지우기</a></span>` : ""}
+          <button class="btn done" id="send-${id}" onclick="sendReply('${id}')">${answered?"📨 답변 고쳐 보내기":"📨 답변 보내기"}</button>
+          ${answered?`<button class="btn" onclick="closeComposer('${id}')">닫기</button>`:""}
+        </div></div>`;
+    }
+  }else if(answered){
+    extra=`<div class="u-row">이제 이해했나요?
+        <button class="btn ${q.understood===true?"done":""}" onclick="setUnderstood('${id}',true)">✅ 이해했어요</button>
+        <button class="btn ${q.understood===false?"warn":""}" onclick="setUnderstood('${id}',false)">🤔 아직 모르겠어요</button>
+      </div>
+      ${q.understood===false?`<div class="u-row" style="color:var(--amber)">선생님께 다시 알렸어요. 답변이 새로 오면 🔔로 알려 드려요.</div>`:""}`;
+  }
+
+  const foot=isTeacher
+    ? `<div class="q-foot">
+        ${answered ? (d_open(q)?"":`<button class="btn" onclick="openComposer('${id}')">✏️ 답변 고치기 / 다시 답변</button>`)
+                   : `<button class="btn" onclick="markOral('${id}')" title="교실에서 말로 설명했을 때 — 스크린샷은 그대로 남습니다">🗣 직접 설명함 (완료 처리)</button>`}
+        ${q.driveUrl?`<a class="btn" href="${esc(q.driveUrl)}" target="_blank" rel="noopener">☁️ 원본 보기</a>`:""}
+        ${q.wsId?`<a class="btn" href="index.html" title="학습지로 이동">📘 학습지 열기</a>`:""}
+        <button class="btn danger" onclick="teacherDelete('${id}')">🗑 삭제</button>
+      </div>`
+    : `<div class="q-foot">
+        ${q.wsId?`<a class="btn" href="index.html" title="학습지로 이동">📘 학습지 열기</a>`:""}
+        <button class="btn danger" onclick="studentDelete('${id}')">${answered?"🗑 내 목록에서 지우기":"🙋 스스로 해결했어요 (질문 지우기)"}</button>
+      </div>`;
+
+  return `<div class="q-card ${unseen?"unseen":""}" id="qc-${id}" data-unseen="${unseen?1:0}">
       <div class="q-head">
-        <span class="pill">❓ 기다리는 중</span>
-        <span class="q-who">${esc(q.name||q.email||"(미상)")}</span>
+        ${pills}
+        ${isTeacher?`<span class="q-who">${esc(q.name||q.email||"(미상)")}</span>`:""}
         <span class="q-time">${esc(fmtTime(q.createdAt))}</span>
       </div>
       ${where?`<div class="q-where">📄 ${where}</div>`:""}
       <div class="q-text ${q.text?"":"empty"}">${q.text?esc(q.text):"(질문 글 없이 보냈습니다 — 필기를 봐 주세요)"}</div>
-      ${shot}
-      <div class="q-foot">
-        <button class="btn done" onclick="finishQ('${esc(q.id)}')">✅ 답변 완료</button>
-        ${q.driveUrl?`<a class="btn" href="${esc(q.driveUrl)}" target="_blank" rel="noopener">☁️ 원본 보기</a>`:""}
-        ${q.wsId?`<a class="btn" href="index.html" title="학습지로 이동">📘 학습지 열기</a>`:""}
-      </div>
+      ${shotHTML(q)}
+      ${replyHTML(q)}
+      ${extra}
+      ${foot}
     </div>`;
-  }).join("");
+}
+function d_open(q){ return !!(drafts[q.id] && drafts[q.id].open); }
+
+window.toggleZoom=function(id){ $("sw-"+id)?.classList.toggle("zoom"); };
+window.toggleOv=function(id){ $("sw-"+id)?.classList.toggle("hide-ov"); };
+
+/* 학생: 답변 카드가 화면에 보이면 「읽음」으로 표시 → 🔔 배지가 꺼진다 */
+function observeUnseen(){
+  if(seenObserver){ try{seenObserver.disconnect();}catch(e){} seenObserver=null; }
+  if(isTeacher || !("IntersectionObserver" in window)) return;
+  const cards=[...document.querySelectorAll('.q-card[data-unseen="1"]')];
+  if(!cards.length) return;
+  seenObserver=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      if(!en.isIntersecting) return;
+      const id=en.target.id.replace(/^qc-/,"");
+      if(seenMarked.has(id)) return;
+      seenMarked.add(id);
+      updateDoc(doc(db,"questions",id),{seenAt:nowIso()}).catch(e=>{ seenMarked.delete(id); console.warn("[읽음 표시]",e.message); });
+    });
+  },{threshold:0.6});
+  cards.forEach(c=>seenObserver.observe(c));
 }
 
-/* 답변 완료 — 스크린샷을 Drive에서 지우고 질문 문서도 지운다.
-   기록(질문_기록 시트)은 남으므로 어느 문항에서 질문이 많은지는 나중에도 볼 수 있다. */
-window.finishQ=async function(id){
-  const q=questions.find(x=>x.id===id);
-  if(!q) return;
-  const btn=document.querySelector(`#qc-${CSS.escape(id)} .btn.done`);
-  if(btn){ btn.disabled=true; btn.textContent="정리 중…"; }
+/* ───────────── 교사: 답변 작성 ───────────── */
+window.draftText=function(id,v){ if(drafts[id]) drafts[id].text=v; };
+window.clearDraw=function(id){ if(drafts[id]){ drafts[id].drawing=null; render(); } };
+window.openComposer=function(id){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  const d=getDraft(q); d.open=true; render();
+};
+window.closeComposer=function(id){ delete drafts[id]; render(); };
+
+window.sendReply=async function(id){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  const d=getDraft(q);
+  const ta=$("rt-"+id); if(ta) d.text=ta.value;
+  const text=String(d.text||"").trim();
+  if(!text && !d.drawing){ alert("답변 글이나 필기 중 하나는 있어야 해요."); return; }
+  const btn=$("send-"+id); if(btn){ btn.disabled=true; btn.textContent="보내는 중…"; }
   try{
-    if(q.driveFileId) await deleteShot(q.driveFileId);   // 실패해도 아래는 진행한다
-    await deleteDoc(doc(db,"questions",id));
-    // onSnapshot 이 목록을 다시 그리지만, 반응이 늦을 때를 대비해 카드를 먼저 지운다
-    document.getElementById("qc-"+id)?.remove();
+    await updateDoc(doc(db,"questions",id),{
+      status:"answered", replyText:text, replyDrawing:d.drawing||null, replyKind:"written",
+      repliedAt:nowIso(), repliedBy:(user.displayName||user.email),
+      seenAt:null, understood:null, understoodAt:null      // 새 답변이므로 학생 반응은 처음부터
+    });
+    delete drafts[id];
+    pendingRender=false; render();
   }catch(e){
-    alert("처리 실패: "+e.message);
-    if(btn){ btn.disabled=false; btn.textContent="✅ 답변 완료"; }
+    alert("답변을 보내지 못했습니다: "+e.message);
+    if(btn){ btn.disabled=false; btn.textContent=isAnswered(q)?"📨 답변 고쳐 보내기":"📨 답변 보내기"; }
+  }
+};
+
+/* 교실에서 말로 설명한 질문 — 답변 완료로 옮기되 스크린샷은 남긴다 */
+window.markOral=async function(id){
+  if(!confirm("교실에서 직접 설명한 질문으로 완료 처리할까요?\n학생 화면에는 「직접 설명해 주셨어요」로 보입니다.")) return;
+  try{
+    await updateDoc(doc(db,"questions",id),{
+      status:"answered", replyText:"", replyDrawing:null, replyKind:"oral",
+      repliedAt:nowIso(), repliedBy:(user.displayName||user.email),
+      seenAt:null, understood:null, understoodAt:null
+    });
+    delete drafts[id];
+  }catch(e){ alert("처리 실패: "+e.message); }
+};
+
+window.teacherDelete=async function(id){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  if(!confirm("이 질문을 지울까요?\n스크린샷(Drive)과 답변까지 함께 사라지고 되돌릴 수 없어요.\n(질문_기록 시트의 기록은 남습니다.)")) return;
+  try{
+    await deleteDoc(doc(db,"questions",id));          // 문서를 먼저 지운다 — 실패하면 이미지는 그대로 둔다
+    if(q.driveFileId) await deleteShot(q.driveFileId);
+    delete drafts[id];
+  }catch(e){ alert("삭제 실패: "+e.message); }
+};
+
+/* ───────────── 학생: 이해 표시 · 지우기 ───────────── */
+window.setUnderstood=async function(id,v){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  try{
+    await updateDoc(doc(db,"questions",id),{ understood:v, understoodAt:nowIso(), seenAt:q.seenAt||nowIso() });
+  }catch(e){ alert("저장하지 못했어요: "+e.message); }
+};
+
+window.studentDelete=async function(id){
+  const q=questions.find(x=>x.id===id); if(!q) return;
+  if(isAnswered(q)){
+    // 답변받은 질문은 지우지 않고 내 목록에서만 감춘다 — 선생님 기록은 남는다
+    if(!confirm("내 목록에서 이 질문을 지울까요?\n(선생님 기록에는 남아 있어요.)")) return;
+    try{ await updateDoc(doc(db,"questions",id),{ hidden:true }); }
+    catch(e){ alert("지우지 못했어요: "+e.message); }
+    return;
+  }
+  if(!confirm("스스로 해결했나요? 이 질문을 지우면 선생님 목록에서도 사라져요.")) return;
+  try{
+    await deleteDoc(doc(db,"questions",id));
+    if(q.driveFileId) await deleteShot(q.driveFileId);   // 답변받기 전이므로 이미지도 함께 정리
+  }catch(e){
+    alert("지우지 못했어요. 방금 선생님이 답변했을 수 있어요 — 화면을 확인해 주세요.\n\n"+e.message);
   }
 };
 
@@ -232,6 +570,143 @@ async function deleteShot(fileId){
     });
   }catch(e){ console.warn("[스크린샷 삭제]",e.message); }
 }
+
+/* ───────────── ✏️ 필기 편집기 (교사) ─────────────
+   스크린샷은 건드리지 않고, 같은 비율의 투명 캔버스에 그린 뒤 PNG 로 답변 문서에 저장한다.
+   (scoring 의 teacherDrawing 과 같은 방식 — 학생 화면에서 그림 위에 그대로 겹쳐 보인다) */
+let edColor="#dc2626", edEraser=false, edUndoStack=[], edDirty=false;
+let edPenOnly=false;
+try{ edPenOnly=localStorage.getItem("penOnlyMode_qna")==="1"; }catch(e){}
+
+window.openEditor=function(id){
+  const q=questions.find(x=>x.id===id);
+  if(!q || !q.driveFileId) return;
+  const ta=$("rt-"+id); const d=getDraft(q); if(ta) d.text=ta.value;
+  edId=id; edUndoStack=[]; edDirty=false;
+  $("ed-modal").classList.add("on");
+  document.body.style.overflow="hidden";
+  syncPenOnlyBtn();
+  const img=$("ed-img"), cv=$("ed-cv");
+  cv.width=1; cv.height=1;
+  img.onload=()=>{
+    const nw=img.naturalWidth||1, nh=img.naturalHeight||1;
+    const k=Math.min(1,1200/nw);                 // 저장 용량을 줄이려고 가로 1200px 까지만
+    cv.width=Math.max(1,Math.round(nw*k)); cv.height=Math.max(1,Math.round(nh*k));
+    if(d.drawing){                                // 이미 그린 필기가 있으면 이어서 고친다
+      const old=new Image();
+      old.onload=()=>cv.getContext("2d").drawImage(old,0,0,cv.width,cv.height);
+      old.src=d.drawing;
+    }
+  };
+  img.onerror=()=>{ alert("스크린샷을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."); closeEditor(); };
+  img.src=thumb(q.driveFileId);
+};
+
+function closeEditor(){
+  edId=null;
+  $("ed-modal").classList.remove("on");
+  document.body.style.overflow="";
+  if(pendingRender) requestRender();
+}
+
+function hasInk(cv){
+  try{
+    const d=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;
+    for(let i=3;i<d.length;i+=4) if(d[i]>16) return true;
+  }catch(e){}
+  return false;
+}
+/* 문서 하나는 1MB 를 못 넘으므로 PNG 가 커지면 줄여서 맞춘다 */
+function exportDrawing(cv){
+  if(!hasInk(cv)) return null;
+  let url=cv.toDataURL("image/png"), scale=1;
+  while(url.length>700000 && scale>0.4){
+    scale*=0.8;
+    const t=document.createElement("canvas");
+    t.width=Math.max(1,Math.round(cv.width*scale)); t.height=Math.max(1,Math.round(cv.height*scale));
+    t.getContext("2d").drawImage(cv,0,0,t.width,t.height);
+    url=t.toDataURL("image/png");
+  }
+  return url;
+}
+
+window.edDone=function(){
+  if(!edId) return;
+  const q=questions.find(x=>x.id===edId);
+  const url=exportDrawing($("ed-cv"));
+  if(q){ getDraft(q).drawing=url; }
+  closeEditor();
+  render();
+};
+window.edCancel=function(){
+  if(edDirty && !confirm("방금 한 필기를 버리고 닫을까요?")) return;
+  closeEditor();
+};
+window.edUndo=function(){
+  const cv=$("ed-cv");
+  if(!edUndoStack.length) return;
+  cv.getContext("2d").putImageData(edUndoStack.pop(),0,0);
+};
+window.edClear=function(){
+  const cv=$("ed-cv");
+  pushUndo(cv); cv.getContext("2d").clearRect(0,0,cv.width,cv.height); edDirty=true;
+};
+function pushUndo(cv){
+  try{ edUndoStack.push(cv.getContext("2d").getImageData(0,0,cv.width,cv.height)); if(edUndoStack.length>30) edUndoStack.shift(); }catch(_){}
+}
+function syncPenOnlyBtn(){
+  $("ed-penonly").classList.toggle("on",edPenOnly);
+  $("ed-cv").style.touchAction = edPenOnly ? "pan-x pan-y" : "none";   // 펜 전용이면 손가락은 스크롤에 쓴다
+}
+window.edTogglePenOnly=function(){
+  edPenOnly=!edPenOnly;
+  try{ localStorage.setItem("penOnlyMode_qna",edPenOnly?"1":"0"); }catch(e){}
+  syncPenOnlyBtn();
+};
+
+(function initEditorCanvas(){
+  const cv=$("ed-cv");
+  let drawing=false;
+  const pos=e=>{
+    const r=cv.getBoundingClientRect();
+    return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height, cv.width/r.width];
+  };
+  cv.addEventListener("pointerdown",e=>{
+    if(edPenOnly && e.pointerType==="touch") return;
+    if(e.pointerType==="mouse" && e.button!==0) return;
+    e.preventDefault();
+    pushUndo(cv); edDirty=true;
+    drawing=true;
+    const [x,y,k]=pos(e);
+    const c=cv.getContext("2d");
+    c.lineCap="round"; c.lineJoin="round";
+    if(edEraser){ c.globalCompositeOperation="destination-out"; c.lineWidth=22*k; }
+    else{ c.globalCompositeOperation="source-over"; c.strokeStyle=edColor; c.lineWidth=3*k; }
+    c.beginPath(); c.moveTo(x,y);
+    c.lineTo(x+0.01,y+0.01); c.stroke();          // 점 하나만 찍어도 남게
+    c.beginPath(); c.moveTo(x,y);
+    try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(!drawing) return; e.preventDefault();
+    const [x,y]=pos(e);
+    const c=cv.getContext("2d");
+    c.lineTo(x,y); c.stroke(); c.beginPath(); c.moveTo(x,y);
+  });
+  const end=e=>{ drawing=false; try{ cv.releasePointerCapture(e.pointerId); }catch(_){} };
+  cv.addEventListener("pointerup",end);
+  cv.addEventListener("pointercancel",end);
+})();
+
+$("ed-pen").onclick=()=>{ edEraser=false; $("ed-pen").classList.add("on"); $("ed-erase").classList.remove("on"); };
+$("ed-erase").onclick=()=>{ edEraser=true; $("ed-erase").classList.add("on"); $("ed-pen").classList.remove("on"); };
+document.querySelectorAll(".ed-color").forEach(el=>{
+  el.onclick=()=>{
+    edColor=el.dataset.color; edEraser=false;
+    document.querySelectorAll(".ed-color").forEach(x=>x.classList.remove("on")); el.classList.add("on");
+    $("ed-pen").classList.add("on"); $("ed-erase").classList.remove("on");
+  };
+});
 </script>
 </body>
 </html>

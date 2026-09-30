@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.32">
+<meta name="app-version" content="scoring-v1.33">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -1238,12 +1238,18 @@ function refreshFilterOptions(){
   const stSel=document.getElementById('sel-status');
   if(stSel){
     const total=stRows.length;
-    const labels={all:`전체 (${total})`, pending:`미채점만 (${cnt.pending})`, ng:`오답만 (${cnt.ng})`, ok:`정답만 (${cnt.ok})`};
+    /* v1.33: 학습지를 고르기 전에 채점 여부(미채점·오답·정답)부터 고를 수 있다.
+       아직 일부 학습지 기록만 읽은 상태(partial)에서는 건수가 부분 집계라 보여 주지 않고 막지도 않는다 —
+       상태를 고르면 그때 전체 기록을 읽어(onFilterChange) 모든 학습지의 해당 건수로 목록을 좁힌다. */
+    const partial = !allLoaded && !curWsId;
+    const labels = partial
+      ? {all:'전체', pending:'미채점만', ng:'오답만', ok:'정답만'}
+      : {all:`전체 (${total})`, pending:`미채점만 (${cnt.pending})`, ng:`오답만 (${cnt.ng})`, ok:`정답만 (${cnt.ok})`};
     [...stSel.options].forEach(o=>{
       o.textContent = labels[o.value] || o.textContent;
-      o.disabled = (o.value!=='all' && cnt[o.value]===0);
+      o.disabled = partial ? false : (o.value!=='all' && cnt[o.value]===0);
     });
-    if(curStatus && curStatus!=='all' && cnt[curStatus]===0){ curStatus='all'; }
+    if(!partial && curStatus && curStatus!=='all' && cnt[curStatus]===0){ curStatus='all'; }
     stSel.value = curStatus || 'all';
   }
 }
@@ -1366,9 +1372,16 @@ window.onQChange = function(){
   if(curQid) loadQuestion(); else showEmptyView();
 };
 
-window.onFilterChange = function(){
+window.onFilterChange = async function(){
   curCls = document.getElementById('sel-cls').value;
   curStatus = document.getElementById('sel-status').value;
+  if(curStatus!=='all' && !curWsId && !allLoaded){
+    // 학습지를 고르기 전에 채점 여부부터 고름 → 어느 학습지에 해당 답안이 있는지 알려면 전체 기록이 필요하다 (v1.33)
+    const want = curStatus;
+    const ok = await ensureAllLoaded();
+    if(!ok){ curStatus='all'; document.getElementById('sel-status').value='all'; }
+    else if(curStatus!==want) return;   // 기다리는 사이 상태를 또 바꿨으면 그쪽이 이어서 처리한다
+  }
   refreshFilterOptions();           // 학급·상태를 바꾸면 학습지·문항 목록도 좁혀진다
   saveState();
   if(curMode==='feedback'){ buildStuSelector(); if(curStuEmail) openFeedbackStudent(curStuEmail); else showEmptyView(); return; }

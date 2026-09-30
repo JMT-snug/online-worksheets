@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.34">
+<meta name="app-version" content="scoring-v1.33">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -383,7 +383,7 @@ let curWsId = null, curQid = null;
 let allStudents = [];  // 필터 전 전체 학생
 let students = [];  // 필터 후 채점 대상
 let curStuIdx = 0;
-let curCls = "", curStatus = "pending";   // v1.34: 채점할 땐 항상 미채점 문항만 먼저 (시작·필터 초기화 때)
+let curCls = "", curStatus = "all";
 let classMap = {};  // email → 반 정보
 
 /* ── 문제 텍스트 렌더 규칙 (v1.28) — index/edit 의 _bqSpace·normTex 와 **같은 구현** ──
@@ -1070,10 +1070,10 @@ let feedIdx = 0;
 
 /* 필터 전체 초기화 — 우선순위를 바꿔 다시 좁혀 들어가고 싶을 때 (새로고침 대신) */
 window.resetFilters = function(){
-  curWsId=''; curQid=''; curCls=''; curStatus='pending'; curStuEmail='';
+  curWsId=''; curQid=''; curCls=''; curStatus='all'; curStuEmail='';
   feedList=[]; feedIdx=0; allStudents=[]; students=[]; curStuIdx=0;
   ['sel-ws','sel-q','sel-cls','sel-stu'].forEach(id=>{ const s=document.getElementById(id); if(s) s.value=''; });
-  const st=document.getElementById('sel-status'); if(st) st.value='pending';
+  const st=document.getElementById('sel-status'); if(st) st.value='all';
   refreshFilterOptions();
   if(curMode==='feedback') buildStuSelector();
   showEmptyView();
@@ -1341,8 +1341,8 @@ async function restoreState(){
       await onWsChange();   // 기록을 읽고 문항 목록이 채워진 뒤에 문항·학급·상태를 되돌린다
       if(s.qid){
         document.getElementById('sel-q').value = s.qid;
-        if(s.cls){ document.getElementById('sel-cls').value = s.cls; curCls = s.cls; }
-        if(s.status){ document.getElementById('sel-status').value = s.status; curStatus = s.status; }   // v1.34: 기본이 「미채점만」이라 저장된 상태를 변수에도 되돌려야 한다
+        if(s.cls) document.getElementById('sel-cls').value = s.cls;
+        if(s.status) document.getElementById('sel-status').value = s.status;
         onQChange();
       }
       return true;

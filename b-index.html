@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="11.1">
+  <meta name="app-version" content="12.0">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1504,6 +1504,18 @@ function updateHeader(u) {
 }
 
 /* ── DASHBOARD ── */
+/* ⚡ 채점 여부 요약 (v12.0) — scoring 이 그림을 읽지 않고도 「제출됐고 아직 채점 전」인 답안을 찾게 한다.
+   grading_index/{내 이메일}.p.{학습지ID}.{문항ID} = 제출 시각. 학생은 이 칸(과 name)만 쓸 수 있다(규칙).
+   요약 쓰기는 부가 기능이라 실패해도(규칙 미게시·오프라인) 제출은 이미 기록 문서에 성공해 있다 — 로그만 남긴다. */
+function _gradingIndexMark(wsId, qId){
+  try{
+    if(!user || !wsId || !qId) return;
+    setDoc(doc(db,'grading_index',user.email),
+      { name: user.displayName||'', p: { [wsId]: { [qId]: new Date().toISOString() } } }, {merge:true})
+      .catch(e=>console.log('[채점 요약] 쓰기 생략:', e.code||e.message));
+  }catch(e){ console.log('[채점 요약] 쓰기 생략:', e.message); }
+}
+
 /* 내 학습지 기록 전부 {wsId: 데이터} — 컬렉션 한 번 읽기 (실패하면 학습지별 읽기로 대체) */
 async function fetchMyProgress(curReady){
   const byId = {};
@@ -6250,6 +6262,8 @@ async function submitQAns(){
           }
         },{merge:true}).then(()=>console.log('[graph 저장] OK',_qId,'len:',_drawing.length,_regraded?'(재제출 → 채점 초기화)':''))
           .catch(e=>console.error('[graph 저장 오류]',e.message));
+        // ⚡ 채점 요약(v12.0): 미채점 상태로 (다시) 제출됐음을 알린다. 이미 채점된 답안을 그대로 다시 누른 경우(correct 가 남아 있음)는 건드리지 않는다
+        if(_ans.correct==null) _gradingIndexMark(curWS.id, _qId);
       }
     }
     const fb=document.getElementById('feedback-strip');

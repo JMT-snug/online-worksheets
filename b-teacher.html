@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.1">
+<meta name="app-version" content="6.2">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -332,6 +332,16 @@ function wsCategory(ws){ return UNIT_MAP[ws.unitId]?.category; }
 const fbApp   = initializeApp(FB);
 const auth    = getAuth(fbApp);
 const db      = getFirestore(fbApp);
+
+/* ⚡ 채점 여부 요약(grading_index) 오래됨 표시 (v5.2/6.2) — 학습지·문항 ID 를 바꾸거나 학생 기록을 지우면 요약(학습지ID·문항ID 로 정리돼 있다)이
+   실제와 어긋난다. config/gradingIndex.dirty 를 남겨 두면 scoring 이 요약을 믿지 않고 옛 방식으로 읽는다(🔧 요약 만들기로 다시 만들면 지워진다).
+   바로 앞 호출로부터 60초 안이면 건너뛴다(기록 수백 건을 고치는 반복문에서 쓰기를 줄이려고). 실패해도(규칙 미게시) 본 작업은 계속한다. */
+let _gidT = 0;
+function _gradingIndexDirty(){
+  const n = Date.now(); if(n - _gidT < 60000) return; _gidT = n;
+  try{ setDoc(doc(db,'config','gradingIndex'),{ dirty:true, dirtyAt:new Date().toISOString() },{ merge:true })
+        .catch(e=>console.log('[채점 요약] 오래됨 표시 생략:', e.code||e.message)); }catch(e){}
+}
 const storage = getStorage(fbApp);
 
 let tUser=null, allData={}, progressData={}, classes={}, selView="overview";
@@ -1555,7 +1565,7 @@ window.repairPerQuestion=async function(){
         // 그래도 불일치면 건너뜀
         skipped++; continue;
       }
-      await updateDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:newPQ});
+      _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:newPQ});
       rec.perQuestion=newPQ; ok++;
     }catch(e){ errors.push(`${uid}/${wsId}: ${e.message}`); }
   }
@@ -1588,7 +1598,7 @@ window.migrateQuestionIds=async function(){
         const newPQ={};
         for(const [oid,val] of Object.entries(rec.perQuestion))
           newPQ[idMap[oid]||oid]=val;
-        await updateDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ});
+        _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ});
         rec.perQuestion=newPQ; recOk++;
       }
     }catch(e){ errors.push(e.message); }
@@ -1899,7 +1909,7 @@ async function _purgeStudents(uids, label){
   for(const uid of uids){
     for(const wsId of Object.keys(allData[uid]||{})){
       try{
-        await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
+        _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
         try{ await deleteDoc(doc(db,'results',uid,'worksheets',wsId)); }catch(e2){}
         ok++;
       }catch(e){ fail++; console.warn('[삭제 실패]',uid,wsId,e.message); }
@@ -1936,7 +1946,7 @@ window.deleteSelectedWSRecs=async function(wsId){
   let ok=0, fail=0;
   for(const uid of uids){
     try{
-      await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
+      _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
       try{ await deleteDoc(doc(db,'results',uid,'worksheets',wsId)); }catch(e2){}
       if(allData[uid]) delete allData[uid][wsId];
       ok++;
@@ -1953,7 +1963,7 @@ window.deleteStudentRec=async function(wsId, uid){
   if(!confirm(`⚠️ "${name}"의 "${ws?.title||wsId}" 학습 기록을 삭제하시겠습니까?`
     + (_isExam ? `\n\n📝 시험지입니다. 삭제하면 이 학생이 다시 응시할 수 있습니다.\n(제출한 답안·점수는 복구할 수 없습니다)` : ''))) return;
   try{
-    await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+    _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
     if(allData[uid]) delete allData[uid][wsId];
     renderWS(wsId); // 현재 뷰 새로고침
     toast?.('삭제 완료');
@@ -1970,7 +1980,7 @@ window.clearWSRecords=async function(wsId){
   let ok=0, fail=0;
   for(const uid of targets){
     try{
-      await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+      _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
       try{ await deleteDoc(doc(db,"results",uid,"worksheets",wsId)); }catch(e2){}
       delete allData[uid][wsId]; ok++;
     }catch(e){ console.warn("삭제 실패:",uid,e.message); fail++; }

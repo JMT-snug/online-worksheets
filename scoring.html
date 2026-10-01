@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v1.33">
+<meta name="app-version" content="scoring-v2.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -265,6 +265,7 @@ body.mode-feedback .f-q{display:none}
       <!-- 2줄: 통계 + 답안 최신화 -->
       <div class="stat-row">
         <div id="stats-bar" class="stats-bar"></div>
+        <button class="sel-input btn-plain" id="btn-rebuild-idx" style="display:none" onclick="rebuildGradingIndex(this)" title="전체 답안을 한 번 읽어 채점 여부 요약을 새로 만듭니다 (기본 교사 전용)">🔧 요약 만들기</button>
         <button class="sel-input btn-plain" id="btn-refresh" onclick="refreshRecords(this)" title="학생이 수정한 답안을 최신 상태로 다시 불러옵니다">🔄 답안 최신화</button>
       </div>
     </div>
@@ -341,7 +342,7 @@ body.mode-feedback .f-q{display:none}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, collectionGroup, getDocs, query, orderBy }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, collectionGroup, getDocs, query, orderBy, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -438,7 +439,9 @@ onAuthStateChanged(auth, async u => {
   document.getElementById("hdr-user").style.display = "flex";
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   showPage("main-page");
-  await Promise.all([loadCurriculum(), loadClassInfo()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords)
+  await Promise.all([loadCurriculum(), loadClassInfo(), loadGradingIndex()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords) · v2.0: 채점 요약(grading_index)이 준비돼 있으면 목록·건수·상태는 그것으로
+  { const rb = document.getElementById('btn-rebuild-idx'); if(rb) rb.style.display = BASE_TEACHER_EMAILS.includes(u.email) ? '' : 'none'; }
+  if(!idxMode && BASE_TEACHER_EMAILS.includes(u.email)) toast('ℹ️ 채점 요약이 아직 없어 옛 방식으로 읽습니다 — 🔧 요약 만들기를 한 번 누르면 빨라져요', 5000);
   buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
   refreshFilterOptions();    // 네 목록을 서로 반응하도록 채움
   // 주소로 학습지를 지정해 왔으면(index 헤더의 '채점' 버튼) 그것을 우선한다
@@ -526,6 +529,11 @@ async function loadClassInfo(){
    loadedWs: 읽은 학습지 id / allLoaded: 전체를 읽었는가 */
 let loadedWs = new Set();
 let allLoaded = false;
+/* ⚡ 채점 여부 요약 (v2.0) — grading_index/{이메일}: p(제출 시각)·g(채점 결과 {v:0|1|2, t}) — 그림 없이 작은 문서.
+   config/gradingIndex 에 ready:true 이고 dirty 가 아닐 때만 믿는다(idxMode). 아니면 v1.33 의 학습지별 읽기로 동작한다.
+   요약은 목록·건수·상태 필터용이고 진실은 기록 문서다 — 학습지 기록을 읽을 때마다 기록과 대조해 틀린 칸을 고친다(reconcileIdx). */
+let idxMode = false;
+let idxDocs = {};      // 이메일 → {name, p:{ws:{q:시각}}, g:{ws:{q:{v,t}}}}
 const _wsLoading = {};      // wsId → 진행 중인 읽기
 let _allLoading = null;
 const WS_READ_CONCURRENCY = 24;
@@ -537,7 +545,13 @@ async function loadWsRecords(wsId, force){
   if(!force && wsRecordsReady(wsId)) return;
   if(_wsLoading[wsId]) return _wsLoading[wsId];
   const p = (async()=>{
-    const emails = Object.keys(classMap);
+    const emails = idxMode
+      ? Object.keys(idxDocs).filter(em => {   // 요약에 이 학습지 제출이 있는 학생만 (담당 교사는 담당 학급만)
+          const d = idxDocs[em]; if(!(d.p && d.p[wsId])) return false;
+          const cls = classMap[String(em).toLowerCase()] || '';
+          return !myClsNames || (cls && myClsNames.has(cls));
+        })
+      : Object.keys(classMap);
     const recs = {};
     let next = 0, failed = 0;
     const worker = async()=>{
@@ -554,6 +568,7 @@ async function loadWsRecords(wsId, force){
     if(emails.length && failed === emails.length) throw new Error('기록을 읽지 못했습니다');
     if(!allLoaded) allRecords[wsId] = recs;   // 그 사이 전체 읽기가 끝났으면 그 결과(반 명단 밖 학생 포함)를 지키지 않는다
     loadedWs.add(wsId);
+    if(idxMode) reconcileIdx(wsId, { dropMissing: failed === 0 });
     console.log('[기록] 학습지 로드', wsId, Object.keys(recs).length + '건');
   })();
   _wsLoading[wsId] = p;
@@ -591,10 +606,146 @@ async function loadAllRecords(){
     allRecords = all;
     Object.keys(all).forEach(id => loadedWs.add(id));
     allLoaded = true;
+    if(idxMode) Object.keys(all).forEach(id => reconcileIdx(id, { dropMissing: true }));
     console.log("[기록] 전체 로드 완료");
     return true;
   }catch(e){ console.error(e); return false; }
 }
+/* 요약 상태 판정: g 가 있고 g.t 가 제출 시각 p 이후면 g.v, 아니면 미채점 (학생이 다시 제출하면 p 가 새로워져 자동으로 미채점) */
+function idxStatusOf(p, g){
+  if(g && (p === undefined || String(g.t || '') >= String(p))) return g.v === 1 ? 'ok' : g.v === 2 ? 'ng' : 'pending';
+  return 'pending';
+}
+const _idxV = st => st === 'ok' ? 1 : st === 'ng' ? 2 : 0;
+
+/* 요약 읽기 — 표시(config/gradingIndex)가 ready 이고 dirty 가 아니며 문서가 있을 때만 idxMode */
+async function loadGradingIndex(){
+  idxMode = false; idxDocs = {};
+  try{
+    const flag = await getDoc(doc(db, 'config', 'gradingIndex'));
+    const f = flag.exists() ? flag.data() : {};
+    if(!f.ready){ console.log('[요약] 아직 만들지 않음 → 옛 방식'); return; }
+    if(f.dirty){ console.log('[요약] 오래됐다는 표시 → 옛 방식'); return; }
+    const snap = await getDocs(collection(db, 'grading_index'));
+    const docs = {};
+    snap.forEach(d => { const x = d.data() || {}; docs[d.id] = { name: x.name || '', p: x.p || {}, g: x.g || {} }; });
+    idxDocs = docs;
+    idxMode = Object.keys(docs).length > 0;
+    console.log('[요약] 사용', Object.keys(docs).length + '명');
+  }catch(e){ idxMode = false; idxDocs = {}; console.warn('[요약 읽기 실패 — 옛 방식]', e.code || e.message); }
+}
+
+/* 요약으로 채점 대상 행을 만든다 (그림은 읽지 않는다) */
+function buildGraphRowsFromIndex(){
+  graphRows = [];
+  const wsById = {}; WORKSHEETS.forEach(w => { wsById[w.id] = w; });
+  Object.entries(idxDocs).forEach(([email, d]) => {
+    const cls = classMap[String(email).toLowerCase()] || '';
+    if(myClsNames && !(cls && myClsNames.has(cls))) return;
+    Object.entries(d.p || {}).forEach(([wsId, qs]) => {
+      const ws = wsById[wsId]; if(!ws) return;
+      const unit = UNITS.find(u => u.id === ws.unitId);
+      Object.entries(qs || {}).forEach(([qid, pt]) => {
+        const q = (ws.questions || []).find(x => x.id === qid);
+        if(!q || q.type !== 'graph') return;
+        const g = d.g && d.g[wsId] ? d.g[wsId][qid] : undefined;
+        graphRows.push({
+          wsId, wsTitle: ws.title, unitTitle: unit ? unit.title : '',
+          qid, qIdx: (ws.questions || []).findIndex(x => x.id === qid),
+          qNo: qDisplayNo(ws, qid), qText: q.text || '', email,
+          name: d.name || email.split('@')[0], cls, status: idxStatusOf(pt, g)
+        });
+      });
+    });
+  });
+}
+
+/* 요약 한 칸을 고친다 — 로컬(idxDocs)과 Firestore 둘 다. 쓰기가 실패해도(규칙 미게시 등) 채점은 이미 기록에 저장돼 있다 */
+function patchIdx(email, wsId, qid, status, addP, name){
+  try{
+    const now = new Date().toISOString();
+    const isNew = !idxDocs[email];
+    const d = idxDocs[email] || (idxDocs[email] = { name: name || '', p: {}, g: {} });
+    d.p = d.p || {}; d.g = d.g || {};
+    const entry = { v: _idxV(status), t: now };
+    (d.g[wsId] = d.g[wsId] || {})[qid] = entry;
+    const patch = { g: { [wsId]: { [qid]: entry } } };
+    if(addP){ (d.p[wsId] = d.p[wsId] || {})[qid] = now; patch.p = { [wsId]: { [qid]: now } }; }
+    if(name && (isNew || !d.name)){ d.name = name; patch.name = name; }
+    setDoc(doc(db, 'grading_index', email), patch, { merge: true })
+      .catch(e => console.log('[채점 요약] 쓰기 생략:', e.code || e.message));
+  }catch(e){ console.log('[채점 요약] 쓰기 생략:', e.message); }
+}
+
+/* 학습지 기록을 읽은 뒤 요약과 대조 — 기록이 진실이다. 다른 칸은 요약을 고치고, 기록에 답안이 없는 칸은 목록에서 뺀다 */
+function reconcileIdx(wsId, opt){
+  if(!idxMode) return;
+  const ws = WORKSHEETS.find(w => w.id === wsId); if(!ws) return;
+  const recs = allRecords[wsId] || {};
+  const gq = (ws.questions || []).filter(q => q.type === 'graph');
+  let fixed = 0;
+  Object.entries(recs).forEach(([email, r]) => {
+    const d = idxDocs[email];
+    gq.forEach(q => {
+      const v = (r.perQuestion || {})[q.id];
+      const pt = d && d.p && d.p[wsId] ? d.p[wsId][q.id] : undefined;
+      if(!v || !v.drawing){ if(pt !== undefined) delete d.p[wsId][q.id]; return; }
+      const g = d && d.g && d.g[wsId] ? d.g[wsId][q.id] : undefined;
+      const real = statusOf(v);
+      const cur = pt === undefined ? null : idxStatusOf(pt, g);
+      if(cur === real) return;
+      patchIdx(email, wsId, q.id, real, pt === undefined, r.studentName); fixed++;
+    });
+  });
+  if(opt && opt.dropMissing){
+    Object.entries(idxDocs).forEach(([email, d]) => { if(d.p && d.p[wsId] && !recs[email]) delete d.p[wsId]; });
+  }
+  if(fixed) console.log('[요약 대조]', wsId, fixed + '칸 고침');
+}
+
+/* 🔧 요약 다시 만들기 (기본 교사) — 전체 기록을 한 번 읽어 모든 학생의 요약을 새로 쓰고, 「준비됨」 표시를 남긴다. 첫 채우기도 이것이다 */
+window.rebuildGradingIndex = async function(btn){
+  if(!currentUser || !BASE_TEACHER_EMAILS.includes(currentUser.email)){ toast('기본 교사만 쓸 수 있습니다'); return; }
+  if(!confirm('전교생의 모든 답안을 한 번 읽어 채점 여부 요약을 새로 만듭니다.\n(읽는 데 시간이 걸리고 읽기 횟수를 씁니다) 계속할까요?')) return;
+  if(btn){ btn.disabled = true; btn.textContent = '🔧 만드는 중...'; }
+  try{
+    toast('📥 전체 답안 읽는 중…', 180000);
+    allLoaded = false; _allLoading = null;
+    if(!(await loadAllRecords())) throw new Error('전체 답안을 읽지 못했습니다');
+    const nowIso = new Date().toISOString();
+    const gws = {}; WORKSHEETS.forEach(w => { gws[w.id] = w; });
+    const docs = {};
+    Object.entries(allRecords).forEach(([wsId, recs]) => {
+      const ws = gws[wsId]; if(!ws) return;
+      Object.entries(recs).forEach(([email, r]) => {
+        (ws.questions || []).filter(q => q.type === 'graph').forEach(q => {
+          const v = (r.perQuestion || {})[q.id]; if(!v || !v.drawing) return;
+          const d = docs[email] || (docs[email] = { name: r.studentName || email.split('@')[0], p: {}, g: {} });
+          (d.p[wsId] = d.p[wsId] || {})[q.id] = String(v.answeredAt || r.lastUpdated || '');
+          const st = statusOf(v);
+          if(st !== 'pending') (d.g[wsId] = d.g[wsId] || {})[q.id] = { v: _idxV(st), t: nowIso };
+        });
+      });
+    });
+    const emails = Object.keys(docs);
+    for(let i = 0; i < emails.length; i += 400){
+      const b = writeBatch(db);
+      emails.slice(i, i + 400).forEach(em => b.set(doc(db, 'grading_index', em), Object.assign({}, docs[em], { rebuiltAt: nowIso })));
+      await b.commit();
+    }
+    await setDoc(doc(db, 'config', 'gradingIndex'), { ready: true, dirty: false, rebuiltAt: nowIso }, { merge: true });
+    idxDocs = {}; Object.entries(docs).forEach(([em, d]) => { idxDocs[em] = d; });
+    idxMode = true;
+    buildGraphRows(); refreshFilterOptions();
+    if(curMode === 'feedback') buildStuSelector();
+    toast('✅ 요약을 만들었어요 (' + emails.length + '명)', 4000);
+  }catch(e){
+    console.error(e); toast('요약 만들기 실패: ' + (e.message || e), 5000);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '🔧 요약 만들기'; }
+  }
+};
+
 async function ensureAllLoaded(){
   if(allLoaded) return true;
   if(!_allLoading){
@@ -1088,7 +1239,7 @@ window.setMode = async function(m){
   document.getElementById('mode-feedback').classList.toggle('active', curMode==='feedback');
   saveState();
   if(curMode==='feedback'){
-    if(!allLoaded){   // 학생 한 명의 여러 학습지 문항을 넘기므로 전체 기록이 필요하다 (v1.32)
+    if(!allLoaded && !idxMode){   // 학생 한 명의 여러 학습지 문항을 넘기므로 전체 기록이 필요하다 (v1.32) — 요약이 있으면 문항을 열 때 그 학습지 기록만 읽는다 (v2.0)
       await ensureAllLoaded();
       if(curMode!=='feedback') return;
       refreshFilterOptions();
@@ -1144,12 +1295,17 @@ function showFeedItem(i){
   const wsSel=document.getElementById('sel-ws'); if(wsSel && [...wsSel.options].some(o=>o.value===it.wsId)) wsSel.value=it.wsId;
   const qSel=document.getElementById('sel-q');
   saveState();
+  if(!wsRecordsReady(it.wsId)){   // 요약 모드: 이 학습지 기록은 아직 안 읽었다 — 읽고 나서 연다
+    ensureWsLoaded(it.wsId).then(ok=>{ if(ok && curWsId===it.wsId && curQid===it.qid) loadQuestion({ onlyEmail: it.email }); });
+    return;
+  }
   loadQuestion({ onlyEmail: it.email });
 }
 
 window.prevFeed = ()=>showFeedItem(feedIdx-1);
 window.nextFeed = ()=>showFeedItem(feedIdx+1);
 function buildGraphRows(){
+  if(idxMode){ buildGraphRowsFromIndex(); return; }   // v2.0: 요약으로 (그림을 읽지 않고)
   graphRows = [];
   WORKSHEETS.forEach(ws=>{
     const unit = UNITS.find(u=>u.id===ws.unitId);
@@ -1210,7 +1366,7 @@ function refreshFilterOptions(){
   WORKSHEETS.forEach(ws=>{
     const o=wsMap[ws.id];
     if(o) wsOpts.push({v:ws.id, t:`${o.t} (${o.n})`});
-    else if(!wsRecordsReady(ws.id)){
+    else if(!idxMode && !wsRecordsReady(ws.id)){
       const unit=UNITS.find(u=>u.id===ws.unitId);
       wsOpts.push({v:ws.id, t:(unit?unit.title+' · ':'')+ws.title});
     }
@@ -1241,7 +1397,7 @@ function refreshFilterOptions(){
     /* v1.33: 학습지를 고르기 전에 채점 여부(미채점·오답·정답)부터 고를 수 있다.
        아직 일부 학습지 기록만 읽은 상태(partial)에서는 건수가 부분 집계라 보여 주지 않고 막지도 않는다 —
        상태를 고르면 그때 전체 기록을 읽어(onFilterChange) 모든 학습지의 해당 건수로 목록을 좁힌다. */
-    const partial = !allLoaded && !curWsId;
+    const partial = !allLoaded && !curWsId && !idxMode;   // 요약이 있으면 건수를 처음부터 안다
     const labels = partial
       ? {all:'전체', pending:'미채점만', ng:'오답만', ok:'정답만'}
       : {all:`전체 (${total})`, pending:`미채점만 (${cnt.pending})`, ng:`오답만 (${cnt.ng})`, ok:`정답만 (${cnt.ok})`};
@@ -1305,6 +1461,7 @@ window.refreshRecords = async function(btn){
   if(btn){ btn.disabled=true; btn.textContent='🔄 불러오는 중...'; }
   try{
     await loadClassInfo();
+    await loadGradingIndex();   // v2.0: 요약도 다시 읽는다 (그 뒤 기록을 읽으면서 대조)
     if(allLoaded){ if(!(await loadAllRecords())) throw new Error('기록을 읽지 못했습니다'); }
     else await Promise.all([...loadedWs].map(id=>loadWsRecords(id, true)));   // v1.32: 읽어 둔 학습지만 다시 읽는다
     buildGraphRows();   // 색인도 다시 만들어야 필터·상태 건수(미채점 등)에 새 답안이 반영된다
@@ -1375,7 +1532,7 @@ window.onQChange = function(){
 window.onFilterChange = async function(){
   curCls = document.getElementById('sel-cls').value;
   curStatus = document.getElementById('sel-status').value;
-  if(curStatus!=='all' && !curWsId && !allLoaded){
+  if(curStatus!=='all' && !curWsId && !allLoaded && !idxMode){
     // 학습지를 고르기 전에 채점 여부부터 고름 → 어느 학습지에 해당 답안이 있는지 알려면 전체 기록이 필요하다 (v1.33)
     const want = curStatus;
     const ok = await ensureAllLoaded();
@@ -1825,6 +1982,7 @@ window.saveCurrent = async function(){
     stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)
     // 색인의 상태도 갱신해 상태 필터·건수가 즉시 반영되게 한다
     graphRows.forEach(r=>{ if(r.email===stu.email && r.wsId===curWsId && r.qid===curQid) r.status = statusOf({correct:_curJudgment}); });
+    patchIdx(stu.email, curWsId, curQid, statusOf({correct:_curJudgment}), false, stu.name);   // ⚡ 채점 요약 (v2.0) — 실패해도 채점은 이미 저장됨
     if(teacherDrawing) stu.data.teacherDrawing = teacherDrawing;
     toast('✅ 저장');
     // 저장 후 이동 — 모드에 따라 다르게 (피드백 모드는 학생을 유지한다)

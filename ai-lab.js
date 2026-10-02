@@ -181,8 +181,10 @@ function withAiTraps(questions, rec){
    항목(aiReview.traps · wrongAnalysis.items)에 accepted:{reason:'q_error'|'notation'|'other', at, by} 가 붙으면
    · 🏷 유형 집계·재분류와 문항 aiTraps/freqTraps 에서 빠진다(학생 화면·teacher 의 오답 경로 안내에도 안 나온다)
    · 📊 빈출 오답을 다시 분석해도 AI 에 보내지 않고, 항목은 인정 표시 그대로 남는다(sub 는 지우지 않아 되돌리면 원래 유형)
-   · 👤 학생 성취 분석은 그 답을 낸 학생의 기록을 "맞힌 것"으로 보고 센다(adjustRecord — Firestore 기록 자체는 바꾸지 않는다)
-   실제 채점 기록을 바꾸려면 edit 에서 정답(또는 대안 정답)을 고친 뒤 teacher 의 재채점을 쓴다. */
+   · 👤 학생 성취 분석은 그 답을 낸 학생의 기록을 "맞힌 것"으로 보고 센다(adjustRecord — 화면 계산용 사본)
+   · v1.3(같은 날, 교사 요청 「기록도 자동으로」): ai.html 이 acceptPatch 로 학생 기록(records/{uid}/worksheets/{wsId}.perQuestion[qid])도 고친다 —
+     인정한 답을 wrongInputs 에서 빼고(attempts 도 그만큼) 마지막 답이 인정한 답이면 correct:true. 처음 고칠 때의 원본을 _beforeAccept 에 남겨
+     되돌리면 복구한다. 불러온 학생(담당 학급)만이므로 그 밖의 학생은 edit 정답 수정 → teacher 재채점. */
 const ACCEPT_REASONS = { q_error:'출제 오류(정답이 틀림)', notation:'표기 차이(한/영·기호)', other:'기타 사유' };
 const isAccepted = t => !!(t && t.accepted);
 /** 학습지에서 정답으로 인정한 답 — Map qid → Set(정규화한 답). 예상·빈출 항목 모두, on 여부와 무관 */
@@ -203,19 +205,45 @@ function adjustRecord(ws, r){
   const pq={...r.perQuestion}; let changed=false;
   acc.forEach((keys,qid)=>{
     const v=pq[qid], q=qById.get(qid); if(!v || !q) return;
-    const norm=w=>trapNorm(ansForCompare(q, String(w??'').trim()));
-    const wrongs=Array.isArray(v.wrongInputs)?v.wrongInputs:[];
-    const kept=wrongs.filter(w=>!keys.has(norm(w)));
-    const removed=wrongs.length-kept.length;
-    const last = v.lastAnswer!=null ? v.lastAnswer : (wrongs.length ? wrongs[wrongs.length-1] : null);
-    const lastOk = last!=null && keys.has(norm(last));
-    if(!removed && !(v.correct===false && lastOk)) return;
-    const nv={...v, wrongInputs:kept};
-    if(removed && Number(v.attempts)>0) nv.attempts=Math.max(0, Number(v.attempts)-removed);
-    if(v.correct===false && lastOk) nv.correct=true;
-    pq[qid]=nv; changed=true;
+    const nv=adjustOne(q, v, keys);
+    if(nv!==v){ pq[qid]=nv; changed=true; }
   });
   return changed ? {...r, perQuestion:pq} : r;
+}
+/** 문항 기록 하나에 인정한 답(keys)을 적용 — 바뀌는 게 없으면 같은 객체를 돌려준다 */
+function adjustOne(q, v, keys){
+  if(!v || !keys?.size) return v;
+  const norm=w=>trapNorm(ansForCompare(q, String(w??'').trim()));
+  const wrongs=Array.isArray(v.wrongInputs)?v.wrongInputs:[];
+  const kept=wrongs.filter(w=>!keys.has(norm(w)));
+  const removed=wrongs.length-kept.length;
+  const last = v.lastAnswer!=null ? v.lastAnswer : (wrongs.length ? wrongs[wrongs.length-1] : null);
+  const lastOk = last!=null && keys.has(norm(last));
+  if(!removed && !(v.correct===false && lastOk)) return v;
+  const nv={...v, wrongInputs:kept};
+  if(removed && Number(v.attempts)>0) nv.attempts=Math.max(0, Number(v.attempts)-removed);
+  if(v.correct===false && lastOk) nv.correct=true;
+  return nv;
+}
+/** 학생 기록에 실제로 써 넣을 조각 { [qid]: 새 perQuestion 값 } — 바뀌는 문항만 (v1.3).
+    처음 고칠 때 원본(correct·wrongInputs·attempts)을 _beforeAccept 에 남기고, 그 뒤로는 늘 원본에서 다시 계산한다 —
+    인정을 더하든 되돌리든 같은 함수로 맞는 상태가 된다. 인정이 모두 풀리면 원본으로 돌아가고 _beforeAccept 도 없앤다 */
+function acceptPatch(ws, r){
+  const acc=acceptedKeys(ws); const out={};
+  if(!r?.perQuestion) return out;
+  (ws.questions||[]).forEach(q=>{
+    const v=r.perQuestion[q.id]; if(!v) return;
+    const keys=acc.get(q.id);
+    if(!keys && !v._beforeAccept) return;
+    const { _beforeAccept:b, ...rest }=v;
+    const base = b ? { ...rest, correct:b.correct, wrongInputs:b.wrongInputs||[], attempts:b.attempts } : rest;
+    if(base.correct==null) delete base.correct;
+    if(base.attempts==null) delete base.attempts;
+    const adj = keys ? adjustOne(q, base, keys) : base;
+    const nv = adj!==base ? { ...adj, _beforeAccept:{ correct: base.correct??null, wrongInputs: base.wrongInputs||[], attempts: base.attempts??null } } : base;
+    if(JSON.stringify(nv)!==JSON.stringify(v)) out[q.id]=nv;
+  });
+  return out;
 }
 
 /* ══════════ 📊 빈출 오답 (wrongAnalysis) — teacher v3.51~5.0 의 것을 옮겨 왔다 ══════════
@@ -588,7 +616,7 @@ function changesByWs(pairs){
   return out;
 }
 
-if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, ACCEPT_REASONS, isAccepted, acceptedKeys, adjustRecord, buildTaxonomy, taxForAI, catOf, typeName, nextCustomCode, trapNorm, multiNums,
+if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, ACCEPT_REASONS, isAccepted, acceptedKeys, adjustRecord, adjustOne, acceptPatch, buildTaxonomy, taxForAI, catOf, typeName, nextCustomCode, trapNorm, multiNums,
   ansForCompare, studentAnsText, aiAnswerSummary, reviewQuestions, loadReviewRecord, mergeReview, storedReview, withAiTraps,
   FREQ_MIN_STUDENTS, FREQ_MAX_PER_Q, freqWrongStats, freqQuestions, mergeWrongAnalysis, storedWrongAnalysis, withFreqTraps, freqStatus,
   applyTypeChanges, wsTypedItems, countTypes, trapsFor, countTrapHits, classFirstTryAvg, studentWsTypes, mergeCatStats, periodKeyFn,

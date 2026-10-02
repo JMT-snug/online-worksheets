@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.5">
+<meta name="app-version" content="1.6">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -144,7 +144,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.2"></script>
+<script src="ai-lab.js?v=1.3"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -159,7 +159,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, doc, getDoc, setDoc, deleteField }
+import { getFirestore, collectionGroup, collection, query, orderBy, getDocs, doc, getDoc, setDoc, updateDoc, deleteField }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FB = {
@@ -303,7 +303,22 @@ function typeOptions(cur){
   return h;
 }
 const acceptBadge=a=>a?`<span class="badge" style="background:#dcfce7;color:#15803d" title="${esc('정답으로 인정 · '+fmtAt(a.at)+' · '+(a.by||''))}">✅ 정답 인정 · ${esc(ACCEPT_REASONS[a.reason]||a.reason||'')}</span>`:'';
-const ACCEPT_HINT='유형 집계·학생 분석에서 오답으로 세지 않습니다. 실제 채점 기록을 바꾸려면 편집기에서 정답(대안 정답)을 고친 뒤 교사 화면의 재채점을 쓰세요.';
+const ACCEPT_HINT='유형 집계·학생 분석에서 오답으로 세지 않고, 불러온 학생의 기록에서도 이 답을 오답에서 빼고 마지막 답이면 정답으로 고칩니다(되돌리면 원래대로). 불러오지 않은 학생(담당 학급 밖)은 편집기에서 정답을 고친 뒤 교사 화면의 재채점을 쓰세요.';
+/* ✅ 정답 인정을 학생 기록에 반영 (v1.6, 교사 요청 「기록도 자동으로」) — records/{uid}/worksheets/{wsId}.perQuestion[qid] 만 고친다.
+   어떤 값이 되는지는 ai-lab.js acceptPatch(원본은 _beforeAccept 에 남겨 되돌리기 가능). 불러온 학생(allData)만 — 담당 학급 밖은 teacher 재채점.
+   채점 요약(grading_index)은 그림 제출·채점만 담아 건드릴 것이 없다(teacher 의 재채점과 같다). */
+async function syncAcceptedRecords(ws){
+  let n=0, errs=0;
+  for(const [uid,d] of Object.entries(allData)){
+    const r=d?.[ws.id]; if(!r?.perQuestion) continue;
+    const patch=acceptPatch(ws, r); const qids=Object.keys(patch); if(!qids.length) continue;
+    const upd={ acceptedSyncAt:new Date().toISOString() }; qids.forEach(q=>{ upd['perQuestion.'+q]=patch[q]; });
+    try{ await updateDoc(doc(db,'records',uid,'worksheets',ws.id), upd); qids.forEach(q=>{ r.perQuestion[q]=patch[q]; }); n++; }
+    catch(e){ errs++; console.error('[정답 인정 기록 반영 실패]', uid, e.message); }
+  }
+  if(n||errs) toast(`📒 학생 기록 ${n}명 반영${errs?` · 실패 ${errs}명`:''}`);
+  return { n, errs };
+}
 /** 옮길 곳 고르기 — 자기 자신과 숨긴 유형은 뺀다 (v1.1) */
 function targetOptions(exclude, cur){
   let h=`<option value="">— 옮길 유형 고르기 —</option>`;
@@ -570,7 +585,7 @@ function drawWsDetail(){
       <span>🕳 예상 오답 ${rv?`${rv.traps.filter(t=>t.on).length}개 (마지막 ${fmtAt(rv.at)||'옛 기록'})`:'없음'} · 📊 빈출 오답 ${wa?`${wa.items.length}개 (마지막 ${fmtAt(wa.at)} · 학생 ${wa.students}명 기록)`:'분석 안 함'}</span>
       <span id="md-status"></span></div>
     <div class="warn">⚠️ AI 분석은 <b>참고용</b>입니다. 아니다 싶은 오답은 <b>체크를 풀고</b>, 유형이 틀리면 고르세요(바로 저장됩니다). 체크한 것만 학생 분석의 오답 대조에 쓰입니다.
-      <b>출제 오류나 한/영·기호 표기 차이로 실은 맞은 답</b>이면 유형 목록 맨 아래의 <b>✅ 정답 인정</b>을 고르세요 — 유형 집계·학생 분석에서 오답으로 세지 않습니다.</div>
+      <b>출제 오류나 한/영·기호 표기 차이로 실은 맞은 답</b>이면 유형 목록 맨 아래의 <b>✅ 정답 인정</b>을 고르세요 — 유형 집계·학생 분석에서 오답으로 세지 않고, 불러온 학생의 기록도 정답으로 고칩니다.</div>
     ${wa?.summary?`<div class="card"><div class="card-body"><b>📊 ${esc(wa.summary)}</b>
       ${wa.teachingPoints?.length?`<div style="margin-top:6px"><b>📌 수업에서 짚어 줄 것</b><ul style="margin:2px 0 0 18px">${wa.teachingPoints.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}</div></div>`:''}
     <div class="row small" style="margin-bottom:10px"><b>유형 분포</b> 예상 ${typeBar(counts.byCat,'ai')} 빈출(학생 수) ${typeBar(counts.byCat,'stu')}</div>
@@ -593,7 +608,8 @@ function mdScheduleSave(kind){
     try{
       if(md.dirty.ai && md.rv) await saveReview(md.wsId, md.rv);
       if(md.dirty.freq && md.wa) await saveWrongAnalysis(md.wsId, md.wa);
-      md.dirty={};
+      const needSync=md.syncAcc; md.dirty={}; md.syncAcc=false;
+      if(needSync){ const ws=WORKSHEETS.find(w=>w.id===md.wsId); if(ws) await syncAcceptedRecords(ws); }   // ✅ 정답 인정 → 학생 기록 (v1.6)
       const s2=$('md-status'); if(s2) s2.textContent='✅ 저장됨';
       if(TAB==='ws' && !running) { const keep=$('modal').style.display; renderWs(); $('modal').style.display=keep; }
     }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
@@ -601,8 +617,10 @@ function mdScheduleSave(kind){
 }
 window.mdToggle=(kind,j,on)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; l[j].on=!!on; drawWsDetail(); mdScheduleSave(kind); };
 window.mdType=(kind,j,code)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; const t=l[j];
+  const wasAcc=!!t.accepted;
   if(/^accept:/.test(code)){ t.accepted={ reason:code.slice(7), at:new Date().toISOString(), by:tUser.email }; }   // ✅ 정답 인정 — 유형(sub)은 두어 되돌리면 원래대로
   else { delete t.accepted; if(code) t.sub=code; else delete t.sub; t.subManual=true; }
+  if(wasAcc!==!!t.accepted) _md.syncAcc=true;   // 인정이 붙거나 풀리면 저장 뒤 학생 기록도 반영
   drawWsDetail(); mdScheduleSave(kind); };
 window.mdRun=async kind=>{
   if(running) return; const ws=WORKSHEETS.find(w=>w.id===_md.wsId);
@@ -898,7 +916,7 @@ function renderTypes(){
       <tr><td colspan="2"><span class="muted">미분류</span></td><td>${c.none.ai||''}</td><td>${c.none.freq?`${c.none.freq} <span class="muted small">(${c.none.stu}명)</span>`:''}</td>
         <td>${c.none.ai+c.none.freq?`<button class="btn" onclick="showTypeItems('')">보기</button>`:''}</td></tr>
       <tr style="background:#f0fdf4"><td colspan="2"><span style="color:#15803d;font-weight:700">✅ 정답 인정 (오답 아님)</span>
-        <div class="small muted">출제 오류·표기 차이로 실은 맞은 답 — 집계에서 빠지고 학생 분석에서 맞힌 것으로 봅니다</div></td>
+        <div class="small muted">출제 오류·표기 차이로 실은 맞은 답 — 집계에서 빠지고, 불러온 학생의 기록에서 정답으로 고쳐집니다(되돌리면 원래대로)</div></td>
         <td>${accA||''}</td><td>${accItems.length-accA?`${accItems.length-accA} <span class="muted small">(${accS}명)</span>`:''}</td>
         <td>${accItems.length?`<button class="btn" onclick="showTypeItems('__accepted')">보기</button>`:''}</td></tr>
       </tbody></table></div>
@@ -1015,7 +1033,8 @@ async function applyChanges(byWs){
     const patch=applyTypeChanges(fresh, changes); if(!patch) continue;
     n+=patch._changed; delete patch._changed;
     await setDoc(doc(db,'curriculum',wsId), patch, { merge:true });
-    if(ws){ ws.questions=patch.questions; if(patch.aiReview) ws.aiReview=patch.aiReview; if(patch.wrongAnalysis) ws.wrongAnalysis=patch.wrongAnalysis; }
+    if(ws){ ws.questions=patch.questions; if(patch.aiReview) ws.aiReview=patch.aiReview; if(patch.wrongAnalysis) ws.wrongAnalysis=patch.wrongAnalysis;
+      if(changes.some(c=>'accepted' in c)) await syncAcceptedRecords(ws); }   // ✅ 정답 인정/되돌리기 → 학생 기록 (v1.6)
   }
   return n;
 }

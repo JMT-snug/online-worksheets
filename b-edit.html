@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v5.4">
+<meta name="app-version" content="edit-v5.5">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -2879,6 +2879,12 @@ window.addQuestionItem = function(){
 };
 
 
+/* 전체 미리보기의 수식 — 입력칸 미리보기(previewText·toDisplay·stepDisplay)와 같은 규칙.
+   v5.5 이전에는 .replace(/\\\(/g,'\(') 로 "이중 백슬래시를 단일로" 하려 했는데 JS 에서 '\(' 는 '(' 라 \(…\) 구분자가 통째로 지워졌고,
+   _bqSpace 를 안 거쳐 \arc 의 글자 수 치환(_arcSize)·반칸 공백도 빠졌다(2026-10-02 교사 신고: 미리보기에서 \arc 가 안 된다). */
+function prevTex(s){
+  return _bqSpace(String(s??'').replace(/\\\\/g,'\\').replace(/<br\s*\/?>\s*\n/gi,'<br>').replace(/\n/g,'<br>'));
+}
 function renderPreview(){
   const ws = currentWs;
   document.getElementById('preview-title').textContent = `미리보기 — ${ws.title||'제목 없음'}`;
@@ -2897,19 +2903,19 @@ function renderPreview(){
           <span class="q-type-badge ${badgeCls}">${typeLabel}</span>
           <span style="font-size:11px;color:var(--ink3)">★${q.diff||1}</span>
         </div>
-        <div class="prev-q-text">${(q.text||'').replace(/\\\(/g,'\(').replace(/\\\)/g,'\)')}</div>`;
+        <div class="prev-q-text">${prevTex(q.text)}</div>`;
       if(q.type==='multi' && q.options){
         html += `<div class="prev-options">`;
         q.options.forEach((opt,i)=>{
           const isAns = (q.answer||[]).includes(i);
-          const optText = opt.replace(/\\\(/g,'\(').replace(/\\\)/g,'\)');
+          const optText = prevTex(opt);
           html += `<div class="prev-opt${isAns?' correct':''}">
             ${String.fromCharCode(9312+i)} ${optText}${isAns?' ✓':''}
           </div>`;
         });
         html += `</div>`;
       } else if(q.answer!==undefined && q.answer!==''){
-        html += `<div class="prev-ans">정답: ${q.answer}</div>`;
+        html += `<div class="prev-ans">정답: ${prevTex(q.answer)}</div>`;
       }
       html += `</div>`;
     });

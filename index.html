@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="12.1">
+  <meta name="app-version" content="12.2">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -3206,7 +3206,10 @@ function renderOption(opt){
   // backtick(`) → 반칸 공백(\,) 치환은 각 반환 직전에 한 번씩 한다.
   // 아래에서 \(...\)로 감싸는 경로는 감싼 뒤에 치환해야 구분자 안으로 들어간 backtick까지 바뀐다.
   // 이미 LaTeX(\()나 HTML(<span)이 있으면 그대로 (교사가 edit에서 직접 수식 지정한 경우)
-  if(opt.includes('\\(') || opt.includes('<span')) return _bqSpace(opt);
+  // v12.2: $...$ · $$...$$ 로 적은 선지도 같다 — 이걸 \(...\) 로 또 감싸면 MathJax 가 안쪽의 $ 를
+  //   글자 그대로 찍어 학생 화면에 $$ 가 보인다(편집기 미리보기는 감싸지 않아 정상이라 교사가 못 알아챈다).
+  //   이스케이프한 달러(\$3, 금액)는 수식 구분자가 아니므로 제외한다.
+  if(opt.includes('\\(') || opt.includes('<span') || /(^|[^\\])\$/.test(opt)) return _bqSpace(opt);
   const m = opt.match(/^([ㄱ-ㄹ]\.\s*|\([0-9]\)\s*)([\s\S]*)$/);
   const lbl = m ? m[1] : '', raw = m ? m[2] : opt;
   // 한글이 포함된 선지는 일반 텍스트로 표시 — 통째로 수식(\(...\))에 넣으면

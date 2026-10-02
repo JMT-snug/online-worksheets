@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v5.3">
+<meta name="app-version" content="edit-v5.4">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -11,12 +11,17 @@
 /* 구분자와 매크로는 index.html·scoring.html과 반드시 같게 유지할 것 —
    한쪽에만 있으면 편집기 미리보기와 학생 화면이 달라진다.
    \sslash(평행 ⫽)는 stmaryrd 패키지 명령이라 MathJax 기본에는 없어 직접 정의한다.
-   \arc{AB}(호 AB)는 \overparen{AB} 로 정의한다 — 늘어나는 ⏜(U+23DC)라
-   \overset{\frown}{AB} 와 달리 A·B 두 글자를 모두 덮는다. 인자 하나(#1)를 받는다.
+   \arc{AB}(호 AB)는 글자 수에 맞는 크기의 둥근 호(\frown)다 — \arcone(1글자)·\arctwo(2)·\arcthree(3)·\arcfour(4),
+   5글자 이상은 늘어나는 \overparen. 글자 수는 매크로가 못 세므로 _arcSize()(_bqSpace 안)가 \arc 를 바꿔 보낸다.
+   \arc 자체는 2글자 크기(기본값) — _bqSpace 를 안 거친 텍스트도 깨지지 않게.
    startup은 일부러 지정하지 않는다 — 이 페이지는 MathJax 자동 렌더에 기대고 있다. */
 window.MathJax = {
   tex: { inlineMath: [['\\(','\\)'],['$','$']], displayMath: [['\\[','\\]'],['$$','$$']],
-         macros: { sslash: '\\mathbin{/\\mkern-5mu/}', arc: ['\\overparen{#1}', 1] } }
+         macros: { sslash: '\\mathbin{/\\mkern-5mu/}', arc: ['\\arctwo{#1}', 1],
+                   arcone: ['\\overset{\\frown}{#1}', 1],
+                   arctwo: ['\\overset{\\lower.1em{\\LARGE\\frown}}{#1}', 1],
+                   arcthree: ['\\overset{\\lower.2em{\\huge\\frown}}{#1}', 1],
+                   arcfour: ['\\overset{\\lower.3em{\\Huge\\frown}}{#1}', 1] } }
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
@@ -1697,9 +1702,22 @@ window.renderAltList = renderAltList;
    index.html의 _bqSpace 와 같은 규칙 — 편집기 미리보기도 학생 화면과 같게 보이도록 여기서도 적용한다.
    v3.32: 인라인 수식 양끝에 반칸 공백을 자동으로 넣는다 (index v8.84 와 동일 — 자세한 설명은 그쪽 주석).
    그리는 순간에만 넣으므로 저장되는 문항 텍스트는 바뀌지 않는다. */
+/* \arc{…} 는 글자 수에 맞는 크기의 둥근 호(\frown)로 그린다.
+   늘어나는 \overparen 은 두 글자 이상이면 양끝만 굽고 가운데가 평평해 모양이 별로였다(2026-10-02 교사 지적).
+   MathJax 매크로는 글자 수를 셀 수 없어, 여기서 글자 수(명령어는 한 글자로, 공백·'·^·_ 는 빼고)에 따라
+   \arcone(1)·\arctwo(2)·\arcthree(3)·\arcfour(4)·\overparen(5글자 이상) 으로 바꿔 보낸다.
+   중괄호가 겹친 인자(\arc{\overline{AB}})는 그대로 두어 기본값(\arc = \arctwo)으로 그려진다.
+   세 파일(index·edit·scoring)의 이 함수와 MathJax macros 를 같게 유지할 것. */
+function _arcSize(text){
+  return text.replace(/\\arc\{([^{}]*)\}/g, (m, a) => {
+    const n = a.replace(/\\[a-zA-Z]+/g,'x').replace(/[\s'^_]/g,'').length;
+    const cmd = n<=1 ? '\\arcone' : n===2 ? '\\arctwo' : n===3 ? '\\arcthree' : n===4 ? '\\arcfour' : '\\overparen';
+    return cmd + '{' + a + '}';
+  });
+}
 function _bqSpace(text){
   if(!text) return text;
-  const s=String(text);
+  const s=_arcSize(String(text));
   if(s.indexOf('\\(')===-1 && s.indexOf('$')===-1 && s.indexOf('\\[')===-1 && s.indexOf('`')===-1) return s;
   /* 첫 갈래 \\\$ 는 이스케이프한 달러(금액 표기 \$3)를 그대로 돌려준다 — index 와 같은 이유 */
   return s.replace(/\\\$|\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?:\\.|[^$\\\n])*?\$/g, m=>{

@@ -12,6 +12,7 @@
        지우지 않고 숨기기(hidden)만 한다. 숨긴 유형은 AI 에 보내지 않지만 이미 붙은 기록은 그대로 보인다.
      · 합치기(v1.1) — 교사 유형의 오답을 모두 기존 유형으로 옮기고 그 유형은 hidden + mergedInto:'옮긴 곳' 으로 남긴다.
      · subManual:true — 교사가 직접 고른 유형. 다시 분석해도 AI 가 덮어쓰지 않는다.
+     · accepted:{reason,at,by} (v1.2, 2026-10-02) — ✅ 정답 인정. 출제 오류·표기 차이로 실은 맞은 답. 아래 「정답 인정」 절 참고.
    ═══════════════════════════════════════════════════════════════ */
 
 const TAX_BASE = [
@@ -167,12 +168,54 @@ function storedReview(rec){
 /** 문항의 aiTraps 를 기록의 on 인 것으로 다시 만든다 — 문항은 qid 로(없으면 idx) 맞춘다 */
 function withAiTraps(questions, rec){
   const byQ=new Map();
-  (rec?.traps||[]).filter(t=>t.on).forEach(t=>{
+  (rec?.traps||[]).filter(t=>t.on && !isAccepted(t)).forEach(t=>{
     const qid=t.qid || questions[t.idx]?.id; if(!qid) return;
     if(!byQ.has(qid)) byQ.set(qid,[]);
     byQ.get(qid).push({ wrong:t.wrong, path:t.path, label:t.label||'', ...(t.sub?{sub:t.sub}:{}) });
   });
   return (questions||[]).map(q=>{ const c={...q}; const l=byQ.get(q.id); if(l?.length) c.aiTraps=l; else delete c.aiTraps; return c; });
+}
+
+/* ══════════ ✅ 정답 인정 (v1.2, 2026-10-02 교사 요청) ══════════
+   출제 오류로 정답이 오답 처리됐거나 한/영·기호 표기만 다른 답은 "오답"이 아니다.
+   항목(aiReview.traps · wrongAnalysis.items)에 accepted:{reason:'q_error'|'notation'|'other', at, by} 가 붙으면
+   · 🏷 유형 집계·재분류와 문항 aiTraps/freqTraps 에서 빠진다(학생 화면·teacher 의 오답 경로 안내에도 안 나온다)
+   · 📊 빈출 오답을 다시 분석해도 AI 에 보내지 않고, 항목은 인정 표시 그대로 남는다(sub 는 지우지 않아 되돌리면 원래 유형)
+   · 👤 학생 성취 분석은 그 답을 낸 학생의 기록을 "맞힌 것"으로 보고 센다(adjustRecord — Firestore 기록 자체는 바꾸지 않는다)
+   실제 채점 기록을 바꾸려면 edit 에서 정답(또는 대안 정답)을 고친 뒤 teacher 의 재채점을 쓴다. */
+const ACCEPT_REASONS = { q_error:'출제 오류(정답이 틀림)', notation:'표기 차이(한/영·기호)', other:'기타 사유' };
+const isAccepted = t => !!(t && t.accepted);
+/** 학습지에서 정답으로 인정한 답 — Map qid → Set(정규화한 답). 예상·빈출 항목 모두, on 여부와 무관 */
+function acceptedKeys(ws){
+  const m=new Map();
+  const add=(qid,wrong)=>{ if(!qid) return; if(!m.has(qid)) m.set(qid,new Set()); m.get(qid).add(trapNorm(wrong)); };
+  const rv=ws?.aiReview;
+  if(rv && Array.isArray(rv.traps)) rv.traps.forEach(t=>{ if(isAccepted(t)) add(t.qid||ws.questions?.[t.idx]?.id, t.wrong); });
+  (ws?.wrongAnalysis?.items||[]).forEach(t=>{ if(isAccepted(t)) add(t.qid, t.wrong); });
+  return m;
+}
+/** 학생 기록의 사본 — 인정한 답을 오답 목록(wrongInputs)에서 빼고, 마지막 답이 인정한 답이면 맞힌 것으로 본다.
+    인정한 답이 없거나 바뀌는 게 없으면 원본을 그대로 돌려준다 */
+function adjustRecord(ws, r){
+  const acc=acceptedKeys(ws);
+  if(!acc.size || !r?.perQuestion) return r;
+  const qById=new Map((ws.questions||[]).map(q=>[q.id,q]));
+  const pq={...r.perQuestion}; let changed=false;
+  acc.forEach((keys,qid)=>{
+    const v=pq[qid], q=qById.get(qid); if(!v || !q) return;
+    const norm=w=>trapNorm(ansForCompare(q, String(w??'').trim()));
+    const wrongs=Array.isArray(v.wrongInputs)?v.wrongInputs:[];
+    const kept=wrongs.filter(w=>!keys.has(norm(w)));
+    const removed=wrongs.length-kept.length;
+    const last = v.lastAnswer!=null ? v.lastAnswer : (wrongs.length ? wrongs[wrongs.length-1] : null);
+    const lastOk = last!=null && keys.has(norm(last));
+    if(!removed && !(v.correct===false && lastOk)) return;
+    const nv={...v, wrongInputs:kept};
+    if(removed && Number(v.attempts)>0) nv.attempts=Math.max(0, Number(v.attempts)-removed);
+    if(v.correct===false && lastOk) nv.correct=true;
+    pq[qid]=nv; changed=true;
+  });
+  return changed ? {...r, perQuestion:pq} : r;
 }
 
 /* ══════════ 📊 빈출 오답 (wrongAnalysis) — teacher v3.51~5.0 의 것을 옮겨 왔다 ══════════
@@ -209,9 +252,10 @@ function freqWrongStats(ws, allData){
 }
 /** 분석 대상 문항 [{idx, qid, type, text, answer, wrongs:[{wrong,students}], predicted:[{wrong,path,label}]}] */
 function freqQuestions(ws, stats){
+  const acc=acceptedKeys(ws);   // ✅ 정답으로 인정한 답은 빈출 오답이 아니다 — AI 에 보내지 않는다
   return (ws?.questions||[]).map((q,i)=>{
     if(AI_SKIP_TYPES.has(q.type)) return null;
-    const wrongs=(stats.byQ[q.id]||[]).filter(w=>!w.blank && w.students>=FREQ_MIN_STUDENTS).slice(0,FREQ_MAX_PER_Q).map(w=>({wrong:w.wrong, students:w.students}));
+    const wrongs=(stats.byQ[q.id]||[]).filter(w=>!w.blank && w.students>=FREQ_MIN_STUDENTS && !acc.get(q.id)?.has(trapNorm(w.wrong))).slice(0,FREQ_MAX_PER_Q).map(w=>({wrong:w.wrong, students:w.students}));
     if(!wrongs.length) return null;
     return { idx:i, qid:q.id, type:q.type, text:plainText(q.text,400), answer:aiAnswerSummary(q), wrongs,
       predicted:(q.aiTraps||[]).map(t=>({wrong:String(t.wrong??''), path:String(t.path??''), label:String(t.label??'')})) };
@@ -236,8 +280,14 @@ function mergeWrongAnalysis(prev, out, qs, stats, by, now){
     const it={ idx:q.idx, qid:q.qid, wrong:w.wrong, students:w.students, path, label, on: o ? o.on!==false : true, at };
     if(sub) it.sub=sub;
     if(manual) it.subManual=true;
+    if(o?.accepted) it.accepted=o.accepted;
     items.push(it);
   }));
+  // ✅ 정답으로 인정한 항목은 AI 에 안 보냈으니 위 목록에 없다 — 이전 기록에서 그대로 잇는다(학생 수만 지금 집계로)
+  const have=new Set(items.map(it=>it.qid+'|'+trapNorm(it.wrong)));
+  (prev?.items||[]).forEach(o=>{ if(!isAccepted(o)) return; const k=o.qid+'|'+trapNorm(o.wrong); if(have.has(k)) return;
+    const st=(stats.byQ[o.qid]||[]).find(w=>trapNorm(w.wrong)===trapNorm(o.wrong));
+    items.push({ ...o, students: st ? st.students : (o.students||0) }); });
   return { at:now, count:(prev?.count||0)+1, students:stats.students, by:by||'', summary:String(out.summary||''),
     teachingPoints:(out.teachingPoints||[]).map(String).filter(Boolean), items, _analyzed:analyzed, _kept:kept, _missing:missing };
 }
@@ -246,7 +296,7 @@ function storedWrongAnalysis(rec){
 }
 function withFreqTraps(questions, rec){
   const byQid=new Map();
-  (rec?.items||[]).filter(t=>t.on).forEach(t=>{ if(!byQid.has(t.qid)) byQid.set(t.qid,[]);
+  (rec?.items||[]).filter(t=>t.on && !isAccepted(t)).forEach(t=>{ if(!byQid.has(t.qid)) byQid.set(t.qid,[]);
     byQid.get(t.qid).push({ wrong:t.wrong, path:t.path, label:t.label||'', students:t.students||0, ...(t.sub?{sub:t.sub}:{}) }); });
   return (questions||[]).map(q=>{ const c={...q}; const l=byQid.get(q.id); if(l?.length) c.freqTraps=l; else delete c.freqTraps; return c; });
 }
@@ -262,7 +312,8 @@ function freqStatus(ws, allData){
 }
 
 /* ══════════ 유형 바꾸기 (교사가 고르거나 🏷 재분류를 적용할 때) ══════════
-   docData = 학습지 문서(Firestore 에서 **방금 다시 읽은** 것). changes = [{kind:'ai'|'freq', qid, key, sub, manual?}]
+   docData = 학습지 문서(Firestore 에서 **방금 다시 읽은** 것). changes = [{kind:'ai'|'freq', qid, key, sub?, manual?, accepted?}]
+   sub 는 키가 있을 때만 바꾼다(없으면 그대로). accepted:{reason,at,by} 는 ✅ 정답 인정, accepted:null 은 되돌리기
    돌려주는 것 = setDoc(…, {merge:true}) 에 넣을 조각 { aiReview?, wrongAnalysis?, questions } — 바뀐 게 없으면 null */
 function applyTypeChanges(docData, changes){
   const d={ ...docData, questions:(docData.questions||[]).map(q=>({...q})) };
@@ -272,8 +323,9 @@ function applyTypeChanges(docData, changes){
     rv=loadReviewRecord(d);
     if(rv) aiCh.forEach(c=>{
       rv.traps.forEach(t=>{ if(t.qid===c.qid && trapNorm(t.wrong)===c.key){
-        if(c.sub) t.sub=c.sub; else delete t.sub;
+        if('sub' in c){ if(c.sub) t.sub=c.sub; else delete t.sub; }
         if(c.manual) t.subManual=true; else if(c.manual===false) delete t.subManual;
+        if('accepted' in c){ if(c.accepted) t.accepted=c.accepted; else delete t.accepted; }   // ✅ 정답 인정 / 되돌리기
         n++; } });
     });
   }
@@ -281,8 +333,9 @@ function applyTypeChanges(docData, changes){
     wa={ ...d.wrongAnalysis, items:d.wrongAnalysis.items.map(t=>({...t})) };
     fqCh.forEach(c=>{
       wa.items.forEach(t=>{ if(t.qid===c.qid && trapNorm(t.wrong)===c.key){
-        if(c.sub) t.sub=c.sub; else delete t.sub;
+        if('sub' in c){ if(c.sub) t.sub=c.sub; else delete t.sub; }
         if(c.manual) t.subManual=true; else if(c.manual===false) delete t.subManual;
+        if('accepted' in c){ if(c.accepted) t.accepted=c.accepted; else delete t.accepted; }   // ✅ 정답 인정 / 되돌리기
         n++; } });
     });
   }
@@ -298,20 +351,22 @@ function applyTypeChanges(docData, changes){
 
 /* ══════════ 🏷 유형별 집계 ══════════ */
 /** 학습지 하나의 오답 유형 목록 — 예상(on)·빈출(on) 항목에 문항 글을 붙여 평평하게.
-    [{kind:'ai'|'freq', wsId, qid, idx, wrong, key, path, label, sub, subManual, students, q, answer}] */
-function wsTypedItems(ws){
+    [{kind:'ai'|'freq', wsId, qid, idx, wrong, key, path, label, sub, subManual, students, q, answer, accepted}]
+    ✅ 정답으로 인정한 항목은 뺀다. accepted=true 로 부르면 반대로 인정한 항목만(on 여부 무관) 돌려준다 (v1.2) */
+function wsTypedItems(ws, accepted=false){
   const qById=new Map((ws.questions||[]).map((q,i)=>[q.id,{q,i}]));
   const out=[];
+  const pick=t=> accepted ? isAccepted(t) : (t.on && !isAccepted(t));
   const rv=loadReviewRecord(ws);
-  (rv?.traps||[]).filter(t=>t.on).forEach(t=>{
+  (rv?.traps||[]).filter(pick).forEach(t=>{
     const e=qById.get(t.qid); if(!e) return;
     out.push({ kind:'ai', wsId:ws.id, qid:t.qid, idx:e.i, wrong:t.wrong, key:trapNorm(t.wrong), path:t.path, label:t.label||'', sub:t.sub||'', subManual:!!t.subManual,
-      students:0, q:plainText(e.q.text,200), answer:aiAnswerSummary(e.q)||'' });
+      students:0, q:plainText(e.q.text,200), answer:aiAnswerSummary(e.q)||'', accepted:t.accepted||null });
   });
-  (ws.wrongAnalysis?.items||[]).filter(t=>t.on).forEach(t=>{
+  (ws.wrongAnalysis?.items||[]).filter(pick).forEach(t=>{
     const e=qById.get(t.qid); if(!e) return;
     out.push({ kind:'freq', wsId:ws.id, qid:t.qid, idx:e.i, wrong:t.wrong, key:trapNorm(t.wrong), path:t.path, label:t.label||'', sub:t.sub||'', subManual:!!t.subManual,
-      students:t.students||0, q:plainText(e.q.text,200), answer:aiAnswerSummary(e.q)||'' });
+      students:t.students||0, q:plainText(e.q.text,200), answer:aiAnswerSummary(e.q)||'', accepted:t.accepted||null });
   });
   return out;
 }
@@ -370,7 +425,7 @@ function classFirstTryAvg(worksheets, allData){
   worksheets.forEach(ws=>{
     if(!isRegular(ws)) return;
     let s=0, n=0;
-    Object.values(allData||{}).forEach(d=>{ const r=d?.[ws.id]; if(!r?.perQuestion) return;
+    Object.values(allData||{}).forEach(d=>{ const r=adjustRecord(ws, d?.[ws.id]); if(!r?.perQuestion) return;
       const st=recordHistoryStats(ws.questions, r.perQuestion); if(st.firstTryRate!=null){ s+=st.firstTryRate; n++; } });
     if(n) out[ws.id]=Math.round(s/n);
   });
@@ -379,6 +434,7 @@ function classFirstTryAvg(worksheets, allData){
 /** 학생 한 명의 학습지별 오답 유형 — 한 문항에서 낸 서로 다른 오답마다, 분류된 오답 경로와 일치하면 그 유형으로 센다 */
 function studentWsTypes(ws, r, tax){
   const res={ wrongTotal:0, matched:0, subs:{} };
+  r=adjustRecord(ws, r);   // ✅ 정답으로 인정한 답은 오답이 아니다
   if(!r?.perQuestion) return res;
   (ws.questions||[]).forEach(q=>{
     if(AI_SKIP_TYPES.has(q.type)) return;
@@ -422,7 +478,7 @@ function studentTimeline(targets, wsMap, classAvg, tax){
   const rows=[];
   targets.forEach(ws=>{
     if(!isRegular(ws)) return;
-    const r=wsMap[ws.id]; if(!r?.perQuestion) return;
+    const r=adjustRecord(ws, wsMap[ws.id]); if(!r?.perQuestion) return;
     const date=recDate(r); if(!date) return;
     const st=recordHistoryStats(ws.questions, r.perQuestion);
     const ty=studentWsTypes(ws, r, tax);
@@ -449,7 +505,7 @@ function studentTimeline(targets, wsMap, classAvg, tax){
 /** analyzeStudent 로 보낼 학습지 목록 (teacher v5.0 _runStudentAI 와 같은 꼴 + 오답 경로에 유형) */
 function studentAiWorksheets(targets, wsMap, tax){
   return targets.map(ws=>{
-    const r=wsMap[ws.id];
+    const r=adjustRecord(ws, wsMap[ws.id]);   // ✅ 정답으로 인정한 답은 맞힌 것으로
     const rate=r.correctRate ?? (r.totalCount?Math.round((r.answeredCount||0)/r.totalCount*100):0);
     const regular=isRegular(ws);
     const wrongItems=[], recoveredItems=[], unansweredItems=[];
@@ -493,7 +549,7 @@ function studentAiWorksheets(targets, wsMap, tax){
 function studentSummary(wsMap, worksheets, classAvg){
   let n=0, fs=0, fn=0, ds=0, dn=0, last='';
   worksheets.forEach(ws=>{
-    const r=wsMap?.[ws.id]; if(!r || ws.type==='review') return;
+    const r=adjustRecord(ws, wsMap?.[ws.id]); if(!r || ws.type==='review') return;
     n++;
     const d=recDate(r); if(d>last) last=d;
     if(!isRegular(ws) || !r.perQuestion) return;
@@ -528,11 +584,11 @@ function groupAssignments(items, res){
     manual 이면 subManual 로 남아 다시 분석해도 AI 가 덮어쓰지 않는다 (v1.1 — 옮기기·합치기·재분류 결과를 교사가 바꾼 것) */
 function changesByWs(pairs){
   const out={};
-  pairs.forEach(([it,sub,manual])=>{ (out[it.wsId]||(out[it.wsId]=[])).push({ kind:it.kind, qid:it.qid, key:it.key, sub, ...(manual?{manual:true}:{}) }); });
+  pairs.forEach(([it,sub,manual])=>{ (out[it.wsId]||(out[it.wsId]=[])).push({ kind:it.kind, qid:it.qid, key:it.key, sub, ...(manual?{manual:true}:{}), ...(it.accepted?{accepted:null}:{}) }); });
   return out;
 }
 
-if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, buildTaxonomy, taxForAI, catOf, typeName, nextCustomCode, trapNorm, multiNums,
+if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, ACCEPT_REASONS, isAccepted, acceptedKeys, adjustRecord, buildTaxonomy, taxForAI, catOf, typeName, nextCustomCode, trapNorm, multiNums,
   ansForCompare, studentAnsText, aiAnswerSummary, reviewQuestions, loadReviewRecord, mergeReview, storedReview, withAiTraps,
   FREQ_MIN_STUDENTS, FREQ_MAX_PER_Q, freqWrongStats, freqQuestions, mergeWrongAnalysis, storedWrongAnalysis, withFreqTraps, freqStatus,
   applyTypeChanges, wsTypedItems, countTypes, trapsFor, countTrapHits, classFirstTryAvg, studentWsTypes, mergeCatStats, periodKeyFn,

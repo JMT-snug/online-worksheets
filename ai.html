@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.4">
+<meta name="app-version" content="1.5">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -144,7 +144,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.1"></script>
+<script src="ai-lab.js?v=1.2"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -297,9 +297,13 @@ function typeOptions(cur){
   TAX.cats.forEach(c=>{ h+=`<optgroup label="${esc(c.icon+' '+c.name)}">`;
     c.subs.forEach(s=>{ if(s.hidden && s.code!==cur) return; h+=`<option value="${s.code}" ${s.code===cur?'selected':''}>${esc(s.name)}${s.custom?' ✚':''}</option>`; });
     h+='</optgroup>'; });
-  if(cur && !TAX.byCode[cur]) h+=`<option value="${esc(cur)}" selected>${esc(cur)}</option>`;
+  if(cur && !TAX.byCode[cur] && !/^accept:/.test(cur)) h+=`<option value="${esc(cur)}" selected>${esc(cur)}</option>`;
+  // ✅ 정답 인정 (v1.5) — 출제 오류·표기 차이로 실은 맞은 답. 유형 집계·학생 분석에서 오답으로 세지 않는다
+  h+=`<optgroup label="✅ 정답 인정 (오답 아님)">${Object.entries(ACCEPT_REASONS).map(([k,v])=>`<option value="accept:${k}" ${cur==='accept:'+k?'selected':''}>✅ ${esc(v)}</option>`).join('')}</optgroup>`;
   return h;
 }
+const acceptBadge=a=>a?`<span class="badge" style="background:#dcfce7;color:#15803d" title="${esc('정답으로 인정 · '+fmtAt(a.at)+' · '+(a.by||''))}">✅ 정답 인정 · ${esc(ACCEPT_REASONS[a.reason]||a.reason||'')}</span>`:'';
+const ACCEPT_HINT='유형 집계·학생 분석에서 오답으로 세지 않습니다. 실제 채점 기록을 바꾸려면 편집기에서 정답(대안 정답)을 고친 뒤 교사 화면의 재채점을 쓰세요.';
 /** 옮길 곳 고르기 — 자기 자신과 숨긴 유형은 뺀다 (v1.1) */
 function targetOptions(exclude, cur){
   let h=`<option value="">— 옮길 유형 고르기 —</option>`;
@@ -545,13 +549,14 @@ function drawWsDetail(){
     const fr=(wa?.items||[]).map((t,j)=>({t,j})).filter(x=>x.t.qid===q.id);
     const na=(fs.qs.find(x=>x.qid===q.id)?.wrongs||[]).filter(w=>!have.has(q.id+'|'+trapNorm(w.wrong)));
     if(!pr.length && !fr.length && !na.length) return '';
-    const row=(kind,{t,j})=>`<div class="it ${t.on?'':'off'}">
+    const row=(kind,{t,j})=>`<div class="it ${t.on&&!t.accepted?'':'off'}">
       <input type="checkbox" ${t.on?'checked':''} onchange="mdToggle('${kind}',${j},this.checked)" style="margin-top:4px">
       <div style="flex:1"><span class="wrong">${esc(t.wrong)}</span>
         ${kind==='freq'?` <span class="badge" style="background:var(--red-lt);color:var(--red)">학생 ${t.students}명</span>`:''}
         ${t.label?` <span class="badge" style="background:#ede9fe;color:#5b21b6">${esc(t.label)}</span>`:''}
-        <select class="typesel" onchange="mdType('${kind}',${j},this.value)" title="오답 유형 — 고르면 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다">${typeOptions(t.sub||'')}</select>${t.subManual?' <span class="small muted" title="교사가 고른 유형">✋</span>':''}
-        <span class="path">${esc(t.path)}</span></div></div>`;
+        ${acceptBadge(t.accepted)}
+        <select class="typesel" onchange="mdType('${kind}',${j},this.value)" title="오답 유형 — 고르면 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다. 출제 오류·표기 차이로 실은 맞은 답이면 ✅ 정답 인정을 고르세요">${typeOptions(t.accepted?'accept:'+t.accepted.reason:(t.sub||''))}</select>${t.subManual&&!t.accepted?' <span class="small muted" title="교사가 고른 유형">✋</span>':''}
+        ${t.accepted?`<div class="small muted">${ACCEPT_HINT}</div>`:`<span class="path">${esc(t.path)}</span>`}</div></div>`;
     return `<div class="qblock"><div class="small" style="font-weight:700">${i+1}번 <span class="muted" style="font-weight:400">${esc(q.id)}</span></div>
       <div class="small muted">${esc(String(q.text||'').replace(/<[^>]+>/g,'').slice(0,120))}</div>
       ${pr.length?`<div class="small" style="margin-top:6px;font-weight:700;color:#5b21b6">🕳 예상 오답</div>${pr.map(x=>row('ai',x)).join('')}`:''}
@@ -564,7 +569,8 @@ function drawWsDetail(){
     <div class="row small muted" style="justify-content:space-between;margin-bottom:8px">
       <span>🕳 예상 오답 ${rv?`${rv.traps.filter(t=>t.on).length}개 (마지막 ${fmtAt(rv.at)||'옛 기록'})`:'없음'} · 📊 빈출 오답 ${wa?`${wa.items.length}개 (마지막 ${fmtAt(wa.at)} · 학생 ${wa.students}명 기록)`:'분석 안 함'}</span>
       <span id="md-status"></span></div>
-    <div class="warn">⚠️ AI 분석은 <b>참고용</b>입니다. 아니다 싶은 오답은 <b>체크를 풀고</b>, 유형이 틀리면 고르세요(바로 저장됩니다). 체크한 것만 학생 분석의 오답 대조에 쓰입니다.</div>
+    <div class="warn">⚠️ AI 분석은 <b>참고용</b>입니다. 아니다 싶은 오답은 <b>체크를 풀고</b>, 유형이 틀리면 고르세요(바로 저장됩니다). 체크한 것만 학생 분석의 오답 대조에 쓰입니다.
+      <b>출제 오류나 한/영·기호 표기 차이로 실은 맞은 답</b>이면 유형 목록 맨 아래의 <b>✅ 정답 인정</b>을 고르세요 — 유형 집계·학생 분석에서 오답으로 세지 않습니다.</div>
     ${wa?.summary?`<div class="card"><div class="card-body"><b>📊 ${esc(wa.summary)}</b>
       ${wa.teachingPoints?.length?`<div style="margin-top:6px"><b>📌 수업에서 짚어 줄 것</b><ul style="margin:2px 0 0 18px">${wa.teachingPoints.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}</div></div>`:''}
     <div class="row small" style="margin-bottom:10px"><b>유형 분포</b> 예상 ${typeBar(counts.byCat,'ai')} 빈출(학생 수) ${typeBar(counts.byCat,'stu')}</div>
@@ -595,7 +601,9 @@ function mdScheduleSave(kind){
 }
 window.mdToggle=(kind,j,on)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; l[j].on=!!on; drawWsDetail(); mdScheduleSave(kind); };
 window.mdType=(kind,j,code)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; const t=l[j];
-  if(code) t.sub=code; else delete t.sub; t.subManual=true; drawWsDetail(); mdScheduleSave(kind); };
+  if(/^accept:/.test(code)){ t.accepted={ reason:code.slice(7), at:new Date().toISOString(), by:tUser.email }; }   // ✅ 정답 인정 — 유형(sub)은 두어 되돌리면 원래대로
+  else { delete t.accepted; if(code) t.sub=code; else delete t.sub; t.subManual=true; }
+  drawWsDetail(); mdScheduleSave(kind); };
 window.mdRun=async kind=>{
   if(running) return; const ws=WORKSHEETS.find(w=>w.id===_md.wsId);
   running=true; $('md-status').textContent=kind==='pred'?'🕳 예상 오답 분석 중… (몇십 초)':'📊 빈출 오답 분석 중… (몇십 초)';
@@ -854,6 +862,7 @@ function allTypedItems(){ let n=0; return WORKSHEETS.flatMap(ws=>wsTypedItems(ws
 function renderTypes(){
   const items=allTypedItems();
   const c=countTypes(items);
+  const accItems=WORKSHEETS.flatMap(ws=>wsTypedItems(ws,true)); const accA=accItems.filter(i=>i.kind==='ai').length, accS=accItems.reduce((n,i)=>n+(i.kind==='freq'?i.students:0),0);
   const unknown=items.filter(it=>it.sub===TAX_UNKNOWN).length;
   const none=items.filter(it=>!it.sub).length;
   const orphan=items.filter(it=>it.sub && !TAX.byCode[it.sub]).length;
@@ -888,6 +897,10 @@ function renderTypes(){
       }).join('')}
       <tr><td colspan="2"><span class="muted">미분류</span></td><td>${c.none.ai||''}</td><td>${c.none.freq?`${c.none.freq} <span class="muted small">(${c.none.stu}명)</span>`:''}</td>
         <td>${c.none.ai+c.none.freq?`<button class="btn" onclick="showTypeItems('')">보기</button>`:''}</td></tr>
+      <tr style="background:#f0fdf4"><td colspan="2"><span style="color:#15803d;font-weight:700">✅ 정답 인정 (오답 아님)</span>
+        <div class="small muted">출제 오류·표기 차이로 실은 맞은 답 — 집계에서 빠지고 학생 분석에서 맞힌 것으로 봅니다</div></td>
+        <td>${accA||''}</td><td>${accItems.length-accA?`${accItems.length-accA} <span class="muted small">(${accS}명)</span>`:''}</td>
+        <td>${accItems.length?`<button class="btn" onclick="showTypeItems('__accepted')">보기</button>`:''}</td></tr>
       </tbody></table></div>
       <div class="card-body" style="border-top:1px solid var(--rule)">
         <div class="row small"><b>✚ 유형 직접 더하기</b>
@@ -927,7 +940,8 @@ window.hideSub=async code=>{
 };
 /** 이 유형의 오답들 — 하나씩(옆 목록) 또는 여러 개를 골라(체크 → 아래 [옮기기]) 다른 유형으로 옮긴다 (v1.1) */
 window.showTypeItems=code=>{
-  const items=allTypedItems().filter(it=>code?it.sub===code:!it.sub);
+  const isAcc=code==='__accepted';   // ✅ 정답으로 인정한 것 (v1.5) — 유형을 고르면 인정이 풀리고 그 유형으로 돌아간다
+  const items=isAcc ? WORKSHEETS.flatMap(ws=>wsTypedItems(ws,true)).map((it,n)=>({...it, id:'a'+n})) : allTypedItems().filter(it=>code?it.sub===code:!it.sub);
   _md={ typeItems:items, code };
   const byWs=new Map(); items.forEach(it=>{ if(!byWs.has(it.wsId)) byWs.set(it.wsId,[]); byWs.get(it.wsId).push(it); });
   const bar=`<div class="row small" style="position:sticky;top:0;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--rule);margin-bottom:8px;z-index:1">
@@ -935,16 +949,21 @@ window.showTypeItems=code=>{
       <span id="ti-count" class="muted">0개 고름</span>
       <select id="ti-target" class="typesel" style="max-width:240px">${targetOptions(code)}</select>
       <button class="btn btn-ai" onclick="tiMoveSel()">↪ 고른 것 옮기기</button></div>`;
-  openModal(`🏷 ${code?typeName(TAX,code):'미분류'} — ${items.length}개`, `<div class="small muted" style="margin-bottom:4px">하나만 바꾸려면 옆 목록에서 고르고, 여러 개는 체크한 뒤 위에서 옮길 유형을 골라 [옮기기]를 누르세요. 바로 저장되고, 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다.</div>`
+  openModal(isAcc?`✅ 정답 인정 — ${items.length}개`:`🏷 ${code?typeName(TAX,code):'미분류'} — ${items.length}개`, `<div class="small muted" style="margin-bottom:4px">하나만 바꾸려면 옆 목록에서 고르고, 여러 개는 체크한 뒤 위에서 옮길 유형을 골라 [옮기기]를 누르세요. 바로 저장되고, 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다.</div>`
     + bar + [...byWs.entries()].map(([wsId,l])=>`<div class="qblock"><b class="small">${esc(WORKSHEETS.find(w=>w.id===wsId)?.title||wsId)}</b>${l.map(it=>`
       <div class="it"><input type="checkbox" class="ti-ck" data-id="${it.id}" onchange="tiCount()" style="margin-top:4px"><span class="badge" style="background:${it.kind==='ai'?'#ede9fe;color:#5b21b6':'var(--red-lt);color:var(--red)'}">${it.kind==='ai'?'🕳 예상':'📊 빈출 '+it.students+'명'}</span>
         <div style="flex:1"><span class="small muted">${it.idx+1}번</span> <span class="wrong">${esc(it.wrong)}</span>
-          <select class="typesel" onchange="moveItem('${it.id}',this.value)">${typeOptions(it.sub)}</select>
+          ${acceptBadge(it.accepted)}
+          <select class="typesel" onchange="moveItem('${it.id}',this.value)">${typeOptions(it.accepted?'accept:'+it.accepted.reason:it.sub)}</select>
           <span class="path">${esc(it.path)}</span></div></div>`).join('')}</div>`).join(''));
 };
 window.moveItem=async(id,code)=>{
   const it=_md?.typeItems?.find(x=>x.id===id); if(!it) return;
-  try{ await applyChanges({ [it.wsId]:[{ kind:it.kind, qid:it.qid, key:it.key, sub:code, manual:true }] }); it.sub=code; toast('✅ 옮겼습니다'); if(TAB==='types') renderTypes(); $('modal').style.display='flex'; }
+  // ✅ 정답 인정은 유형(sub)을 두고 accepted 만 붙인다 · 유형을 고르면 accepted 를 빼고 그 유형으로 (v1.5)
+  const ch=/^accept:/.test(code) ? { kind:it.kind, qid:it.qid, key:it.key, accepted:{ reason:code.slice(7), at:new Date().toISOString(), by:tUser.email } }
+                                 : { kind:it.kind, qid:it.qid, key:it.key, sub:code, manual:true, ...(it.accepted?{accepted:null}:{}) };
+  try{ await applyChanges({ [it.wsId]:[ch] }); if(ch.accepted){ it.accepted=ch.accepted; toast('✅ 정답으로 인정했습니다'); } else { it.sub=code; it.accepted=null; toast('✅ 옮겼습니다'); }
+    if(TAB==='types') renderTypes(); $('modal').style.display='flex'; }
   catch(e){ toast('저장 실패: '+e.message); }
 };
 window.tiCount=()=>{ const n=document.querySelectorAll('.ti-ck:checked').length; const el=$('ti-count'); if(el) el.textContent=n+'개 고름'; };

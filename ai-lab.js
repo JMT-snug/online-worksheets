@@ -419,6 +419,57 @@ function countTypes(items){
   return { bySub, byCat, none };
 }
 
+/* ── 같은 오답은 한 줄로 (v1.5, 교사 요청) ──
+   같은 학습지·같은 문항에서 오답이 같으면(trapNorm 키 — 학생 분석의 trapsFor 가 합치는 기준과 같다) 🕳 예상 항목과 📊 빈출 항목이
+   따로 나와 두 번 보였다. 화면에서는 한 행으로 묶고 태그만 둘 달아 보여 준다. 저장되는 기록(aiReview·wrongAnalysis)은 그대로 두 항목이다 —
+   유형을 바꾸거나 체크를 풀면 행의 두 항목에 같이 적용하면 된다(행의 ai·freq 가 원래 항목).
+   items: wsTypedItems 꼴 [{kind, wsId, qid, idx, key, wrong, q, answer, sub, accepted, students, …}] (key 만 있으면 된다)
+   행: { wsId, qid, idx, key, q, answer, ai, freq, parts:[ai,freq 중 있는 것], wrong, students, sub, subDiffers, accepted }
+   · wrong 은 빈출(실제 학생 답)이 있으면 그쪽 글, sub·accepted 도 빈출을 먼저 따른다. 두 유형이 다르면 subDiffers.
+   · 순서: 둘 다 있는 행 → 빈출만 → 예상만, 같은 묶음 안에서는 들어온 순서 */
+function mergeTypedItems(items){
+  const rows=[], by=new Map();
+  (items||[]).forEach(it=>{
+    const k=it.wsId+'|'+it.qid+'|'+it.key;
+    let r=by.get(k);
+    if(!r){ r={ wsId:it.wsId, qid:it.qid, idx:it.idx, key:it.key, q:it.q, answer:it.answer, ai:null, freq:null, _i:rows.length }; by.set(k,r); rows.push(r); }
+    if(it.kind==='ai'){ if(!r.ai) r.ai=it; } else if(!r.freq) r.freq=it;
+  });
+  rows.forEach(r=>{
+    const p=r.freq||r.ai;
+    r.parts=[r.ai,r.freq].filter(Boolean);
+    r.wrong=p.wrong;
+    r.students=r.freq?.students||0;
+    r.sub=r.freq?.sub||r.ai?.sub||'';
+    r.subDiffers=!!(r.ai && r.freq && (r.ai.sub||'')!==(r.freq.sub||''));
+    r.accepted=r.freq?.accepted||r.ai?.accepted||null;
+  });
+  const rank=r=>r.ai&&r.freq?0:r.freq?1:2;
+  rows.sort((a,b)=>rank(a)-rank(b)||a._i-b._i);
+  rows.forEach(r=>{ delete r._i; });
+  return rows;
+}
+/** 문항 글·정답을 화면에서 읽기 좋게 — 수식 구분자와 흔한 LaTeX 명령을 걷어 낸다.
+    AI 분석실에는 MathJax 가 없어 \(3x+5\) 가 그대로 보이기 때문이다. 표시 전용: AI 에 보내는 글(wsTypedItems 의 q·answer)은 건드리지 않는다. */
+function tidyTex(s){
+  let t=String(s??'');
+  t=t.replace(/\\\$/g,'\u0000');                      // 이스케이프한 달러(금액)는 아래에서 지우지 않게 잠시 빼 둔다
+  t=t.replace(/\\[()\[\]]/g,'').replace(/\$\$?/g,'');  // \( \) \[ \] $ $$
+  for(let i=0;i<3;i++) t=t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'($1)/($2)');
+  t=t.replace(/\\sqrt\s*\{([^{}]*)\}/g,'√($1)')
+     .replace(/\\(?:text|mathrm|mathbf|operatorname)\s*\{([^{}]*)\}/g,'$1')
+     .replace(/\^\{([^{}]*)\}/g,'^$1').replace(/_\{([^{}]*)\}/g,'_$1')
+     /* 명령 이름 바로 뒤가 숫자여도(\times3) 이름이 끝난 것이다 — 영문자와 숫자 사이에는 \b 경계가 없어서 (?![a-zA-Z]) 로 끊는다 */
+     .replace(/\\times(?![a-zA-Z])/g,'×').replace(/\\div(?![a-zA-Z])/g,'÷').replace(/\\cdot(?![a-zA-Z])/g,'·').replace(/\\pm(?![a-zA-Z])/g,'±')
+     .replace(/\\(?:leq?|leqslant)(?![a-zA-Z])/g,'≤').replace(/\\(?:geq?|geqslant)(?![a-zA-Z])/g,'≥').replace(/\\neq?(?![a-zA-Z])/g,'≠')
+     .replace(/\\angle(?![a-zA-Z])/g,'∠').replace(/\\triangle(?![a-zA-Z])/g,'△').replace(/\\circ(?![a-zA-Z])/g,'°').replace(/\\pi(?![a-zA-Z])/g,'π')
+     .replace(/\\(?:left|right|displaystyle)(?![a-zA-Z])/g,'')
+     .replace(/\\[,;:!]/g,' ').replace(/`/g,' ')
+     .replace(/\\([a-zA-Z]+)/g,'$1')                    // 모르는 명령은 이름만 남긴다
+     .replace(/\u0000/g,'$');
+  return t.replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,' ').trim();
+}
+
 /* ══════════ 👤 학생 성취 ══════════ */
 /** 이 문항의 오답 경로(예상+빈출, 같은 오답은 합침) + 학생 답과 일치하는지 + 유형 이름 (teacher v5.0 _trapsFor 에 유형을 더함) */
 function trapsFor(q, studentAns, tax){

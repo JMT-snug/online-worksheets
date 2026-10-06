@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.7">
+<meta name="app-version" content="1.8">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -88,6 +88,8 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 .it.off{opacity:.5}
 .wrong{color:#b91c1c;font-weight:700;font-family:'DM Mono',monospace}
 .path{display:block;color:var(--ink2);font-size:12px;margin-top:1px}
+.qtxt{background:var(--cream);border-radius:6px;padding:5px 9px;margin-top:4px;font-size:12.5px;line-height:1.55;color:var(--ink);word-break:break-word}
+.qans{color:var(--ink2);font-size:12px;margin-top:3px;word-break:break-word}
 .typesel{font-size:12px;padding:2px 6px;max-width:210px}
 .grp-row td{background:#f5f3ee;border-bottom:1px solid var(--rule);cursor:pointer;user-select:none}
 .grp-row.lv1 td{background:#ece8df;font-size:14px}
@@ -144,7 +146,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.4"></script>
+<script src="ai-lab.js?v=1.5"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -303,6 +305,19 @@ function typeOptions(cur){
   return h;
 }
 const acceptBadge=a=>a?`<span class="badge" style="background:#dcfce7;color:#15803d" title="${esc('정답으로 인정 · '+fmtAt(a.at)+' · '+(a.by||''))}">✅ 정답 인정 · ${esc(ACCEPT_REASONS[a.reason]||a.reason||'')}</span>`:'';
+/** 문항 글 + 정답 (v1.8, 교사 요청) — 오답만 나열되면 무슨 문제의 오답인지, 어떤 유형인지 알 수 없어서 오답 옆에 문제를 같이 보여 준다.
+    AI 분석실에는 MathJax 가 없으므로 수식 구분자·LaTeX 명령은 tidyTex 로 걷어 낸다(표시 전용). 전체 글은 마우스를 올리면 툴팁으로 */
+function qBodyHtml(text, answer){
+  let t=tidyTex(plainText(text,2000)); const full=t;
+  if(t.length>200) t=t.slice(0,200)+'…';
+  let a=answer?tidyTex(String(answer)):'';
+  const fullA=a; if(a.length>240) a=a.slice(0,240)+'…';
+  return `<div class="qtxt" title="${esc(full)}">${t?esc(t):'<span class="muted">(문제 글 없음 — 그림 문항일 수 있습니다)</span>'}</div>`
+    +(a?`<div class="qans" title="${esc(fullA)}">정답: ${esc(a)}</div>`:'');
+}
+const qBody=q=>qBodyHtml(q?.text, q?aiAnswerSummary(q):'');
+/** 유형 목록의 행(mergeTypedItems)에 붙일 문항 — 학습지에서 문항을 찾아 전체 글로, 못 찾으면 항목에 실려 온 앞부분으로 */
+const qBodyOfRow=r=>{ const q=(WORKSHEETS.find(w=>w.id===r.wsId)?.questions||[]).find(x=>x.id===r.qid); return q?qBody(q):qBodyHtml(r.q, r.answer); };
 const ACCEPT_HINT='유형 집계·학생 분석에서 오답으로 세지 않고, 불러온 학생의 기록에서도 이 답을 오답에서 빼고 마지막 답이면 정답으로 고칩니다(되돌리면 원래대로). 불러오지 않은 학생(담당 학급 밖)은 편집기에서 정답을 고친 뒤 교사 화면의 재채점을 쓰세요.';
 /* ✅ 정답 인정을 학생 기록에 반영 (v1.6, 교사 요청 「기록도 자동으로」) — records/{uid}/worksheets/{wsId}.perQuestion[qid] 만 고친다.
    어떤 값이 되는지는 ai-lab.js acceptPatch(원본은 _beforeAccept 에 남겨 되돌리기 가능). 불러온 학생(allData)만 — 담당 학급 밖은 teacher 재채점.
@@ -560,22 +575,33 @@ function drawWsDetail(){
   const have=new Set((wa?.items||[]).map(t=>t.qid+'|'+trapNorm(t.wrong)));
   const counts=countTypes(wsTypedItems({...ws, aiReview:rv?storedReview(rv):ws.aiReview, wrongAnalysis:wa}));
   const blocks=(ws.questions||[]).map((q,i)=>{
-    const pr=(rv?.traps||[]).map((t,j)=>({t,j})).filter(x=>x.t.qid===q.id);
-    const fr=(wa?.items||[]).map((t,j)=>({t,j})).filter(x=>x.t.qid===q.id);
+    const mk=kind=>(t,j)=>({ kind, t, j, wsId:ws.id, qid:q.id, idx:i, key:trapNorm(t.wrong), wrong:t.wrong, sub:t.sub||'', accepted:t.accepted||null, students:t.students||0 });
+    const pr=(rv?.traps||[]).map(mk('ai')).filter(x=>x.t.qid===q.id);
+    const fr=(wa?.items||[]).map(mk('freq')).filter(x=>x.t.qid===q.id);
     const na=(fs.qs.find(x=>x.qid===q.id)?.wrongs||[]).filter(w=>!have.has(q.id+'|'+trapNorm(w.wrong)));
     if(!pr.length && !fr.length && !na.length) return '';
-    const row=(kind,{t,j})=>`<div class="it ${t.on&&!t.accepted?'':'off'}">
-      <input type="checkbox" ${t.on?'checked':''} onchange="mdToggle('${kind}',${j},this.checked)" style="margin-top:4px">
-      <div style="flex:1"><span class="wrong">${esc(t.wrong)}</span>
-        ${kind==='freq'?` <span class="badge" style="background:var(--red-lt);color:var(--red)">학생 ${t.students}명</span>`:''}
-        ${t.label?` <span class="badge" style="background:#ede9fe;color:#5b21b6">${esc(t.label)}</span>`:''}
-        ${acceptBadge(t.accepted)}
-        <select class="typesel" onchange="mdType('${kind}',${j},this.value)" title="오답 유형 — 고르면 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다. 출제 오류·표기 차이로 실은 맞은 답이면 ✅ 정답 인정을 고르세요">${typeOptions(t.accepted?'accept:'+t.accepted.reason:(t.sub||''))}</select>${t.subManual&&!t.accepted?' <span class="small muted" title="교사가 고른 유형">✋</span>':''}
-        ${t.accepted?`<div class="small muted">${ACCEPT_HINT}</div>`:`<span class="path">${esc(t.path)}</span>`}</div></div>`;
+    /* v1.8: 같은 오답이 예상에도 빈출에도 있으면 한 행으로 — 🕳 예상 · 📊 빈출 태그를 둘 다 달고,
+       체크·유형은 두 기록(aiReview·wrongAnalysis)에 같이 적용한다 */
+    const rows=mergeTypedItems([...pr,...fr]);
+    const row=r=>{
+      const a=r.ai, f=r.freq, ts=r.parts.map(p=>p.t);
+      const ja=a?a.j:-1, jf=f?f.j:-1, acc=r.accepted;
+      const live=ts.every(t=>t.on&&!t.accepted);
+      const labels=[...new Set(ts.map(t=>t.label).filter(Boolean))];
+      const paths=[]; if(a&&a.t.path) paths.push(['🕳',a.t.path]); if(f&&f.t.path&&(!a||f.t.path!==a.t.path)) paths.push(['📊',f.t.path]);
+      return `<div class="it ${live?'':'off'}">
+      <input type="checkbox" ${ts.every(t=>t.on)?'checked':''} onchange="mdToggleRow(${ja},${jf},this.checked)" style="margin-top:4px">
+      <div style="flex:1"><span class="wrong">${esc(r.wrong)}</span>
+        ${a?` <span class="badge" style="background:#ede9fe;color:#5b21b6">🕳 예상</span>`:''}
+        ${f?` <span class="badge" style="background:var(--red-lt);color:var(--red)">📊 빈출 · 학생 ${f.t.students}명</span>`:''}
+        ${labels.map(l=>` <span class="badge" style="background:#ede9fe;color:#5b21b6">${esc(l)}</span>`).join('')}
+        ${acceptBadge(acc)}
+        <select class="typesel" onchange="mdTypeRow(${ja},${jf},this.value)" title="오답 유형 — 고르면 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다. 출제 오류·표기 차이로 실은 맞은 답이면 ✅ 정답 인정을 고르세요${a&&f?' (예상·빈출 둘 다 바뀝니다)':''}">${typeOptions(acc?'accept:'+acc.reason:r.sub)}</select>${ts.some(t=>t.subManual)&&!acc?' <span class="small muted" title="교사가 고른 유형">✋</span>':''}${r.subDiffers&&!acc?` <span class="small muted" title="예상 오답과 빈출 오답이 서로 다른 유형으로 분류돼 있습니다 — 여기서 고르면 둘 다 그 유형으로 바뀝니다">(🕳 예상은 ${esc(typeName(TAX,a.t.sub)||'미분류')})</span>`:''}
+        ${acc?`<div class="small muted">${ACCEPT_HINT}</div>`:paths.map(([ic,p])=>`<span class="path">${paths.length>1?ic+' ':''}${esc(p)}</span>`).join('')}</div></div>`;
+    };
     return `<div class="qblock"><div class="small" style="font-weight:700">${i+1}번 <span class="muted" style="font-weight:400">${esc(q.id)}</span></div>
-      <div class="small muted">${esc(String(q.text||'').replace(/<[^>]+>/g,'').slice(0,120))}</div>
-      ${pr.length?`<div class="small" style="margin-top:6px;font-weight:700;color:#5b21b6">🕳 예상 오답</div>${pr.map(x=>row('ai',x)).join('')}`:''}
-      ${fr.length?`<div class="small" style="margin-top:6px;font-weight:700;color:var(--red)">📊 빈출 오답</div>${fr.map(x=>row('freq',x)).join('')}`:''}
+      ${qBody(q)}
+      ${rows.map(row).join('')}
       ${na.length?`<div class="small muted" style="margin-top:6px">아직 분석 안 된 빈출 오답: ${na.map(w=>`<span class="wrong">${esc(w.wrong)}</span> (${w.students}명)`).join(', ')}</div>`:''}
     </div>`;
   }).join('');
@@ -615,13 +641,24 @@ function mdScheduleSave(kind){
     }catch(e){ toast('저장 실패: '+e.message); console.error(e); }
   },600);
 }
-window.mdToggle=(kind,j,on)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; l[j].on=!!on; drawWsDetail(); mdScheduleSave(kind); };
-window.mdType=(kind,j,code)=>{ const l=kind==='ai'?_md.rv.traps:_md.wa.items; const t=l[j];
+/* v1.8: 같은 오답이 예상에도 빈출에도 있으면 한 행으로 보이므로(mergeTypedItems) 체크·유형은 그 행의 두 기록에 같이 적용한다.
+   ja·jf = 예상 기록(rv.traps)·빈출 기록(wa.items) 안에서의 번호, 그쪽에 없으면 -1 */
+window.mdToggleRow=(ja,jf,on)=>{
+  if(ja>=0) _md.rv.traps[ja].on=!!on;
+  if(jf>=0) _md.wa.items[jf].on=!!on;
+  drawWsDetail(); if(ja>=0) mdScheduleSave('ai'); if(jf>=0) mdScheduleSave('freq'); };
+function mdSetType(t, code){
   const wasAcc=!!t.accepted;
   if(/^accept:/.test(code)){ t.accepted={ reason:code.slice(7), at:new Date().toISOString(), by:tUser.email }; }   // ✅ 정답 인정 — 유형(sub)은 두어 되돌리면 원래대로
   else { delete t.accepted; if(code) t.sub=code; else delete t.sub; t.subManual=true; }
   if(wasAcc!==!!t.accepted) _md.syncAcc=true;   // 인정이 붙거나 풀리면 저장 뒤 학생 기록도 반영
-  drawWsDetail(); mdScheduleSave(kind); };
+}
+window.mdTypeRow=(ja,jf,code)=>{
+  if(ja>=0) mdSetType(_md.rv.traps[ja], code);
+  if(jf>=0) mdSetType(_md.wa.items[jf], code);
+  drawWsDetail(); if(ja>=0) mdScheduleSave('ai'); if(jf>=0) mdScheduleSave('freq'); };
+window.mdToggle=(kind,j,on)=>kind==='ai'?mdToggleRow(j,-1,on):mdToggleRow(-1,j,on);
+window.mdType=(kind,j,code)=>kind==='ai'?mdTypeRow(j,-1,code):mdTypeRow(-1,j,code);
 window.mdRun=async kind=>{
   if(running) return; const ws=WORKSHEETS.find(w=>w.id===_md.wsId);
   running=true; $('md-status').textContent=kind==='pred'?'🕳 예상 오답 분석 중… (몇십 초)':'📊 빈출 오답 분석 중… (몇십 초)';
@@ -961,26 +998,41 @@ window.showTypeItems=code=>{
   const isAcc=code==='__accepted';   // ✅ 정답으로 인정한 것 (v1.5) — 유형을 고르면 인정이 풀리고 그 유형으로 돌아간다
   const items=isAcc ? WORKSHEETS.flatMap(ws=>wsTypedItems(ws,true)).map((it,n)=>({...it, id:'a'+n})) : allTypedItems().filter(it=>code?it.sub===code:!it.sub);
   _md={ typeItems:items, code };
-  const byWs=new Map(); items.forEach(it=>{ if(!byWs.has(it.wsId)) byWs.set(it.wsId,[]); byWs.get(it.wsId).push(it); });
+  /* v1.8: 같은 오답(예상 + 빈출)은 한 행 · 오답마다 문제와 정답을 같이 보여 준다 — 학습지 → 문항 순으로 묶는다 */
+  const rows=mergeTypedItems(items);
+  const byWs=new Map(); rows.forEach(r=>{ if(!byWs.has(r.wsId)) byWs.set(r.wsId,[]); byWs.get(r.wsId).push(r); });
+  const rowHtml=r=>{
+    const ids=r.parts.map(p=>p.id).join(',');
+    const paths=[]; if(r.ai?.path) paths.push(['🕳',r.ai.path]); if(r.freq?.path&&(!r.ai||r.freq.path!==r.ai.path)) paths.push(['📊',r.freq.path]);
+    return `
+      <div class="it"><input type="checkbox" class="ti-ck" data-id="${ids}" onchange="tiCount()" style="margin-top:4px">
+        ${r.ai?`<span class="badge" style="background:#ede9fe;color:#5b21b6">🕳 예상</span>`:''}${r.freq?`<span class="badge" style="background:var(--red-lt);color:var(--red)">📊 빈출 ${r.freq.students}명</span>`:''}
+        <div style="flex:1"><span class="wrong">${esc(r.wrong)}</span>
+          ${acceptBadge(r.accepted)}
+          <select class="typesel" onchange="moveItem('${ids}',this.value)" title="${r.ai&&r.freq?'예상·빈출 둘 다 바뀝니다':''}">${typeOptions(r.accepted?'accept:'+r.accepted.reason:r.sub)}</select>
+          ${paths.map(([ic,p])=>`<span class="path">${paths.length>1?ic+' ':''}${esc(p)}</span>`).join('')}</div></div>`;
+  };
+  const qGroups=l=>{ const m=new Map(); l.forEach(r=>{ if(!m.has(r.qid)) m.set(r.qid,[]); m.get(r.qid).push(r); }); return [...m.values()].sort((x,y)=>x[0].idx-y[0].idx); };   // 문항 번호 순
   const bar=`<div class="row small" style="position:sticky;top:0;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--rule);margin-bottom:8px;z-index:1">
       <label class="row"><input type="checkbox" onchange="tiAll(this.checked)"> 모두 고르기</label>
       <span id="ti-count" class="muted">0개 고름</span>
       <select id="ti-target" class="typesel" style="max-width:240px">${targetOptions(code)}</select>
       <button class="btn btn-ai" onclick="tiMoveSel()">↪ 고른 것 옮기기</button></div>`;
   openModal(isAcc?`✅ 정답 인정 — ${items.length}개`:`🏷 ${code?typeName(TAX,code):'미분류'} — ${items.length}개`, `<div class="small muted" style="margin-bottom:4px">하나만 바꾸려면 옆 목록에서 고르고, 여러 개는 체크한 뒤 위에서 옮길 유형을 골라 [옮기기]를 누르세요. 바로 저장되고, 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다.</div>`
-    + bar + [...byWs.entries()].map(([wsId,l])=>`<div class="qblock"><b class="small">${esc(WORKSHEETS.find(w=>w.id===wsId)?.title||wsId)}</b>${l.map(it=>`
-      <div class="it"><input type="checkbox" class="ti-ck" data-id="${it.id}" onchange="tiCount()" style="margin-top:4px"><span class="badge" style="background:${it.kind==='ai'?'#ede9fe;color:#5b21b6':'var(--red-lt);color:var(--red)'}">${it.kind==='ai'?'🕳 예상':'📊 빈출 '+it.students+'명'}</span>
-        <div style="flex:1"><span class="small muted">${it.idx+1}번</span> <span class="wrong">${esc(it.wrong)}</span>
-          ${acceptBadge(it.accepted)}
-          <select class="typesel" onchange="moveItem('${it.id}',this.value)">${typeOptions(it.accepted?'accept:'+it.accepted.reason:it.sub)}</select>
-          <span class="path">${esc(it.path)}</span></div></div>`).join('')}</div>`).join(''));
+    + bar + [...byWs.entries()].map(([wsId,l])=>`<div class="qblock"><b class="small">${esc(WORKSHEETS.find(w=>w.id===wsId)?.title||wsId)}</b>${qGroups(l).map(g=>`
+      <div style="margin-top:8px;padding-top:6px;border-top:1px dashed var(--rule)"><span class="small" style="font-weight:700">${g[0].idx+1}번</span>${qBodyOfRow(g[0])}${g.map(rowHtml).join('')}</div>`).join('')}</div>`).join(''));
 };
-window.moveItem=async(id,code)=>{
-  const it=_md?.typeItems?.find(x=>x.id===id); if(!it) return;
+/* id 는 한 개("i3") 또는 쉼표로 이은 여러 개("i3,i7") — 같은 오답이 예상·빈출에 모두 있어 한 행으로 보일 때(v1.8)는 두 항목에 같이 적용한다 */
+window.moveItem=async(idStr,code)=>{
+  const its=String(idStr).split(',').map(id=>_md?.typeItems?.find(x=>x.id===id)).filter(Boolean); if(!its.length) return;
   // ✅ 정답 인정은 유형(sub)을 두고 accepted 만 붙인다 · 유형을 고르면 accepted 를 빼고 그 유형으로 (v1.5)
-  const ch=/^accept:/.test(code) ? { kind:it.kind, qid:it.qid, key:it.key, accepted:{ reason:code.slice(7), at:new Date().toISOString(), by:tUser.email } }
-                                 : { kind:it.kind, qid:it.qid, key:it.key, sub:code, manual:true, ...(it.accepted?{accepted:null}:{}) };
-  try{ await applyChanges({ [it.wsId]:[ch] }); if(ch.accepted){ it.accepted=ch.accepted; toast('✅ 정답으로 인정했습니다'); } else { it.sub=code; it.accepted=null; toast('✅ 옮겼습니다'); }
+  const at=new Date().toISOString();
+  const mk=it=>/^accept:/.test(code) ? { kind:it.kind, qid:it.qid, key:it.key, accepted:{ reason:code.slice(7), at, by:tUser.email } }
+                                     : { kind:it.kind, qid:it.qid, key:it.key, sub:code, manual:true, ...(it.accepted?{accepted:null}:{}) };
+  const chs=its.map(mk);
+  try{ await applyChanges({ [its[0].wsId]:chs });
+    its.forEach((it,i)=>{ if(chs[i].accepted) it.accepted=chs[i].accepted; else { it.sub=code; it.accepted=null; } });
+    toast(chs[0].accepted?'✅ 정답으로 인정했습니다':'✅ 옮겼습니다');
     if(TAB==='types') renderTypes(); $('modal').style.display='flex'; }
   catch(e){ toast('저장 실패: '+e.message); }
 };
@@ -988,7 +1040,7 @@ window.tiCount=()=>{ const n=document.querySelectorAll('.ti-ck:checked').length;
 window.tiAll=on=>{ document.querySelectorAll('.ti-ck').forEach(c=>{ c.checked=on; }); tiCount(); };
 window.tiMoveSel=async()=>{
   const to=$('ti-target')?.value; if(!to){ toast('옮길 유형을 고르세요'); return; }
-  const ids=new Set([...document.querySelectorAll('.ti-ck:checked')].map(c=>c.dataset.id));
+  const ids=new Set([...document.querySelectorAll('.ti-ck:checked')].flatMap(c=>String(c.dataset.id).split(',')));   // 한 행이 두 항목일 수 있다(v1.8)
   const items=(_md?.typeItems||[]).filter(it=>ids.has(it.id));
   if(!items.length){ toast('옮길 오답을 체크하세요'); return; }
   if(running) return; running=true;
@@ -1067,7 +1119,12 @@ window.runClassify=async()=>{
 };
 function drawClassifyResult(){
   const r=classifyResult;
-  const ex=l=>l.slice(0,4).map(it=>`<div class="small" style="margin-left:22px"><span class="wrong">${esc(it.wrong)}</span> <span class="muted">${esc((WORKSHEETS.find(w=>w.id===it.wsId)?.title||'')+' '+(it.idx+1)+'번')} — ${esc(it.path)}</span></div>`).join('')+(l.length>4?`<div class="small muted" style="margin-left:22px">… 외 ${l.length-4}개</div>`:'');
+  /* v1.8: 예시에도 문제를 같이 보여 주고(어떤 문제의 오답인지 알아야 유형이 맞는지 판단된다), 같은 오답은 한 줄로 */
+  const ex=l=>{ const rows=mergeTypedItems(l);
+    return rows.slice(0,4).map(r=>{ const q=(WORKSHEETS.find(w=>w.id===r.wsId)?.questions||[]).find(x=>x.id===r.qid); const qt=tidyTex(plainText(q?.text??r.q,600));
+      return `<div class="small" style="margin-left:22px"><span class="wrong">${esc(r.wrong)}</span>${r.ai?` <span class="badge" style="background:#ede9fe;color:#5b21b6">🕳 예상</span>`:''}${r.freq?` <span class="badge" style="background:var(--red-lt);color:var(--red)">📊 빈출 ${r.freq.students}명</span>`:''} <span class="muted">${esc((WORKSHEETS.find(w=>w.id===r.wsId)?.title||'')+' '+(r.idx+1)+'번')} — ${esc((r.freq?.path)||(r.ai?.path)||'')}</span>
+        <div class="muted" style="font-size:12px" title="${esc(qt)}">문제: ${esc(qt.length>90?qt.slice(0,90)+'…':qt)||'(글 없음)'}</div></div>`; }).join('')
+      +(rows.length>4?`<div class="small muted" style="margin-left:22px">… 외 ${rows.length-4}개</div>`:''); };
   /* v1.1: 새 유형 제안은 「✚ 새 유형으로 만들기」 대신 기존 유형에 넣을 수 있고(p.target), 기존 유형으로 옮길 묶음은 목적지를 바꿀 수 있다(g.target) */
   const props=r.proposals.map((p,i)=>{ const l=r.toProposal.get(p.key)||[]; const into=!!p.target; return `<div class="qblock">
     <div class="row"><input type="checkbox" ${p.on?'checked':''} onchange="clProp(${i},'on',this.checked)">

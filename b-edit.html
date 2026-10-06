@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v5.5">
+<meta name="app-version" content="edit-v6.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -217,13 +217,15 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .btn-modal-cancel{background:var(--rule);color:var(--ink2)}
 
 /* ── 유형 선택 모달 ── */
-.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}
-.type-opt{border:2px solid var(--rule);border-radius:8px;padding:12px;cursor:pointer;text-align:center;transition:.15s}
+.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}
+.type-opt{border:2px solid var(--rule);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:center;transition:.15s}
 .type-opt:hover{border-color:var(--accent);background:var(--acc-lt)}
 .type-opt.selected{border-color:var(--accent);background:var(--acc-lt)}
-.type-opt .type-icon{font-size:20px;margin-bottom:4px}
+.type-opt .type-icon{font-size:18px;margin-bottom:2px}
 .type-opt .type-name{font-size:12px;font-weight:600;color:var(--ink2)}
 .type-opt .type-desc{font-size:11px;color:var(--ink3);margin-top:2px}
+.type-group{grid-column:1/-1;font-size:11px;font-weight:700;color:var(--ink3);margin-top:6px}
+.type-group:first-child{margin-top:0}
 
 /* ── 미리보기 모달 ── */
 .preview-modal{max-width:680px;width:95vw}
@@ -412,15 +414,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <!-- 공통: 유형 선택 -->
           <div class="field">
             <label>문항 유형</label>
-            <select id="q-type-sel" onchange="onQTypeChange()">
-              <option value="word_text">① 한글 용어</option>
-              <option value="equation">② 숫자 값</option>
-              <option value="word_expr">③ 문자 포함 식 (x, y 등 문자 · =, 부등호 포함 가능)</option>
-              <option value="multi">객관식</option>
-              <option value="link">링크(다음 문항)</option>
-              <option value="graph">그래프 그리기</option>
-              <option value="step3">④ 단계형</option>
-            </select>
+            <!-- 보기는 Q_TYPE_DEFS 에서 만든다 (fillQTypeLists) — 「문항 추가」 팝업과 같은 목록·같은 순서·같은 이름 -->
+            <select id="q-type-sel" onchange="onQTypeChange()"></select>
             <div id="q-raw-type" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
           </div>
           <div class="field">
@@ -1312,7 +1307,8 @@ function renderQList(){
       ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
       : _rawType;
     const badgeClass = {word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
-    const badgeLabel = {word_text:'①용어',word_expr:'③식',equation:'②숫자',multi:'⑥객관식',auto:'자동생성',pool_random:'🎲랜덤풀',step3:'④단계형',link:'⑤링크',graph:'📈그래프',word:'용어'}[badge]||'계산';
+    const _tdef = Q_TYPE_DEFS.find(t=>t.val===badge);   // 유형 이름·아이콘은 Q_TYPE_DEFS 한 곳에서
+    const badgeLabel = _tdef ? `${_tdef.icon}${_tdef.badge}` : ({auto:'자동생성',word:'용어'}[badge]||'계산');
     const preview = (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
 
     card.innerHTML = `
@@ -1578,7 +1574,10 @@ function showPanel(item){
       if(Array.isArray(item.steps) && item.steps.length){
         editSteps = item.steps.map(s=>({
           label:s.label||'', answerType:normStepType(s.answerType),
-          answer:s.answer??'', answerAlt:[...(s.answerAlt||[])], hint:s.hint||''
+          // 객관식 단계의 정답은 선지 번호 배열(0부터), 나머지는 글·숫자
+          answer:Array.isArray(s.answer) ? [...s.answer] : (s.answer??''),
+          answerAlt:[...(s.answerAlt||[])], hint:s.hint||'',
+          ...(Array.isArray(s.options) ? {options:[...s.options]} : {})
         }));
       } else {
         editSteps=[];
@@ -1953,14 +1952,8 @@ window.saveQuestion = async function(){
     /* 예전에 있던 '등식 유형인데 = 가 없다' 경고는 없앴다 —
        유형이 하나로 합쳐졌고, 정답 모양대로 채점하므로 더 이상 함정이 아니다.
        저장할 때 옛 유형명 'equation' 은 'expr' 로 정리해 둔다. */
-    const steps = editSteps.map(s=>{
-      const at=normStepType(s.answerType);
-      const o={ label:(s.label||'').trim(), answerType:at, hint:(s.hint||'').trim() };
-      const av=(s.answer??'').toString().trim();
-      o.answer = (at==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
-      if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
-      return o;
-    });
+    const {steps, problems:stepProblems} = stepsFromEditor(editSteps);
+    if(stepProblems.length){ toast(stepProblems[0]); return; }
     const _step3Q={
       id:currentWs.questions[qIdxS]?.id||`q${Date.now()}`,
       type:'step3', diff:parseInt(document.getElementById('q-diff-sel').value)||1,
@@ -2021,17 +2014,17 @@ window.saveQuestion = async function(){
       q.answer=document.getElementById('q-ans-expr').value.trim();
     } else if(type==='equation'){
       const ansVal = document.getElementById('q-ans-num').value.trim();
-      /* "② 숫자 값"은 채점할 때 이 값 하나를 숫자로만 비교한다(evalAnswer).
+      /* "숫자 값"은 채점할 때 이 값 하나를 숫자로만 비교한다(evalAnswer).
          "y=30/x" 처럼 문자와 =가 든 관계식을 여기 넣으면 항상 NaN 비교가 되어
          학생이 뭘 입력해도 무조건 오답 처리된다 — 새로고침으로도 못 고치는 채점 오류
          (실제 신고: 「반비례」 학습지 14번, 정답 y=30/x가 계속 오답 처리됨).
-         문자·= 가 섞인 답은 저장을 막고 "③ 문자 포함 식"으로 안내한다. */
+         문자·= 가 섞인 답은 저장을 막고 "문자 포함 식"으로 안내한다. */
       const _bareAns = ansVal.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'');
       if(/[=<>≤≥]|[a-zA-Z]/.test(_bareAns)){
-        alert(`「② 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))만 채점할 수 있어요.\n\n`
+        alert(`「🔢 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))만 채점할 수 있어요.\n\n`
           + `지금 입력한 "${ansVal}"처럼 문자(x, y 등)나 =·부등호가 들어간 관계식·방정식·부등식은 이 유형으로는 채점이 안 됩니다`
           + `(학생이 뭘 입력해도 무조건 오답 처리돼요).\n\n`
-          + `문항 유형을 「③ 문자 포함 식」으로 바꾸고 정답을 다시 입력해 주세요.`);
+          + `문항 유형을 「🔣 문자 포함 식」으로 바꾸고 정답을 다시 입력해 주세요.`);
         return;
       }
       q.type='equation';
@@ -2721,15 +2714,48 @@ window.runImageCleanup = async function(){
 // ── 동적 단계형(steps) 관리 ──
 let editSteps = []; // 현재 편집 중인 단계 배열
 
-/* 답 유형은 문항 유형과 똑같이 세 가지다.
+/* ── 문항 유형 목록 (한 곳) ──
+   「문항 추가」 팝업 · 편집창의 「문항 유형」 목록 · 문항 카드의 배지 · 단계형의 「답 유형」이 모두 여기서 나온다.
+   예전에는 네 곳에 따로 적혀 있어서 번호(①②③⑥④⑤)·순서·이름이 서로 어긋났고,
+   팝업에는 링크가, 편집창 목록에는 랜덤 풀이 없었다. 번호는 매기지 않는다 — 아이콘과 이름으로 구분한다.
+   step 이 있는 앞의 네 가지는 「답을 받는 방식」이라 단계형의 단계에서도 같은 목록·같은 순서로 고른다
+   (값은 문항과 달리 text·number·expr·multi — 저장된 옛 데이터의 answerType 을 그대로 쓰려고). */
+const Q_TYPE_DEFS = [
+  {val:'word_text',   icon:'📝', name:'한글 용어',      badge:'용어',   step:'text',   group:'답을 받는 방식', desc:'한글/텍스트 정답'},
+  {val:'equation',    icon:'🔢', name:'숫자 값',        badge:'숫자',   step:'number', group:'답을 받는 방식', desc:'숫자/분수 정답'},
+  {val:'word_expr',   icon:'🔣', name:'문자 포함 식',   badge:'식',     step:'expr',   group:'답을 받는 방식', desc:'식 · 등식(y=30/x) · 부등식(x&gt;3)'},
+  {val:'multi',       icon:'☑️', name:'객관식',         badge:'객관식', step:'multi',  group:'답을 받는 방식', desc:'선지에서 모두 고르기'},
+  {val:'step3',       icon:'🪜', name:'단계형',         badge:'단계형',                 group:'특수 문항',     desc:'단계별 풀이 과정'},
+  {val:'link',        icon:'🔗', name:'링크(다음 문항)', badge:'링크',                  group:'특수 문항',     desc:'바깥 활동으로 가는 링크'},
+  {val:'graph',       icon:'📈', name:'그래프 그리기',  badge:'그래프',                 group:'특수 문항',     desc:'수직선/좌표평면/좌표축/작도 답안'},
+  {val:'pool_random', icon:'🎲', name:'랜덤 풀',        badge:'랜덤풀',                 group:'특수 문항',     desc:'정답/오답 풀에서 무작위 출제'},
+];
+/** 편집창의 「문항 유형」 목록과 「문항 추가」 팝업을 Q_TYPE_DEFS 로 채운다 */
+function fillQTypeLists(){
+  const sel=document.getElementById('q-type-sel');
+  if(sel) sel.innerHTML=Q_TYPE_DEFS.map(t=>`<option value="${t.val}">${t.icon} ${t.name}</option>`).join('');
+  const grid=document.getElementById('type-grid');
+  if(grid){
+    let html='', grp=null;
+    Q_TYPE_DEFS.forEach((t,i)=>{
+      if(t.group!==grp){ grp=t.group; html+=`<div class="type-group">${t.group}</div>`; }
+      html+=`<div class="type-opt${i===0?' selected':''}" data-type="${t.val}" onclick="selectTypeOpt(this)">
+        <div class="type-icon">${t.icon}</div>
+        <div class="type-name">${t.name}</div>
+        <div class="type-desc">${t.desc}</div>
+      </div>`;
+    });
+    grid.innerHTML=html;
+  }
+}
+fillQTypeLists();
+
+/* 답 유형은 문항 유형(Q_TYPE_DEFS 의 앞 네 가지)과 같은 목록·같은 순서·같은 이름이다.
    예전에는 여기에만 '③ 문자 포함 식 (= 포함)'이 따로 있어서 문항 쪽과 어긋났고,
    고른 유형과 정답 모양이 다르면(등식 유형인데 = 가 없는 등) 전원 오답이 되는 함정이었다.
-   지금은 식·등식·부등식 중 무엇으로 채점할지 정답의 생김새를 보고 알아서 고른다. */
-const STEP_ANSWER_TYPES = [
-  {val:'number',   label:'② 숫자 값'},
-  {val:'expr',     label:'③ 문자 포함 식 (=, 부등호 포함 가능)'},
-  {val:'text',     label:'① 한글 용어'},
-];
+   지금은 식·등식·부등식 중 무엇으로 채점할지 정답의 생김새를 보고 알아서 고른다.
+   채점은 학생 화면(index)이 단계를 같은 유형의 문항으로 바꿔 judgeAnswer 로 한다(grading.js judgeStep). */
+const STEP_ANSWER_TYPES = Q_TYPE_DEFS.filter(t=>t.step).map(t=>({val:t.step, label:`${t.icon} ${t.name}`}));
 /* 옛 데이터의 'equation' 은 이제 'expr' 과 같은 것으로 다룬다 */
 const normStepType = at => (at==='equation' ? 'expr' : (at||'number'));
 
@@ -2744,6 +2770,76 @@ window.removeStep = function(i){
 };
 window.updateStep = function(i, field, val){
   if(editSteps[i]) editSteps[i][field]=val;
+};
+/* 단계의 답 유형을 바꾼다. 객관식의 정답은 선지 번호 배열이고 나머지는 글이라서 서로 옮겨 갈 때 정답을 비운다
+   (글로 적어 둔 정답이 번호 배열로 남으면 저장 때 엉뚱한 선지가 정답이 된다). 선지는 남겨 두어 도로 바꿔도 사라지지 않는다. */
+window.setStepType = function(i, val){
+  const s=editSteps[i]; if(!s) return;
+  const was=normStepType(s.answerType);
+  s.answerType=val;
+  if(val==='multi' && was!=='multi'){
+    if(!Array.isArray(s.options) || !s.options.length) s.options=['',''];
+    s.answer=[]; s.answerAlt=[];
+  } else if(val!=='multi' && was==='multi'){
+    s.answer='';
+  }
+  renderSteps();
+};
+/* 객관식 단계의 선지 — 문항 「객관식」의 선지 편집과 같은 모양(체크 = 정답, 수식 미리보기).
+   입력 중에는 다시 그리지 않는다(포커스 유지) — 추가·삭제·체크 해제만 다시 그린다. */
+const stepOptDisplay = s => _bqSpace((s||'').replace(/\\\\/g,'\\'));
+window.addStepOption = function(i){
+  const s=editSteps[i]; if(!s) return;
+  s.options=s.options||[]; s.options.push('');
+  renderSteps();
+};
+window.removeStepOption = function(i, j){
+  const s=editSteps[i]; if(!s || !s.options) return;
+  if(s.options.length<=2){ toast('선지는 최소 2개가 필요합니다'); return; }
+  s.options.splice(j,1);
+  // 지운 선지 뒤의 정답 번호는 하나씩 당긴다
+  s.answer=(Array.isArray(s.answer)?s.answer:[]).filter(k=>k!==j).map(k=>k>j?k-1:k);
+  renderSteps();
+};
+window.updateStepOption = function(i, j, val){
+  const s=editSteps[i]; if(!s || !s.options) return;
+  s.options[j]=val;
+  const prev=document.getElementById(`step-opt-prev-${i}-${j}`);
+  if(prev){
+    prev.innerHTML = stepOptDisplay(val) || '미리보기';
+    if(window.MathJax?.typesetPromise) MathJax.typesetPromise([prev]).catch(()=>{});
+  }
+};
+/** 편집 중인 단계(editSteps)를 문항에 저장할 steps[] 로 바꾼다 — 문제가 있으면 problems 에 한 줄씩 (저장을 막는다).
+    객관식 단계: 빈 선지는 빼고, 정답 번호는 남은 선지의 번호로 다시 맞춘다 (문항 「객관식」과 같은 모양: options · answer[0부터]). */
+function stepsFromEditor(list){
+  const problems=[];
+  const steps=list.map((s,si)=>{
+    const at=normStepType(s.answerType);
+    const o={ label:(s.label||'').trim(), answerType:at, hint:(s.hint||'').trim() };
+    if(at==='multi'){
+      const raw=(s.options||[]).map(t=>String(t??''));
+      const keep=[]; raw.forEach((t,k)=>{ if(t.trim()!=='') keep.push(k); });
+      o.options=keep.map(k=>raw[k]);
+      const ans=(Array.isArray(s.answer)?s.answer:[]).map(k=>keep.indexOf(k)).filter(k=>k>=0);
+      o.answer=[...new Set(ans)].sort((a,b)=>a-b);
+      if(o.options.length<2) problems.push(`${si+1}단계: 선지를 2개 이상 입력하세요`);
+      else if(!o.answer.length) problems.push(`${si+1}단계: 정답인 선지를 하나 이상 체크하세요`);
+      return o;
+    }
+    const av=(s.answer??'').toString().trim();
+    o.answer = (at==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
+    if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
+    return o;
+  });
+  return {steps, problems};
+}
+window.stepsFromEditor = stepsFromEditor;
+window.toggleStepOptAns = function(i, j, on){
+  const s=editSteps[i]; if(!s) return;
+  const a=new Set(Array.isArray(s.answer)?s.answer:[]);
+  if(on) a.add(j); else a.delete(j);
+  s.answer=[...a].sort((x,y)=>x-y);
 };
 
 /* 예전의 '= 가 없습니다' 경고는 없앴다 — 유형이 하나로 합쳐져서
@@ -2769,7 +2865,20 @@ function renderSteps(){
     const stType=normStepType(s.answerType);
     const typeOpts=STEP_ANSWER_TYPES.map(t=>`<option value="${t.val}" ${stType===t.val?'selected':''}>${t.label}</option>`).join('');
     const showAlt = stType==='text' || stType==='expr';
+    const isMultiStep = stType==='multi';
     const altTags=(s.answerAlt||[]).map((a,j)=>`<div class="ans-alt-tag">${a}<button onclick="removeStepAlt(${i},${j})">✕</button></div>`).join('');
+    // 객관식 단계: 정답 칸 대신 선지 목록 (✓ = 정답)
+    const multiAns=(Array.isArray(s.answer)?s.answer:[]);
+    const optRows=(s.options||[]).map((opt,j)=>`
+        <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;background:var(--paper);border-radius:6px;padding:6px 8px;border:1px solid var(--rule)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" ${multiAns.includes(j)?'checked':''} onchange="toggleStepOptAns(${i},${j},this.checked)" style="width:auto;margin:0">
+            <span style="font-size:11px;font-weight:600;color:var(--ink3)">선지 ${j+1}</span>
+            <button class="btn-rm-opt" onclick="removeStepOption(${i},${j})" style="margin-left:auto">✕</button>
+          </div>
+          <input value="${(opt||'').replace(/"/g,'&quot;')}" oninput="updateStepOption(${i},${j},this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="LaTeX 입력 예: \\(3x=2x-6\\)" style="background:#fff">
+          <div class="latex-preview" id="step-opt-prev-${i}-${j}" style="min-height:28px;text-align:left;padding:6px 10px;font-size:13px">${stepOptDisplay(opt)||'미리보기'}</div>
+        </div>`).join('');
     return `
       <div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:10px;border-left:3px solid ${color}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -2780,9 +2889,13 @@ function renderSteps(){
         <input value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'label',this.value);updateStepPreview(${i})" placeholder="예: \\(3x=2x-6\\) 을 푸시오." style="margin-bottom:6px">
         <div class="latex-preview" id="step-prev-${i}" style="min-height:28px;text-align:left;padding:6px 10px;font-size:13px;margin:0 0 6px">${stepDisplay(s.label)||'미리보기'}</div>
         <label style="font-size:11px">답 유형</label>
-        <select onchange="updateStep(${i},'answerType',this.value);renderSteps()" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
+        <select onchange="setStepType(${i},this.value)" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
+        ${isMultiStep ? `
+        <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · 학생은 해당하는 것을 모두 고릅니다)</span></label>
+        ${optRows}
+        <button class="btn-add-opt" onclick="addStepOption(${i})" style="margin-bottom:4px">＋ 선지 추가</button>` : `
         <label style="font-size:11px">정답</label>
-        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3':stType==='expr'?'예: 2x+3, 2x+3=11, x>3':'예: 21, 2년 후'}" style="margin-bottom:6px">
+        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3':stType==='expr'?'예: 2x+3, 2x+3=11, x>3':'예: 21, 2년 후'}" style="margin-bottom:6px">`}
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">
@@ -2863,6 +2976,7 @@ function _doAddQuestion(type){
       {label:'x의 값을 구하시오.',answerType:'number',answer:'',hint:''},
       {label:'답을 구하시오.',answerType:'text',answer:'',answerAlt:[],hint:''},
     ]; }
+  else if(type==='link'){ newQ.type='link'; newQ.linkLabel=''; newQ.linkUrl=''; }
   else if(type==='graph'){ newQ.type='graph'; newQ.graphType='coordinate'; newQ.xMin=-5; newQ.xMax=5; newQ.yMin=-5; newQ.yMax=5; }
   else if(type==='pool_random'){ newQ.type='pool_random'; newQ.badge=''; newQ.question=''; newQ.correct_pool=[]; newQ.wrong_pool=[]; }
   currentWs.questions.push(newQ);
@@ -2986,7 +3100,14 @@ function _aiAnswerSummary(q){
     const ans=(q.answer||[]).map(i=>i+1).join(',');
     return `보기: ${opts} / 정답 번호: ${ans}`;
   }
-  if(q.type==='step3') return (q.steps||[]).map((s,i)=>`${i+1}단계 정답:${s.answer}`).join(' / ');
+  if(q.type==='step3') return (q.steps||[]).map((s,i)=>{
+    // 객관식 단계는 정답이 선지 번호 배열이라 번호를 그대로 보내면 뜻이 안 통한다 → 문항 「객관식」과 같은 꼴로
+    if(s.answerType==='multi'){
+      const opts=(s.options||[]).map((o,k)=>`${k+1}.${o}`).join(' / ');
+      return `${i+1}단계 (객관식) 보기: ${opts} / 정답 번호: ${(s.answer||[]).map(k=>k+1).join(',')}`;
+    }
+    return `${i+1}단계 정답:${s.answer}`;
+  }).join(' / ');
   if(q.type==='word') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   if(q.type==='equation') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   return null;   // graph/link/pool_random 등 — 검토 대상 아님
@@ -3155,43 +3276,8 @@ window._jumpToQuestion = function(qIdx){
 <div class="modal-bg" id="type-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal" style="width:360px">
     <h3>문항 유형 선택</h3>
-    <div class="type-grid" id="type-grid">
-      <div class="type-opt selected" data-type="word_text" onclick="selectTypeOpt(this)">
-        <div class="type-icon">📝</div>
-        <div class="type-name">① 한글 용어</div>
-        <div class="type-desc">한글/텍스트 정답</div>
-      </div>
-      <div class="type-opt" data-type="word_expr" onclick="selectTypeOpt(this)">
-        <div class="type-icon">🔣</div>
-        <div class="type-name">③ 문자 포함 식</div>
-        <div class="type-desc">식 · 등식(y=30/x) · 부등식(x&gt;3)</div>
-      </div>
-      <div class="type-opt" data-type="equation" onclick="selectTypeOpt(this)">
-        <div class="type-icon">🔢</div>
-        <div class="type-name">② 숫자 값</div>
-        <div class="type-desc">숫자/분수 정답</div>
-      </div>
-      <div class="type-opt" data-type="multi" onclick="selectTypeOpt(this)">
-        <div class="type-icon">☑️</div>
-        <div class="type-name">⑥ 객관식</div>
-        <div class="type-desc">선지 선택</div>
-      </div>
-      <div class="type-opt" data-type="step3" onclick="selectTypeOpt(this)">
-        <div class="type-icon">🪜</div>
-        <div class="type-name">④ 단계형</div>
-        <div class="type-desc">단계별 풀이 과정</div>
-      </div>
-      <div class="type-opt" data-type="graph" onclick="selectTypeOpt(this)">
-        <div class="type-icon">📈</div>
-        <div class="type-name">그래프 그리기</div>
-        <div class="type-desc">수직선/좌표평면/좌표축 답안</div>
-      </div>
-      <div class="type-opt" data-type="pool_random" onclick="selectTypeOpt(this)" style="grid-column:1/-1">
-        <div class="type-icon">🎲</div>
-        <div class="type-name">랜덤 풀</div>
-        <div class="type-desc">정답/오답 풀 등록 → 퀴즈마다 무작위 선택</div>
-      </div>
-    </div>
+    <!-- 칸은 Q_TYPE_DEFS 에서 만든다 (fillQTypeLists) — 편집창의 「문항 유형」 목록과 같은 순서·같은 이름 -->
+    <div class="type-grid" id="type-grid"></div>
     <div class="modal-actions">
       <button class="btn-modal-cancel" onclick="document.getElementById('type-modal').style.display='none'">취소</button>
       <button class="btn-modal-ok" onclick="confirmAddQuestion()">추가</button>

@@ -115,7 +115,14 @@ function aiAnswerSummary(q){
     const opts=(q.options||[]).map((o,i)=>`${i+1}.${o}`).join(' / ');
     return `보기: ${opts} / 정답 번호: ${(q.answer||[]).map(i=>i+1).join(',')}`;
   }
-  if(q.type==='step3') return (q.steps||[]).map((s,i)=>`${i+1}단계 정답:${s.answer}`).join(' / ');
+  if(q.type==='step3') return (q.steps||[]).map((s,i)=>{
+    // 객관식 단계(edit v6.0)는 정답이 선지 번호 배열(0부터) — 번호만 보내면 뜻이 안 통하므로 객관식 문항과 같은 꼴로 (v1.4)
+    if(s.answerType==='multi'){
+      const opts=(s.options||[]).map((o,k)=>`${k+1}.${o}`).join(' / ');
+      return `${i+1}단계 (객관식) 보기: ${opts} / 정답 번호: ${(s.answer||[]).map(k=>k+1).join(',')}`;
+    }
+    return `${i+1}단계 정답:${s.answer}`;
+  }).join(' / ');
   return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
 }
 

@@ -7,7 +7,7 @@
 
    포함: evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, gradeExamWord, judgeAnswer
+         normalizeMultiAnswer, gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -451,6 +451,28 @@ function judgeAnswer(q, ans, tokens){
   if(t==='link') return ans===true;
   if(t==='graph') return null;   // scoring.html에서 수동 채점
   return false;
+}
+
+/* ── 단계형의 한 단계 채점 (v13.0) ──
+   단계의 답 유형(answerType)마다 따로 채점 규칙을 두면 같은 유형의 문항과 규칙이 어긋난다
+   (예전에는 한글 용어 단계가 글자를 그대로 비교해서, 문항에서는 맞는 「이차 방정식」이 단계에서는 오답이었다).
+   그래서 단계를 같은 유형의 '문항' 모양으로 바꿔 judgeAnswer 하나로 채점한다 —
+   띄어쓰기·대소문자·≤ 표기·수식 동치 같은 규칙이 문항과 한 곳에서 맞춰진다.
+     text  → 한글 용어   word / answerType text
+     number→ 숫자 값     equation
+     expr  → 문자 포함 식 word / answerType expr  (옛 이름 equation 도 같은 것)
+     multi → 객관식      multi (options · answer 는 문항과 같은 모양)
+   ※ 학생 화면(index)의 숫자 단계는 키패드 값을 직접 비교한다 — 문항 ② 숫자 값을 연습할 때와 같은 방식이다. */
+function stepAsQuestion(step){
+  const s=step||{};
+  const at=(s.answerType==='equation') ? 'expr' : (s.answerType||'number');
+  if(at==='multi')  return {type:'multi', options:s.options||[], answer:s.answer};
+  if(at==='number') return {type:'equation', answer:s.answer, answerAlt:s.answerAlt||[]};
+  return {type:'word', answerType:(at==='expr'?'expr':'text'), answer:s.answer, answerAlt:s.answerAlt||[]};
+}
+/** 단계 하나를 판정한다. ans: 문자열(용어·식) 또는 고른 선지 번호 배열(객관식, 0부터) */
+function judgeStep(step, ans, tokens){
+  return judgeAnswer(stepAsQuestion(step), ans, tokens);
 }
 
 /* ═══════════════════════════════════════════════════════════════

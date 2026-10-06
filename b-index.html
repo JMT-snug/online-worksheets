@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="12.4">
+  <meta name="app-version" content="13.0">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -938,7 +938,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=10.0"></script>
+<script src="grading.js?v=13.0"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -3677,6 +3677,13 @@ async function startQuiz(ws) {
       if(q.type!=='step3') return q;
       const steps=getSteps(q);
       const last=steps[steps.length-1]||{};
+      // 마지막 단계가 객관식이면 문항 「객관식」으로 바꿔 선지·답안 캡처·채점을 그대로 쓴다
+      if(last.answerType==='multi'){
+        return {...q, type:'multi', _origType:'step3',
+          options: last.options||[],
+          answer: last.answer||[],
+          text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 고르세요)</span>'};
+      }
       return {...q, type:'word', _origType:'step3',
         answerType: last.answerType==='expr' ? 'expr' : 'text',
         answer: last.answer,
@@ -4359,7 +4366,7 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
     vars.map(v=>`<button tabindex="-1" class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
   /* 정답에 = 나 부등호가 들어 있으면 그 버튼을 띄운다.
-     예전에는 단계형의 '등식' 단계에만 = 버튼이 있어서, 문항 유형 「③ 문자 포함 식」의
+     예전에는 단계형의 '등식' 단계에만 = 버튼이 있어서, 문항 유형 「문자 포함 식」의
      정답이 y=30/x 같은 관계식이면 태블릿에서 = 를 칠 방법이 아예 없었다. */
   const ansStr=String(answer||'');
   const wantsEq=showEq||ansStr.includes('=');
@@ -4770,6 +4777,24 @@ function restoreS3State(q, saved){
 }
 
 const STEP_TAB_LABELS = ['①','②','③','④','⑤','⑥','⑦','⑧'];
+/* 객관식 단계의 답은 고른 선지 번호(0부터)를 "0,2" 꼴 글로 저장한다 (stepAnswers 는 글만 담는다).
+   s3MultiNums: 그 글 → 번호 배열, s3NumMark: 번호 → ①②… (20번을 넘으면 괄호 숫자) */
+function s3MultiNums(raw){
+  return String(raw??'').split(',').map(s=>s.trim()).filter(s=>/^\d+$/.test(s)).map(Number);
+}
+function s3NumMark(n){ return n<20 ? String.fromCharCode(9312+n) : `(${n+1})`; }
+/* 키패드(qTokens)로 쓴 「문자 포함 식」 답을 채점용 글로 바꾼다 — 분수 (a)/(b), 거듭제곱 (a)**(b), 제곱근 Math.sqrt(a).
+   문항(용어/수식)과 단계형이 같은 글을 만들어 같은 judgeAnswer 규칙으로 채점되게 하려고 한 곳에 둔다.
+   (단계형은 예전에 ^ 로 바꾸고 제곱근 토큰을 빠뜨려서, √ 가 든 식을 쓰면 √ 부분이 사라진 채 채점됐다.) */
+function kbdExprRaw(){
+  return qTokens.map(t=>{
+    if(t.type==="char") return t.val;
+    if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
+    if(t.type==="exp")  return `(${t.base||0})**(${t.expo||1})`;
+    if(t.type==="sqrt") return `Math.sqrt(${t.inner||0})`;
+    return "";
+  }).join("").replace(/−/g,"-");
+}
 
 
 function renderGraphQ(q, panel, qHeadHtml, prevAns){
@@ -5763,7 +5788,10 @@ function renderStep3Body(q){
   if(st.done[i]){
     const savedAns=(st.ans && st.ans[i]!==undefined && st.ans[i]!==null && st.ans[i]!=='')
                    ? String(st.ans[i]) : String(step.answer??'');
-    const escAns=String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // 객관식 단계는 고른 선지 번호("0,2")가 저장돼 있다 → 번호와 선지 글을 그대로 다시 보여 준다
+    const escAns = at==='multi'
+      ? s3MultiNums(savedAns).map(n=>`<span style="display:inline-block;margin-right:12px">${s3NumMark(n)} ${renderOption((step.options||[])[n]??'')}</span>`).join('')
+      : String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const hintHtmlD = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>` : '';
     const nextUndone = st.done.findIndex(v=>!v);
     const navHtml = nextUndone===-1
@@ -5782,10 +5810,27 @@ function renderStep3Body(q){
   // 수/다항식/방정식 → 수학 키패드, 텍스트 → 일반 입력
   const useKeypad = (at==='number' || at==='expr' || at==='equation');
 
-  if(useKeypad){
+  if(at==='multi'){
+    /* 객관식 단계 — 문항 「객관식」(모두 고르기)과 같은 모양·같은 선택 상태(multiSel)를 쓴다.
+       채점은 submitStep3 → judgeStep → judgeAnswer 의 multi 규칙(정답 번호 집합이 정확히 같아야 정답). */
+    multiSel = new Set();
+    const opts=step.options||[];
+    const maxLen=Math.max(0,...opts.map(optVisibleLen));
+    const cols = maxLen>10 ? 'cols1' : opts.length===4 ? 'cols2' : opts.length===3 ? 'cols3' : '';
+    const hintHtml = `<div class="step3-hint">${step.hint ? '💡 '+step.hint : '💡 해당하는 것을 모두 선택하세요'}</div>`;
+    body.innerHTML=labelHtml+hintHtml+`
+      <div class="multi-grid ${cols}" id="multi-grid">
+        ${opts.map((opt,k)=>
+          `<button class="multi-opt" id="mopt-${k}"
+            onmousedown="event.preventDefault()" onclick="toggleMulti(${k})">${renderOption(opt)}</button>`
+        ).join('')}
+      </div>
+      <button class="btn-multi-submit" onmousedown="event.preventDefault()" onclick="submitStep3(${st.curStep})">확인</button>
+      <div class="feedback-strip" id="s3-fb"></div>`;
+  } else if(useKeypad){
     qTokens=[]; qEditPart=null; qCursorIdx=0;
     /* 안내 문구는 유형명이 아니라 정답의 생김새를 따른다 —
-       「③ 문자 포함 식」 하나로 식·등식·부등식을 모두 받기 때문이다. */
+       「문자 포함 식」 하나로 식·등식·부등식을 모두 받기 때문이다. */
     const ansStr=String(step.answer||'');
     const defHint = at==='number'        ? '💡 숫자/분수로 입력하세요'
                   : /[<>≤≥]/.test(ansStr) ? '💡 부등식을 입력하세요 (부등호 버튼 사용)'
@@ -5862,19 +5907,15 @@ function submitStep3(stepNum, byEnter){
 
   // 빈 답 제출은 오답으로 세지 않고 무시한다 (엔터 연타·실수 입력).
   const usesKeypad = ['number','expr','equation'].includes(at);
-  const isEmptyAns = usesKeypad
-    ? !(Array.isArray(qTokens) && qTokens.length)
-    : !((document.getElementById("s3-inp")?.value)||"").trim();
+  const isMulti = at==='multi';
+  const isEmptyAns = isMulti
+    ? multiSel.size===0
+    : usesKeypad
+      ? !(Array.isArray(qTokens) && qTokens.length)
+      : !((document.getElementById("s3-inp")?.value)||"").trim();
   if(isEmptyAns) return;
 
-  let ok=false, userAns="";
-  // 키패드 토큰 → 원시 문자열 변환 헬퍼
-  const tokensToRaw=()=>qTokens.map(t=>{
-    if(t.type==="char") return t.val;
-    if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
-    if(t.type==="exp")  return `(${t.base||0})^(${t.expo||1})`;
-    return "";
-  }).join("").replace(/−/g,"-");
+  let ok=false, userAns="", finalAns=null;   // finalAns: 재채점용으로 남길 답 (객관식은 선지 번호 배열)
   /* 나중에 이 단계를 다시 열었을 때 보여 줄 "내가 쓴 답".
      수 단계의 userAns는 계산값이라 분수 2/3이 0.6666…으로 남는다 → 누른 모양 그대로 만든다. */
   const tokensToDisp=()=>qTokens.map(t=>{
@@ -5889,20 +5930,24 @@ function submitStep3(stepNum, byEnter){
     userAns=String(val);
     const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
     ok=!isNaN(val)&&Math.abs(val-correctNum)<0.001;
+  } else if(isMulti){
+    // 고른 선지 번호(0부터)를 문항 「객관식」과 같은 규칙으로 채점한다
+    const sel=[...multiSel].sort((a,b)=>a-b);
+    userAns=sel.join(",");   // stepAnswers 에는 "0,2" 꼴 글로 저장 (s3MultiNums 가 되읽는다)
+    finalAns=sel;
+    ok=judgeStep(step, sel)===true;
   } else if(at==='expr' || at==='equation'){
-    /* 'equation'은 옛 데이터에만 남아 있는 유형명이다. 지금은 문항 유형과 똑같이
-       「③ 문자 포함 식」 하나로 다루고, 식·등식·부등식 중 무엇으로 볼지는
-       정답의 생김새를 보고 mathEquivCheck 가 알아서 고른다.
-       (예전에는 equation 단계의 정답에 = 가 없으면 학생이 뭘 써도 오답이었다.) */
-    userAns=tokensToRaw();
-    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
-    ok=alts.some(ex=>mathEquivCheck(userAns,ex));
+    /* 'equation'은 옛 데이터에만 남아 있는 유형명이다 — judgeStep 이 「문자 포함 식」으로 다룬다.
+       채점은 같은 유형의 문항과 같은 judgeAnswer 규칙(식·등식·부등식은 정답 생김새로 판별). */
+    userAns=kbdExprRaw();
+    ok=judgeStep(step, userAns)===true;
   } else { // text
+    /* 한글 용어 단계도 문항 「한글 용어」와 같은 judgeAnswer 규칙 —
+       띄어쓰기는 무시하고, 대소문자는 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다.
+       (v12.4 까지는 글자를 그대로 비교해서 「이차 방정식」을 「이차방정식」과 다르게 봤다.) */
     const inp=document.getElementById("s3-inp");
     userAns=(inp?.value||"").trim();
-    const alts=[step.answer,...(step.answerAlt||[])].map(a=>String(a));
-    // 대소문자는 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (grading.js 와 같은 규칙)
-    ok=alts.some(a=>isCaseSignificant(a) ? a===userAns : a.toLowerCase()===userAns.toLowerCase());
+    ok=judgeStep(step, userAns)===true;
   }
 
   if(ok){
@@ -5922,9 +5967,10 @@ function submitStep3(stepNum, byEnter){
         renderStep3Q(q,document.getElementById("quiz-left-panel"));
       },700);
     } else {
-      recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
+      recordAnswer(curQIdx, finalAns ?? userAns, isMulti ? null : (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
-      const dispAns = at==='number' ? (typeof step.answer==='number'?step.answer:step.answer) : step.answer;
+      // 객관식 단계의 정답은 선지 번호 배열 → ①, ③ 으로 보여 준다
+      const dispAns = isMulti ? (Array.isArray(step.answer)?step.answer:[]).map(s3NumMark).join(', ') : step.answer;
       // 부등호(<)가 든 답을 그대로 넣으면 태그로 읽혀 뒤쪽 버튼까지 사라진다 → 반드시 escape
       const doneHtml=`✅ 완료! 답: ${_escHtml(dispAns)}&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
@@ -5950,6 +5996,7 @@ function submitStep3(stepNum, byEnter){
     fb.className="feedback-strip show fb-wrong";
     fb.innerHTML= (at==='equation'||at==='expr') ? "❌ 식을 다시 확인해보세요."
                 : at==='number'   ? "❌ 다시 풀어보세요!"
+                : isMulti         ? "❌ 틀렸어요. 다시 선택해보세요!"
                 : "❌ 다시 확인해보세요.";
     lp()?.classList.add("shake");
     setTimeout(()=>lp()?.classList.remove("shake"),450);
@@ -6303,13 +6350,7 @@ async function submitQAns(){
     let input=null; // 블록 전체에서 접근 가능하도록 상단 선언
     if(isExprInput(q)){
       // 수식 동치 비교 (qTokens 사용)
-      const rawInput=qTokens.map(t=>{
-        if(t.type==="char") return t.val;
-        if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
-        if(t.type==="exp")  return `(${t.base||0})**(${t.expo||1})`;
-        if(t.type==="sqrt") return `Math.sqrt(${t.inner||0})`;
-        return "";
-      }).join("").replace(/−/g,"-");
+      const rawInput=kbdExprRaw();
       userAns=rawInput||"(빈칸)";
       // 채점은 grading.js의 judgeAnswer로 통일 — 토큰까지 넘겨 factorMode 형태 검사 포함
       ok = judgeAnswer(q, rawInput, qTokens) === true;

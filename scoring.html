@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.2">
+<meta name="app-version" content="scoring-v2.3">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -143,6 +143,11 @@ body.mode-feedback .f-q{display:none}
 .judge-btn.active-ok{border-color:var(--green);background:var(--grn-lt);color:var(--green)}
 .judge-btn.active-ng{border-color:var(--red);background:var(--red-lt);color:var(--red)}
 .judge-btn.active-skip{border-color:var(--ink3);background:var(--cream);color:var(--ink3)}
+/* 🏷 그래프 오답 유형 (v2.3) — ❌ 를 누르기 전에 고르면 함께 저장된다 */
+.err-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.err-row label{font-weight:700;color:var(--ink2);white-space:nowrap}
+.err-row select{flex:1;min-width:160px;max-width:300px;padding:7px 8px;border:1px solid var(--rule);border-radius:8px;font-size:13px;font-family:inherit;background:var(--paper)}
+.err-row .err-hint{font-size:11px;color:var(--ink3)}
 
 .feedback-box{width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px}
 .feedback-box:focus{outline:none;border-color:var(--accent)}
@@ -323,6 +328,14 @@ body.mode-feedback .f-q{display:none}
           </div>
 
           <div class="grade-actions">
+            <!-- 🏷 오답 유형 (v2.3): ❌ 로 채점할 때 어떤 실수인지 고른다. 학생 기록의 graphErrorTypes[문항id] 에 저장되고
+                 AI 분석실의 학생 성취 분석(오답 유형 분포)에 쓰인다 — 학습지 오답 분석(예상·빈출)에는 안 쓰인다. ⭕·보류로 채점하면 지워진다. -->
+            <div class="err-row" id="err-row">
+              <label for="err-type">🏷 오답 유형</label>
+              <select id="err-type" onchange="setErrorType(this.value)" title="❌ 로 채점할 학생의 실수 유형. ❌ 를 누르기 전에 고르면 함께 저장되고, 이미 ❌ 인 학생은 고르는 즉시 저장됩니다">
+                <option value="">— 고르지 않음 —</option></select>
+              <span class="err-hint">❌ 를 누르기 전에 고르세요 (학생 성취 분석에 반영돼요)</span>
+            </div>
             <div class="judge-row">
               <button class="judge-btn" id="btn-ok" onclick="setJudgment(true)">⭕ 정답</button>
               <button class="judge-btn" id="btn-ng" onclick="setJudgment(false)">❌ 오답</button>
@@ -345,6 +358,7 @@ body.mode-feedback .f-q{display:none}
 <div class="toast" id="toast"></div>
 
 <script src="grading.js?v=9.3"></script>
+<script src="ai-lab.js?v=1.6"></script>   <!-- 오답 유형 분류표(buildTaxonomy·typeName) — grading.js 다음에 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -459,7 +473,7 @@ onAuthStateChanged(auth, async u => {
   document.getElementById("hdr-user").style.display = "flex";
   document.getElementById("hdr-name").textContent = u.displayName || u.email;
   showPage("main-page");
-  await Promise.all([loadCurriculum(), loadClassInfo(), loadGradingIndex()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords) · v2.0: 채점 요약(grading_index)이 준비돼 있으면 목록·건수·상태는 그것으로
+  await Promise.all([loadCurriculum(), loadClassInfo(), loadGradingIndex(), loadErrTaxonomy()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords) · v2.0: 채점 요약(grading_index)이 준비돼 있으면 목록·건수·상태는 그것으로
   { const rb = document.getElementById('btn-rebuild-idx'); if(rb) rb.style.display = BASE_TEACHER_EMAILS.includes(u.email) ? '' : 'none'; }
   if(!idxMode && BASE_TEACHER_EMAILS.includes(u.email)) toast('ℹ️ 채점 요약이 아직 없어 옛 방식으로 읽습니다 — 🔧 요약 만들기를 한 번 누르면 빨라져요', 5000);
   buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
@@ -514,6 +528,74 @@ async function loadCurriculum(){
 }
 
 /* 반 정보(teacher_data) — 학급 이름·담당 교사 범위. 기록을 읽기 전에 있어야 학습지별 읽기가 학생 목록을 안다 */
+/* ══════════ 🏷 그래프 오답 유형 (v2.3, 교사 요청) ══════════
+   그래프 문항은 오답 글이 없어 AI 분석실이 학생 오답을 유형과 맞춰 볼 수 없다. 그래서 ❌ 로 채점할 때 교사가 직접 실수 유형을 고른다.
+   · 분류표는 AI 분석실과 같은 것 — ai-lab.js 의 buildTaxonomy(기본 유형 + 교사가 더한 config/errorTaxonomy.subs).
+   · 저장 위치: 학생 기록 문서의 **최상위 graphErrorTypes[문항id] = 유형 코드**('calc.sign'). perQuestion 안이 아닌 이유 —
+     학생 화면(index)이 그래프 문항을 저장할 때 perQuestion.{문항id} 를 정해진 키(drawing·feedback·correct…)로 통째로 다시 써서,
+     거기 새 키를 두면 학생이 다시 열었다 저장하는 순간 지워진다. 최상위 필드는 index 가 건드리지 않는다.
+   · 쓰임: AI 분석실의 **학생 성취 분석**(화면의 오답 유형 분포·기간별 유형, AI 입력의 유형 개수)에 센다.
+     📝 학습지 오답 분석(예상·빈출 오답을 AI 가 분석)에는 그래프를 넣지 않는다 — 그쪽은 예전부터 그래프를 건너뛴다.
+   · ⭕·보류로 채점하면 지운다. 기록에 남아 있어도 perQuestion.correct 가 false 일 때만 쓰인다(학생이 다시 제출해 채점 대기가 되면 무시). */
+let TAX = null;
+async function loadErrTaxonomy(){
+  let subs = [];
+  try{ const sn = await getDoc(doc(db,'config','errorTaxonomy')); subs = sn.exists() ? (sn.data().subs||[]) : []; }
+  catch(e){ console.warn('[분류표 로드 실패 — 기본 분류표만]', e.message); }
+  try{ TAX = buildTaxonomy(subs); }catch(e){ TAX = null; console.warn('[분류표 만들기 실패]', e.message); }
+  fillErrTypeSelect();
+}
+function fillErrTypeSelect(){
+  const sel = document.getElementById('err-type'); if(!sel) return;
+  const keep = sel.value;
+  if(!TAX){ sel.innerHTML = '<option value="">— 고르지 않음 —</option>'; return; }
+  const esc = t => String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  let h = '<option value="">— 고르지 않음 —</option>';
+  TAX.cats.forEach(c=>{
+    const subs = c.subs.filter(x=>!x.hidden); if(!subs.length) return;
+    h += `<optgroup label="${esc(c.icon+' '+c.name)}">` + subs.map(x=>`<option value="${esc(x.code)}" title="${esc(x.desc||'')}">${esc(x.name)}</option>`).join('') + '</optgroup>';
+  });
+  sel.innerHTML = h;
+  showErrType(keep);
+}
+/** 선택 칸을 이 학생의 저장된 유형으로 — 분류표에서 숨기거나 없어진 코드도 그대로 보이게 임시 항목을 둔다 */
+function showErrType(code){
+  const sel = document.getElementById('err-type'); if(!sel) return;
+  code = code || '';
+  if(code && ![...sel.options].some(o=>o.value===code)){
+    const o = document.createElement('option'); o.value = code;
+    try{ o.textContent = TAX ? typeName(TAX, code) : code; }catch(e){ o.textContent = code; }
+    sel.appendChild(o);
+  }
+  sel.value = code;
+}
+/** 저장할 유형 코드 — ❌ 일 때만 값이 있고, ⭕·보류·판정 전이면 null(지운다) */
+function errTypeForSave(judgment, selValue){
+  return (judgment === false && selValue) ? String(selValue) : null;
+}
+/** 화면 상태(색인·학생 목록)와 읽어 둔 기록에 새 유형을 맞춘다 — 학생을 다시 열었을 때 저장된 값이 보이게 */
+function syncErrType(stu, wsId, qid, code){
+  stu.errType = code || '';
+  const rec = (allRecords[wsId]||{})[stu.email];
+  if(rec){
+    rec.graphErrorTypes = { ...(rec.graphErrorTypes||{}) };
+    if(code) rec.graphErrorTypes[qid] = code; else delete rec.graphErrorTypes[qid];
+  }
+}
+/** 이미 ❌ 인 학생의 유형을 바꾼다 — 고르는 즉시 저장하고 학생은 그대로 둔다. 아직 판정 전이면 ❌ 를 누를 때 함께 저장된다 */
+window.setErrorType = async function(code){
+  if(_curJudgment !== false) return;
+  const stu = students[curStuIdx]; if(!stu) return;
+  const val = errTypeForSave(false, code);
+  try{
+    const ref = doc(db, 'records', stu.email, 'worksheets', curWsId);
+    try{ await updateDoc(ref, { [`graphErrorTypes.${curQid}`]: val }); }
+    catch(errUpd){ await setDoc(ref, { graphErrorTypes: { [curQid]: val } }, { merge:true }); }
+    syncErrType(stu, curWsId, curQid, val);
+    toast(val ? '🏷 유형 저장' : '🏷 유형을 지웠어요');
+  }catch(e){ toast('저장 실패: '+e.message); }
+};
+
 async function loadClassInfo(){
   try{
     const clsSnap = await getDocs(collection(db, 'teacher_data'));
@@ -1589,7 +1671,8 @@ function loadQuestion(opts){
       email,
       name: r.studentName || email.split('@')[0],
       cls: classMap[String(email).toLowerCase()] || "",
-      data: r.perQuestion[curQid]
+      data: r.perQuestion[curQid],
+      errType: String(r.graphErrorTypes?.[curQid] || '')   // 🏷 교사가 ❌ 로 채점하며 고른 오답 유형 (v2.3)
     }))
     .filter(s => !myClsNames || (s.cls && myClsNames.has(s.cls))) // 담당 교사: 담당 학급 학생만
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
@@ -1841,6 +1924,7 @@ function showStudent(idx){
 
   // 판정 버튼 상태
   updateJudgeButtons(stu.data.correct);
+  showErrType(stu.data.correct === false ? stu.errType : '');   // ❌ 인 학생만 저장된 유형을 보여 준다 (v2.3)
   document.getElementById('feedback').value = stu.data.feedback || '';
 }
 
@@ -1969,6 +2053,9 @@ window.saveCurrent = async function(){
       [`perQuestion.${curQid}.feedback`]: feedback || null,
       [`perQuestion.${curQid}.gradedAt`]: new Date().toISOString(),   // 재채점 여부 판단용 (챗 알림)
     };
+    // 🏷 오답 유형 (v2.3) — ❌ 일 때만 값, 그 밖의 판정이면 null 로 지운다. 최상위 필드에 쓰는 이유는 loadErrTaxonomy 위 주석 참고
+    const _errType = errTypeForSave(_curJudgment, document.getElementById('err-type')?.value);
+    upd[`graphErrorTypes.${curQid}`] = _errType;
     // 시험지 문항이면 점수도 판정과 함께 기록 — correct만 쓰면 '⭕인데 0점' 모순 데이터가 됨
     const _ws = WORKSHEETS.find(w=>w.id===curWsId);
     if(_ws?.type==='exam'){
@@ -1995,11 +2082,12 @@ window.saveCurrent = async function(){
         feedback: feedback || null,
         gradedAt: new Date().toISOString(),
         ...(teacherDrawing ? {teacherDrawing} : {}),
-      } } }, {merge:true});
+      } }, graphErrorTypes: { [curQid]: _errType } }, {merge:true});
     }
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
     stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)
+    syncErrType(stu, curWsId, curQid, _errType);
     // 색인의 상태도 갱신해 상태 필터·건수가 즉시 반영되게 한다
     graphRows.forEach(r=>{ if(r.email===stu.email && r.wsId===curWsId && r.qid===curQid) r.status = statusOf({correct:_curJudgment}); });
     patchIdx(stu.email, curWsId, curQid, statusOf({correct:_curJudgment}), false, stu.name);   // ⚡ 채점 요약 (v2.0) — 실패해도 채점은 이미 저장됨

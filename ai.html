@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.8">
+<meta name="app-version" content="1.9">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -146,7 +146,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.5"></script>
+<script src="ai-lab.js?v=1.6"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -318,6 +318,10 @@ function qBodyHtml(text, answer){
 const qBody=q=>qBodyHtml(q?.text, q?aiAnswerSummary(q):'');
 /** 유형 목록의 행(mergeTypedItems)에 붙일 문항 — 학습지에서 문항을 찾아 전체 글로, 못 찾으면 항목에 실려 온 앞부분으로 */
 const qBodyOfRow=r=>{ const q=(WORKSHEETS.find(w=>w.id===r.wsId)?.questions||[]).find(x=>x.id===r.qid); return q?qBody(q):qBodyHtml(r.q, r.answer); };
+/** 유형 분포에 그래프 오답이 들어 있다는 안내 (v1.9) — 그래프는 오답 글이 없어 scoring 에서 교사가 ❌ 로 채점하며 고른 유형으로 센다. 성취 분석(화면·AI)에는 반영하고, 📝 학습지 오답 분석(예상·빈출)에는 넣지 않는다 */
+const graphNote=(cs,long)=>cs.graphWrong?(long
+  ?`📈 그래프 오답 ${cs.graphWrong}개 포함(유형을 고른 것 ${cs.graphTyped}개 — scoring 에서 교사가 ❌ 로 채점하며 고른 것). 학생 성취 분석(AI 포함)에 반영됩니다.`
+  :` <span class="badge" style="background:var(--amb-lt);color:var(--amber)" title="그래프 오답은 scoring 에서 교사가 ❌ 로 채점하며 고른 유형으로 센 것입니다. 학생 성취 분석(AI 포함)에 반영됩니다">📈 그래프 ${cs.graphWrong}개 포함</span>`):'';
 const ACCEPT_HINT='유형 집계·학생 분석에서 오답으로 세지 않고, 불러온 학생의 기록에서도 이 답을 오답에서 빼고 마지막 답이면 정답으로 고칩니다(되돌리면 원래대로). 불러오지 않은 학생(담당 학급 밖)은 편집기에서 정답을 고친 뒤 교사 화면의 재채점을 쓰세요.';
 /* ✅ 정답 인정을 학생 기록에 반영 (v1.6, 교사 요청 「기록도 자동으로」) — records/{uid}/worksheets/{wsId}.perQuestion[qid] 만 고친다.
    어떤 값이 되는지는 ai-lab.js acceptPatch(원본은 _beforeAccept 에 남겨 되돌리기 가능). 불러온 학생(allData)만 — 담당 학급 밖은 teacher 재채점.
@@ -750,7 +754,7 @@ async function renderStu(){
   // 선택 학생 종합 (AI 없이 우리가 센 값)
   let agg='';
   if(sel.length){
-    const parts=[]; sel.forEach(r=>r.targets.forEach(ws=>parts.push(studentWsTypes(ws, allData[r.uid][ws.id], TAX))));
+    const parts=[]; sel.forEach(r=>r.targets.forEach(ws=>parts.push(studentWsTypes(ws, allData[r.uid][ws.id], TAX))));   // 그래프 오답(교사가 scoring 에서 고른 유형)도 센다 (v1.9)
     const cs=mergeCatStats(parts, TAX);
     const byCat={}; cs.cats.forEach(c=>{ byCat[c.code]={n:c.count}; });
     const f=sel.filter(r=>r.sum.avgFirst!=null), d=sel.filter(r=>r.sum.avgDiff!=null);
@@ -758,7 +762,7 @@ async function renderStu(){
       <div class="row small" style="gap:16px">
         <span>평균 첫 시도 정답률 <b>${f.length?Math.round(f.reduce((s,r)=>s+r.sum.avgFirst,0)/f.length)+'%':'-'}</b></span>
         <span>학급 평균 대비 <b>${d.length?fmtDiff(Math.round(d.reduce((s,r)=>s+r.sum.avgDiff,0)/d.length)):'-'}</b></span>
-        <span>낸 오답 ${cs.wrongTotal}개 중 유형과 일치 <b>${cs.matched}개</b></span></div>
+        <span>낸 오답 ${cs.wrongTotal}개 중 유형과 일치 <b>${cs.matched}개</b></span>${graphNote(cs)}</div>
       <div class="row small" style="margin-top:8px"><b>오답 유형</b> <div style="flex:1;max-width:420px">${typeBar(byCat,'n')}</div></div>
       <div class="small" style="margin-top:6px">${cs.cats.slice(0,6).map(c=>`${esc(c.name)} ${c.count} <span class="muted">(${c.subs.slice(0,3).map(s=>esc(s.name)+' '+s.count).join(', ')})</span>`).join(' · ')||'<span class="muted">유형과 일치한 오답이 없습니다 — 📝 학습지 오답 분석을 먼저 해 두면 채워집니다</span>'}</div>
     </div></div>`;
@@ -817,6 +821,9 @@ async function runStudent(uid){
   const targets=stuTargets(uid);
   if(!targets.length) throw new Error('분석할 기록이 없습니다');
   const worksheets=studentAiWorksheets(targets, wsMap, TAX);
+  /* v1.9 (교사 요청): 학생 성취 분석에는 그래프 오답 유형도 반영한다 — 유형 분포(catStats)·기간별 유형(timeline)에 들어간다.
+     그래프는 오답 글이 없으므로 위 worksheets(오답 문항 목록)에는 없고, 유형 개수로만 반영된다.
+     (📝 학습지 오답 분석 — 예상·빈출 오답을 AI 가 분석하는 쪽 — 에서는 그래프를 예전부터 제외한다.) */
   const cs=mergeCatStats(targets.map(ws=>studentWsTypes(ws, wsMap[ws.id], TAX)), TAX);
   const tl=studentTimeline(targets, wsMap, CLASS_AVG, TAX);
   const key=stuAiKey(F.scope, F.scopeUnit);
@@ -875,7 +882,7 @@ window.openStuDetail=async uid=>{
   const rec=savedStu[uid]?.[key]||null;
   const wsMap=allData[uid]||{};
   const targets=stuTargets(uid);
-  const cs=mergeCatStats(targets.map(ws=>studentWsTypes(ws, wsMap[ws.id], TAX)), TAX);
+  const cs=mergeCatStats(targets.map(ws=>studentWsTypes(ws, wsMap[ws.id], TAX)), TAX);   // 그래프 오답 유형 포함 (v1.9)
   const tl=studentTimeline(targets, wsMap, CLASS_AVG, TAX);
   const byCat={}; cs.cats.forEach(c=>{ byCat[c.code]={n:c.count}; });
   const a=rec?.analysis||{};
@@ -900,6 +907,7 @@ window.openStuDetail=async uid=>{
       ${tl.periods.length?`<table style="margin-top:8px"><thead><tr><th>기간</th><th>학습지</th><th>첫 시도 평균</th><th>학급 대비</th><th>오답 유형</th></tr></thead><tbody>${tl.periods.map(p=>`<tr><td>${esc(p.period)}</td><td>${p.n}</td><td>${p.avgFirst!=null?p.avgFirst+'%':'-'}</td><td>${p.avgDiff!=null?fmtDiff(p.avgDiff):'-'}</td><td class="small">${esc(p.cats)||'<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table>`:''}
     </div></div>
     <div class="card"><div class="card-hdr"><span class="card-title">🏷 오답 유형 분포</span><span class="small muted">낸 오답 ${cs.wrongTotal}개 중 분류된 오답과 일치한 ${cs.matched}개</span></div><div class="card-body">
+      ${cs.graphWrong?`<div class="small muted" style="margin-bottom:6px">${graphNote(cs,true)}</div>`:''}
       ${cs.cats.length?`<div style="max-width:480px;margin-bottom:8px">${typeBar(byCat,'n')}</div>${cs.cats.map(c=>`<div class="small" style="margin-top:3px"><b>${esc(c.name)} ${c.count}</b> <span class="muted">${c.subs.map(s=>esc(s.name)+' '+s.count).join(' · ')}</span></div>`).join('')}`
         :'<div class="small muted">유형과 일치한 오답이 없습니다 — 이 학생이 푼 학습지를 📝 학습지 오답 분석으로 먼저 분석해 두면 채워집니다.</div>'}
       ${rec?.pathHits?.length?`<div style="margin-top:10px"><b class="small">🕳 자주 걸린 오답 경로</b><ul style="margin:2px 0 0 18px" class="small">${rec.pathHits.slice(0,8).map(h=>`<li><b>${esc(h.label)}</b> ${h.count}회 ${h.sub?typeBadge(h.sub):''}${h.peers?` <span class="badge" style="background:var(--amb-lt);color:var(--amber)">학급에서도 ${h.peers}명</span>`:''}<span class="path">${esc(h.path)} · 적어 낸 답: ${h.answers.map(esc).join(', ')}</span></li>`).join('')}</ul></div>`:''}

@@ -517,13 +517,25 @@ function classFirstTryAvg(worksheets, allData){
   });
   return out;
 }
-/** 학생 한 명의 학습지별 오답 유형 — 한 문항에서 낸 서로 다른 오답마다, 분류된 오답 경로와 일치하면 그 유형으로 센다 */
+/** 학생 한 명의 학습지별 오답 유형 — 한 문항에서 낸 서로 다른 오답마다, 분류된 오답 경로와 일치하면 그 유형으로 센다
+    v1.6 (교사 요청): **학생 성취 분석에는 그래프 오답도 센다.** 그래프 문항은 오답 글이 없어 오답 경로와 맞춰 볼 수 없으니,
+    scoring 에서 교사가 ❌ 로 채점하며 고른 유형(기록의 graphErrorTypes[문항id])을 쓴다 — ❌ 한 문항을 오답 1개로 세고, 유형을 골랐으면 그 유형으로도 센다.
+    (이 함수의 결과는 화면의 유형 분포와 AI 학생 성취 분석 입력(catStats·기간별 유형)에 쓰인다.)
+    반대로 **📝 학습지 오답 분석(예상·빈출 오답을 AI 가 분석)에는 그래프를 넣지 않는다** — 그쪽은 AI_SKIP_TYPES 로 예전부터 건너뛴다(wsTypedItems·freq*).
+    graphWrong·graphTyped 는 그 가운데 그래프 몫(화면에 「그래프 N개 포함」 표시용). */
 function studentWsTypes(ws, r, tax){
-  const res={ wrongTotal:0, matched:0, subs:{} };
+  const res={ wrongTotal:0, matched:0, subs:{}, graphWrong:0, graphTyped:0 };
   r=adjustRecord(ws, r);   // ✅ 정답으로 인정한 답은 오답이 아니다
   if(!r?.perQuestion) return res;
   (ws.questions||[]).forEach(q=>{
-    if(AI_SKIP_TYPES.has(q.type)) return;
+    if(AI_SKIP_TYPES.has(q.type)){
+      if(q.type==='graph' && r.perQuestion[q.id]?.correct===false){
+        res.wrongTotal++; res.graphWrong++;
+        const code=String(r.graphErrorTypes?.[q.id]||'');
+        if(code){ res.matched++; res.graphTyped++; res.subs[code]=(res.subs[code]||0)+1; }
+      }
+      return;
+    }
     const v=r.perQuestion[q.id]; if(!v) return;
     const seen=new Set();
     (Array.isArray(v.wrongInputs)?v.wrongInputs:[]).forEach(w=>{
@@ -538,8 +550,8 @@ function studentWsTypes(ws, r, tax){
 }
 /** 여러 학습지를 합친 유형 분포 → AI·화면용 { wrongTotal, matched, bySub, cats:[{code,name,count,subs:[{code,name,count}]}] } */
 function mergeCatStats(parts, tax){
-  const bySub={}; let wrongTotal=0, matched=0;
-  parts.forEach(p=>{ wrongTotal+=p.wrongTotal; matched+=p.matched; Object.entries(p.subs).forEach(([k,n])=>{ bySub[k]=(bySub[k]||0)+n; }); });
+  const bySub={}; let wrongTotal=0, matched=0, graphWrong=0, graphTyped=0;
+  parts.forEach(p=>{ wrongTotal+=p.wrongTotal; matched+=p.matched; graphWrong+=p.graphWrong||0; graphTyped+=p.graphTyped||0; Object.entries(p.subs).forEach(([k,n])=>{ bySub[k]=(bySub[k]||0)+n; }); });
   const cats=[];
   tax.cats.forEach(c=>{
     const subs=c.subs.filter(s=>bySub[s.code]).map(s=>({code:s.code, name:s.name, count:bySub[s.code]})).sort((a,b)=>b.count-a.count);
@@ -551,7 +563,7 @@ function mergeCatStats(parts, tax){
   const orphan=Object.entries(bySub).filter(([k])=>!known.has(k));
   if(orphan.length) cats.push({ code:'?', name:'알 수 없는 유형', count:orphan.reduce((n,[,c])=>n+c,0), subs:orphan.map(([k,c])=>({code:k,name:k,count:c})) });
   cats.sort((a,b)=>b.count-a.count);
-  return { wrongTotal, matched, bySub, cats };
+  return { wrongTotal, matched, bySub, cats, graphWrong, graphTyped };
 }
 /** 기간 나누기 — 두 달 이상이면 월, 아니면 주(월요일 시작) */
 function periodKeyFn(dates){
@@ -559,7 +571,8 @@ function periodKeyFn(dates){
   if(months.size>=2) return d=>d.slice(0,7);
   return d=>{ const t=new Date(d+'T00:00:00Z'); const wd=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-wd); return t.toISOString().slice(0,10)+' 주'; };
 }
-/** 시간 순 기록 — rows(학습지별)·periods(기간별). 일반 학습지 중 풀이 기록과 날짜가 있는 것만 */
+/** 시간 순 기록 — rows(학습지별)·periods(기간별). 일반 학습지 중 풀이 기록과 날짜가 있는 것만
+    기간별 오답 유형(cats)에도 그래프 오답 유형이 들어간다(studentWsTypes 와 같다 — 성취 분석이므로) */
 function studentTimeline(targets, wsMap, classAvg, tax){
   const rows=[];
   targets.forEach(ws=>{

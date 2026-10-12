@@ -29,6 +29,15 @@ function piToJs(t){
   return t.replace(/π/g,'(Math.PI)').replace(/(\d|\))\(/g,'$1*(').replace(/\)(\d)/g,')*$1');
 }
 
+/* 맨 앞·여는 괄호 뒤·곱셈/덧셈/뺄셈 뒤의 음수 부호를 (-1)* 로 바꾼다.
+   JS 는 -x**2 처럼 단항 마이너스 바로 뒤에 거듭제곱이 오면 문법 오류로 막는다. 수학에서는 -x² = -(x²) 이므로 (-1)*x**2 와 같다.
+   예전에는 이 오류를 삼켜 식이 통째로 NaN 이 되어(_compileMulti) 키패드로 쓴 -(x)**(2) 가 정답 -x^2 와 글자까지 같아야만 정답이었고,
+   evalAnswer 는 -2^2 를 앞 숫자만 읽어 -2 로 돌려줬다(-4 여야 한다).
+   · 지수 자리(x^-2)와 나눗셈 뒤(a/-b)는 뜻이 달라지므로 건드리지 않는다 — a/-b 를 a/(-1)*b 로 바꾸면 (a/-1)*b 가 된다.
+   · 거듭제곱은 ^ 로 적혀 있어야 한다(** 는 먼저 ^ 로 바꿔 둘 것): 그래야 지수 앞의 * 와 구별된다.
+   (-1)*x 는 -x 와 비트까지 같아서 이미 되던 식의 계산 결과는 달라지지 않는다. */
+function negToMul(t){ return t.replace(/(^|[(*+\-])-/g,'$1(-1)*'); }
+
 function evalAnswer(s){
   // 문자열 수식("8/3", "Math.sqrt(2)", "23/5", "6π")을 수치로 평가
   if(typeof s==='number') return s;
@@ -37,7 +46,7 @@ function evalAnswer(s){
   /* 계산이 안 되면 맨 앞 숫자만 읽는 오랜 보험(parseFloat)이 있다. π 가 든 식에는 쓰면 안 된다 —
      「6π」가 6 으로 읽혀 정답 6 과 같아진다. */
   const fallback=()=>{ if(hasPi) return NaN; const n=parseFloat(s); return isNaN(n)?NaN:n; };
-  let t=piToJs(normPi(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**'));
+  let t=piToJs(negToMul(normPi(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\*\*/g,'^')).replace(/\^/g,'**'));
   // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
   if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
     return fallback();
@@ -96,7 +105,7 @@ function _compileMulti(s){
       t=t.replace(/([a-zA-Zπ])(\d)/g,'$1*$2');
       t=t.replace(/([a-zA-Zπ])([a-zA-Zπ])/g,'$1*$2');
     }while(prev!==t);
-    t=t.replace(/\^/g,'**');
+    t=negToMul(t).replace(/\^/g,'**');   // -x^2 가 JS 문법 오류가 되지 않게 (negToMul 주석 참고) — 거듭제곱이 아직 ^ 일 때 한다
     // 허용 문자(숫자·영문자·π·사칙연산·괄호)만 남았는지 먼저 확인한 뒤에 치환한다
     if(!/^[a-zA-Zπ\d+\-*/().]+$/.test(t.replace(/\*\*/g,''))) throw 0;
     t=t.replace(/π/g,'(3.141592653589793)');

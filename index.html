@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.4">
+  <meta name="app-version" content="13.5">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -4816,6 +4816,89 @@ function kbdExprRaw(){
   }).join("").replace(/−/g,"-");
 }
 
+/* ── 식으로 쓴 답 → LaTeX (정답 화면용, v13.5) ──
+   답은 글로만 저장된다 — 교사가 적은 정답("π*r^2", "y=30/x", "2x+3", "x<=3", "Math.sqrt(2)")도,
+   키패드가 만든 글("(8π)/(3)", "(x)**(2)")도, 「내가 쓴 답」으로 남긴 글("8π/3", "πr^2")도.
+   정답 화면에서도 문제·답칸처럼 MathJax 로 그려 주려고 같은 식을 LaTeX 로 바꾼다.
+   읽는 규칙은 채점(grading.js _compileMulti)과 같다: 곱셈 기호는 생략 가능 · a/b*c = (a/b)c · 2x/3 = (2x)/3 ·
+   지수는 바로 뒤 한 덩이(x^2y = (x^2)y) · 문자 하나가 변수 하나 · pi·\pi·Math.PI 는 π.
+   모르는 글(한글·단위·세 글자 이상 영문)이나 식이 아닌 모양은 null — 부르는 쪽이 원래 글을 그대로 보여 준다(answerHtml). */
+function answerToTex(raw){
+  let s=normPi(String(raw??'')).replace(/\s+/g,'').replace(/[−–]/g,'-').replace(/×/g,'*').replace(/÷/g,'/')
+          .replace(/\*\*/g,'^').replace(/Math\./g,'');
+  if(!s) return null;
+  s=normalizeRelText(s);   // grading.js: ≤ → <=, ≥ → >=, =< → <=
+  if(!/^[A-Za-z0-9π+\-*\/^().,<>=]+$/.test(s)) return null;
+  if((s.replace(/sqrt/g,'').match(/[A-Za-z]{3,}/)||[]).length) return null;   // 낱말·단위(cm 정도는 변수 곱으로 읽히지만 abc 는 식이 아니다)
+  let i=0;
+  const bad=()=>{ throw new Error('answerToTex'); };
+  const numTok=()=>{ const m=/^\d*\.?\d*/.exec(s.slice(i))[0]; if(!m||m==='.') bad(); i+=m.length; return m; };
+  const group=()=>{ i++; const e=expr(); if(s[i]!==')') bad(); i++; return e; };
+  function atom(){
+    const c=s[i]; if(c===undefined) bad();
+    if(c==='('){ const e=group(); return {tex:`\\left(${e}\\right)`, inner:e, simple:/^([A-Za-z]|\d+\.?\d*|\\pi )$/.test(e)}; }
+    if(s.startsWith('sqrt(',i)){ i+=4; const e=group(); return {tex:`\\sqrt{${e}}`}; }
+    if(/[0-9.]/.test(c)) return {tex:numTok()};
+    if(c==='π'){ i++; return {tex:'\\pi '}; }
+    if(/[A-Za-z]/.test(c)){ i++; return {tex:c}; }
+    return bad();
+  }
+  function exponent(){
+    let neg=''; if(s[i]==='-'){ neg='-'; i++; }
+    const c=s[i]; if(c===undefined) bad();
+    if(c==='(') return neg+group();
+    if(/[0-9.]/.test(c)) return neg+numTok();
+    if(c==='π'){ i++; return neg+'\\pi '; }
+    if(/[A-Za-z]/.test(c)){ i++; return neg+c; }
+    return bad();
+  }
+  function factor(){
+    let neg=false;
+    if(s[i]==='-'){ neg=true; i++; } else if(s[i]==='+') i++;
+    let b=atom();
+    if(s[i]==='^'){ i++; b={tex:`${b.simple?b.inner:b.tex}^{${exponent()}}`}; }   // (x)**(2) 의 군더더기 괄호는 벗긴다
+    return neg ? {tex:'-'+b.tex} : b;
+  }
+  const unwrap=n=>n.inner!==undefined ? n.inner : n.tex;
+  const startsFactor=c=>c!==undefined && /[A-Za-z0-9.π(]/.test(c);
+  function term(){
+    let parts=[factor()];
+    for(;;){
+      const c=s[i];
+      if(c==='*'){ i++; const n=factor(); parts.push({tex:/^[0-9.\-]/.test(n.tex)?'\\times ':''}); parts.push(n); }
+      else if(c==='/'){
+        i++; const den=factor();
+        const num=parts.length===1 ? unwrap(parts[0]) : parts.map(p=>p.tex).join('');
+        parts=[{tex:`\\frac{${num}}{${unwrap(den)}}`}];
+      }
+      else if(startsFactor(c)) parts.push(factor());   // 곱셈 기호 없이 붙인 것: 2x · xy · 2(x+1) · (a)(b) · π(r)
+      else break;
+    }
+    return parts.map(p=>p.tex).join('');
+  }
+  function expr(){
+    let sign=''; if(s[i]==='-'){ sign='-'; i++; } else if(s[i]==='+') i++;
+    let out=sign+term();
+    while(s[i]==='+'||s[i]==='-'){ const op=s[i++]; out+=op+term(); }
+    if(s[i]===','){ i++; out+=',\\,'+expr(); }
+    return out;
+  }
+  try{
+    const REL={'<':'\\lt ','>':'\\gt ','<=':'\\le ','>=':'\\ge ','=':'='};
+    const pieces=s.split(/(<=|>=|<|>|=)/);   // 홀수 칸이 관계 기호
+    return pieces.map((p,k)=>{
+      if(k%2) return REL[p];
+      s=p; i=0; const e=expr(); if(i!==s.length) bad(); return e;
+    }).join('');
+  }catch(e){ return null; }
+}
+/* 정답 화면에 넣을 HTML — 식이면 MathJax 구분자로 감싼 span, 아니면 원래 글을 escape 해서 그대로.
+   넣은 뒤 renderMath(그 칸)을 불러야 그려진다. */
+function answerHtml(raw){
+  const tex=answerToTex(raw);
+  return tex==null ? _escHtml(String(raw??'')) : `<span class="ans-math">\\(${_escHtml(tex)}\\)</span>`;
+}
+
 
 function renderGraphQ(q, panel, qHeadHtml, prevAns){
   const isNL = q.graphType==='numberline';
@@ -5811,7 +5894,9 @@ function renderStep3Body(q){
     // 객관식 단계는 고른 선지 번호("0,2")가 저장돼 있다 → 번호와 선지 글을 그대로 다시 보여 준다
     const escAns = at==='multi'
       ? s3MultiNums(savedAns).map(n=>`<span style="display:inline-block;margin-right:12px">${s3NumMark(n)} ${renderOption((step.options||[])[n]??'')}</span>`).join('')
-      : String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      : (at==='text'
+          ? String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          : answerHtml(savedAns));   // 숫자·식 단계는 MathJax 로 (아래 typesetPromise 가 그린다) — 한글 용어는 글 그대로
     const hintHtmlD = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>` : '';
     const nextUndone = st.done.findIndex(v=>!v);
     const navHtml = nextUndone===-1
@@ -5938,10 +6023,14 @@ function submitStep3(stepNum, byEnter){
   let ok=false, userAns="", finalAns=null;   // finalAns: 재채점용으로 남길 답 (객관식은 선지 번호 배열)
   /* 나중에 이 단계를 다시 열었을 때 보여 줄 "내가 쓴 답".
      수 단계의 userAns는 계산값이라 분수 2/3이 0.6666…으로 남는다 → 누른 모양 그대로 만든다. */
+  /* 분수·지수의 식 칸은 항이 둘 이상이면 괄호로 감싼다 — (x+1)/2 를 x+1/2 로 적으면 다시 볼 때 x+½ 로 읽힌다.
+     제곱근 토큰도 sqrt(…) 로 남긴다(예전에는 빠져서 「내가 쓴 답」에서 근호가 사라졌다). 정답 화면(answerToTex)이 이 글을 읽는다. */
+  const wrapIfCompound=v=>/[+\-−×÷*\/]/.test(String(v).replace(/^[-−]/,'')) ? `(${v})` : String(v);
   const tokensToDisp=()=>qTokens.map(t=>{
     if(t.type==="char") return t.val;
-    if(t.type==="frac") return `${t.num||0}/${t.den||1}`;
-    if(t.type==="exp")  return `${t.base||0}^${t.expo||1}`;
+    if(t.type==="frac") return `${wrapIfCompound(t.num||0)}/${wrapIfCompound(t.den||1)}`;
+    if(t.type==="exp")  return `${t.base||0}^${wrapIfCompound(t.expo||1)}`;
+    if(t.type==="sqrt") return `sqrt(${t.inner||0})`;
     return "";
   }).join("");
 
@@ -5992,7 +6081,9 @@ function submitStep3(stepNum, byEnter){
       // 객관식 단계의 정답은 선지 번호 배열 → ①, ③ 으로 보여 준다
       const dispAns = isMulti ? (Array.isArray(step.answer)?step.answer:[]).map(s3NumMark).join(', ') : step.answer;
       // 부등호(<)가 든 답을 그대로 넣으면 태그로 읽혀 뒤쪽 버튼까지 사라진다 → 반드시 escape
-      const doneHtml=`✅ 완료! 답: ${_escHtml(dispAns)}&nbsp;
+      // 숫자·식 단계의 답은 MathJax 로 그린다(answerHtml) — 한글 용어·객관식 선지 번호는 글 그대로
+      const dispAnsHtml = (isMulti || at==='text') ? _escHtml(dispAns) : answerHtml(dispAns);
+      const doneHtml=`✅ 완료! 답: ${dispAnsHtml}&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
@@ -6006,7 +6097,7 @@ function submitStep3(stepNum, byEnter){
       setNextFocus(false);
       renderStep3Q(q,document.getElementById("quiz-left-panel"));
       const fbDone=document.getElementById("s3-fb");
-      if(fbDone){ fbDone.className="feedback-strip show fb-correct"; fbDone.innerHTML=doneHtml; }
+      if(fbDone){ fbDone.className="feedback-strip show fb-correct"; fbDone.innerHTML=doneHtml; renderMath(fbDone); }
       // 텍스트 입력은 잠근다 — 포커스가 남아 있으면 다음 엔터가 입력창의 onkeydown으로
       // 흡수돼(stopPropagation) '다음 문제'가 아니라 빈 답 재채점이 된다.
       const inpDone=document.getElementById("s3-inp");
@@ -6387,13 +6478,15 @@ async function submitQAns(){
       if(input) input.disabled=true;
       fb.className="feedback-strip show fb-correct";
       const isLast=curQIdx===curWS.questions.length-1;
-      fb.innerHTML=`✅ 정답! &nbsp;<strong>${_escHtml(q.answer)}</strong>&nbsp;
+      // 식으로 답하는 문항(키패드)은 정답도 MathJax 로, 한글 용어는 글 그대로
+      fb.innerHTML=`✅ 정답! &nbsp;<strong>${isExprInput(q)?answerHtml(q.answer):_escHtml(q.answer)}</strong>&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
           background:var(--green);color:#fff;font-size:13px;font-weight:700;
           cursor:pointer;font-family:inherit">
           ${allAnswered()?'결과 보기 →':'다음 문제 →'}
         </button>`;
+      renderMath(fb);
         recordAnswer(curQIdx, userAns, (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
       answered[curQIdx]=true; updateStrip(); saveWorksheet();
     } else {
@@ -6450,13 +6543,14 @@ async function submitQAns(){
     fb.className="feedback-strip show fb-correct";
     const isLast = curQIdx===curWS.questions.length-1;
     const dispAns = q.answerFrac || q.answer;
-    fb.innerHTML=`✅ 정답! &nbsp; x = ${_escHtml(dispAns)} &nbsp;
+    fb.innerHTML=`✅ 정답! &nbsp; x = ${answerHtml(dispAns)} &nbsp;
       <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
         style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
         background:var(--green);color:#fff;font-size:13px;font-weight:700;
         cursor:pointer;font-family:inherit">
         ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
+    renderMath(fb);
       recordAnswer(curQIdx, (typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {

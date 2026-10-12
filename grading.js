@@ -5,23 +5,45 @@
    채점 규칙을 바꿀 때는 이 파일만 수정하면 되고,
    HTML 안에 채점 함수를 복사해 넣지 말 것 (과거 세 벌 복사가 채점 불일치 사고의 원인).
 
-   포함: evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
+   포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
          normalizeMultiAnswer, gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
 
+/* ══════════ 원주율 π ══════════
+   π 는 문자(변수)가 아니라 상수 3.14159… 이다. 학생은 키패드의 π 버튼으로 넣고, 교사는 π 버튼·pi·\pi·Math.PI 중
+   무엇으로 적어도 되도록 채점하기 전에 모두 π 한 글자로 통일한다(normPi).
+   pi 는 앞뒤에 영문자가 붙어 있지 않을 때만 π 로 본다 — 낱말(api, pie)과 변수 곱(p·i·r)은 건드리지 않는다.
+   그래서 2πr 을 pi 로 쓰려면 2pi*r 이나 2pi r 처럼 띄우거나 π 버튼을 쓴다.
+   (정규식 lookbehind 는 옛 Safari 에서 파싱 자체가 죽으므로 쓰지 않는다 — 앞쪽 영문자는 콜백에서 가린다.) */
+function normPi(s){
+  return String(s??'')
+    .replace(/Math\.PI/g,'π')
+    .replace(/\\pi(?![a-zA-Z])/g,'π')
+    .replace(/([a-zA-Z]*)pi([a-zA-Z]*)/gi,(m,a,b)=>(a||b)?m:'π');
+}
+/* 공백을 이미 지운 식에서 π 를 JS 로 계산할 수 있는 글로 바꾼다. 2π → 2*(Math.PI), (8π)/3 → (8*(Math.PI))/3 */
+function piToJs(t){
+  if(t.indexOf('π')<0) return t;
+  return t.replace(/π/g,'(Math.PI)').replace(/(\d|\))\(/g,'$1*(').replace(/\)(\d)/g,')*$1');
+}
+
 function evalAnswer(s){
-  // 문자열 수식("8/3", "Math.sqrt(2)", "23/5")을 수치로 평가
+  // 문자열 수식("8/3", "Math.sqrt(2)", "23/5", "6π")을 수치로 평가
   if(typeof s==='number') return s;
   if(s==null||s==='') return NaN;
-  let t=String(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**');
+  const hasPi=normPi(s).indexOf('π')>=0;
+  /* 계산이 안 되면 맨 앞 숫자만 읽는 오랜 보험(parseFloat)이 있다. π 가 든 식에는 쓰면 안 된다 —
+     「6π」가 6 으로 읽혀 정답 6 과 같아진다. */
+  const fallback=()=>{ if(hasPi) return NaN; const n=parseFloat(s); return isNaN(n)?NaN:n; };
+  let t=piToJs(normPi(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\^/g,'**'));
   // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
   if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
-    const n=parseFloat(s); return isNaN(n)?NaN:n;
+    return fallback();
   }
   try{ return Function('"use strict";return('+t+')')(); }
-  catch(e){ const n=parseFloat(s); return isNaN(n)?NaN:n; }
+  catch(e){ return fallback(); }
 }
 
 /* ── 다변수 수식 평가 ──
@@ -56,7 +78,9 @@ function _compileMulti(s){
        예전에는 여기서 통째로 소문자로 바꿔서 A 와 a 가 같은 문자가 됐다.
        '대소문자를 구분하지 않는' 지금까지의 동작은 mathEquivCheck 가
        필요할 때 양쪽을 소문자로 바꿔 주는 것으로 유지한다. */
-    let t=String(s).replace(/\s/g,'')
+    /* π 는 값이 정해진 상수라 문자처럼 곱셈 생략(2π·πr)만 풀어 주고, 마지막에 3.14159… 로 바꾼다.
+       normPi 가 pi·\pi·Math.PI 를 먼저 π 한 글자로 통일한다(Math. 를 지우기 전이어야 Math.PI 가 살아남는다). */
+    let t=normPi(s).replace(/\s/g,'')
       .replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/')
       .replace(/Math\./gi,'')
       .replace(/sqrt\(/gi,'sqrt(')
@@ -66,15 +90,16 @@ function _compileMulti(s){
     if(/sqrt/i.test(t)) throw 0;
     let prev;
     do{prev=t;
-      t=t.replace(/(\d|\)|[a-zA-Z])\(/g,'$1*(');
-      t=t.replace(/\)(\d|[a-zA-Z]|\()/g,')*$1');
-      t=t.replace(/(\d)([a-zA-Z])/g,'$1*$2');
-      t=t.replace(/([a-zA-Z])(\d)/g,'$1*$2');
-      t=t.replace(/([a-zA-Z])([a-zA-Z])/g,'$1*$2');
+      t=t.replace(/(\d|\)|[a-zA-Zπ])\(/g,'$1*(');
+      t=t.replace(/\)(\d|[a-zA-Zπ]|\()/g,')*$1');
+      t=t.replace(/(\d)([a-zA-Zπ])/g,'$1*$2');
+      t=t.replace(/([a-zA-Zπ])(\d)/g,'$1*$2');
+      t=t.replace(/([a-zA-Zπ])([a-zA-Zπ])/g,'$1*$2');
     }while(prev!==t);
     t=t.replace(/\^/g,'**');
-    // 허용 문자(숫자·영문자·사칙연산·괄호)만 남았는지 먼저 확인한 뒤에 치환한다
-    if(!/^[a-zA-Z\d+\-*/().]+$/.test(t.replace(/\*\*/g,''))) throw 0;
+    // 허용 문자(숫자·영문자·π·사칙연산·괄호)만 남았는지 먼저 확인한 뒤에 치환한다
+    if(!/^[a-zA-Zπ\d+\-*/().]+$/.test(t.replace(/\*\*/g,''))) throw 0;
+    t=t.replace(/π/g,'(3.141592653589793)');
     t=t.replace(/[a-zA-Z]/g, ch=>'e['+JSON.stringify(ch)+']');
     fn=new Function('e','"use strict";return('+t+')');
   }catch(err){ fn=null; }
@@ -369,7 +394,7 @@ function gradeExamWord(q, ans){
   // 2) 텍스트 정규화 비교 — 일반 모드와 동일한 normW (≤ 와 <= 는 같은 글자로 본다)
   //    대소문자는 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (isCaseSignificant)
   const normW=(s,keepCase)=>{
-    const t=String(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
+    const t=normPi(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
       .replace(/\s*,\s*/g,",")
       .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim();
     return keepCase?t:t.toLowerCase();
@@ -377,7 +402,8 @@ function gradeExamWord(q, ans){
   if(allAns.some(a=>{ const ks=isCaseSignificant(a); return normW(a,ks)===normW(raw,ks); })) return true;
   // 3) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
   //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
-  const hasVar=s=>/[a-zA-Z가-힣]/.test(String(s));
+  //    π 도 같다 — parseFloat("6π")===6 이라 정답 6 에 「6π」가 통과하고, 정답 「6π」에는 소수 근사(18.85)가 통과한다.
+  const hasVar=s=>/[a-zA-Zπ가-힣]/.test(normPi(s));
   if(!hasVar(raw)){
     const uf=parseFloat(raw.replace(/−/g,'-'));
     if(!isNaN(uf)){

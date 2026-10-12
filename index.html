@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.2">
+  <meta name="app-version" content="13.3">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -945,7 +945,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=13.0"></script>
+<script src="grading.js?v=13.3"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -4184,7 +4184,8 @@ function renderQuestion() {
 /* ── 수식 입력기 LaTeX 렌더링 ── */
 function latexEsc(s){
   return s.replace(/−/g,'-').replace(/×/g,'\\times ').replace(/÷/g,'\\div ')
-          .replace(/≤/g,'\\le ').replace(/≥/g,'\\ge ');
+          .replace(/≤/g,'\\le ').replace(/≥/g,'\\ge ')
+          .replace(/π/g,'\\pi ');   // 원주율 π (v13.3) — 저장·채점에는 π 한 글자 그대로 쓰고 화면에서만 \pi 로 그린다
 }
 
 function tokensToLatex(){
@@ -4370,8 +4371,15 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
   /* 정답에 쓰인 글자를 대소문자 그대로 버튼으로 만든다.
      예전에는 소문자로 바꿔 버려서, 정답이 A=a² 처럼 둘을 갈라 쓴 문항이면
      학생이 대문자 A 를 넣을 방법이 아예 없었다. */
-  const vars=[...new Set(String(answer||'').match(/[a-zA-Z]/g)||['x'])];
-  const varRow=`<div class="kbd-var-row">${
+  /* 원주율 π (v13.3): 정답에 π 가 있는 문항에만 π 버튼을 띄운다 — 변수 버튼이 정답에 쓰인 글자만 나오는 것과 같은 방식.
+     교사가 pi·\pi·Math.PI 로 적어 둔 정답도 normPi 가 π 로 읽으므로, 그 글자들(p, i, M, a, t, h)이 변수 버튼으로 새지 않는다.
+     정답에 글자가 하나도 없을 때 x 를 기본으로 띄우던 것은 π 만 있는 정답(6π)에서는 하지 않는다. */
+  const ansNorm=normPi(answer);
+  const wantsPi=ansNorm.indexOf('π')>=0;
+  const letters=[...new Set(ansNorm.match(/[a-zA-Z]/g)||[])];
+  const vars=letters.length ? letters : (wantsPi ? [] : ['x']);
+  const piBtn=wantsPi?`<button tabindex="-1" class="kb v" onclick="qInput('π')"><i style="font-family:serif">π</i></button>`:'';
+  const varRow=`<div class="kbd-var-row">${piBtn}${
     vars.map(v=>`<button tabindex="-1" class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
   /* 정답에 = 나 부등호가 들어 있으면 그 버튼을 띄운다.
@@ -4433,6 +4441,7 @@ function qTokensToNum(){
     return "";
   }).join("");
   s=s.replace(/−/g,"-").replace(/×/g,"*").replace(/÷/g,"/");
+  s=piToJs(normPi(s));   // 원주율 π (v13.3, grading.js): 6π → 6*(Math.PI), (8π)/(3) → (8*(Math.PI))/(3)
   try{ return Function('"use strict";return ('+s+')')(); } catch(e){ return NaN; }
 }
 
@@ -4507,7 +4516,9 @@ const KMAP={"0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":
   "N":"N","O":"O","P":"P","Q":"Q","R":"R","S":"S","T":"T","U":"U","V":"V","W":"W","X":"X","Y":"Y","Z":"Z",
   /* 부등식 답(x>3, x≤3)을 물리 키보드로도 칠 수 있게 한다.
      ≤ 는 < 와 = 를 이어 치면 되고(채점에서 ≤ 와 <= 를 같게 본다), 키패드에는 ≤ ≥ 버튼이 따로 있다. */
-  "<":"<",">":">","≤":"≤","≥":"≥"};
+  "<":"<",">":">","≤":"≤","≥":"≥",
+  /* 원주율 π (v13.3) — 화면 키패드의 π 버튼이 기본이고, π 글자가 직접 들어오는 키보드(맥 Option+P 등)도 받는다 */
+  "π":"π"};
 function quizKeyHandler(e){
   /* 화면 위에 떠 있는 다른 입력창(🚨 오류 신고 글상자 등)에 글자를 넣는 중이면
      문제 답칸으로 가로채지 않는다. 이 처리기는 document 전체의 키를 받기 때문에,
@@ -6423,7 +6434,7 @@ async function submitQAns(){
   if(!isNaN(val)){
     ok=Math.abs(val-evalAnswer(q.answer))<1e-9;
     // 분수/무리수 입력 비교: "3/2" → 1.5
-    if(!ok && rawInput.includes("/")){
+    if(!ok && rawInput.includes("/") && !rawInput.includes("π")){   // π 가 든 분수는 parseFloat 로 읽으면 π 가 사라진다 (8π/3 → 8/3)
       const parts=rawInput.split("/");
       if(parts.length===2){
         const fv=parseFloat(parts[0])/parseFloat(parts[1]);

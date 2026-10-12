@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v6.1">
+<meta name="app-version" content="edit-v6.2">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -180,6 +180,11 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .btn-rm-opt:hover{color:var(--red)}
 .btn-add-opt{background:none;border:1px dashed var(--rule);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--ink3);width:100%;margin-top:4px}
 .btn-add-opt:hover{border-color:var(--accent);color:var(--accent)}
+/* 원주율 π 넣기 버튼 — 입력칸 오른쪽 (v6.2) */
+.pi-row{display:flex;gap:6px;align-items:stretch}
+.pi-row input{flex:1;width:auto;min-width:0}
+.pi-btn{flex:none;width:38px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);color:var(--ink2);font-family:serif;font-style:italic;font-size:17px;cursor:pointer;padding:0}
+.pi-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--acc-lt)}
 
 /* 저장/삭제 버튼 */
 .panel-actions{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)}
@@ -567,18 +572,32 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               </select>
             </div>
             <label>정답 (식 · 등식 · 부등식)</label>
-            <input id="q-ans-expr" placeholder="예: 4*a**2, y=30/x, x>3">
+            <div class="pi-row">
+              <input id="q-ans-expr" placeholder="예: 4*a**2, y=30/x, x>3, 6π">
+              <button type="button" class="pi-btn" onclick="insertPi('q-ans-expr')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>
+            </div>
             <div style="font-size:11px;color:var(--ink3);margin-top:4px">
               대소문자는 <b>구분하지 않습니다</b> (x 를 X 로 써도 정답).
               단, 정답에 <code>A</code> 와 <code>a</code> 를 <b>둘 다</b> 쓰면(예: 넓이 A, 한 변 a) 그 문항만 구분해서 채점합니다.
+            </div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px">
+              <b>원주율</b>은 <b>π 버튼</b>으로 넣으세요 (<code>pi</code> · <code>\pi</code> · <code>Math.PI</code> 로 써도 적용할 때 π 로 바뀝니다).
+              정답에 π 가 있으면 학생 키패드에도 π 버튼이 나옵니다. <code>6π</code> · <code>2πr</code> · <code>(8π)/3</code> 처럼 곱셈 기호는 생략해도 되고, 소수 근사(18.85)는 오답입니다.
+              <code>pi</code> 는 <code>2pi*r</code> 처럼 글자와 떼어 써야 π 로 읽힙니다.
             </div>
             <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px">미리보기</div>
           </div>
 
           <!-- 숫자 답 -->
           <div id="field-ans-num" class="field" style="display:none">
-            <label>정답 <span style="font-weight:400;color:var(--ink3)">(정수: 5 / 분수: 2/3 / 수식: Math.sqrt(2))</span></label>
-            <input id="q-ans-num" type="text" placeholder="숫자 또는 분수 입력 (예: 5, -3, 2/3, 8/3)">
+            <label>정답 <span style="font-weight:400;color:var(--ink3)">(정수: 5 / 분수: 2/3 / 수식: Math.sqrt(2) / 원주율: 6π)</span></label>
+            <div class="pi-row">
+              <input id="q-ans-num" type="text" placeholder="숫자 또는 분수 입력 (예: 5, -3, 2/3, 8/3, 6π)">
+              <button type="button" class="pi-btn" onclick="insertPi('q-ans-num')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>
+            </div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:4px">
+              π 가 든 답(<code>6π</code> · <code>(8π)/3</code>)은 <b>값이 같으면</b> 정답입니다. 학생 키패드에 π 버튼이 나오고, 소수 근사(18.85)는 오답입니다.
+            </div>
           </div>
 
           <!-- 객관식 선지 -->
@@ -627,6 +646,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 <div class="toast" id="toast"></div>
 
+<script src="grading.js?v=13.3"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2) -->
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -2028,9 +2048,9 @@ window.saveQuestion = async function(){
       q.type='word'; q.answerType='expr';
       q.text=text;
       const imgUrl4=document.getElementById('q-img-url').value.trim(); if(imgUrl4) q.imageUrl=imgUrl4; else delete q.imageUrl;
-      q.answer=document.getElementById('q-ans-expr').value.trim();
+      q.answer=_normPi(document.getElementById('q-ans-expr').value.trim());   // pi · \pi · Math.PI → π (v6.2)
     } else if(type==='equation'){
-      const ansVal = document.getElementById('q-ans-num').value.trim();
+      const ansVal = _normPi(document.getElementById('q-ans-num').value.trim());   // 원주율은 π 한 글자로 통일 — 아래 글자 검사에 pi 가 걸리지 않게 먼저 (v6.2)
       /* "숫자 값"은 채점할 때 이 값 하나를 숫자로만 비교한다(evalAnswer).
          "y=30/x" 처럼 문자와 =가 든 관계식을 여기 넣으면 항상 NaN 비교가 되어
          학생이 뭘 입력해도 무조건 오답 처리된다 — 새로고침으로도 못 고치는 채점 오류
@@ -2038,7 +2058,7 @@ window.saveQuestion = async function(){
          문자·= 가 섞인 답은 저장을 막고 "문자 포함 식"으로 안내한다. */
       const _bareAns = ansVal.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'');
       if(/[=<>≤≥]|[a-zA-Z]/.test(_bareAns)){
-        alert(`「🔢 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))만 채점할 수 있어요.\n\n`
+        alert(`「🔢 숫자 값」은 숫자·분수(8/3)·무리수(Math.sqrt(2))·원주율(6π)만 채점할 수 있어요.\n\n`
           + `지금 입력한 "${ansVal}"처럼 문자(x, y 등)나 =·부등호가 들어간 관계식·방정식·부등식은 이 유형으로는 채점이 안 됩니다`
           + `(학생이 뭘 입력해도 무조건 오답 처리돼요).\n\n`
           + `문항 유형을 「🔣 문자 포함 식」으로 바꾸고 정답을 다시 입력해 주세요.`);
@@ -2792,6 +2812,17 @@ window.removeStep = function(i){
 window.updateStep = function(i, field, val){
   if(editSteps[i]) editSteps[i][field]=val;
 };
+/* 원주율 π 를 입력칸의 커서 자리에 넣는다 (v6.2). 한글 키보드로는 π 를 치기 어려워서 버튼으로 넣는다.
+   input 이벤트를 일으켜, 입력칸에 달린 oninput(단계 정답을 editSteps 에 담는 updateStep 등)이 그대로 돈다. */
+/* grading.js 의 normPi — 그 파일을 못 읽었더라도 문항 저장이 막히지는 않게 감싼다(그땐 표기 통일만 건너뛴다) */
+function _normPi(s){ return typeof normPi==='function' ? normPi(s) : String(s??''); }
+window.insertPi = function(id){
+  const el=document.getElementById(id); if(!el) return;
+  const s=el.selectionStart ?? el.value.length, e=el.selectionEnd ?? s;
+  el.setRangeText('π', s, e, 'end');
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.focus();
+};
 /* 단계의 답 유형을 바꾼다. 객관식의 정답은 선지 번호 배열이고 나머지는 글이라서 서로 옮겨 갈 때 정답을 비운다
    (글로 적어 둔 정답이 번호 배열로 남으면 저장 때 엉뚱한 선지가 정답이 된다). 선지는 남겨 두어 도로 바꿔도 사라지지 않는다. */
 window.setStepType = function(i, val){
@@ -2848,9 +2879,11 @@ function stepsFromEditor(list){
       else if(!o.answer.length) problems.push(`${si+1}단계: 정답인 선지를 하나 이상 체크하세요`);
       return o;
     }
-    const av=(s.answer??'').toString().trim();
+    /* 원주율은 π 한 글자로 통일해 저장한다(pi · \pi · Math.PI → π). 숫자·식 단계만 — 한글 용어 단계의 글은 건드리지 않는다. */
+    const mathStep = at==='number' || at==='expr';
+    const av=(mathStep ? _normPi((s.answer??'').toString().trim()) : (s.answer??'').toString().trim());
     o.answer = (at==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
-    if(s.answerAlt?.length) o.answerAlt=[...s.answerAlt];
+    if(s.answerAlt?.length) o.answerAlt = mathStep ? s.answerAlt.map(_normPi) : [...s.answerAlt];
     return o;
   });
   return {steps, problems};
@@ -2915,8 +2948,11 @@ function renderSteps(){
         <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · 학생은 해당하는 것을 모두 고릅니다)</span></label>
         ${optRows}
         <button class="btn-add-opt" onclick="addStepOption(${i})" style="margin-bottom:4px">＋ 선지 추가</button>` : `
-        <label style="font-size:11px">정답</label>
-        <input value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3':stType==='expr'?'예: 2x+3, 2x+3=11, x>3':'예: 21, 2년 후'}" style="margin-bottom:6px">`}
+        <label style="font-size:11px">정답${(stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>
+        <div class="pi-row" style="margin-bottom:6px">
+          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
+          ${(stType==='number'||stType==='expr') ? `<button type="button" class="pi-btn" onclick="insertPi('step-ans-${i}')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>` : ''}
+        </div>`}
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">

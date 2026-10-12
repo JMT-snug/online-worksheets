@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v6.0">
+<meta name="app-version" content="edit-v6.1">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -378,6 +378,15 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 진도율에 반영
               </label>
               <span style="font-size:11px;color:var(--ink3)">(끄면 단원 진도·교사 진도 체크에서 제외)</span>
+            </div>
+            <!-- 🔁 학습지 통째로 복습에서 제외 (일반 학습지만) — 시험 범위 밖 학습지를 복습 무작위 추출에서 빼는 용도 -->
+            <div class="meta-row" id="ws-noreview-row">
+              <span class="meta-label">복습</span>
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer">
+                <input type="checkbox" id="ws-noreview" onchange="saveMetaField()" style="width:15px;height:15px;cursor:pointer">
+                🔁 단원 복습 학습지에서 제외
+              </label>
+              <span style="font-size:11px;color:var(--ink3)">(체크하면 이 학습지의 문항 전체가 복습 무작위 추출에 안 뽑힘 — 시험 범위 밖일 때)</span>
             </div>
             <div class="meta-row">
               <span class="meta-label">ID</span>
@@ -804,6 +813,7 @@ function renderSidebar(){
             onclick="selectWs('${ws.id}')">
             <span class="ws-drag">⣿</span>
             <span class="ws-name">${ws.title||'제목 없음'}</span>
+            ${ws.noReview&&ws.type!=='review'&&ws.type!=='exam'?'<span title="단원 복습 학습지에서 제외된 학습지" style="font-size:10px;color:#fca5a5;font-weight:700">🔁✕</span>':''}
             <span class="ws-status-icon" title="${ws.status==='published'?'발행됨':ws.status==='locked'?'잠김':'준비 중'}" style="margin-left:auto;font-size:12px">${ws.status==='published'?'✅':ws.status==='locked'?'🔒':'📝'}</span>
           </div>
         `).join('')}
@@ -915,6 +925,11 @@ function renderEditor(){
   if(_ip) _ip.checked = currentWs.includeInProgress!==false;
   const _pr=document.getElementById('ws-progress-row');
   if(_pr) _pr.style.display=(wType==='regular')?'':'none';
+  // 복습 제외 옵션(학습지 단위, 일반 학습지만): 미설정(기존 데이터)은 포함
+  const _nr=document.getElementById('ws-noreview');
+  if(_nr) _nr.checked = !!currentWs.noReview;
+  const _nrr=document.getElementById('ws-noreview-row');
+  if(_nrr) _nrr.style.display=(wType==='regular')?'':'none';
 
   // 문항 제목
   // VOCA 타입이면 두 버튼
@@ -1778,6 +1793,8 @@ window.onWsTypeChange=function(){
   // 진도율 반영 옵션: 일반 학습지에만 노출
   const _pr=document.getElementById('ws-progress-row');
   if(_pr) _pr.style.display=(t==='regular')?'':'none';
+  const _nrr=document.getElementById('ws-noreview-row');   // 복습 제외(학습지 단위)도 일반 학습지만
+  if(_nrr) _nrr.style.display=(t==='regular')?'':'none';
   // 현재 학습지 type 즉시 반영
   if(currentWs) currentWs.type=t;
   // 점수 입력 필드 표시 토글
@@ -2295,6 +2312,10 @@ async function saveToFirestore(status, silent=false){
     lastModified: new Date().toISOString(),
     createdBy: currentUser.email,
   };
+  // 🔁 학습지 통째로 복습 제외 — 일반 학습지에서 체크했을 때만 true 를 남기고, 아니면 필드를 지운다
+  //    (setDoc 전체 덮어쓰기라 delete 하면 Firestore 에서도 사라짐. 문항 단위 noReview 와 같은 이름·같은 의미)
+  if(saveData.type==='regular' && document.getElementById('ws-noreview')?.checked) saveData.noReview=true;
+  else delete saveData.noReview;
   try{
     const existing = (await getDoc(doc(db,'curriculum',wsId))).data();
     // 빈 배열로 기존 데이터 삭제 방지: vocab/questions 독립 체크

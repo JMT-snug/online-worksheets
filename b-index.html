@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.5">
+  <meta name="app-version" content="13.6">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -2624,7 +2624,10 @@ function watchWs(ws){
     try{
       if(!snap.exists()||!curWS||curWS.id!==ws.id) return;
       const d=snap.data();
-      applyLiveQuestions(ws, d.questions);   // 교사가 고친 문항·정답·채점 유형 반영
+      /* 교사가 고친 문항·정답·채점 유형 반영.
+         복습 학습지는 문서의 questions 가 늘 빈 배열이고 화면의 10문항은 매번 새로 뽑은 것이라 비교할 짝이 없다 —
+         그대로 비교하면 열자마자 「📝 학습지가 수정되었어요 — 새로고침하면 반영됩니다」가 뜨고, 새로고침을 하면 문제만 바뀐다 (v13.6). */
+      if(ws.type!=='review') applyLiveQuestions(ws, d.questions);
       const beforeOpen=new Set((getParts(ws)||[]).filter(p=>partOpenFor(ws,p.id,user?.email)).map(p=>p.id));
       const hasParts=!!getParts(ws);
       const changed=JSON.stringify(d.partAllowed||{})!==JSON.stringify(ws.partAllowed||{}) || d.status!==ws.status;
@@ -3621,6 +3624,22 @@ async function ensureLatestVersion(){
   }catch(e){ return true; }                   // 오프라인 등 → 막지 않음
 }
 
+/* 복습 풀에 넣을 수 있는 문항인가 (v13.6).
+   복습은 10문항을 모두 맞혀야 끝난다 — 정답이 비어 있거나(채점이 언제나 오답) 학생 화면이 그리지 못하는 유형이
+   한 문항이라도 끼면 그 판은 영원히 끝나지 않는다. 원래 학습지에서는 교사가 보고 고치지만 복습에서는 섞여 들어와 눈에 띄지 않는다. */
+function reviewUsable(q){
+  if(!q || typeof q!=='object') return false;
+  const t=q.type;
+  if(t==='graph'||t==='link'||t==='pool_random') return false;
+  const hasAns=v=>v!==undefined && v!==null && String(v).trim()!=='';
+  if(t==='multi') return Array.isArray(q.options) && q.options.length>0 && Array.isArray(q.answer) && q.answer.length>0;
+  if(t==='step3'){
+    const st=getSteps(q);
+    return st.length>0 && st.every(s=> s && (s.answerType==='multi' ? (Array.isArray(s.answer) && s.answer.length>0) : hasAns(s.answer)));
+  }
+  return hasAns(q.answer) || _altList(q.answerAlt).some(hasAns);   // 용어·숫자·식 (type 이 없는 옛 문항 포함)
+}
+
 /* ── 단원별 복습 학습지 ──
    문항을 직접 담지 않고, 같은 단원(unitId)의 일반 학습지 중 이 학생의 학급에
    잠금이 풀려 있는 것에서 (복습 제외(noReview) 학습지는 통째로 건너뛰고) 그래프·링크·복습 제외(noReview) 문항을 뺀 나머지를 모아 매번 무작위 10개를 뽑는다.
@@ -3636,12 +3655,14 @@ async function startReviewQuiz(ws){
   }catch(e){ sourceDocs=WORKSHEETS; } // 오프라인 등 실패 시 로그인 때 읽어 둔 캐시로 대체
   if(wsBlockedFor(ws, user?.email)){ wsBlockedAlert(ws); return; }
   const pool=[];
-  sourceDocs.filter(w=>w.unitId===ws.unitId && w.type==='regular')
+  /* type 이 비어 있는 옛 학습지도 일반 학습지다 (index·edit 모두 review·exam 이 아니면 일반으로 읽는다) — 예전엔 'regular' 글자가 있는 것만 담겨서
+     type 필드가 없는 학습지의 문항은 복습에 한 번도 나오지 않았다 (v13.6) */
+  sourceDocs.filter(w=>w.unitId===ws.unitId && (w.type||'regular')==='regular')
     .forEach(src=>{
       if(wsBlockedFor(src, user?.email)) return; // 학급에 잠금 해제된 학습지에서만 추출
       if(src.noReview) return; // 교사가 edit.html에서 학습지 통째로 「🔁 단원 복습 학습지에서 제외」를 체크한 학습지 (시험 범위 밖 등)
       (src.questions||[]).forEach(q=>{
-        if(q.type==='graph'||q.type==='link') return; // 그래프(수동채점)·링크(안내문)는 제외
+        if(!reviewUsable(q)) return; // 그래프(수동채점)·링크(안내문)·랜덤 풀(학생 화면 미지원)·정답이 빈 문항은 제외
         if(q.noReview) return; // 교사가 edit.html에서 「🔁 단원 복습 학습지에서 제외」를 체크한 문항
         const {partStart, ...rest}=q; // 파트 마커는 원본 학습지 것이므로 떼어낸다
         pool.push({...rest, id:`${src.id}__${q.id}`});
@@ -3710,6 +3731,13 @@ async function startQuiz(ws) {
   if(!window._pCanvasStoreByWs) window._pCanvasStoreByWs={};
   if(!window._canvasStoreByWs[ws.id]) window._canvasStoreByWs[ws.id]={};
   if(!window._pCanvasStoreByWs[ws.id]) window._pCanvasStoreByWs[ws.id]={};
+  /* 복습 학습지는 같은 ID 로 열 때마다 문항이 바뀐다. 필기는 「ID + 문항 순번」으로, 단계형 진행은 문항 ID 로 보관되므로
+     비우지 않으면 앞 판의 연습장 필기가 새 문제 위에 되살아나고, 앞 판에서 푼 단계형 문항이 다시 뽑히면 단계가 이미 풀린 채로
+     나오는데 답은 안 낸 것이라 그 문항을 끝낼 수 없다 (v13.6) */
+  if(ws._reviewBase){
+    window._canvasStoreByWs[ws.id]={}; window._pCanvasStoreByWs[ws.id]={};
+    ws.questions.forEach(q=>{ delete step3State[q.id]; });
+  }
   canvasStore = window._canvasStoreByWs[ws.id];
   _pCanvasStore = window._pCanvasStoreByWs[ws.id];
   _pCanvasIdx = -1;   // 보관함이 바뀌었으니 '지금 캔버스의 주인'도 새로 잡는다
@@ -4012,6 +4040,45 @@ function updateStrip() {
   updateNavBtns();
 }
 
+/* ── 문항 그림 (v13.6) ──
+   일반·객관식·단계형 세 렌더러가 같은 한 곳에서 <img> 를 만든다.
+   예전에는 일반·단계형만 옛 Drive 주소(drive.google.com/uc?export=view&id=…)를 lh3 주소로 바꿔 주고
+   객관식은 저장된 주소를 그대로 써서, 옛 주소로 저장된 문항의 그림만 객관식에서 안 나왔다 — 복습 학습지는
+   오래된 학습지의 문항까지 섞어 내므로 그런 문항이 눈에 띄었다.
+   불러오기에 실패하면(일시 오류·공유 권한) 한 번은 주소 뒤에 값을 붙여 다시 받아 보고, 그래도 안 되면
+   빈 칸으로 두지 않고 안내와 [다시 불러오기]를 보여 준다. */
+function questionImgSrc(url){
+  let u=String(url==null?'':url).trim();
+  if(!u) return '';
+  const m=u.match(/drive\.google\.com\/(?:uc|open|thumbnail)\?(?:[^#]*&)?id=([\w-]+)/)
+       || u.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
+  return m ? 'https://lh3.googleusercontent.com/d/'+m[1] : u;
+}
+function questionImgHtml(q){
+  const src=questionImgSrc(q && q.imageUrl);
+  if(!src) return '';
+  return `<img src="${_escHtml(src)}" data-src="${_escHtml(src)}" data-try="0" alt="문제 그림" onerror="qImgError(this)" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`;
+}
+window.qImgError=function(img){
+  if(!img || !img.isConnected) return;
+  const orig=img.dataset.src||img.getAttribute('src')||'';
+  const n=Number(img.dataset.try||0);
+  if(n<1){   // 한 번은 조용히 다시 받아 본다
+    img.dataset.try=String(n+1);
+    setTimeout(()=>{ if(img.isConnected) img.src=orig+(orig.indexOf('?')>=0?'&':'?')+'_r='+Date.now(); },700);
+    return;
+  }
+  const box=document.createElement('div');
+  box.style.cssText='margin:10px 0;padding:12px 14px;border:1px dashed var(--rule);border-radius:8px;font-size:13px;color:var(--ink3);line-height:1.6';
+  box.textContent='🖼️ 그림을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 보세요. ';
+  const btn=document.createElement('button');
+  btn.type='button'; btn.textContent='다시 불러오기';
+  btn.style.cssText='margin-left:6px;padding:3px 10px;border-radius:6px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit';
+  btn.onclick=()=>{ img.dataset.try='0'; box.replaceWith(img); img.src=orig+(orig.indexOf('?')>=0?'&':'?')+'_r='+Date.now(); };
+  box.appendChild(btn);
+  img.replaceWith(box);
+};
+
 function renderQuestion() {
   flushPendingQ();   // 교사가 고친 내용이 보류돼 있으면 지금 반영한다
   setTimeout(updateFabDock,0);   // 링크 문항·시험지에서 ❓ 를 숨기고 보이기
@@ -4043,9 +4110,7 @@ function renderQuestion() {
   /* 작도 문항은 이미지를 작도 캔버스 배경으로 깔아 주므로(drawConstructionBg) 지문에서는 뺀다.
      안 그러면 같은 그림이 위아래로 두 번 보인다. */
   const _imgInCanvas = q.type==='graph' && q.graphType==='construction';
-  const imgHtml = (q.imageUrl && !_imgInCanvas)
-    ? `<img src="${q.imageUrl.replace(/drive\.google\.com\/uc\?export=view&id=([\w-]+)/,'lh3.googleusercontent.com/d/$1')}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
-    : '';
+  const imgHtml = _imgInCanvas ? '' : questionImgHtml(q);
   const _realN=curWS.questions.slice(0,curQIdx).filter(q=>q.type!=="link").length+1;
   const _realT=curWS._realQCount||curWS.questions.filter(q=>q.type!=="link").length;
   const _qNum=q.type==="link"?"🔗 링크":("문제 "+_realN+" / "+_realT);
@@ -4555,7 +4620,7 @@ function quizKeyHandler(e){
       }
       return;
     }
-    const isKeypad = step && ['number','expr','equation'].includes(step.answerType||'number');
+    const isKeypad = step && ['number','expr','equation'].includes(stepAT(step));
     if(isKeypad){
       // 수 단계: 메인 키패드와 동일하게 물리 키보드 처리
       if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
@@ -4650,9 +4715,7 @@ let multiSel = new Set();
    ※ 아래 innerHTML 은 템플릿 리터럴이라 그 안에 backtick 문자를 쓰면 안 된다(구문 오류). */
 function renderMultiQ(q, panel){
   multiSel = new Set();
-  const imgHtmlM = q.imageUrl
-    ? `<img src="${q.imageUrl}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`
-    : '';
+  const imgHtmlM = questionImgHtml(q);   // 옛 Drive 주소도 같이 바꿔 준다 (v13.6)
   panel.innerHTML=`
     <div class="problem-card mq">
       <div class="q-num">
@@ -5861,7 +5924,7 @@ function renderStep3Q(q, panel){
         <span style="font-size:10px;font-weight:600;color:var(--green);margin-left:6px">${steps.length}단계 풀이</span>
       </div>
       <div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>
-      ${q.imageUrl?`<img src="${q.imageUrl.replace(/drive\.google\.com\/uc\?export=view&id=([\w-]+)/,'lh3.googleusercontent.com/d/$1')}" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`:''}
+      ${questionImgHtml(q)}
     </div>
     <div class="step3-wrap">
       <div class="step3-tabs">${tabs}</div>
@@ -5881,7 +5944,7 @@ function renderStep3Body(q){
   const i=st.curStep-1;
   const step=steps[i];
   if(!step) return;
-  const at=step.answerType||'number';
+  const at=stepAT(step);
   const labelHtml=`<div class="step3-label">${fracText(step.label||'')}</div>`;
 
   /* ── 이미 해결한 단계 ──
@@ -6006,7 +6069,7 @@ function submitStep3(stepNum, byEnter){
   if(!step) return;
   if(st.done[i]) return;   // 이미 해결한 단계를 다시 보는 중 — 재채점하지 않는다
   const fb=document.getElementById("s3-fb");
-  const at=step.answerType||'number';
+  const at=stepAT(step);
   const isLastStep = stepNum===steps.length;
   const lp=()=>document.getElementById("quiz-left-panel");
 
@@ -6740,14 +6803,33 @@ window.qInput=qInput;
 window.qNextPart=qNextPart;
 window.qClear=qClear;
 /* 한글 답이면 text 입력, 그 외 word 문항은 수식 입력도구 */
-function isExprInput(q){
-  if(!q||q.type!=="word") return false;
-  if(q.answerType==="expr") return true;
-  // answerType이 명시되어 있지 않을 때만 자동 판정 (한글 없으면 expr)
-  if(q.answerType==null){
-    return !/[가-힣]/.test((q.answer||"")+(q.answerAlt||[]).join(""));
+/* 글 안에 한글이 있는가 (v13.6) — 완성형(가-힣)뿐 아니라 낱자(ㄱ·ㅏ)와 풀어 쓴 한글(맥·PDF 에서 붙여 넣으면
+   자모로 풀려 들어온다)도 한글로 본다. 예전 검사는 가-힣 하나뿐이라 그런 정답이 한글로 안 읽혔다. */
+function hasHangul(s){
+  const t=String(s==null?'':s);
+  for(let i=0;i<t.length;i++){
+    const c=t.charCodeAt(i);   // 자모 · 호환 자모 · 자모 확장-A · 완성형 · 자모 확장-B
+    if((c>=0x1100&&c<=0x11FF)||(c>=0x3130&&c<=0x318F)||(c>=0xA960&&c<=0xA97F)||(c>=0xAC00&&c<=0xD7A3)||(c>=0xD7B0&&c<=0xD7FF)) return true;
   }
   return false;
+}
+function _altList(a){ return Array.isArray(a) ? a : (a==null||a==='' ? [] : [a]); }   // 대체 정답이 배열이 아니어도 죽지 않게
+function isExprInput(q){
+  if(!q||q.type!=="word") return false;
+  /* 정답이 한글이면 유형이 "expr"로 저장돼 있어도 글자 입력칸이다 — 화면 키패드와 물리 키 처리(KMAP)는 한글을 받지 못해,
+     키패드만 뜨면 학생이 답을 쓸 방법이 아예 없다(유형을 잘못 골랐거나 옛 데이터인 문항). 채점은 같은 문항을 글자로 쓴 답으로도 맞게 읽는다. */
+  if(q.answerType==="expr") return !hasHangul(q.answer);
+  // answerType이 명시되어 있지 않을 때만 자동 판정 (한글 없으면 expr)
+  if(q.answerType==null){
+    return !(hasHangul(q.answer) || _altList(q.answerAlt).some(hasHangul));
+  }
+  return false;
+}
+/* 단계형 한 단계의 답 유형 (v13.6) — 유형이 없거나 키패드 유형인데 정답이 한글이면 글자 입력칸(text)으로 본다.
+   (단계 유형이 비어 있으면 number 로 읽는데, 정답이 한글인 단계는 키패드로 답할 수 없다) */
+function stepAT(step){
+  const at=(step && step.answerType) || 'number';
+  return ((at==='number'||at==='expr'||at==='equation') && hasHangul(step && step.answer)) ? 'text' : at;
 }
 
 window.submitQAns=submitQAns;
@@ -6825,7 +6907,8 @@ document.getElementById("btn-home").addEventListener("click",()=>{
   try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
-  if(curWS) wsProgress[curWS.id]={
+  // 복습 학습지는 완료 횟수·누적 정답률(completions…)이 이 자리에 들어 있다 — 「진행 중」 값으로 덮으면 카드가 방금 끝낸 것도 모르는 채가 된다 (v13.6)
+  if(curWS && curWS.type!=='review') wsProgress[curWS.id]={
     answeredCount: answered.filter(Boolean).length,
     totalCount: curWS.questions.filter(q=>q.type!=="link").length,
     isComplete: false,
@@ -6843,8 +6926,8 @@ document.getElementById("btn-back").addEventListener("click",async ()=>{
   try{ sessionStorage.removeItem('lastQuizWsId'); }catch(e){}
   document.removeEventListener("visibilitychange", _onVisibilityChange);
   window.removeEventListener("pagehide", saveWorksheet);
-  // wsProgress 메모리 즉시 반영 (화면 갱신용)
-  if(curWS) wsProgress[curWS.id]={
+  // wsProgress 메모리 즉시 반영 (화면 갱신용) — 복습 학습지는 완료 횟수·정답률을 덮지 않게 건너뛴다 (v13.6)
+  if(curWS && curWS.type!=='review') wsProgress[curWS.id]={
     answeredCount: answered.filter(Boolean).length,
     totalCount: curWS.questions.filter(q=>q.type!=="link").length,
     isComplete: false,

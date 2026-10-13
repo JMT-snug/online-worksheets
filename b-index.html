@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.7">
+  <meta name="app-version" content="13.8">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -3808,7 +3808,7 @@ async function startQuiz(ws) {
         window._examReentry=true;   // 결과 화면에 '제출 완료' 안내 표시용
         if(_activeWsId!==ws.id) return;
         console.log('[시험지] 제출 완료 기록 → 결과 화면 표시 (재응시 불가)');
-        document.getElementById("quiz-ws-title").textContent=ws.title;
+        document.getElementById("quiz-ws-title").textContent=wsDisplayTitle(ws);   // 시험 결과 화면도 같은 제목 (v13.8)
         curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
         finishQuiz();
         return;
@@ -3836,7 +3836,7 @@ async function startQuiz(ws) {
   }
   _wsDataLoaded = true; // 로드 완료: 저장 허용
   showPage("quiz-page");
-  document.getElementById("quiz-ws-title").textContent=wsDisplayTitle(ws);   // 복습: 「단원 이름 - 학습지 이름」 (v13.7)
+  document.getElementById("quiz-ws-title").textContent=wsDisplayTitle(ws);   // 「단원 이름 - 학습지 이름」 (복습 v13.7 · 모든 학습지 v13.8)
   // 링크 제외 문항 수 캐싱
   curWS._realQCount = ws.questions.filter(q=>q.type!=="link").length;
   setNextFocus(false);   // 학습지를 눌러서 들어온 것 → 엔터가 아니다
@@ -4043,8 +4043,8 @@ function updateStrip() {
 
 /* ── 복습 학습지 표시 (v13.7) ──
    ① 문제 번호줄의 별 옆에 문항이 나온 학습지 ID 를 작게 붙인다 (마우스를 올리면 그 학습지 이름) — 복습 문항에만 _srcWsId 가 있다.
-   ② 복습 학습지의 제목은 「단원 이름 - 학습지 이름」 (정비례와 반비례 - 🔁 단원 복습). 화면에만 그렇게 보이고 ws.title 은 그대로다
-      (질문·신고·기록에 쓰는 이름이 바뀌지 않게). 학습지 이름에 이미 단원 이름이 들어 있으면 덧붙이지 않는다. */
+   ② 문제 화면의 제목은 「단원 이름 - 학습지 이름」 (정비례와 반비례 - 🔁 단원 복습). v13.7 에서는 복습만, v13.8 부터 모든 학습지(일반·시험지 포함).
+      화면에만 그렇게 보이고 ws.title 은 그대로다(질문·신고·기록에 쓰는 이름이 바뀌지 않게). 학습지 이름에 이미 단원 이름이 들어 있으면 덧붙이지 않는다. */
 function qSrcHtml(q){
   return (q && q._srcWsId)
     ? `<span class="q-src" title="${_escHtml('출처 학습지: '+(q._srcWsTitle||q._srcWsId))}">${_escHtml(q._srcWsId)}</span>`
@@ -4052,7 +4052,7 @@ function qSrcHtml(q){
 }
 function wsDisplayTitle(ws){
   const t=(ws && ws.title) || '';
-  if(!ws || ws.type!=='review') return t;
+  if(!ws) return t;
   const u=(UNITS||[]).find(x=>x.id===ws.unitId);
   const ut=(u && u.title) ? String(u.title) : '';
   return (!ut || t.indexOf(ut)>=0) ? t : ut+' - '+t;

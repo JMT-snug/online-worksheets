@@ -674,11 +674,43 @@ function groupAssignments(items, res){
     const it=byId.get(a.id); if(!it) return;
     const target=/^new\d+$/.test(a.code) ? toProposal : toExisting;
     if(target===toExisting && a.code===it.sub) return;   // 그대로인 것
+    if(a.why) it.why=String(a.why);                      // 🔎 검토(v1.7): AI 가 바꾸자고 한 까닭 — 화면에 그대로 보여 준다
     if(!target.has(a.code)) target.set(a.code,[]);
     target.get(a.code).push(it);
   });
   return { toExisting, toProposal };
 }
+/* ══════════ 🔎 분류된 오답 검토 (v1.7, 2026-10-13, 교사 요청) ══════════
+   이미 유형이 붙은 오답을 AI 로 다시 본다 — 「현재 유형이 원인 설명에 맞는가」. 범위는 전체 · 학습지 선택 · 유형 선택 셋.
+   · 「기타」·미분류는 위의 재분류(classifyErrors 기본 모드)가 맡으므로 검토 대상이 아니다.
+   · 교사가 직접 고른 것(subManual)은 AI 가 덮어쓰지 않는 규칙이라 뺀다. ✅ 정답 인정한 것도 뺀다(오답이 아니다).
+   · 결과는 바로 적용하지 않는다 — AI 가 현재와 다르게 본 것만 보여 주고, 교사가 고른 것만 바꾼다(바꾼 것은 교사가 정한 것 = subManual). */
+const REVIEW_CHUNK=40;   // 한 번에 AI 에 보내는 오답 수 (재분류 60 보다 작게 — 맞는지 따지는 일이라 한 건마다 더 깊게 읽는다)
+/** 검토할 수 있는 오답 — items 는 wsTypedItems 로 모은 것 */
+function reviewPool(items){
+  return (items||[]).filter(it=>it.sub && it.sub!==TAX_UNKNOWN && !it.subManual && !isAccepted(it));
+}
+/** 범위로 거른다. scope: 'all' | 'ws' (sel.ws = 학습지 id 들) | 'type' (sel.types = 유형 코드 들, 분류표에 없는 코드는 '__orphan' 하나로) */
+function reviewScope(items, scope, sel, tax){
+  const toSet=v=>v instanceof Set ? v : new Set(v||[]);
+  const pool=reviewPool(items);
+  if(scope==='ws'){ const s=toSet(sel&&sel.ws); return pool.filter(it=>s.has(it.wsId)); }
+  if(scope==='type'){ const s=toSet(sel&&sel.types); return pool.filter(it=>(tax&&tax.byCode&&tax.byCode[it.sub]) ? s.has(it.sub) : s.has('__orphan')); }
+  return pool;
+}
+/** AI 에 보내는 항목 — 지금 붙은 유형(cur 코드·curName 이름)을 함께 */
+function reviewPayload(items, tax){
+  return items.map(it=>({ id:it.id, q:it.q, answer:it.answer, wrong:it.wrong, path:it.path, label:it.label, cur:it.sub, curName:typeName(tax,it.sub) }));
+}
+/** 호출 횟수 */
+const reviewCalls=n=>n>0 ? Math.ceil(n/REVIEW_CHUNK) : 0;
+/** 검토 결과 요약 — judged: AI 가 답한 수, changed: 다른 유형으로 본 수, kept: 현재 유형이 맞다고 본 수, missing: 답을 못 받은 수(유지로 둔다) */
+function reviewOutcome(items, assignments){
+  const byId=new Map(items.map(it=>[it.id,it])); const seen=new Set(); let changed=0;
+  (assignments||[]).forEach(a=>{ const it=byId.get(a&&a.id); if(!it || seen.has(a.id)) return; seen.add(a.id); if(a.code!==it.sub) changed++; });
+  return { judged:seen.size, changed, kept:seen.size-changed, missing:items.length-seen.size };
+}
+
 /** 학습지별 바꿀 목록 — pairs = [[항목, 새 유형, 교사가 정함?], …] → { wsId: [{kind, qid, key, sub, manual?}] }
     manual 이면 subManual 로 남아 다시 분석해도 AI 가 덮어쓰지 않는다 (v1.1 — 옮기기·합치기·재분류 결과를 교사가 바꾼 것) */
 function changesByWs(pairs){
@@ -691,4 +723,5 @@ if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, ACCEPT_R
   ansForCompare, studentAnsText, aiAnswerSummary, reviewQuestions, loadReviewRecord, mergeReview, storedReview, withAiTraps,
   FREQ_MIN_STUDENTS, FREQ_MAX_PER_Q, freqWrongStats, freqQuestions, mergeWrongAnalysis, storedWrongAnalysis, withFreqTraps, freqStatus,
   applyTypeChanges, wsTypedItems, countTypes, trapsFor, countTrapHits, classFirstTryAvg, studentWsTypes, mergeCatStats, periodKeyFn,
-  studentTimeline, studentAiWorksheets, studentSummary, basisAtOf, stuAiKey, groupAssignments, changesByWs, recDate, isRegular };
+  studentTimeline, studentAiWorksheets, studentSummary, basisAtOf, stuAiKey, groupAssignments, changesByWs, recDate, isRegular,
+  REVIEW_CHUNK, reviewPool, reviewScope, reviewPayload, reviewCalls, reviewOutcome };

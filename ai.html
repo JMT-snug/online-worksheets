@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="1.9">
+<meta name="app-version" content="2.0">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -146,11 +146,12 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.6"></script>
+<script src="ai-lab.js?v=1.7"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
      ① 🏷 오답 유형   — 분류표(기본 + 교사가 더한 것)와 쓰임새. 「기타」·미분류 오답을 AI 로 다시 분류하고 새 유형을 제안받는다.
+                        (v2.0) 🔎 이미 분류된 오답도 AI 로 다시 검토한다 — 범위는 전체·학습지 선택·유형 선택. 다르게 본 것만 보여 주고 교사가 고른 것만 바꾼다.
      ② 📝 학습지 오답 분석 — 여러 학습지를 체크해 한꺼번에: 🕳 예상 오답(문항만 보고 예측) + 📊 실제 빈출 오답의 원인 분석, 모두 유형 코드를 붙인다.
      ③ 👤 학생 성취 분석 — 여러 학생을 체크해 한꺼번에: 학습 상태·오답 유형 분포·시간에 따른 변화(학급 평균 대비).
    예전에 edit(🕳 예상 오답)과 teacher(📊 빈출 오답 분석 · 🤖 AI 학습 분석)에 흩어져 있던 것을 옮겨 왔다(edit v5.0 · teacher v6.0).
@@ -189,7 +190,8 @@ let TAB='ws', running=false, stopReq=false;
 const selWs=new Set(), selStu=new Set();
 const F={ grade:'', unit:'', onlyRec:true, cls:'', q:'', scope:'all', scopeUnit:'' };
 const OPT={ pred:'missing', freq:'fresh' };
-let classifyResult=null;
+let classifyResult=null;   // { mode:'review' 이면 🔎 검토 결과, 아니면 🤖 재분류(기타·미분류) 결과 }
+const RV={ scope:'all', ws:new Set(), types:new Set() };   // 🔎 검토 범위 (v2.0) — scope: 'all' | 'ws' | 'type'
 
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmtAt=iso=>iso?String(iso).slice(0,16).replace('T',' '):'';
@@ -361,7 +363,7 @@ window.stopRun=()=>{ stopReq=true; const b=$('prog-stop'); if(b) b.disabled=true
 
 /* ── 탭 ── */
 function render(){
-  const tabs=[['ws','📝 학습지 오답 분석','예상 오답 + 실제 빈출 오답'],['stu','👤 학생 성취 분석','성취·지도 방향·성장'],['types','🏷 오답 유형','분류표 · 새 유형 찾기']];
+  const tabs=[['ws','📝 학습지 오답 분석','예상 오답 + 실제 빈출 오답'],['stu','👤 학생 성취 분석','성취·지도 방향·성장'],['types','🏷 오답 유형','분류표 · 재분류 · 검토']];
   $('tabs').innerHTML=tabs.map(([k,t,s])=>`<button class="tab ${TAB===k?'active':''}" onclick="setTab('${k}')">${t}<small>${s}</small></button>`).join('');
   if(TAB==='types') renderTypes(); else if(TAB==='stu') renderStu(); else renderWs();
 }
@@ -932,7 +934,7 @@ function renderTypes(){
   $('content').innerHTML=`
     <div class="pg-title">🏷 오답 유형</div>
     <div class="pg-sub">예상 오답·빈출 오답마다 붙이는 유형 목록입니다. <b>기본 유형</b>은 고정이고, 쓰다 보면 「기타」에 쌓이는 오답을 AI 로 분석해 <b>새 유형</b>을 더할 수 있습니다.
-      유형은 지우지 않고 숨기기만 합니다(쌓인 기록이 그 유형을 가리키기 때문).</div>
+      이미 분류된 오답도 <b>🔎 검토</b>로 AI 에게 다시 보게 할 수 있습니다. 유형은 지우지 않고 숨기기만 합니다(쌓인 기록이 그 유형을 가리키기 때문).</div>
     <div class="card"><div class="card-hdr"><span class="card-title">🤖 「기타」·미분류 오답 다시 분류하기</span></div><div class="card-body">
       <div class="small" style="margin-bottom:8px">지금 체크된 오답 ${items.length}개 중 <b>미분류 ${none}개</b> · <b>기타(원인 불명확) ${unknown}개</b>${orphan?` · 알 수 없는 유형 ${orphan}개`:''}.
         AI 가 기존 유형에 넣을 수 있는 것은 넣고, 기존 유형으로 설명이 안 되는 <b>같은 성격의 오답이 2개 이상</b> 모이면 새 유형을 제안합니다. 바로 바뀌지 않고, 결과를 보고 고른 것만 적용됩니다.</div>
@@ -941,9 +943,11 @@ function renderTypes(){
         <label class="small"><input type="checkbox" id="cl-unk" checked> 기타(원인 불명확)</label>
         <button class="btn btn-ai" ${running||!(none+unknown)?'disabled':''} onclick="runClassify()">🤖 분류하기 (약 ${Math.max(1,Math.ceil((none+unknown)/60))}번 호출)</button>
       </div>
-      ${progressBox()}
-      <div id="cl-result">${classifyResult?drawClassifyResult():''}</div>
     </div></div>
+    ${reviewCardHtml()}
+    ${progressBox()}
+    ${classifyResult?`<div class="card"><div class="card-hdr"><span class="card-title">${classifyResult.mode==='review'?'🔎 검토 결과':'🤖 다시 분류한 결과'}</span></div>
+      <div class="card-body" id="cl-result">${drawClassifyResult()}</div></div>`:''}
     <div class="card"><div class="card-hdr"><span class="card-title">📋 분류표와 쓰임새</span>
       <span class="small muted">예상 = 🕳 예상 오답 개수 · 빈출 = 📊 빈출 오답 개수 (낸 학생 수 합)</span></div>
       <div style="overflow-x:auto"><table><thead><tr><th>유형</th><th class="hide-sm">설명</th><th>예상</th><th>빈출</th><th></th></tr></thead><tbody>
@@ -972,6 +976,7 @@ function renderTypes(){
           <input type="text" id="ns-desc" placeholder="어떤 실수인지 한 문장" style="flex:1;min-width:180px">
           <button class="btn" onclick="addSub()">더하기</button></div>
       </div></div>`;
+  rvSync();   // 🔎 검토 카드의 선택 수·호출 횟수·묶음 체크 표시 (v2.0)
 }
 /** 분류표 저장 — config/errorTaxonomy (Firestore 규칙에 쓰기 허용이 있어야 한다) */
 async function saveCustomSubs(subs){
@@ -1125,8 +1130,170 @@ window.runClassify=async()=>{
   renderTypes();
   const p=$('prog'); if(p){ p.style.display='block'; $('prog-log').innerHTML=log; $('prog-stop').disabled=true; progSet(1,1,'끝 — 아래에서 적용할 것을 고르세요'); }
 };
+/* ══════════ 🔎 이미 분류된 오답 검토 (v2.0, 2026-10-13, 교사 요청) ══════════
+   위의 「기타·미분류 다시 분류」는 유형이 없거나 기타인 오답만 다룬다. 여기는 **이미 유형이 붙은 오답**을 AI 로 다시 본다 —
+   「현재 유형이 원인 설명에 맞는가」. 범위는 셋: 전체 · 학습지 선택 · 유형 선택 (ai-lab.js reviewScope).
+   · 호출은 classifyErrors 의 mode:'review' (Apps Script 새 버전 필요). 응답에 mode 가 없으면 예전 서버 — 아래에서 안내하고 멈춘다.
+   · AI 가 현재와 **다르게 본 것만** 목적지 유형별로 묶어 보여 준다(까닭 포함). 바로 바뀌지 않고 체크한 것만 적용된다.
+   · 적용한 것은 교사가 정한 것(subManual)으로 남아, 다시 분석해도 AI 가 되돌리지 않고 다음 검토에서도 빠진다.
+   · 체크박스 핸들러는 RVK 번호표의 번호로 부른다 — 학습지 id·유형 코드를 onclick 글자에 넣지 않으려고(GKEYS 와 같은 방식). */
+const RVK={ items:[], groups:[] };   // items: [{kind:'w'|'t', id}], groups: [{kind, ids}] — reviewCardHtml 이 그릴 때마다 다시 채운다
+const rvSet=kind=>kind==='w'?RV.ws:RV.types;
+function reviewCardHtml(){
+  const pool=reviewPool(allTypedItems());
+  const nA=pool.filter(i=>i.kind==='ai').length;
+  RVK.items=[]; RVK.groups=[];
+  const list=RV.scope==='ws' ? rvWsListHtml(pool) : RV.scope==='type' ? rvTypeListHtml(pool) : '';
+  return `<div class="card"><div class="card-hdr"><span class="card-title">🔎 이미 분류된 오답 검토하기</span></div><div class="card-body">
+    <div class="small" style="margin-bottom:8px">유형이 이미 붙은 오답 <b>${pool.length}개</b>(🕳 예상 ${nA} · 📊 빈출 ${pool.length-nA})를 AI 가 원인 설명에 비춰 <b>현재 유형이 맞는지</b> 다시 봅니다.
+      맞는 것은 그대로 두고 <b>분명히 다르다고 본 것만</b> 제안하며, 바로 바뀌지 않고 결과에서 <b>체크한 것만</b> 적용됩니다(적용한 것은 교사가 정한 것으로 남아 다시 분석해도 바뀌지 않습니다).
+      「기타」·미분류(위 카드)와 교사가 직접 고른 유형, ✅ 정답 인정한 오답은 검토하지 않습니다.</div>
+    <div class="row" style="margin-bottom:8px"><b class="small">범위</b>
+      ${[['all','전체'],['ws','학습지 선택'],['type','유형 선택']].map(([v,t])=>`<label class="small"><input type="radio" name="rvs" ${RV.scope===v?'checked':''} onchange="rvScope('${v}')"> ${t}</label>`).join('')}</div>
+    ${list}
+    <div class="row" style="margin-top:8px"><span id="rv-sum" class="small"></span>
+      <button class="btn btn-ai" id="rv-btn" style="margin-left:auto" onclick="runReview()">🤖 검토하기</button></div>
+  </div></div>`;
+}
+/** 체크박스 한 줄 — kind 'w' 학습지 / 't' 유형 */
+function rvItemHtml(kind, id, label, n, indent){
+  const i=RVK.items.push({kind,id})-1;
+  return `<label class="small" style="display:flex;gap:6px;align-items:center;padding:2px 0 2px ${indent}px"><input type="checkbox" id="rvi-${i}" ${rvSet(kind).has(id)?'checked':''} onchange="rvTog(${i},this.checked)">
+    <span>${label}</span><span class="muted">오답 ${n}개</span></label>`;
+}
+/** 묶음 줄(학년·단원 / 대분류) — 체크하면 안의 것을 모두 고른다/푼다 */
+function rvGroupHtml(kind, ids, title, n){
+  const g=RVK.groups.push({kind, ids})-1;
+  return `<label class="small" style="display:flex;gap:6px;align-items:center;padding:6px 0 2px;font-weight:700"><input type="checkbox" id="rvg-${g}" onchange="rvGrp(${g},this.checked)">
+    <span>${title}</span><span class="muted" style="font-weight:400">오답 ${n}개</span></label>`;
+}
+function rvListFrame(inner){
+  return `<div class="row small" style="margin-bottom:4px"><button class="btn" onclick="rvAll(true)">모두 선택</button><button class="btn" onclick="rvAll(false)">모두 해제</button></div>
+    <div style="max-height:260px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:4px 12px;background:var(--cream)">${inner}</div>`;
+}
+function rvWsListHtml(pool){
+  const cnt=new Map(); pool.forEach(it=>cnt.set(it.wsId,(cnt.get(it.wsId)||0)+1));
+  const byUnit=new Map();
+  WORKSHEETS.forEach(ws=>{ const n=cnt.get(ws.id); if(!n) return; const uk=ws.unitId||''; if(!byUnit.has(uk)) byUnit.set(uk,[]); byUnit.get(uk).push({ws,n}); });   // WORKSHEETS 는 단원 순서·학습지 순서로 정렬돼 있다
+  if(!byUnit.size) return '<div class="small muted" style="margin-bottom:6px">검토할 수 있는 오답이 있는 학습지가 없습니다.</div>';
+  return rvListFrame([...byUnit.entries()].map(([uk,l])=>{
+    const u=UNIT_MAP[uk]; const g=gradeOfUnit(u);
+    return rvGroupHtml('w', l.map(x=>x.ws.id), `📂 ${g?esc(g)+'학년 · ':''}${esc(u?.title||'단원 미지정')}`, l.reduce((s,x)=>s+x.n,0))
+      + l.map(x=>rvItemHtml('w', x.ws.id, esc(x.ws.title||x.ws.id), x.n, 22)).join('');
+  }).join(''));
+}
+function rvTypeListHtml(pool){
+  const cnt=new Map(); let orphan=0;
+  pool.forEach(it=>{ if(TAX.byCode[it.sub]) cnt.set(it.sub,(cnt.get(it.sub)||0)+1); else orphan++; });
+  let h='';
+  TAX.cats.forEach(cat=>{
+    const subs=cat.subs.filter(s=>s.code!==TAX_UNKNOWN && cnt.get(s.code)); if(!subs.length) return;   // 「기타」 유형은 위 카드가 맡는다
+    h+=rvGroupHtml('t', subs.map(s=>s.code), `${cat.icon} ${esc(cat.name)}`, subs.reduce((n,s)=>n+cnt.get(s.code),0))
+      + subs.map(s=>rvItemHtml('t', s.code, esc(s.name)+(s.custom?' ✚':'')+(s.hidden?' <span class="badge" style="background:#f5f5f4;color:#78716c">숨김</span>':''), cnt.get(s.code), 22)).join('');
+  });
+  if(orphan) h+=rvGroupHtml('t', ['__orphan'], '⚠️ 분류표에 없는 유형', orphan) + rvItemHtml('t','__orphan','알 수 없는 유형 코드',orphan,22);
+  return h ? rvListFrame(h) : '<div class="small muted" style="margin-bottom:6px">검토할 수 있는 오답이 없습니다.</div>';
+}
+/** 선택 수·호출 횟수·묶음 체크 표시를 지금 상태에 맞춘다 — 화면을 다시 그리지 않으니 안쪽 목록의 스크롤이 유지된다 */
+function rvSync(){
+  RVK.items.forEach((x,i)=>{ const el=$('rvi-'+i); if(el) el.checked=rvSet(x.kind).has(x.id); });
+  RVK.groups.forEach((g,gi)=>{ const el=$('rvg-'+gi); if(!el) return; const n=g.ids.filter(id=>rvSet(g.kind).has(id)).length;
+    el.checked=!!g.ids.length && n===g.ids.length; el.indeterminate=n>0 && n<g.ids.length; });
+  const sum=$('rv-sum'), btn=$('rv-btn'); if(!sum||!btn) return;
+  const n=reviewScope(allTypedItems(), RV.scope, RV, TAX).length, calls=reviewCalls(n);
+  sum.innerHTML=n ? `검토할 오답 <b>${n}개</b> · AI 호출 약 <b>${calls}번</b> (${REVIEW_CHUNK}개씩)`
+                  : `<span class="muted">${RV.scope==='all'?'검토할 오답이 없습니다':'위에서 범위를 고르세요'}</span>`;
+  btn.disabled=running || !n;
+}
+window.rvScope=v=>{ if(running){ toast('분석이 끝난 뒤에 바꿔 주세요'); return; } RV.scope=v; renderTypes(); };
+window.rvTog=(i,on)=>{ const x=RVK.items[i]; if(!x) return; if(on) rvSet(x.kind).add(x.id); else rvSet(x.kind).delete(x.id); rvSync(); };
+window.rvGrp=(gi,on)=>{ const g=RVK.groups[gi]; if(!g) return; g.ids.forEach(id=>{ if(on) rvSet(g.kind).add(id); else rvSet(g.kind).delete(id); }); rvSync(); };
+window.rvAll=on=>{ RVK.items.forEach(x=>{ if(on) rvSet(x.kind).add(x.id); else rvSet(x.kind).delete(x.id); }); rvSync(); };
+
+window.runReview=async()=>{
+  if(running) return;
+  const items=reviewScope(allTypedItems(), RV.scope, RV, TAX);
+  if(!items.length){ toast('검토할 오답이 없습니다'); return; }
+  const CH=REVIEW_CHUNK, chunks=[]; for(let i=0;i<items.length;i+=CH) chunks.push(items.slice(i,i+CH));
+  if(chunks.length>=6 && !confirm(`오답 ${items.length}개를 ${chunks.length}번에 나눠 AI 에 보냅니다.\n호출이 많아 시간과 비용이 들 수 있어요. 학습지나 유형으로 범위를 좁힐 수도 있습니다.\n\n계속할까요?`)) return;
+  progStart();
+  const res={ assignments:[] }; let bad=0;
+  for(let i=0;i<chunks.length;i++){
+    if(stopReq){ progLog('⏹ 멈췄습니다'); break; }
+    progSet(i, chunks.length, `${i+1}/${chunks.length} 묶음 검토 중… (오답 ${chunks[i].length}개)`);
+    try{
+      const out=await callAI({ action:'classifyErrors', mode:'review', taxonomy:taxForAI(TAX), cats:TAX.cats.map(c=>({code:c.code,name:c.name})), items:reviewPayload(chunks[i], TAX) });
+      // 예전 서버는 mode 를 몰라 「분류 못 한 오답」 프롬프트로 처리해 버린다 — 응답에 mode 가 없으면 결과를 쓰지 않는다
+      if(out.mode!=='review') throw new Error('AI 서버가 예전 버전이라 검토 기능이 없습니다 — AI기능 Apps Script 를 새 버전으로 배포해 주세요');
+      res.assignments.push(...out.assignments);
+      const ch=out.assignments.filter(a=>{ const it=chunks[i].find(x=>x.id===a.id); return it && a.code!==it.sub; }).length;
+      progLog(`✅ ${i+1}번째 묶음 — ${out.assignments.length}개 검토${ch?` · 바꾸자고 한 것 ${ch}개`:' · 모두 현재 유형 유지'}`);
+    }catch(e){ bad++; progLog('❌ '+esc(e.message)); if(/새 버전으로 배포/.test(e.message)) break; }
+  }
+  running=false;
+  const log=$('prog-log')?.innerHTML||'';
+  if(!res.assignments.length){   // 답을 하나도 못 받았다(서버 오류·예전 서버·멈춤) — 「모두 맞다」는 결과 카드를 만들지 않는다
+    classifyResult=null; renderTypes();
+    const p0=$('prog'); if(p0){ p0.style.display='block'; $('prog-log').innerHTML=log; $('prog-stop').disabled=true; progSet(0,1, bad?'검토하지 못했습니다 — 아래 오류를 확인하세요':'검토 결과가 없습니다'); }
+    toast(bad?'❌ 검토 결과를 받지 못했습니다':'검토 결과가 없습니다'); return;
+  }
+  const g=groupAssignments(items, res);
+  classifyResult={ mode:'review', items, ...reviewOutcome(items, res.assignments), bad, proposals:[], toProposal:new Map(),
+    toExisting:[...g.toExisting.entries()].map(([code,l])=>({ code, items:l, on:code!==TAX_UNKNOWN, skip:new Set(), target:'' })).sort((a,b)=>b.items.length-a.items.length) };
+  renderTypes();
+  const p=$('prog'); if(p){ p.style.display='block'; $('prog-log').innerHTML=log; $('prog-stop').disabled=true; progSet(1,1,'끝 — 아래에서 적용할 것을 고르세요'); }
+  $('cl-result')?.scrollIntoView({ block:'nearest', behavior:'smooth' });
+};
+/** 검토 결과 — 목적지 유형별 묶음 → 오답 한 줄마다 체크 (v2.0). 한 줄 = 같은 오답의 예상·빈출(mergeTypedItems) */
+function drawReviewResult(){
+  const r=classifyResult;
+  const discard=`<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" onclick="clDiscard()">버리기</button>`;
+  const head=`<div class="small" style="margin-bottom:8px">검토한 오답 <b>${r.judged}개</b> 중 <b>${r.changed}개</b>를 현재와 다른 유형으로 제안했고 <b>${r.kept}개</b>는 현재 유형이 맞다고 봤습니다${
+    r.missing?` · 답을 못 받은 ${r.missing}개는 그대로 둡니다${r.bad?` (호출 실패 ${r.bad}번)`:''}`:''}.
+    AI 는 틀릴 수 있으니 문제와 원인을 보고 <b>체크한 것만</b> 적용하세요. 적용한 것은 교사가 정한 것으로 남습니다.</div>`;
+  if(!r.toExisting.length) return head+`<div class="small" style="color:var(--green);font-weight:700">바꿀 것이 없습니다 — AI 가 본 오답은 모두 현재 유형이 맞다고 했습니다.</div>`+discard+`</div>`;
+  const rowHtml=(g,gi,row)=>{
+    const ids=row.parts.map(p=>p.id).join(','); const off=row.parts.every(p=>g.skip.has(p.id));
+    const q=(WORKSHEETS.find(w=>w.id===row.wsId)?.questions||[]).find(x=>x.id===row.qid); const qt=tidyTex(plainText(q?.text??row.q,600));
+    const why=row.parts.map(p=>p.why).find(Boolean)||'';
+    return `<div class="it ${off?'off':''}"><input type="checkbox" ${off?'':'checked'} onchange="clItem(${gi},'${ids}',this.checked)" style="margin-top:4px">
+      <div style="flex:1"><span class="wrong">${esc(row.wrong)}</span>${row.ai?` <span class="badge" style="background:#ede9fe;color:#5b21b6">🕳 예상</span>`:''}${row.freq?` <span class="badge" style="background:var(--red-lt);color:var(--red)">📊 빈출 ${row.freq.students}명</span>`:''}
+        <span class="small muted">현재</span> ${typeBadge(row.sub)}
+        <span class="small muted"> — ${esc((WORKSHEETS.find(w=>w.id===row.wsId)?.title||'')+' '+(row.idx+1)+'번')}</span>
+        <span class="path">${esc((row.freq?.path)||(row.ai?.path)||'')}</span>
+        <div class="muted small" title="${esc(qt)}">문제: ${esc(qt.length>90?qt.slice(0,90)+'…':qt)||'(글 없음)'}</div>
+        ${why?`<div class="small" style="color:var(--violet)">🤖 ${esc(why)}</div>`:''}</div></div>`;
+  };
+  const blocks=r.toExisting.map((g,gi)=>{
+    const n=g.items.filter(it=>!g.skip.has(it.id)).length;
+    return `<div class="qblock"><div class="row"><input type="checkbox" ${g.on?'checked':''} onchange="clMove(${gi},this.checked)">
+      <select class="typesel" style="max-width:260px" onchange="clMoveTo(${gi},this.value)" title="AI 가 고른 유형 — 다른 유형으로 바꿀 수 있습니다">${targetOptions('', g.target||g.code).replace('<option value="">— 옮길 유형 고르기 —</option>','')}</select>
+      <span class="small">으로 ${g.items.length}개 <span class="muted">(체크 ${n})</span></span>${g.target&&g.target!==g.code?` <span class="small muted">(AI 제안: ${esc(typeName(TAX,g.code))})</span>`:''}</div>
+      ${mergeTypedItems(g.items).map(row=>rowHtml(g,gi,row)).join('')}</div>`;
+  }).join('');
+  const nOn=r.toExisting.filter(g=>g.on).reduce((n,g)=>n+g.items.filter(it=>!g.skip.has(it.id)).length,0);
+  return head+blocks+discard+`<button class="btn btn-ai" ${nOn?'':'disabled'} onclick="applyReview()">✅ 고른 것 적용 (오답 ${nOn}개)</button></div>`;
+}
+/** 검토 결과에서 오답 한 줄(예상·빈출이 같이 있으면 둘 다)을 체크/해제 — idsStr 은 쉼표로 이은 항목 id */
+window.clItem=(gi,idsStr,on)=>{ const g=classifyResult?.toExisting?.[gi]; if(!g) return;
+  String(idsStr).split(',').forEach(id=>{ if(on) g.skip.delete(id); else g.skip.add(id); });
+  $('cl-result').innerHTML=drawClassifyResult(); };
+window.applyReview=async()=>{
+  const r=classifyResult; if(!r || r.mode!=='review' || running) return;
+  const pairs=[];
+  r.toExisting.filter(g=>g.on).forEach(g=>g.items.filter(it=>!g.skip.has(it.id)).forEach(it=>pairs.push([it, g.target||g.code, true])));   // 교사가 확인하고 고른 것 = manual
+  if(!pairs.length){ toast('적용할 것을 체크하세요'); return; }
+  running=true;
+  try{
+    const n=await applyChanges(changesByWs(pairs));
+    classifyResult=null; running=false;
+    toast(`✅ 적용했습니다 — 오답 ${n}개의 유형을 바꿨습니다`); renderTypes();
+  }catch(e){ running=false; toast('적용 실패: '+e.message); console.error(e); }
+};
+
 function drawClassifyResult(){
   const r=classifyResult;
+  if(r && r.mode==='review') return drawReviewResult();   // 🔎 검토 결과 (v2.0)
   /* v1.8: 예시에도 문제를 같이 보여 주고(어떤 문제의 오답인지 알아야 유형이 맞는지 판단된다), 같은 오답은 한 줄로 */
   const ex=l=>{ const rows=mergeTypedItems(l);
     return rows.slice(0,4).map(r=>{ const q=(WORKSHEETS.find(w=>w.id===r.wsId)?.questions||[]).find(x=>x.id===r.qid); const qt=tidyTex(plainText(q?.text??r.q,600));

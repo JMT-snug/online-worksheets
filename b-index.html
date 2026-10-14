@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.8">
+  <meta name="app-version" content="13.9">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -946,7 +946,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=13.4"></script>
+<script src="grading.js?v=13.9"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -6119,7 +6119,7 @@ function submitStep3(stepNum, byEnter){
     const val=qTokensToNum();
     userAns=String(val);
     const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
-    ok=!isNaN(val)&&Math.abs(val-correctNum)<0.001;
+    ok=numAnsEq(val, correctNum);   // grading.js — 소수 다섯째 자리까지 (v13.9, 예전에는 0.001 차이까지 정답)
   } else if(isMulti){
     // 고른 선지 번호(0부터)를 문항 「객관식」과 같은 규칙으로 채점한다
     const sel=[...multiSel].sort((a,b)=>a-b);
@@ -6606,13 +6606,13 @@ async function submitQAns(){
   // 분수 정답 처리 (answerFrac 있으면 분수로도 비교)
   let ok=false;
   if(!isNaN(val)){
-    ok=Math.abs(val-evalAnswer(q.answer))<1e-9;
+    ok=numAnsEq(val, evalAnswer(q.answer));   // grading.js — 소수 다섯째 자리까지 (v13.9, 시험지·재채점과 같은 기준)
     // 분수/무리수 입력 비교: "3/2" → 1.5
     if(!ok && rawInput.includes("/") && !rawInput.includes("π")){   // π 가 든 분수는 parseFloat 로 읽으면 π 가 사라진다 (8π/3 → 8/3)
       const parts=rawInput.split("/");
       if(parts.length===2){
         const fv=parseFloat(parts[0])/parseFloat(parts[1]);
-        ok=Math.abs(fv-evalAnswer(q.answer))<1e-9;
+        ok=numAnsEq(fv, evalAnswer(q.answer));
       }
     }
   }

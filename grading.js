@@ -129,6 +129,17 @@ function _evalMulti(s, env){
 /* 두 값이 사실상 같은가 (값이 커질 때를 대비한 상대 비교) */
 function _numEq(a,b){ return Math.abs(a-b) < 1e-6*Math.max(1,Math.abs(a),Math.abs(b)); }
 
+/* 숫자 답이 같은가 — 소수 다섯째 자리까지 비교한다 (v13.9, 교사 요청).
+   예전에는 차가 0.001 보다 작으면 정답이라 정답 1/3 에 0.333 이 통과했고, 문자 없는 식은 위 _numEq(값에 비례한 오차)를 써서
+   큰 수일수록 느슨했다(정답 1048576 에 1048577 이 정답). 이제 값 크기와 상관없이 차가 0.00001(다섯째 자리 한 칸)보다 작아야 한다:
+   정답 1/3 에 0.33333·0.33334 는 정답, 0.3333 은 오답 · 정답 2/3 에 0.66667(반올림)·0.66666(버림) 정답.
+   · 다섯째 자리가 딱 한 칸 다른 답(0.12346 ↔ 0.12345)은 부동소수점에서 차가 0.0000099999… 로 나와 기준을 겨우 넘지 못하므로 기준을 1e-9 만큼 낮춰 둔다.
+   · 10억이 넘는 수는 부동소수점 자체의 오차가 다섯째 자리를 넘을 수 있어 값 크기에 비례한 아주 작은 여유를 둔다. */
+function numAnsEq(a,b){
+  if(typeof a!=='number'||typeof b!=='number'||!isFinite(a)||!isFinite(b)) return false;
+  return Math.abs(a-b) < Math.max(1e-5-1e-9, 1e-14*Math.max(Math.abs(a),Math.abs(b)));
+}
+
 /* ══════════ 관계 기호(=, <, ≤, >, ≥) 다루기 ══════════
    부등식 답은 예전에 글자가 똑같을 때만 정답이었다 — x>3 을 3<x 나 2x>6 으로
    쓰면 오답이었다. 관계식을 (왼쪽, 오른쪽, 기호)로 갈라 두고 수치로 비교한다. */
@@ -295,7 +306,7 @@ function exprEquivCheck(userExpr, correctExpr){
     const uv=_evalMulti(userExpr,env), cv=_evalMulti(correctExpr,env);
     if(!isFinite(uv)||!isFinite(cv)) return false;
     any=true;
-    return _numEq(uv,cv);
+    return vars.length ? _numEq(uv,cv) : numAnsEq(uv,cv);   // 문자 없는 식(숫자 답)은 소수 다섯째 자리까지
   });
   return any&&ok;
 }
@@ -412,15 +423,17 @@ function gradeExamWord(q, ans){
   // 3) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
   //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
   //    π 도 같다 — parseFloat("6π")===6 이라 정답 6 에 「6π」가 통과하고, 정답 「6π」에는 소수 근사(18.85)가 통과한다.
+  //    학생 답은 맨 앞 숫자만 읽지(parseFloat) 않고 식 전체를 계산한다 — 예전에는 「1/3」이 1, 「2+3」이 2 로 읽혀 정답 1·2 에 통과했다.
+  //    비교는 numAnsEq(소수 다섯째 자리까지, v13.9 — 예전에는 0.001 차이까지 정답).
   const hasVar=s=>/[a-zA-Zπ가-힣]/.test(normPi(s));
   if(!hasVar(raw)){
-    const uf=parseFloat(raw.replace(/−/g,'-'));
+    const r=raw.replace(/−/g,'-');
+    const uf=/^[+-]?(\d+\.?\d*|\.\d+)$/.test(r) ? Number(r) : _evalMulti(r,{});   // 「05」처럼 0 으로 시작하는 수는 JS 식으로는 오류라 따로 읽는다
     if(!isNaN(uf)){
       try{
         if(allAns.some(a=>{
           if(hasVar(a)) return false;
-          const av=evalAnswer(String(a));
-          return isFinite(av)&&Math.abs(uf-av)<0.001;
+          return numAnsEq(uf, evalAnswer(String(a)));
         })) return true;
       }catch(e){}
     }

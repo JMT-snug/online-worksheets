@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.5">
+<meta name="app-version" content="6.6">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2828,13 +2828,36 @@ function toast(msg, duration=2000){
   t._tid=setTimeout(()=>t.style.opacity='0', duration);
 }
 
+/* 그래프 ⭕/❌ 를 매긴 뒤 이 학생의 이 학습지에 「제출됐고 아직 채점 전」인 그래프가 남는가 — 평일 아침 미채점 알림(graph.gs)의 근거 hasPendingGraph.
+   scoring stillPendingGraph · index 그래프 제출 · graph.gs 와 같은 규칙(그래프 문항에 그림이 있고 correct 가 null/undefined).
+   다른 문항 상태를 알려고 기록을 한 번 다시 읽는다. 학습지를 못 찾거나 읽기에 실패하면 null(그 필드는 건드리지 않는다) */
+async function graphPendingAfter(ref, wsId, qid, correct){
+  try{
+    const ws=WORKSHEETS.find(w=>w.id===wsId); if(!ws) return null;
+    const snap=await getDoc(ref); const pq=(snap.exists()?snap.data().perQuestion:null)||{};
+    return (ws.questions||[]).some(q=>{
+      if(q.type!=='graph') return false;
+      const v=q.id===qid ? {...(pq[q.id]||{}), correct} : pq[q.id];
+      return !!(v && v.drawing && (v.correct===null || v.correct===undefined));
+    });
+  }catch(e){ console.warn('[그래프 채점] 미채점 여부 계산 생략:', e.message); return null; }
+}
 window.saveGraphGrade=async function(key,correct){
   const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
   try{
-    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
-      [`perQuestion.${d.qid}.correct`]: correct,
-    });
-    d.v.correct=correct;
+    const ref=doc(db,'records',d.uid,'worksheets',d.wsId);
+    const now=new Date().toISOString();
+    /* v6.6 (2026-10-16 교사 신고 「아침 알림에 4개가 떴는데 2개만 미채점」): 예전엔 correct 만 써서 아침 알림 표시(hasPendingGraph)가
+       그대로 남았고, scoring 의 채점 요약(grading_index)도 몰라서 scoring 목록에는 한동안 미채점으로 보였다. 이제 scoring 저장과 같이
+       correct · gradedAt(챗 안내의 재채점 판단) · hasPendingGraph · 채점 요약을 함께 쓴다. */
+    const upd={ [`perQuestion.${d.qid}.correct`]: correct, [`perQuestion.${d.qid}.gradedAt`]: now };
+    const pending=await graphPendingAfter(ref, d.wsId, d.qid, correct);
+    if(pending!==null) upd.hasPendingGraph=pending;
+    await updateDoc(ref, upd);
+    // ⚡ 채점 요약 — scoring patchIdx 와 같은 칸(g.{학습지}.{문항} = {v:1 ⭕ / 2 ❌, t}). 실패해도 채점은 이미 저장됐다
+    setDoc(doc(db,'grading_index',d.uid), { g:{ [d.wsId]:{ [d.qid]:{ v:(correct===true?1:2), t:now } } } }, { merge:true })
+      .catch(e=>console.log('[채점 요약] 쓰기 생략:', e.code||e.message));
+    d.v.correct=correct; d.v.gradedAt=now;
     toast(`${d.studentName} ${d.qid.replace('q','Q')}번: ${correct?'⭕':'❌'} 저장`);
     document.getElementById('qd-modal').style.display='none';
     navigate(selView);

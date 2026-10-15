@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.0">
+  <meta name="app-version" content="14.1">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -6510,13 +6510,22 @@ async function submitQAns(){
       const _ans=answered[curQIdx];
       const _drawing=typeof _ans==='object'?_ans.drawing||null:null;
       if(_drawing){
+        /* 이 학습지에 「제출됐고 아직 채점 전」인 그래프가 남았는가 — 평일 아침 미채점 알림(graph.gs)의 근거.
+           scoring stillPendingGraph · teacher saveGraphGrade · graph.gs 와 같은 규칙: 그래프 문항에 그림이 있고 correct 가 null/undefined.
+           v14.1 (2026-10-16 교사 신고 「알림에 4개가 떴는데 2개만 미채점」): 예전엔 그림만 있으면 늘 true 를 써서,
+           ❌ 채점된 그래프를 바꾸지 않고 다시 제출하면(correct:false 그대로) 채점할 것이 없는데도 알림에 떴다. */
+        const _pendingNow=curWS.questions.some((qq,i)=>{
+          if(qq.type!=='graph') return false;
+          const a=answered[i];
+          return !!(a && typeof a==='object' && a.drawing && (a.correct===null || a.correct===undefined));
+        });
         setDoc(doc(db,'records',user.email,'worksheets',curWS.id),{
           studentEmail: user.email,
           studentName: user.displayName||"",
           worksheetId: curWS.id,
           worksheetTitle: curWS.title,
           lastUpdated: new Date().toISOString(),
-          hasPendingGraph: true,   // 교사 채점 대기 (scoring에서 채점하면 해제 — 평일 아침 알림 근거)
+          hasPendingGraph: _pendingNow,   // 교사 채점 대기 (scoring·teacher 에서 채점하면 다시 계산 — 평일 아침 알림 근거)
           perQuestion: {
             [_qId]: {
               drawing: _drawing,

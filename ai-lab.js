@@ -2,6 +2,8 @@
    ai-lab.js — 🤖 AI 분석실(ai.html) 계산 로직 (화면·Firebase 없이 도는 순수 함수만)
 
    ai.html 이 <script src="ai-lab.js?v=버전"> 으로 읽는다. grading.js(questionHistory·recordHistoryStats)를 먼저 읽어야 한다.
+   v1.8(2026-10-16)부터 **학생 화면 index 도 읽는다**(🔁 복습 문항 가중 추출 pickReviewQs — 맨 아래 절). 그래서 여기 최상위 이름은 전역이 된다 —
+   index 의 고전 스크립트와 겹치면 index 가 통째로 죽으니 새 이름을 더할 때 `점검/검증_복습가중.js` 의 이름 겹침 검사를 돌릴 것.
    검증: 검증_AI분석실.js 가 이 파일을 그대로 불러 시나리오를 돌린다 — 여기 함수를 고치면 그것도 돌릴 것.
 
    ■ 오답 유형 분류표 (2026-09-29)
@@ -719,9 +721,126 @@ function changesByWs(pairs){
   return out;
 }
 
+/* ══════════ 🔁 단원 복습 학습지 — 가중치로 문항 고르기 (v1.8, 2026-10-16 교사 요청) ══════════
+   index 의 startReviewQuiz 는 복습 풀(같은 단원 일반 학습지에서 복습에 쓸 수 있는 문항)에서 10개를 뽑는다. 예전엔 균등 무작위였고,
+   이제 문항마다 세 신호(모두 0~1)를 매겨 **점수에 비례해** 뽑는다(비복원 가중 추출 — 매번 다른 10문제가 섞여 나온다):
+     cls  — 학급 전체의 첫 시도 오답률. 풀 안에서 가장 높은 문항 = 1. 학생은 다른 학생 기록을 못 읽으므로 AI 분석실(마스터 교사)이
+            전 학생 기록으로 세어 config/reviewPick.stats 에 저장해 둔 것을 읽는다(rpClassStats). 결과가 난 학생이 RP_MIN_N 명 미만이면 0.
+            (학습지 문서 curriculum 에 두지 않는 까닭: edit 저장이 문서를 통째로 덮어 모르는 필드를 지운다.)
+     self — 이 학생이 그 문항(출처 학습지)에 낸 서로 다른 오답 수. RP_SELF_CAP 개 이상 = 1. ✅ 정답 인정한 답은 오답이 아니다(adjustRecord).
+            복습 중에 틀린 것은 기록이 남지 않아(복습은 perQuestion 을 저장하지 않는다) 출처 학습지 기록만 본다.
+     type — 이 학생이 자주 틀리는 오답 유형이 그 문항의 예상·빈출 오답(aiTraps·freqTraps)에 달려 있는가. 학생의 유형 분포는 AI 분석실
+            학생 성취 분석과 같은 studentWsTypes 로 일반 학습지 기록 전체에서 센다. 같은 하위 유형 = 그 유형 비중(가장 많은 유형 = 1),
+            대분류만 겹치면 대분류 비중의 절반. 「원인 불명확(etc.unknown)」은 유형으로 치지 않는다.
+   점수 = 1 + 가중 평균 → **1~2 배** (교사 결정 「최대 2배 차이 정도」). 가중 평균은 풀 안에서 값이 하나라도 있는 신호끼리만 나눈다 —
+   학급 통계가 아직 없어도 남은 신호로 1~2 배를 다 쓴다. 신호가 하나도 없으면(첫 복습·기록 없음) 예전과 똑같이 균등 무작위.
+   가중치는 기본 1:1:1, 교사가 AI 분석실 「🔁 복습 출제」 탭에서 바꾼다(config/reviewPick.weights — 쓰기는 마스터 교사만, 규칙 config/{docId}).
+   학생 화면에는 이 방식을 알리지 않는다(교사 결정 「비밀로」) — 뽑힌 10문항의 순서도 다시 섞고, 정답률 계산·표시는 예전 그대로다. */
+const RP_DEFAULT_WEIGHTS = { cls:1, self:1, type:1 };
+const RP_KEYS = ['cls','self','type'];
+const RP_MIN_N = 3;          // 학급 오답률을 믿을 최소 학생 수 (첫 시도 정답·고침·오답이 난 학생)
+const RP_SELF_CAP = 3;       // 서로 다른 오답이 이만큼이면 self = 1
+const RP_MAX_W = 5;          // 가중치 상한 (화면 입력도 0~5)
+/** 가중치 정리 — 없거나 숫자가 아니거나 음수면 기본값, RP_MAX_W 로 자른다 */
+function rpWeights(w){
+  const out={};
+  RP_KEYS.forEach(k=>{ const v=w?.[k]; const n=Number(v);
+    out[k]=(v===undefined || v===null || v==='' || !Number.isFinite(n) || n<0) ? RP_DEFAULT_WEIGHTS[k] : Math.min(RP_MAX_W, n); });
+  return out;
+}
+/** 학급 문항 통계 { wsId: { qid: [n, w] } } — n = 결과가 난 학생 수(첫 시도 정답·고침·오답), w = 그중 첫 시도에 틀린 학생 수(고침+오답).
+    일반 학습지의 복습에 나올 수 있는 유형만(그래프·링크·랜덤 풀 제외). allData = { uid: { wsId: 기록 } } — 마스터 교사면 전 학생 */
+function rpClassStats(worksheets, allData){
+  const out={};
+  (worksheets||[]).forEach(ws=>{
+    if(!isRegular(ws) || ws.type==='vocab') return;
+    const qs=(ws.questions||[]).filter(q=>q && q.id && !AI_SKIP_TYPES.has(q.type));
+    if(!qs.length) return;
+    const m={};
+    Object.values(allData||{}).forEach(d=>{
+      const r=adjustRecord(ws, d?.[ws.id]); const pq=r?.perQuestion; if(!pq) return;
+      qs.forEach(q=>{
+        const st=questionHistory(q, pq[q.id]).status;
+        if(st!=='first' && st!=='recovered' && st!=='wrong') return;
+        const c=m[q.id]||(m[q.id]=[0,0]); c[0]++; if(st!=='first') c[1]++;
+      });
+    });
+    if(Object.keys(m).length) out[ws.id]=m;
+  });
+  return out;
+}
+/** 이 학생의 오답 유형 비중 { sub:{코드:0~1}, cat:{대분류:0~1}, total } — 일반 학습지 기록 전체를 studentWsTypes 로 센다 */
+function rpStudentTypes(worksheets, progress){
+  const subs={}; let total=0;
+  (worksheets||[]).forEach(ws=>{
+    if(!isRegular(ws) || ws.type==='vocab') return;
+    const r=progress?.[ws.id]; if(!r?.perQuestion) return;
+    Object.entries(studentWsTypes(ws, r).subs).forEach(([k,n])=>{ if(k===TAX_UNKNOWN) return; subs[k]=(subs[k]||0)+n; total+=n; });
+  });
+  const cats={};
+  Object.entries(subs).forEach(([k,n])=>{ const c=catOf(k); cats[c]=(cats[c]||0)+n; });
+  const norm=o=>{ const mx=Math.max(0,...Object.values(o)); const r={}; Object.entries(o).forEach(([k,n])=>{ r[k]=mx?n/mx:0; }); return r; };
+  return { sub:norm(subs), cat:norm(cats), total };
+}
+/** 문항 하나의 type 신호 — 그 문항의 예상·빈출 오답 유형 가운데 학생 비중이 가장 큰 것 */
+function rpTypeSignal(q, st){
+  let best=0;
+  (q?.aiTraps||[]).concat(q?.freqTraps||[]).forEach(t=>{
+    if(!t?.sub || t.sub===TAX_UNKNOWN) return;
+    best=Math.max(best, st?.sub?.[t.sub]||0, 0.5*(st?.cat?.[catOf(t.sub)]||0));
+  });
+  return best;
+}
+/** 풀 문항마다 세 신호 [{cls,self,type}] — pool 항목은 index 가 만든 복습 문항({...문항, _srcWsId, _srcQid}).
+    ctx = { stats(config/reviewPick.stats), progress(학생 기록 {wsId: 기록}), wsById(Map 출처 학습지 — 유형 분포도 여기 있는 학습지로 센다), types?(미리 센 rpStudentTypes) } */
+function rpSignals(pool, ctx){
+  const stats=ctx?.stats||{}, progress=ctx?.progress||{}, wsById=ctx?.wsById||new Map();
+  const st=ctx?.types || rpStudentTypes([...wsById.values()], progress);
+  const recs=new Map();
+  const recOf=wsId=>{ if(!recs.has(wsId)){ const ws=wsById.get(wsId); recs.set(wsId, ws ? adjustRecord(ws, progress[wsId]) : progress[wsId]); } return recs.get(wsId); };
+  const sig=(pool||[]).map(it=>{
+    const wsId=it?._srcWsId, qid=it?._srcQid;
+    const q=(wsById.get(wsId)?.questions||[]).find(x=>x.id===qid) || it;
+    const s=stats?.[wsId]?.[qid];
+    const cls=Array.isArray(s) && +s[0]>=RP_MIN_N ? (+s[1]||0)/(+s[0]) : 0;
+    const wc=qid ? questionHistory(q, recOf(wsId)?.perQuestion?.[qid]).wrongCount : 0;
+    return { cls, self:Math.min(wc, RP_SELF_CAP)/RP_SELF_CAP, type:rpTypeSignal(it, st) };
+  });
+  const mx=Math.max(0, ...sig.map(s=>s.cls));
+  sig.forEach(s=>{ s.cls = mx>0 ? s.cls/mx : 0; });
+  return sig;
+}
+/** 점수 = 1 + 가중 평균 (1~2). active = 가중치가 0 보다 크고 풀 안에서 값이 있는 신호 — 그 신호끼리만 가중치를 나눈다 */
+function rpScores(signals, weights){
+  const w=rpWeights(weights);
+  const active=RP_KEYS.filter(k=>w[k]>0 && (signals||[]).some(s=>s[k]>0));
+  const sum=active.reduce((a,k)=>a+w[k],0);
+  return { active, scores:(signals||[]).map(s=> sum ? 1 + active.reduce((a,k)=>a+w[k]*s[k],0)/sum : 1) };
+}
+/** 가중 비복원 추출 (Efraimidis–Spirakis: 열쇠 u^(1/점수) 가 큰 k 개). 점수가 모두 같으면 균등 무작위와 같다. rand 는 시험용으로 바꿔 끼운다 */
+function rpWeightedSample(items, scores, k, rand=Math.random){
+  return (items||[]).map((it,i)=>({ it, key:Math.pow(rand() || 1e-12, 1/(scores[i]||1)) }))
+    .sort((a,b)=>b.key-a.key).slice(0, Math.max(0, Math.min(k, (items||[]).length))).map(x=>x.it);
+}
+/** 복습 문항 고르기 → { sample, active, scores, signals }. 뽑은 뒤 순서를 다시 섞는다(점수 높은 문항이 앞에 몰리지 않게 — 학생에게 티 나지 않도록) */
+function pickReviewQs(pool, ctx, k=10, rand=Math.random){
+  const signals=rpSignals(pool, ctx);
+  const { active, scores }=rpScores(signals, ctx?.weights);
+  const sample=rpWeightedSample(pool, scores, k, rand);
+  for(let i=sample.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [sample[i],sample[j]]=[sample[j],sample[i]]; }
+  return { sample, active, scores, signals };
+}
+/** 키 순서와 무관한 비교용 문자열 (Firestore 가 돌려주는 맵은 키 순서가 다를 수 있다) */
+function stableStr(v){
+  if(Array.isArray(v)) return '['+v.map(stableStr).join(',')+']';
+  if(v && typeof v==='object') return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableStr(v[k])).join(',')+'}';
+  return JSON.stringify(v);
+}
+
 if(typeof module!=='undefined') module.exports={ TAX_BASE, TAX_UNKNOWN, ACCEPT_REASONS, isAccepted, acceptedKeys, adjustRecord, adjustOne, acceptPatch, buildTaxonomy, taxForAI, catOf, typeName, nextCustomCode, trapNorm, multiNums,
   ansForCompare, studentAnsText, aiAnswerSummary, reviewQuestions, loadReviewRecord, mergeReview, storedReview, withAiTraps,
   FREQ_MIN_STUDENTS, FREQ_MAX_PER_Q, freqWrongStats, freqQuestions, mergeWrongAnalysis, storedWrongAnalysis, withFreqTraps, freqStatus,
   applyTypeChanges, wsTypedItems, countTypes, trapsFor, countTrapHits, classFirstTryAvg, studentWsTypes, mergeCatStats, periodKeyFn,
   studentTimeline, studentAiWorksheets, studentSummary, basisAtOf, stuAiKey, groupAssignments, changesByWs, recDate, isRegular,
-  REVIEW_CHUNK, reviewPool, reviewScope, reviewPayload, reviewCalls, reviewOutcome };
+  REVIEW_CHUNK, reviewPool, reviewScope, reviewPayload, reviewCalls, reviewOutcome,
+  RP_DEFAULT_WEIGHTS, RP_KEYS, RP_MIN_N, RP_SELF_CAP, RP_MAX_W, rpWeights, rpClassStats, rpStudentTypes, rpTypeSignal, rpSignals, rpScores, rpWeightedSample, pickReviewQs, stableStr };

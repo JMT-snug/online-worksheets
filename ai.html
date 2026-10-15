@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="2.0">
+<meta name="app-version" content="3.0">
 <script src="site-nav.js?v=1.0"></script>
 <title>AI 분석실 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -146,7 +146,7 @@ tr.in-grp td:nth-child(2){padding-left:34px}
 </div>
 
 <script src="grading.js?v=10.0"></script>
-<script src="ai-lab.js?v=1.7"></script>
+<script src="ai-lab.js?v=1.8"></script>
 <script type="module">
 /* ══════════════════════════════════════════════════════════════════
    🤖 AI 분석실 (ai.html, 2026-09-29) — AI 로 하는 분석을 한곳에 모은 교사 전용 화면
@@ -154,6 +154,8 @@ tr.in-grp td:nth-child(2){padding-left:34px}
                         (v2.0) 🔎 이미 분류된 오답도 AI 로 다시 검토한다 — 범위는 전체·학습지 선택·유형 선택. 다르게 본 것만 보여 주고 교사가 고른 것만 바꾼다.
      ② 📝 학습지 오답 분석 — 여러 학습지를 체크해 한꺼번에: 🕳 예상 오답(문항만 보고 예측) + 📊 실제 빈출 오답의 원인 분석, 모두 유형 코드를 붙인다.
      ③ 👤 학생 성취 분석 — 여러 학생을 체크해 한꺼번에: 학습 상태·오답 유형 분포·시간에 따른 변화(학급 평균 대비).
+     ④ 🔁 복습 출제 (v3.0, 2026-10-16) — 학생 index 가 🔁 단원 복습 문항을 고를 때 쓰는 가중치와 학급 문항 통계(config/reviewPick).
+                        AI 를 부르지 않는다. 통계는 마스터 교사가 이 화면을 열 때 전 학생 기록으로 다시 세어, 바뀌었으면 저장한다(ai-lab.js rpClassStats).
    예전에 edit(🕳 예상 오답)과 teacher(📊 빈출 오답 분석 · 🤖 AI 학습 분석)에 흩어져 있던 것을 옮겨 왔다(edit v5.0 · teacher v6.0).
    계산은 ai-lab.js(순수 함수), 여기는 화면·Firebase·호출 순서만.
    호출 방식: 학습지·학생 **하나에 한 번씩 차례로** 부른다. Gemini 는 토큰 양으로 과금돼서 몰아 보내도 값이 거의 같고,
@@ -180,6 +182,7 @@ const AI_WEBAPP_URL   = "https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7
 const AI_WEBAPP_TOKEN = "snug-ai-assist";
 const BASE_TEACHER_EMAILS = ["rapidwing@snu-g.ms.kr", "mint0026@snu-g.ms.kr"];
 const TEACHER_EMAILS = [...BASE_TEACHER_EMAILS];
+const MASTER_EMAIL = "rapidwing@snu-g.ms.kr";   // firestore.rules isMaster() 와 같아야 한다 — config/reviewPick(🔁 복습 출제) 쓰기
 
 const fbApp=initializeApp(FB), auth=getAuth(fbApp), db=getFirestore(fbApp);
 let tUser=null, scopedTeacher=false, scopeEmails=null, classes={};
@@ -191,6 +194,7 @@ const selWs=new Set(), selStu=new Set();
 const F={ grade:'', unit:'', onlyRec:true, cls:'', q:'', scope:'all', scopeUnit:'' };
 const OPT={ pred:'missing', freq:'fresh' };
 let classifyResult=null;   // { mode:'review' 이면 🔎 검토 결과, 아니면 🤖 재분류(기타·미분류) 결과 }
+let RP=null;               // config/reviewPick — { weights, weightsAt, weightsBy, stats, statsAt, statsBy, statsStudents } (🔁 복습 출제, v3.0)
 const RV={ scope:'all', ws:new Set(), types:new Set() };   // 🔎 검토 범위 (v2.0) — scope: 'all' | 'ws' | 'type'
 
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -215,8 +219,9 @@ onAuthStateChanged(auth, async u=>{
   $('auth-gate').style.display='none'; $('app').style.display='block';
   await loadAll();
   const p=new URLSearchParams(location.search);
-  TAB=({types:'types',ws:'ws',stu:'stu'})[p.get('tab')] || 'ws';
+  TAB=({types:'types',ws:'ws',stu:'stu',rp:'rp'})[p.get('tab')] || 'ws';
   render();
+  autoRefreshReviewStats();   // 🔁 복습 출제 학급 통계 — 마스터 교사만, 바뀐 경우만 저장 (기다리지 않는다)
   if(p.get('ws') && WORKSHEETS.find(w=>w.id===p.get('ws'))){ TAB='ws'; render(); openWsDetail(p.get('ws')); }
   else if(p.get('stu') && allData[p.get('stu')]){ TAB='stu'; render(); openStuDetail(p.get('stu')); }
 });
@@ -248,6 +253,11 @@ async function loadAll(){
   });
   await loadTaxonomy();
   CLASS_AVG=classFirstTryAvg(WORKSHEETS, allData);
+  await loadReviewPick();
+}
+async function loadReviewPick(){
+  try{ const s=await getDoc(doc(db,'config','reviewPick')); RP=s.exists()?s.data():{}; }
+  catch(e){ console.warn('[복습 출제 설정 로드 실패]',e.message); RP={}; }
 }
 async function loadTaxonomy(){
   try{ const s=await getDoc(doc(db,'config','errorTaxonomy')); customSubs=s.exists()?(s.data().subs||[]):[]; }
@@ -363,9 +373,9 @@ window.stopRun=()=>{ stopReq=true; const b=$('prog-stop'); if(b) b.disabled=true
 
 /* ── 탭 ── */
 function render(){
-  const tabs=[['ws','📝 학습지 오답 분석','예상 오답 + 실제 빈출 오답'],['stu','👤 학생 성취 분석','성취·지도 방향·성장'],['types','🏷 오답 유형','분류표 · 재분류 · 검토']];
+  const tabs=[['ws','📝 학습지 오답 분석','예상 오답 + 실제 빈출 오답'],['stu','👤 학생 성취 분석','성취·지도 방향·성장'],['types','🏷 오답 유형','분류표 · 재분류 · 검토'],['rp','🔁 복습 출제','가중치 · 학급 통계']];
   $('tabs').innerHTML=tabs.map(([k,t,s])=>`<button class="tab ${TAB===k?'active':''}" onclick="setTab('${k}')">${t}<small>${s}</small></button>`).join('');
-  if(TAB==='types') renderTypes(); else if(TAB==='stu') renderStu(); else renderWs();
+  if(TAB==='types') renderTypes(); else if(TAB==='stu') renderStu(); else if(TAB==='rp') renderRp(); else renderWs();
 }
 window.setTab=k=>{ if(running){ toast('분석이 끝난 뒤에 옮겨 주세요'); return; } TAB=k; history.replaceState(null,'','?tab='+k); render(); };
 
@@ -923,6 +933,110 @@ window.sdRun=async uid=>{
 };
 
 /* ══════════ 🏷 오답 유형 ══════════ */
+/* ══════════ 🔁 복습 출제 (v3.0, 2026-10-16 교사 요청) ══════════
+   학생 index 의 🔁 단원 복습이 10문항을 고를 때 세 신호(학급 첫 시도 오답률 · 그 학생의 오답 수 · 그 학생이 자주 틀리는 유형)에
+   가중치를 줘 뽑는다 — 계산은 ai-lab.js pickReviewQs(머리말에 자세히). 여기서는 config/reviewPick 의 weights(가중치)와
+   stats(학급 문항 통계)를 관리한다. 둘 다 쓰기는 마스터 교사만(규칙 config/{docId} isMaster — 규칙 변경 없이).
+   통계를 학습지 문서(curriculum)가 아니라 여기 두는 까닭: edit 저장이 학습지 문서를 통째로 덮어 모르는 필드를 지운다.
+   학생에게는 알리지 않는다(교사 결정) — 학생 화면·학생 매뉴얼에 안내 없음. */
+const isMasterT=()=>tUser?.email===MASTER_EMAIL;
+async function saveRp(patch){
+  const ref=doc(db,'config','reviewPick');
+  try{ await updateDoc(ref, patch); }      // 필드째 바꾼다 — stats 를 통째로 갈아야 지운 학습지·문항이 남지 않는다(setDoc merge 는 맵을 합친다)
+  catch(e){ if(e.code==='not-found') await setDoc(ref, patch); else throw e; }
+  RP={...(RP||{}), ...patch};
+}
+/** 학급 통계를 다시 세어 달라졌으면(force 면 무조건) 저장 → 저장했으면 true */
+async function refreshReviewStats(force){
+  if(!isMasterT()) return false;
+  const stats=rpClassStats(WORKSHEETS, allData);
+  if(!force && stableStr(stats)===stableStr(RP?.stats||{})) return false;
+  await saveRp({ stats, statsAt:new Date().toISOString(), statsBy:tUser.email, statsStudents:Object.keys(allData).length });
+  return true;
+}
+async function autoRefreshReviewStats(){
+  if(!isMasterT()) return;
+  try{ if(await refreshReviewStats(false)){ console.log('[복습 출제] 학급 통계 갱신'); if(TAB==='rp' && !running) render(); } }
+  catch(e){ console.warn('[복습 출제] 학급 통계 저장 실패', e.message); }
+}
+window.rpRefresh=async()=>{
+  if(!isMasterT()){ toast('마스터 교사만 갱신할 수 있습니다'); return; }
+  try{ await refreshReviewStats(true); toast('학급 통계를 다시 세어 저장했습니다'); }catch(e){ alert('저장 실패: '+e.message); }
+  render();
+};
+window.rpSaveWeights=async()=>{
+  if(!isMasterT()){ toast('마스터 교사만 바꿀 수 있습니다'); return; }
+  const raw={}; RP_KEYS.forEach(k=>{ raw[k]=$('rpw-'+k)?.value; });
+  const w=rpWeights(raw);
+  if(!RP_KEYS.some(k=>w[k]>0) && !confirm('가중치가 모두 0 이면 예전처럼 모든 문항을 같은 확률로 뽑습니다. 저장할까요?')) return;
+  try{ await saveRp({ weights:w, weightsAt:new Date().toISOString(), weightsBy:tUser.email }); toast('가중치를 저장했습니다 — 학생이 다음에 복습을 열 때부터 적용'); }
+  catch(e){ alert('저장 실패: '+e.message); }
+  render();
+};
+window.rpResetWeights=()=>{ RP_KEYS.forEach(k=>{ const el=$('rpw-'+k); if(el) el.value=RP_DEFAULT_WEIGHTS[k]; }); rpPreview(); };
+window.rpPreview=()=>{
+  const el=$('rp-share'); if(!el) return;
+  const raw={}; RP_KEYS.forEach(k=>{ raw[k]=$('rpw-'+k)?.value; });
+  const w=rpWeights(raw), s=RP_KEYS.reduce((a,k)=>a+w[k],0);
+  const nm={cls:'학급 오답률', self:'본인 오답 수', type:'자주 틀리는 유형'};
+  el.innerHTML = s ? '비중 — '+RP_KEYS.map(k=>`${nm[k]} <b>${Math.round(w[k]/s*100)}%</b>`).join(' · ')
+                   : '<b>모두 0</b> — 예전처럼 모든 문항을 같은 확률로 뽑습니다';
+};
+function renderRp(){
+  const w=rpWeights(RP?.weights), m=isMasterT();
+  const st=RP?.stats||{};
+  let nQ=0, nOk=0; const top=[];
+  WORKSHEETS.forEach(ws=>{ const s=st[ws.id]; if(!s) return;
+    (ws.questions||[]).forEach((q,i)=>{ const v=s[q.id]; if(!Array.isArray(v)) return; nQ++;
+      if(v[0]>=RP_MIN_N){ nOk++; if(v[1]>0) top.push({ ws, q, i, n:v[0], w:v[1], rate:v[1]/v[0] }); } }); });   // 목록엔 한 명이라도 틀린 문항만
+  top.sort((a,b)=>b.rate-a.rate || b.n-a.n);
+  const LBL={ cls:['👥 학급 오답률','학급 전체가 첫 시도에 틀린 비율 — 아래 학급 통계'],
+              self:['✏️ 이 학생의 오답 수','그 학생이 원래 학습지에서 그 문항에 낸 서로 다른 오답 수 (3개 이상이면 최대)'],
+              type:['🏷 자주 틀리는 유형','그 학생이 자주 틀리는 오답 유형이 그 문항의 예상·빈출 오답에 달려 있는가'] };
+  $('content').innerHTML=`
+    <div class="pg-title">🔁 복습 출제</div>
+    <div class="pg-sub">학생이 🔁 단원 복습 학습지를 열 때 10문항을 고르는 방식입니다. 세 가지를 따져 <b>약한 문항이 더 잘 뽑히게</b> 하되,
+      매번 다른 문항이 섞이도록 <b>무작위로</b> 고릅니다. 가장 우선인 문항도 아무 신호가 없는 문항보다 <b>최대 2배</b>까지만 잘 뽑힙니다.</div>
+    <div class="note">🤫 학생 화면에는 이 방식을 알리지 않습니다. 뽑힌 10문항의 순서도 다시 섞고, 복습 정답률 계산·표시는 예전 그대로입니다.
+      신호가 하나도 없으면(복습을 처음 하는 학생·풀이 기록 없음) 예전처럼 모든 문항을 같은 확률로 뽑습니다.</div>
+    <div class="card"><div class="card-hdr"><span class="card-title">⚖️ 가중치</span>
+      <span class="small muted">${RP?.weightsAt?`마지막 저장 ${fmtAt(RP.weightsAt)} · ${esc(RP.weightsBy||'')}`:'저장한 적 없음 — 기본 1 : 1 : 1'}</span></div>
+      <div class="card-body">
+      ${RP_KEYS.map(k=>`<div class="row" style="margin-bottom:6px;align-items:center"><label for="rpw-${k}" style="min-width:170px;font-weight:600">${LBL[k][0]}</label>
+        <input type="number" id="rpw-${k}" min="0" max="${RP_MAX_W}" step="0.5" value="${w[k]}" style="width:70px" ${m?'':'disabled'} oninput="rpPreview()">
+        <span class="small muted">${LBL[k][1]}</span></div>`).join('')}
+      <div class="small" id="rp-share" style="margin:6px 0 8px"></div>
+      <div class="row"><button class="btn" ${m?'':'disabled'} onclick="rpSaveWeights()">💾 저장</button>
+        <button class="btn" ${m?'':'disabled'} onclick="rpResetWeights()">기본값 1 : 1 : 1</button>
+        ${m?'':'<span class="small muted">가중치는 마스터 교사만 바꿀 수 있습니다.</span>'}</div>
+    </div></div>
+    <div class="card"><div class="card-hdr"><span class="card-title">👥 학급 문항 통계</span>
+      <span class="small muted">${RP?.statsAt?`마지막 갱신 ${fmtAt(RP.statsAt)} · 학생 ${RP.statsStudents??'?'}명`:'아직 없음'}</span></div>
+      <div class="card-body">
+      <div class="small" style="margin-bottom:8px">학생은 다른 학생의 기록을 읽을 수 없어서, 이 화면이 전 학생 기록으로 문항마다 <b>첫 시도에 틀린 학생 비율</b>을 세어 저장해 둡니다.
+        마스터 교사가 AI 분석실을 열 때마다 저절로 다시 세고, 달라진 것이 있을 때만 저장합니다. 결과가 난 학생이 ${RP_MIN_N}명 미만인 문항은 쓰지 않습니다.</div>
+      <div class="row"><span class="small">학습지 <b>${Object.keys(st).length}</b>개 · 문항 <b>${nQ}</b>개 (그중 ${RP_MIN_N}명 이상 푼 문항 <b>${nOk}</b>개)</span>
+        <button class="btn" ${m?'':'disabled'} onclick="rpRefresh()">🔄 지금 다시 세기</button>
+        ${m?'':'<span class="small muted">마스터 교사만 갱신할 수 있습니다.</span>'}</div>
+    </div></div>
+    ${top.length?`<div class="card"><div class="card-hdr"><span class="card-title">📉 첫 시도 오답률이 높은 문항</span>
+      <span class="small muted">상위 ${Math.min(20,top.length)}개 — 복습에서 더 잘 뽑힙니다</span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>학습지</th><th>문항</th><th>첫 시도 오답률</th><th>학생</th></tr></thead><tbody>
+      ${top.slice(0,20).map(r=>`<tr><td>${esc(r.ws.title||r.ws.id)}<div class="small muted">${esc(UNIT_MAP[r.ws.unitId]?.title||'')}</div></td>
+        <td>${r.i+1}번<div class="small muted">${esc(tidyTex(plainText(r.q.text,120)).slice(0,60))}</div></td>
+        <td><b>${Math.round(r.rate*100)}%</b></td><td class="small">${r.w}/${r.n}명</td></tr>`).join('')}
+      </tbody></table></div></div>`:''}
+    <div class="card"><div class="card-hdr"><span class="card-title">ℹ️ 점수 매기는 법</span></div><div class="card-body small" style="line-height:1.7">
+      문항마다 세 값을 0~1 로 매깁니다 — <b>학급 오답률</b>(그 단원 복습 문항 가운데 가장 높은 문항이 1),
+      <b>이 학생의 오답 수</b>(0개 0 · 1개 ⅓ · 2개 ⅔ · 3개 이상 1),
+      <b>자주 틀리는 유형</b>(그 학생이 가장 많이 틀린 유형이 그 문항의 예상·빈출 오답에 있으면 1, 덜 틀린 유형일수록 작게, 대분류만 같으면 절반 — 👤 학생 성취 분석의 유형 분포와 같은 셈).<br>
+      점수 = 1 + (가중 평균)이라 <b>1 ~ 2</b> 사이이고, 점수 2 인 문항은 1 인 문항보다 약 2배 잘 뽑힙니다.
+      가중 평균은 그 풀에서 값이 있는 것끼리만 냅니다 — 예를 들어 학급 통계가 아직 없으면 나머지 두 가지로만 매깁니다.<br>
+      ✅ 정답으로 인정한 답은 오답으로 세지 않습니다. 복습 중에 틀린 것은 기록이 남지 않아 원래 학습지 기록만 봅니다.
+    </div></div>`;
+  rpPreview();
+}
+
 function allTypedItems(){ let n=0; return WORKSHEETS.flatMap(ws=>wsTypedItems(ws)).map(it=>({...it, id:'i'+(n++)})); }
 function renderTypes(){
   const items=allTypedItems();

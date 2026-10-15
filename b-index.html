@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="13.9">
+  <meta name="app-version" content="14.0">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -947,6 +947,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 </div>
 
 <script src="grading.js?v=13.9"></script>
+<script src="ai-lab.js?v=1.8"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -3666,15 +3667,35 @@ async function startReviewQuiz(ws){
         if(!reviewUsable(q)) return; // 그래프(수동채점)·링크(안내문)·랜덤 풀(학생 화면 미지원)·정답이 빈 문항은 제외
         if(q.noReview) return; // 교사가 edit.html에서 「🔁 단원 복습 학습지에서 제외」를 체크한 문항
         const {partStart, ...rest}=q; // 파트 마커는 원본 학습지 것이므로 떼어낸다
-        pool.push({...rest, id:`${src.id}__${q.id}`, _srcWsId:src.id, _srcWsTitle:src.title||''});   // 출처 표시용 (v13.7) — 화면에만 쓰고 저장하지 않는다
+        pool.push({...rest, id:`${src.id}__${q.id}`, _srcWsId:src.id, _srcWsTitle:src.title||'', _srcQid:q.id});   // 출처 표시용 (v13.7) — 화면에만 쓰고 저장하지 않는다. _srcQid 는 가중 추출이 출처 기록을 찾는 열쇠 (v14.0)
       });
     });
   if(!pool.length){
     alert('아직 복습할 수 있는 문항이 없습니다.\n(학급에 해제된 학습지가 없거나, 문항이 없거나, 모두 복습에서 제외되어 있습니다)');
     return;
   }
-  const sample=shuffleArr(pool).slice(0, Math.min(10,pool.length));
+  const sample=await pickReviewSample(pool, sourceDocs);
   startQuiz({...ws, questions:sample, vocab:[], _reviewBase:ws});
+}
+/* 🔁 복습 10문항 — 가중 추출 (v14.0, 2026-10-16 교사 요청). 계산은 ai-lab.js pickReviewQs (머리말에 신호·점수 설명):
+   학급 첫 시도 오답률(config/reviewPick.stats — AI 분석실이 저장) · 이 학생이 그 문항에 낸 오답 수 · 이 학생이 자주 틀리는 오답 유형이
+   걸린 문항일수록 잘 뽑힌다(점수 1~2배, 가중치 config/reviewPick.weights). 신호가 없으면 예전처럼 균등 무작위.
+   ⚠️ 학생에게 알리지 않는다(교사 결정) — 화면 문구·공지 없음, 뽑힌 순서도 다시 섞는다. 어떤 실패든 예전 균등 무작위로 돌아간다. */
+async function pickReviewSample(pool, sourceDocs){
+  const uniform=()=>shuffleArr(pool).slice(0, Math.min(10,pool.length));
+  try{
+    if(typeof pickReviewQs!=='function') throw new Error('ai-lab.js 를 못 읽음');
+    let cfg=null;
+    try{ const s=await getDoc(doc(db,'config','reviewPick')); cfg=s.exists()?s.data():null; }
+    catch(e){ console.warn('[복습 출제] 설정을 못 읽어 학급 통계 없이 고릅니다', e.message); }
+    const wsById=new Map((sourceDocs||[]).filter(w=>w && w.id).map(w=>[w.id,w]));
+    const r=pickReviewQs(pool, { stats:cfg?.stats, weights:cfg?.weights, progress:wsProgress, wsById }, 10);
+    console.log('[복습 출제] 풀 '+pool.length+'개 · 신호 '+(r.active.length ? r.active.join('·') : '없음(균등)'));
+    return r.sample.length ? r.sample : uniform();
+  }catch(e){
+    console.warn('[복습 출제] 가중 추출 실패 — 균등 무작위로', e.message);
+    return uniform();
+  }
 }
 
 let _activeWsId=null;

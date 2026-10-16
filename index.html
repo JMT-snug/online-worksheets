@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.1">
+  <meta name="app-version" content="14.2">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -3707,6 +3707,7 @@ async function startQuiz(ws) {
   // 구버전 탭이면 여기서 새로고침 (reload 후 lastQuizWsId로 이 학습지에 자동 재진입)
   if(!(await ensureLatestVersion())) return;
   curWS=ws; curQIdx=0;
+  s3ClaimFor(ws.id);   // 단계형 풀이 상태는 학습지마다 따로 — 다른 학습지의 같은 번호 문항 상태가 섞이지 않게 (v14.2)
   // 시험지 모드 초기화 (일반 학습지면 타이머 중지/숨김)
   if(window._examTimer){ clearInterval(window._examTimer); window._examTimer=null; }
   const _tEl=document.getElementById('exam-timer');
@@ -4852,6 +4853,17 @@ window.submitMulti = function(){
    함께 저장된다 — 문제를 끝까지 풀지 못하고 나가도 해결한 단계는 다음 접속에 그대로 남고,
    다 푼 문제는 중간 단계를 다시 열어 그때 쓴 답을 다시 볼 수 있다. */
 const step3State = {};
+/* step3State 는 문항 ID(q04 …)로만 열쇠를 삼는데, 문항 번호는 학습지마다 q01 부터 다시 시작한다.
+   그래서 한 학습지의 q04 를 풀고 같은 탭에서 다른 학습지를 열면, 그 학습지의 q04(단계 수가 같은 단계형)가
+   앞 학습지의 단계 ✓ 와 답을 그대로 물려받았다 — 화면엔 다 푼 것처럼 보이지만 정답으로 낸 적이 없어서
+   「이미 해결한 단계」라 다시 제출할 수 없고, 그 학습지는 끝낼 수 없게 됐다(그 상태가 기록에도 저장돼 새로고침해도 그대로).
+   (v13.6 은 복습 학습지만 막았다.) 학습지를 열 때 이 상태가 다른 학습지 것이면 비운다 — 같은 학습지를 다시 열 땐 그대로 둔다. */
+let _s3Owner = null;
+function s3ClaimFor(wsId){
+  if(_s3Owner===wsId) return;
+  Object.keys(step3State).forEach(k=>{ delete step3State[k]; });
+  _s3Owner=wsId;
+}
 
 function getSteps(q){
   if(Array.isArray(q.steps) && q.steps.length) return q.steps;
@@ -4885,6 +4897,11 @@ function restoreS3State(q, saved){
   if(!Array.isArray(done) || !done.length) return;
   const n=getSteps(q).length||1;
   if(done.length!==n) return;               // 문항이 바뀌었다 → 복원하지 않음
+  /* 단계가 전부 ✓ 인데 정답으로 제출된 기록(correct:true)이 아니면 믿지 않는다 (v14.2).
+     마지막 단계를 맞히면 같은 순간에 정답도 함께 저장되므로 정상 기록에는 이 모양이 없다 — 다른 학습지의 같은 번호
+     문항 상태가 섞인 기록이다(예전 버전이 남긴 것). 그대로 복원하면 「이미 해결한 단계」라 제출할 수 없어 영영 끝낼 수 없으니,
+     처음부터 다시 풀게 비워 둔다(다시 풀어 저장하면 이 기록이 새 값으로 덮인다). */
+  if(done.every(Boolean) && saved.correct!==true) return;
   const prev=step3State[q.id];
   const sAns=Array.isArray(saved.stepAnswers)?saved.stepAnswers:[];
   const mDone=done.map((v,k)=>!!v || !!prev?.done?.[k]);

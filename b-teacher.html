@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.6">
+<meta name="app-version" content="6.7">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1706,6 +1706,21 @@ window.migrateWsIds=async function(){
 function regradeOne(q, ans, tokens){
   return judgeAnswer(q, ans, tokens);   // grading.js 공용 판정 (factorMode 토큰 포함)
 }
+/* 재채점에 쓸 문항 모양 — judgeAnswer 가 정오를 가릴 수 있는 것만 (v6.7).
+   · 단계형(step3): 저장된 lastAnswer 는 **마지막 단계의 답**이다(index 가 끝 단계를 맞힐 때 남긴다). 그런데 judgeAnswer 는 step3 를
+     몰라 늘 false 를 돌려줘서, 일반 학습지를 재채점하면 맞은 단계형이 전부 오답으로 바뀌었다(2026-10-16 계산: 단계형 3,402개).
+     그래서 마지막 단계를 같은 유형의 문항으로 바꿔(grading.js stepAsQuestion — index 의 시험지 변환과 같은 규칙) 판정한다.
+   · 그래프(수동 채점)·링크(채점 없음)·유형 없는 옛 문항은 judgeAnswer 가 null/false 만 돌려줘 정오가 바뀌어 보이므로 재채점하지 않는다.
+   null 이면 이 문항은 재채점 대상이 아니다. */
+const REGRADE_TYPES=new Set(['word','equation','word_text','word_expr','multi']);
+function regradeTarget(q){
+  if(!q) return null;
+  if(q.type==='step3'){
+    const st=Array.isArray(q.steps)?q.steps:[];
+    return st.length ? stepAsQuestion(st[st.length-1]) : null;
+  }
+  return REGRADE_TYPES.has(q.type) ? q : null;
+}
 
 /* 재채점 미리보기 계산 (쓰기 없음) */
 function buildRegradePlan(wsId){
@@ -1719,6 +1734,10 @@ function buildRegradePlan(wsId){
     (ws.questions||[]).forEach(q=>{
       const v=rec.perQuestion[q.id]; if(!v) return;
       const isExamQ = v.examAnswer!==undefined || v.maxScore!==undefined;
+      // 일반 학습지는 판정할 수 없는 유형(그래프·링크·유형 없음)을 건드리지 않고, 단계형은 마지막 단계로 판정한다 (v6.7).
+      // 시험지 문항은 예전처럼 그대로(점수 합계가 어긋나지 않게 빠뜨리지 않는다)
+      const rq = isExamQ ? (regradeTarget(q)||q) : regradeTarget(q);
+      if(!rq) return;
       // 시험지는 examAnswer, 일반 학습지는 lastAnswer(index v8.27부터 저장)를 근거로 재채점
       const stored = isExamQ ? v.examAnswer : v.lastAnswer;
       const tokens = isExamQ ? v.examAnswerTokens : v.lastAnswerTokens;
@@ -1734,7 +1753,7 @@ function buildRegradePlan(wsId){
         if(isExamQ) after+=(v.score||0);
         return;
       }
-      const nc=regradeOne(q, stored, tokens);
+      const nc=regradeOne(rq, stored, tokens);
       const ns=(nc===true)?mx:0;
       if(isExamQ) after+=ns;
       const oldC=(v.correct===undefined?null:v.correct);
@@ -1814,7 +1833,7 @@ window.lostReport=function(nameFilter){
 window.regradeWS=async function(wsId){
   const ws=WORKSHEETS.find(w=>w.id===wsId);
   if(!ws){ alert('학습지를 찾을 수 없습니다.'); return; }
-  if(ws.type!=='exam' && !confirm('시험지가 아닌 학습지입니다.\n시험지 문항(제출 답안이 저장된 문항)만 재채점됩니다. 계속할까요?')) return;
+  if(ws.type!=='exam' && !confirm('시험지가 아닌 학습지입니다.\n정답으로 인정돼 저장된 마지막 답(단계형은 마지막 단계의 답)이 있는 문항만, 지금 정답 키로 다시 판정합니다. 그래프·링크 문항은 건드리지 않습니다.\n정답 키를 나중에 고친 학습지는 예전에 맞은 답이 틀린 것으로 바뀔 수 있으니, 다음 화면의 변경 목록을 꼭 확인하세요. 계속할까요?')) return;
 
   let plan;
   try{ plan=buildRegradePlan(wsId); }

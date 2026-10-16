@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.7">
+<meta name="app-version" content="6.8">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -649,6 +649,14 @@ function perQCells(r, uid, wsIdArg){
     const isCorrect = v.correct!==undefined && v.correct!==null ? v.correct===true
                       : (isExamQ ? false : (wc===0));   // 시험지는 오답기록이 없다고 정답 처리하면 안 됨
     const unanswered = !isExamQ && (v.correct===false) && wc===0 && att===0;
+    // 단계형 진행: stepDone 이 있고 이 문항 단계 수와 같을 때만 (문항이 바뀌어 단계 수가 다르면 믿지 않는다), 일부라도 풀렸고 아직 정답이 아니면
+    let stepPart=null;
+    if(!isExamQ && !isCorrect && Array.isArray(v.stepDone) && v.stepDone.length){
+      const _q=(WORKSHEETS.find(w=>w.id===(wsIdArg||r.wsId))?.questions||[]).find(x=>x.id===qid);
+      const _n=Array.isArray(_q?.steps)?_q.steps.length:0;
+      const _d=v.stepDone.filter(Boolean).length;
+      if(_q?.type==='step3' && _n===v.stepDone.length && _d>0) stepPart={done:_d,n:_n,allDone:_d===_n};
+    }
     let col, mark, ttl;
     const _gq = isGraphQ(wsIdArg||r.wsId, qid);
     if(_gq){ const g=graphCell(v, fmtQid(qid)); col=g.col; mark=g.mark; ttl=g.ttl; }
@@ -660,6 +668,14 @@ function perQCells(r, uid, wsIdArg){
       else { col="var(--amber)"; mark="📝"; }
       ttl=`${fmtQid(qid)}: ${v.correct===true?'정답':v.correct===false?'오답':'미채점'} · 제출답안: ${ansTxt}`
           + (v.score!=null&&v.maxScore!=null?` (${v.score}/${v.maxScore}점)`:'');
+    }
+    else if(stepPart){
+      // 단계형: 정답으로 제출하기 전, 앞 단계까지만 풀고 멈춘 문항 (v6.8) — 「미응답 —」과 구별해서 「2/3」처럼 보여 준다
+      col="var(--amber)"; mark=`${stepPart.done}/${stepPart.n}`+(wc>0?`·${wc}회`:'');
+      ttl=`${fmtQid(qid)}: 단계형 ${stepPart.done}/${stepPart.n}단계까지 풀었어요 (아직 정답으로 제출 전)`
+          + (stepPart.allDone?' — 단계는 모두 풀렸는데 정답으로 제출된 기록이 없어요(예전 버전 오류)':'')
+          + (wc>0?` · 오답 ${wc}회`:'')
+          + (r.regradedAt?` · 재채점으로 일부 단계를 비웠을 수 있어요(${String(r.regradedAt).slice(0,10)})`:'');
     }
     else if(unanswered){ col="var(--ink3)"; mark="—"; ttl=`${fmtQid(qid)}: 미응답`; }
     else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc})`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }

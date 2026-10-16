@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.2">
+  <meta name="app-version" content="14.3">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -371,6 +371,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .ans-display{min-height:56px;padding:8px 16px;border:1.5px solid var(--rule);
   border-radius:12px 12px 0 0;background:var(--paper);
   cursor:text;display:flex;align-items:center;
+  -webkit-user-select:none;user-select:none;   /* 눌러서 커서를 옮길 때(v14.3) 글자가 선택돼 파랗게 칠해지지 않게 */
   transition:border-color .15s;overflow-x:auto}
 .ans-display.focused{border-color:var(--accent)}
 .ans-cur{color:var(--accent);animation:blink 1s infinite;font-weight:300;}
@@ -4470,6 +4471,105 @@ function qNextPart(){
   } qInput("→"); }
 function qArrowRight(){ qInput("→"); }
 function qClear(){qTokens=[];qEditPart=null;qCursorIdx=0;qRender();}
+
+/* ── 정답 입력칸을 눌러 커서 옮기기 (v14.3) ──
+   입력칸(#ans-display)은 앱이 qTokens 로 만든 식을 MathJax 로 그린 것이라 브라우저의 글자 커서가 없다(←→ 키와 화면 키패드만 커서를 옮겼다).
+   그래서 눌린 자리는 MathJax 가 그려 둔 글자 상자(mjx-c)의 위치로 구한다 — 식의 LaTeX 는 건드리지 않으니 모양·간격은 그대로다.
+   · 맨 앞단: 누른 곳 왼쪽에 있는 토큰 수 → qCursorIdx
+   · 분수(분자·분모)·지수·제곱근 안쪽: 그 칸 안의 글자 사이 → qEditPart
+   그려진 상자 수가 식의 토큰 수와 안 맞으면(아직 그리는 중·예상 밖의 모양) 아무것도 하지 않는다 — 예전과 똑같이 동작한다. */
+function _qGlyphs(el){ return [...el.querySelectorAll('mjx-c')].filter(c=>!c.closest('mjx-mphantom')); }   // 자리 표시(보이지 않는 0)는 뺀다
+/* 요소의 상자 — 지수·근호 같은 작은 상자는 안의 글자가 상자 밖으로 삐져나와 있어서(글자 줄 높이), 요소와 글자 상자를 모두 합친 영역을 쓴다 */
+function _qBox(el){
+  let r=el.getBoundingClientRect(), L=r.left, T=r.top, R=r.right, B=r.bottom;
+  for(const g of _qGlyphs(el)){ const q=g.getBoundingClientRect(); L=Math.min(L,q.left); T=Math.min(T,q.top); R=Math.max(R,q.right); B=Math.max(B,q.bottom); }
+  return {left:L,top:T,right:R,bottom:B,width:R-L,height:B-T};
+}
+/* 맨 앞단 단위 목록 — 글자 하나(mjx-c) 또는 분수·지수·제곱근 덩어리 하나. 토큰·커서와 같은 순서 */
+function _qTopUnits(math){
+  const out=[];
+  const walk=parent=>{
+    for(const ch of parent.children){
+      const tag=ch.tagName.toLowerCase();
+      if(tag==='mjx-msup'||tag==='mjx-msqrt'||tag==='mjx-mfrac'||(tag==='mjx-mstyle'&&ch.querySelector('mjx-mfrac'))) out.push({kind:'box',el:ch});
+      else if(tag==='mjx-mn'||tag==='mjx-mo'||tag==='mjx-mi'||tag==='mjx-mtext') _qGlyphs(ch).forEach(g=>out.push({kind:'glyph',el:g}));
+      else if(tag==='mjx-texatom'||tag==='mjx-mrow'||tag==='mjx-mstyle') walk(ch);
+      else out.push({kind:'?',el:ch});
+    }
+  };
+  walk(math.querySelector(':scope > mjx-mstyle')||math);
+  return out;
+}
+/* tokensToLatex 가 그린 순서 그대로: 토큰들 사이(또는 끝)에 커서 글자 하나가 끼어 있다(칸 안을 고치는 중이면 맨 앞단엔 없다) */
+function _qExpectedItems(){
+  const items=[];
+  qTokens.forEach((t,i)=>{ if(!qEditPart&&i===qCursorIdx) items.push({cur:true}); items.push({tok:i}); });
+  if(!qEditPart&&qCursorIdx>=qTokens.length) items.push({cur:true});
+  return items;
+}
+/* 분자·분모·지수·근호 안: 누른 x 왼쪽에 글자가 몇 개 있는가 = 커서 위치(0..글자 수). 맞지 않으면 null */
+function _qPartCursor(partEl,str,curPos,x){
+  if(!str.length) return 0;
+  const g=_qGlyphs(partEl);
+  if(g.length!==str.length+(curPos==null?0:1)) return null;          // 커서 글자 1개를 더해서 센다
+  const chars=curPos==null?g:g.filter((_,k)=>k!==curPos);
+  let n=0;
+  for(const el of chars){ const r=el.getBoundingClientRect(); if(x>r.left+r.width/2) n++; else break; }
+  return n;
+}
+function _qPartHit(el,t,i,x,y){
+  const curOf=(p,s)=>(qEditPart&&qEditPart.idx===i&&qEditPart.part===p)?(qEditPart.cursor??s.length):null;
+  let partEl=null, part=null;
+  if(t.type==='frac'){
+    const num=el.querySelector('mjx-num'), den=el.querySelector('mjx-den'); if(!num||!den) return null;
+    const rn=num.getBoundingClientRect(), rd=den.getBoundingClientRect();
+    part=y<(rn.bottom+rd.top)/2?'num':'den'; partEl=part==='num'?num:den;   // 분수선 위 = 분자, 아래 = 분모
+  } else if(t.type==='exp'){
+    const sc=el.querySelector('mjx-script'); if(!sc) return null; const r=_qBox(sc);
+    if(x<r.left-3||x>r.right+3||y<r.top-3||y>r.bottom+3) return null;       // 밑(base) 자리는 맨 앞단 규칙으로
+    part='expo'; partEl=sc;
+  } else if(t.type==='sqrt'){
+    const bx=el.querySelector('mjx-box'); if(!bx) return null; const r=_qBox(bx);
+    if(x<r.left-1) return null;                                               // 근호 기호 자리는 맨 앞단 규칙으로
+    part='inner'; partEl=bx;
+  } else return null;
+  const s=t[part==='num'?'num':part==='den'?'den':part==='inner'?'inner':'expo']||'';
+  const k=_qPartCursor(partEl,s,curOf(part,s),x);
+  return k==null ? null : {idx:i,part,cursor:k};
+}
+function _qCursorFromPoint(box,x,y){
+  const math=box.querySelector('mjx-math'); if(!math) return null;            // 아직 그리는 중
+  const units=_qTopUnits(math), items=_qExpectedItems();
+  if(units.length!==items.length) return null;
+  const toks=[];
+  for(let k=0;k<items.length;k++){
+    const it=items[k], u=units[k];
+    if(u.kind!==((it.cur||qTokens[it.tok].type==='char')?'glyph':'box')) return null;
+    if(!it.cur) toks[it.tok]=u;
+  }
+  for(let i=0;i<toks.length;i++){                                              // 분수·지수·제곱근 안쪽을 눌렀는가
+    const t=qTokens[i]; if(t.type==='char') continue;
+    const r=_qBox(toks[i].el);
+    if(x<r.left-2||x>r.right+2||y<r.top-2||y>r.bottom+2) continue;
+    const hit=_qPartHit(toks[i].el,t,i,x,y); if(hit) return hit;
+  }
+  let idx=toks.length;                                                         // 아니면 눌린 곳 왼쪽의 토큰 수
+  for(let i=0;i<toks.length;i++){ const r=toks[i].el.getBoundingClientRect(); if(x<r.left+r.width/2){ idx=i; break; } }
+  return {top:idx};
+}
+function _qDisplayMouseDown(e){
+  if(e.button) return;                                                         // 왼쪽 버튼(터치 포함)만
+  const box=e.target&&e.target.closest?e.target.closest('#ans-display'):null; if(!box) return;
+  const r=box.getBoundingClientRect();
+  if(e.clientX>r.left+box.clientWidth||e.clientY>r.top+box.clientHeight) return;   // 가로 스크롤바
+  let hit=null; try{ hit=_qCursorFromPoint(box,e.clientX,e.clientY); }catch(err){ hit=null; }
+  if(!hit) return;
+  e.preventDefault();                                                          // 글자 선택·포커스 이동 방지(키패드와 같은 방식)
+  if(hit.top!==undefined){ qEditPart=null; qCursorIdx=hit.top; }
+  else { qEditPart={idx:hit.idx,part:hit.part,cursor:hit.cursor}; qCursorIdx=hit.idx; }
+  qRender();
+}
+document.addEventListener('mousedown',_qDisplayMouseDown);
 
 // ── 공통 수식 키패드 HTML 생성 ──
 function buildKeypad(answer, {onEnter='', showEq=false}={}){

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.3">
+<meta name="app-version" content="scoring-v2.4">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -1067,13 +1067,28 @@ function buildChatMessages(){
     // 오답이 있는 학습지가 전부 '재채점 후 또 오답'일 때만 재제출 문구 사용 (피드백만 있는 학습지는 제외하고 판단)
     const wrongEntries = v.items.filter(it=>it.wrong.length);
     const allRetry = wrongEntries.length>0 && wrongEntries.every(it=>it.retry);
-    const head = anyWrong
-      ? (allRetry
-        ? `📐 수학 학습지 안내\n\n${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?\n\n`
-        : `📐 수학 학습지 안내\n\n${v.name} 학생, 학습지에 확인할 것이 있어요.\n\n`)
-      : anyUn
-        ? `📐 수학 학습지 안내\n\n${v.name} 학생, 아직 다 풀지 않은 학습지가 있어요.\n마저 완성해 볼까요?\n\n`
-        : `📐 수학 학습지 안내\n\n${v.name} 학생, 그래프 문제에 선생님이 남긴 피드백이 있어요.\n확인해 볼까요?\n\n`;
+    // 이 학생에게 가는 알림 한 통 기준 개수 (아래 목록에 실리는 문항과 같은 집합) — 요약 줄과 인사말 단계에 쓴다
+    const cWrong = v.items.reduce((a,it)=>a+it.wrong.length,0);
+    const cNote  = v.items.reduce((a,it)=>a+it.note.length,0);
+    const cUn    = v.items.reduce((a,it)=>a+(it.un||[]).length,0);
+    const summary = '📋 ' + [cNote&&`피드백 ${cNote}개`, cWrong&&`오답 ${cWrong}개`, cUn&&`안 푼 문제 ${cUn}개`]
+      .filter(Boolean).join(' · ');
+    // 오답+안 푼 문제 합계가 클수록 재촉이 세진다 — 단계 경계 5·10·20 (v2.4, 교사 요청)
+    const pile = cWrong + cUn;
+    const lvl = pile>=20 ? 3 : pile>=10 ? 2 : pile>=5 ? 1 : 0;
+    const what = anyWrong ? '다시 풀어야 할' : '풀어야 할';   // 안 푼 문제만 있으면 '다시'를 뺀다
+    const NAG = [
+      `${v.name} 학생, ${what} 문제가 살짝 남아 있어요 👀\n몇 문제만 풀면 끝나요. 오늘 딱 한 번만 들어와 볼까요?`,
+      `${v.name} 학생, ${what} 문제가 기다리고 있어요 🥺\n선생님이 학습지 앞에서 계속 기다리는 중이에요.`,
+      `${v.name} 학생, ${what} 문제가 계속 쌓이고 있어요 😢\n알림을 보내도 답이 없어서 선생님 마음이 아파요. 지금 바로 풀러 오세요!`,
+      `${v.name} 학생, ${what} 문제가 산더미예요 😭\n선생님이 알림을 몇 번이나 보냈는데… 이제는 더 못 기다려요. 지금 당장 풀러 오세요!!`,
+    ];
+    const greet = anyWrong && allRetry
+      ? `${v.name} 학생, 다시 제출한 그래프가 아직 정답이 아니에요.\n한 번 더 확인해 볼까요?`
+      : (anyWrong || anyUn)
+        ? NAG[lvl]
+        : `${v.name} 학생, 그래프 문제에 선생님이 남긴 피드백이 있어요.\n확인해 볼까요?`;
+    const head = `📐 수학 학습지 안내\n\n${greet}\n${summary}\n\n`;
     const lines = v.items.map(it=>{
       const sub=[];
       if(it.wrong.length)     sub.push(`   ↳ 다시 풀기: ${fmtNums(it.wrong)}${(!allRetry&&it.retry)?' (다시 확인)':''}`);

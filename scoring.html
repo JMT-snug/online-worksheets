@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.4">
+<meta name="app-version" content="scoring-v2.5">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -1753,12 +1753,27 @@ async function refreshWsDoc(wsId, qid){
   }catch(e){ console.warn('[학습지 새로 읽기 실패]', e.message); }
 }
 
+/* 작도판 크기 규칙 (index v14.4 와 같음) — 작도판은 가로세로 비율을 어느 화면에서나 20:17 로 같게 둔다.
+   예전에는 세로를 400px 에서 끊어서 넓은 화면(채점 화면은 가로 700px 가까이)일수록 판이 가로로 길어졌고,
+   학생 획은 판 크기에 맞춰 늘어나는 상대 좌표라 그림을 비율대로 그리면 획과 배경 그림이 어긋났다.
+   그래서 작도 문항은 가로 470px 을 넘으면 가운데로 모아(세로 ≤ 400px) 학생 화면과 같은 비율로 맞춘다.
+   판을 감싼 칸(wrap)은 문항마다 재사용되므로 작도가 아니면 인라인 제한을 되돌린다. */
+function fitBoardWrap(wrap, isCon){
+  wrap.style.maxWidth = isCon ? '470px' : '';
+  wrap.style.margin   = isCon ? '0 auto' : '';
+  return wrap.clientWidth;
+}
+function boardHeight(q, W){
+  if(q.graphType === 'numberline') return 100;
+  return q.graphType === 'construction' ? W * 0.85 : Math.min(W * 0.85, 400);
+}
+
 function drawRefGrid(q){
   const cv = document.getElementById('ref-grid');
   const wrap = cv.parentElement;
-  const W = wrap.clientWidth || 400;
   const isNL = q.graphType === 'numberline';
-  const H = isNL ? 100 : Math.min(W * 0.85, 400);
+  const W = fitBoardWrap(wrap, q.graphType === 'construction') || 400;
+  const H = boardHeight(q, W);
   cv.width = W; cv.height = H; cv.style.width = W+'px'; cv.style.height = H+'px';
   const ctx = cv.getContext('2d');
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
@@ -1769,13 +1784,18 @@ function drawRefGrid(q){
 }
 
 /* 작도(자·컴퍼스) 배경 — index.html과 동일: 격자·눈금 없는 빈 화면, 경계만 옅게 표시.
-   이미지(imageUrl)가 있으면 그 위에 깔아 준다. */
+   이미지(imageUrl)가 있으면 그 위에 깔아 준다. 그림은 늘리지 않고 원래 가로세로 비율 그대로 가운데에 맞춰 넣는다(v2.5, index v14.4 와 같은 규칙). */
 function drawConstructionBg(ctx,W,H,imageUrl){
   ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
   ctx.strokeRect(0.5,0.5,W-1,H-1);
   if(imageUrl){
     const img=new Image();
-    img.onload=()=>{ ctx.drawImage(img,0,0,W,H); ctx.strokeRect(0.5,0.5,W-1,H-1); };
+    img.onload=()=>{
+      const iw=img.naturalWidth||W, ih=img.naturalHeight||H;
+      const k=Math.min(W/iw,H/ih), w=iw*k, h=ih*k;
+      ctx.drawImage(img,(W-w)/2,(H-h)/2,w,h);
+      ctx.strokeRect(0.5,0.5,W-1,H-1);
+    };
     img.src=imgNoCache(imageUrl);
   }
 }
@@ -1902,9 +1922,9 @@ function showStudent(idx){
   const q = ws.questions.find(x=>x.id===curQid);
   const gridCv = document.getElementById('grid-canvas');
   const wrap = document.getElementById('ans-preview');
-  const W = wrap.clientWidth || 400;
+  const W = fitBoardWrap(wrap, q.graphType === 'construction') || 400;
   const isNL = q.graphType === 'numberline';
-  const H = isNL ? 100 : Math.min(W * 0.85, 400);
+  const H = boardHeight(q, W);
   gridCv.width = W; gridCv.height = H; gridCv.style.width = W+'px'; gridCv.style.height = H+'px';
   const gCtx = gridCv.getContext('2d');
   gCtx.fillStyle='#fff'; gCtx.fillRect(0,0,W,H);

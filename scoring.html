@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.5">
+<meta name="app-version" content="scoring-v2.6">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -1753,26 +1753,26 @@ async function refreshWsDoc(wsId, qid){
   }catch(e){ console.warn('[학습지 새로 읽기 실패]', e.message); }
 }
 
-/* 작도판 크기 규칙 (index v14.4 와 같음) — 작도판은 가로세로 비율을 어느 화면에서나 20:17 로 같게 둔다.
-   예전에는 세로를 400px 에서 끊어서 넓은 화면(채점 화면은 가로 700px 가까이)일수록 판이 가로로 길어졌고,
-   학생 획은 판 크기에 맞춰 늘어나는 상대 좌표라 그림을 비율대로 그리면 획과 배경 그림이 어긋났다.
-   그래서 작도 문항은 가로 470px 을 넘으면 가운데로 모아(세로 ≤ 400px) 학생 화면과 같은 비율로 맞춘다.
-   판을 감싼 칸(wrap)은 문항마다 재사용되므로 작도가 아니면 인라인 제한을 되돌린다. */
-function fitBoardWrap(wrap, isCon){
-  wrap.style.maxWidth = isCon ? '470px' : '';
-  wrap.style.margin   = isCon ? '0 auto' : '';
+/* 그래프 판 크기 규칙 (index v14.5 와 같음, v2.6) — 좌표평면·좌표축·작도 판은 어느 화면에서나 정사각형으로 고정한다
+   (교사 요청. v2.5 에서는 작도만 20:17). 예전에는 세로를 400px 에서 끊어서 넓은 화면(채점 화면은 가로 700px 가까이)일수록
+   판이 가로로 길어졌고, 학생 획은 판 크기에 맞춰 늘어나는 상대 좌표라 판의 비율이 화면마다 다르면 배경 그림·눈금과 획이
+   어긋나거나 원이 찌그러졌다. 그래서 가로가 400px 을 넘으면 가운데로 모아(세로 ≤ 400px) 학생 화면과 같은 비율로 맞춘다.
+   옛 답안(PNG)은 이 판에 맞춰 늘어나 보인다. 수직선은 가는 띠라 그대로.
+   판을 감싼 칸(wrap)은 문항마다 재사용되므로 수직선이면 인라인 제한을 되돌린다. */
+function fitBoardWrap(wrap, isSquare){
+  wrap.style.maxWidth = isSquare ? '400px' : '';
+  wrap.style.margin   = isSquare ? '0 auto' : '';
   return wrap.clientWidth;
 }
 function boardHeight(q, W){
-  if(q.graphType === 'numberline') return 100;
-  return q.graphType === 'construction' ? W * 0.85 : Math.min(W * 0.85, 400);
+  return q.graphType === 'numberline' ? 100 : W;
 }
 
 function drawRefGrid(q){
   const cv = document.getElementById('ref-grid');
   const wrap = cv.parentElement;
   const isNL = q.graphType === 'numberline';
-  const W = fitBoardWrap(wrap, q.graphType === 'construction') || 400;
+  const W = fitBoardWrap(wrap, !isNL) || 400;
   const H = boardHeight(q, W);
   cv.width = W; cv.height = H; cv.style.width = W+'px'; cv.style.height = H+'px';
   const ctx = cv.getContext('2d');
@@ -1922,8 +1922,8 @@ function showStudent(idx){
   const q = ws.questions.find(x=>x.id===curQid);
   const gridCv = document.getElementById('grid-canvas');
   const wrap = document.getElementById('ans-preview');
-  const W = fitBoardWrap(wrap, q.graphType === 'construction') || 400;
   const isNL = q.graphType === 'numberline';
+  const W = fitBoardWrap(wrap, !isNL) || 400;
   const H = boardHeight(q, W);
   gridCv.width = W; gridCv.height = H; gridCv.style.width = W+'px'; gridCv.style.height = H+'px';
   const gCtx = gridCv.getContext('2d');

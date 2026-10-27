@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.4">
+  <meta name="app-version" content="14.5">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -5176,12 +5176,13 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
     const ansC = document.getElementById('graph-answer-canvas');
     if(!wrap||!bgC||!ansC) return;
     const isCon=q.graphType==='construction';
-    /* 작도판은 가로세로 비율을 어느 화면에서나 20:17 로 같게 둔다(v14.4). 예전에는 세로를 400px 에서 끊어서
-       넓은 화면일수록 판이 가로로 길어졌고, 획은 판 크기에 맞춰 늘어나는 상대 좌표로 저장되므로 배경 그림을 비율대로
-       그리면 화면마다 획과 그림이 어긋났다. 가로가 470px 을 넘으면 가운데로 모아 세로가 400px 을 안 넘게 한다(scoring 도 같은 규칙). */
-    if(isCon){ wrap.style.maxWidth='470px'; wrap.style.margin='0 auto'; }
+    /* 그래프 판(좌표평면·좌표축·작도)은 어느 화면에서나 정사각형으로 고정한다(v14.5, 교사 요청 — v14.4 에서는 작도만 20:17).
+       예전에는 세로를 400px 에서 끊어서 넓은 화면일수록 판이 가로로 길어졌고, 획은 판 크기에 맞춰 늘어나는 상대 좌표로
+       저장되므로 판의 비율이 화면마다 다르면 배경 그림·눈금과 획이 어긋나거나 원이 찌그러졌다. 가로가 400px 을 넘으면
+       가운데로 모아 세로가 400px 을 안 넘게 한다(scoring 도 같은 규칙). 수직선은 가는 띠라 그대로. */
+    if(!isNL){ wrap.style.maxWidth='400px'; wrap.style.margin='0 auto'; }
     const W = wrap.clientWidth || 360;
-    const H = isNL ? 100 : isCon ? W * 0.85 : Math.min(W * 0.85, 400);
+    const H = isNL ? 100 : W;
     bgC.width  = W; bgC.height  = H; bgC.style.height = H+'px';
     ansC.width = W; ansC.height = H;
     drawGraphGrid(bgC, q, W, H);
@@ -5243,7 +5244,7 @@ function drawGraphGrid(canvas, q, W, H){
    이 배경과 별개 캔버스라 이미지를 깔아도 제출 답안 용량에는 영향이 없다.
    그림은 캔버스(가로 W × 세로 0.85W 이하)에 맞춰 늘리지 않고 원래 가로세로 비율 그대로 가운데에 맞춰 넣는다(v14.4) —
    예전에는 drawImage(img,0,0,W,H) 라 판 크기에 맞춰 그림이 늘어났다. 획은 판에 대한 상대 좌표라 그림과 어긋나지 않게
-   작도판의 가로세로 비율은 renderGraphQ 에서 어느 화면에서나 20:17 로 고정한다. */
+   그래프 판의 가로세로 비율은 renderGraphQ 에서 어느 화면에서나 정사각형으로 고정한다. */
 function drawConstructionBg(ctx,W,H,imageUrl){
   ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
   ctx.strokeRect(0.5,0.5,W-1,H-1);
@@ -6015,8 +6016,8 @@ function initGraphCanvas(canvas, W, H, isConstruction, startState){
   }
 
   /* 저장된 벡터 기록으로 그림을 다시 그린다(v8.96). PNG 를 얹는 대신 획을 하나씩 재생하므로 번호가 그림에 박혀 있지 않고,
-     이어 그리면 옛 번호도 새 획을 피해 다시 자리를 잡는다. 저장 당시와 캔버스 크기가 다르면(다른 기기) 가로·세로 비율대로 옮긴다
-     — 배경 그림도 같은 비율로 늘어나므로 그 위에 맞는다(원은 타원이 되지만 위치는 맞는다). */
+     이어 그리면 옛 번호도 새 획을 피해 다시 자리를 잡는다. 저장 당시와 판 크기가 다르면(다른 기기, 정사각형으로 바꾸기 전 답안)
+     가로·세로 비율대로 옮긴다 — 판의 비율에 맞춰지므로 위치는 같은 자리이고, 원은 비율이 다른 만큼 타원이 될 수 있다. */
   if(isConstruction && startState && Array.isArray(startState.items)){
     const sx=W/(startState.w||W), sy=H/(startState.h||H);
     graphConItems=startState.items.map(it=>{

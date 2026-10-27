@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.8">
+<meta name="app-version" content="6.9">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2754,8 +2754,28 @@ function drawGraphGridForTeacher(canvas, q, W, H){
     _drawNumberLineT(ctx,W,H,q.nMin??-10,q.nMax??10);
   } else if(q.graphType==='axisonly'){
     drawAxisOnlyPlane(ctx,W,H,q.originPos||'mc');
+  } else if(q.graphType==='construction'){
+    _drawConstructionBgT(ctx,W,H,q.imageUrl);   // v6.9: 작도 문항에 좌표평면이 깔리던 것을 학생·채점 화면과 같은 빈 판(+배경 그림)으로
   } else {
     _drawCoordPlaneT(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
+  }
+}
+/* 작도(자·컴퍼스) 배경 — index v14.4·scoring v2.5 와 같은 규칙: 격자 없는 빈 판에 경계만 옅게, 문항 그림(imageUrl)이 있으면 깐다.
+   그림은 늘리지 않고 원래 가로세로 비율 그대로 가운데에 맞춰 넣는다. 이 창의 판(W×H)은 학생 답안 PNG 의 크기라
+   새 답안은 학생이 그린 판(20:17)과 같다. */
+const _T_IMG_TS=Date.now();   // 같은 주소로 그림을 바꿔 올려도 옛 그림이 보이지 않게, 이 화면을 연 시각을 붙인다(scoring 과 같은 방식)
+function _drawConstructionBgT(ctx,W,H,imageUrl){
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
+  ctx.strokeRect(0.5,0.5,W-1,H-1);
+  if(imageUrl){
+    const img=new Image();
+    img.onload=()=>{
+      const iw=img.naturalWidth||W, ih=img.naturalHeight||H;
+      const k=Math.min(W/iw,H/ih), w=iw*k, h=ih*k;
+      ctx.drawImage(img,(W-w)/2,(H-h)/2,w,h);
+      ctx.strokeRect(0.5,0.5,W-1,H-1);
+    };
+    img.src=imageUrl.startsWith('data:') ? imageUrl : imageUrl+(imageUrl.includes('?')?'&':'?')+'v='+_T_IMG_TS;
   }
 }
 function _drawCoordPlaneT(ctx,W,H,xMin,xMax,yMin,yMax){

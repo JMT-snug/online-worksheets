@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v6.4">
+<meta name="app-version" content="edit-v6.5">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -124,6 +124,21 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 .part-divider .pd-actions button:hover{background:#c7d2fe}
 .q-card:hover{border-color:var(--accent)}
 .q-card.selected{border-color:var(--accent);background:var(--acc-lt)}
+/* 여러 문항 이동 모드 (v6.5) */
+.q-card.multi-sel{border-color:#7c3aed;background:#f5f3ff}
+.q-card.multi-sel.selected{border-color:#7c3aed}
+.q-chk{width:17px;height:17px;flex-shrink:0;margin:1px 0 0;cursor:pointer;accent-color:#7c3aed}
+#q-list.multi-on .q-card{-webkit-user-select:none;user-select:none}   /* Shift+클릭 범위 선택이 글자 선택으로 번지지 않게 */
+.q-multi-bar{display:none;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;margin-bottom:10px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;font-size:12px;color:#4c1d95}
+.q-multi-bar.on{display:flex}
+.q-multi-bar .mm-count{font-weight:700;margin-right:2px}
+.q-multi-bar button{background:#fff;border:1px solid #c4b5fd;color:#5b21b6;border-radius:6px;padding:4px 9px;font-size:12px;font-weight:600;cursor:pointer}
+.q-multi-bar button:hover:not(:disabled){background:#ede9fe}
+.q-multi-bar button:disabled{opacity:.4;cursor:default}
+.q-multi-bar input[type=number]{width:58px;border:1px solid #c4b5fd;border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit}
+.q-multi-bar .mm-sep{width:1px;align-self:stretch;background:#ddd6fe;margin:0 2px}
+.q-multi-bar .mm-hint{flex-basis:100%;font-size:11px;color:#6d28d9;opacity:.85}
+#btn-multi.active{background:#4c1d95 !important;outline:2px solid #c4b5fd}
 .q-card.drag-over{border:2px dashed var(--accent);background:var(--acc-lt)}
 .q-btn:disabled{opacity:.25;cursor:default}
 .q-drag{cursor:grab;color:var(--ink3);font-size:18px;padding:2px;line-height:1;flex-shrink:0;margin-top:2px}
@@ -411,7 +426,24 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
                 style="background:#78350f;color:#fbbf24">🔧 ID 정리</button>
               <button class="btn-add-q" id="btn-ai-review" onclick="reviewWorksheetWithAI()" title="이 학습지의 문항 전체를 AI로 점검합니다 (오탈자·수식 깨짐·정답 오류·모호한 표현 — 참고용, 최종 확인은 직접 해주세요). 예상 오답은 🤖 AI 분석실에서 만듭니다"
                 style="background:#4c1d95;color:#e9d5ff">🤖 AI 검토</button>
+              <button class="btn-add-q" id="btn-multi" onclick="toggleMultiMode()" title="문항을 여러 개 체크해서 한꺼번에 위·아래로 옮기거나 원하는 번호로 보냅니다"
+                style="background:#6d28d9">☑ 여러 문항 이동</button>
             </div>
+          </div>
+          <!-- 여러 문항 이동 도구줄 (v6.5) — 「☑ 여러 문항 이동」을 켜면 보인다 -->
+          <div class="q-multi-bar" id="q-multi-bar">
+            <span class="mm-count" id="mm-count">선택한 문항 없음</span>
+            <button onclick="multiSelectAll()" title="이 학습지의 문항을 모두 선택">전체 선택</button>
+            <button onclick="multiSelectNone()" data-needsel title="선택 해제">선택 해제</button>
+            <span class="mm-sep"></span>
+            <button onclick="multiStep(-1)" data-needsel title="선택한 문항을 각각 한 칸 위로 (선택끼리는 서로 넘지 않음)">▲ 위로</button>
+            <button onclick="multiStep(1)" data-needsel title="선택한 문항을 각각 한 칸 아래로">▼ 아래로</button>
+            <button onclick="multiToEdge(-1)" data-needsel title="선택한 문항을 순서를 유지한 채 맨 위로">⤒ 맨 위로</button>
+            <button onclick="multiToEdge(1)" data-needsel title="선택한 문항을 순서를 유지한 채 맨 아래로">⤓ 맨 아래로</button>
+            <span class="mm-sep"></span>
+            <input type="number" id="mm-pos" min="1" placeholder="번호" title="선택한 문항 중 맨 앞 문항이 이 번호가 되게 옮깁니다" onkeydown="if(event.key==='Enter')multiToPos()">
+            <button onclick="multiToPos()" data-needsel title="선택한 문항 중 맨 앞 문항이 이 번호가 되도록 한꺼번에 옮김">번으로 이동</button>
+            <span class="mm-hint">카드를 누르면 선택/해제 · Shift+누르기: 범위 선택 · 선택한 카드를 끌어다 놓으면 함께 옮겨집니다 · 옮긴 뒤에는 저장해야 반영됩니다</span>
           </div>
           <div id="q-list"></div>
 
@@ -703,6 +735,9 @@ let currentWsId = null;  // 현재 편집 중인 학습지
 let currentWs = null;    // 현재 학습지 객체
 let _wsRestoredOnce = false; // ?ws=/직전 학습지 복원은 최초 1회만 — saveToFirestore가 목록 새로고침용으로 loadAll()을 다시 부를 때 재실행되면 방금 저장한 학습지를 두고 주소의 학습지로 도로 튐
 let selectedQIdx = null; // 현재 선택된 문항 인덱스
+let multiMode = false;   // 「☑ 여러 문항 이동」 모드 (v6.5)
+const multiSel = new Set(); // 그 모드에서 체크한 문항 — 인덱스가 아니라 문항 객체로 들고 있어 순서가 바뀌어도 따라간다
+let multiLast = null;    // Shift+클릭 범위 선택의 기준 문항
 let altAnswers = [];     // 대안 정답 배열
 let poolCorrect = [], poolWrong = []; // 랜덤 풀
 
@@ -916,6 +951,7 @@ function updateStatusUI(){
 window.updateStatusUI=updateStatusUI;
 
 function renderEditor(){
+  multiMode=false; multiSel.clear(); multiLast=null;   // 다른 학습지로 옮겨 왔으면 여러 문항 이동 모드도 끈다 (v6.5)
   document.getElementById('editor-empty').style.display='none';
   document.getElementById('editor-main').style.display='flex';
   document.getElementById('panel-empty').style.display='block';
@@ -960,6 +996,8 @@ function renderEditor(){
     addArea.innerHTML='<button class="btn-add-q" id="btn-add-q">＋ 문항 추가</button><button class="btn-add-q" onclick="pasteQuestion()" style="background:#dcfce7;color:#15803d;margin-left:6px" title="복사한 문항 붙여넣기">📥 붙여넣기</button>';
     document.getElementById('btn-add-q').onclick = function(){ window.addQuestionItem && window.addQuestionItem(); };
   }
+  const _mmBtn=document.getElementById('btn-multi');   // 복습 학습지는 문항을 직접 두지 않으니 옮길 것도 없다
+  if(_mmBtn) _mmBtn.style.display = wType==='review' ? 'none' : '';
   document.getElementById('q-list-title').textContent =
     wType==='review'
       ? '복습 학습지 — 문항 자동 추출'
@@ -1286,6 +1324,10 @@ window.migrateUnitIds = async function(){
 function renderQList(){
   const list = document.getElementById('q-list');
   list.innerHTML = '';
+  // 삭제됐거나 다른 학습지의 문항은 선택에서 뺀다 (여러 문항 이동 모드, v6.5)
+  for(const q of [...multiSel]) if(!currentWs.questions.includes(q)) multiSel.delete(q);
+  if(multiLast && !currentWs.questions.includes(multiLast)) multiLast=null;
+  updateMultiBar();
 
   const allItems = currentWs.questions.map((q,i)=>({...q, _type:'q', _idx:i}));
 
@@ -1322,6 +1364,7 @@ function renderQList(){
       dv.addEventListener('drop',      e => {
         e.preventDefault(); dv.classList.remove('drag-over');
         const data = e.dataTransfer.getData('text/plain');
+        if(data==='multi'){ multiDropOn(item._idx, false, true); return; }   // 선택한 묶음을 구분선 위에 놓으면 그 파트의 첫 문항들이 된다
         if(data.startsWith('part:')){ movePartTo(parseInt(data.slice(5)), item._idx); return; }
         // 문항 카드를 구분선 위에 놓으면 그 파트의 첫 문항이 된다
         const from = parseInt(data);
@@ -1330,12 +1373,15 @@ function renderQList(){
       });
       list.appendChild(dv);
     }
+    const isExtraItem = item._type==='extra';
+    const qObj = isExtraItem ? null : currentWs.questions[item._idx];       // 여러 문항 이동 모드의 선택은 문항 객체로 기억한다
+    const multiOn = multiMode && !isExtraItem;
+    const isChecked = multiOn && multiSel.has(qObj);
     const card = document.createElement('div');
-    card.className = 'q-card' + (selectedQIdx===i?' selected':'');
+    card.className = 'q-card' + (selectedQIdx===i?' selected':'') + (isChecked?' multi-sel':'');
     card.draggable = true;
     card.dataset.idx = i;
 
-    const isExtraItem = item._type==='extra';
     const _rawType = isExtraItem ? 'auto' : (item.type||'word');
     // word 타입은 answerType으로 세분화 (word_text/word_expr 구분)
     const badge = _rawType==='word'
@@ -1347,6 +1393,7 @@ function renderQList(){
     const preview = (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
 
     card.innerHTML = `
+      ${multiOn?`<input type="checkbox" class="q-chk" ${isChecked?'checked':''} onclick="event.stopPropagation();multiToggle(${item._idx},event)" title="선택 (Shift+누르기: 범위 선택)">`:''}
       <span class="q-drag">⣿</span>
       <span class="q-num">${i+1}</span>
       <div class="q-info">
@@ -1359,19 +1406,28 @@ function renderQList(){
         ${isExtraItem ? '' : `<button class="q-btn" onclick="event.stopPropagation();deleteItemAt(${i})" title="삭제">✕</button>`}
       </div>`;
 
-    card.onclick = () => {
+    card.onclick = (e) => {
       if(isExtraItem){ toast('자동생성 문항은 코드로 처리되며 편집할 수 없습니다'); return; }
+      if(multiMode){ multiToggle(item._idx, e); return; }   // 여러 문항 이동 모드에서는 카드를 눌러 선택/해제 (편집창은 모드를 끄고 연다)
       selectQuestion(i, combinedItems);
     };
 
     // Drag & Drop
-    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); card.style.opacity='.4'; });
-    card.addEventListener('dragend',   e => { card.style.opacity='1'; });
+    card.addEventListener('dragstart', e => {
+      if(multiOn && multiSel.has(qObj) && multiSel.size>1){      // 선택한 카드를 끌면 선택한 문항 전부가 함께 간다
+        e.dataTransfer.setData('text/plain', 'multi');
+        document.querySelectorAll('.q-card.multi-sel').forEach(c=>{ c.style.opacity='.4'; });
+        return;
+      }
+      e.dataTransfer.setData('text/plain', i); card.style.opacity='.4';
+    });
+    card.addEventListener('dragend',   e => { card.style.opacity='1'; document.querySelectorAll('.q-card.multi-sel').forEach(c=>{ c.style.opacity='1'; }); });
     card.addEventListener('dragover',  e => { e.preventDefault(); card.classList.add('drag-over'); });
     card.addEventListener('dragleave', e => { card.classList.remove('drag-over'); });
     card.addEventListener('drop',      e => {
       e.preventDefault(); card.classList.remove('drag-over');
       const data = e.dataTransfer.getData('text/plain');
+      if(data==='multi'){ multiDropOn(i, isExtraItem, false); return; }
       if(data.startsWith('part:')){
         if(isExtraItem){ toast('자동생성 문항 앞에는 파트를 둘 수 없습니다'); return; }
         movePartTo(parseInt(data.slice(5)), item._idx); return;
@@ -1500,6 +1556,119 @@ window.moveQuestionBy = function(i, delta){
   if(i<0 || i>=allItems.length || to<0 || to>=allItems.length) return;
   moveItem(i, to, allItems);
   setTimeout(()=>{ document.querySelector(`.q-card[data-idx="${to}"]`)?.scrollIntoView({block:'nearest'}); }, 0);
+};
+
+// ── 여러 문항을 한꺼번에 옮기기 (v6.5) ──
+// 「☑ 여러 문항 이동」 모드에서 체크한 문항(multiSel)을 한 번에 옮긴다 — 각각 한 칸 위·아래, 맨 위·맨 아래, 원하는 번호로, 끌어다 놓기.
+// 선택한 문항끼리의 순서는 그대로 유지된다. 파트 구분선(🧩)은 한 문항 옮기기(moveItem)와 같은 규칙이다:
+// 구분선은 「문항」이 아니라 「파트」의 시작 표시라서, 안 옮긴 문항은 원래 파트 그대로 두고
+// 옮긴 문항은 놓인 자리 이웃의 파트로 들어간다(위로 가면 뒤 이웃, 아래로 가면 앞 이웃).
+function _partInfo(qs){
+  // 문항마다 몇 번째 파트인지(0 = 첫 구분선 앞)와 파트 표시(partStart) 객체
+  const of=new Map(), marks=[null]; let pid=0;
+  qs.forEach(q=>{ if(q.partStart){ pid++; marks[pid]=q.partStart; } of.set(q,pid); });
+  return {of, marks};
+}
+// order: 새 순서의 문항 배열, adopt: Map(옮긴 문항 → 그 문항이 어느 파트로 들어갈지 알려 줄, 안 옮긴 이웃 문항)
+// 새 순서에서 파트가 바뀌는 자리마다 구분선을 다시 달아 준다(파트 표시 객체는 그대로 재사용 — id·이름 유지).
+function _reorderKeepingParts(qs, order, adopt){
+  const {of, marks}=_partInfo(qs);
+  const pidOf=q=>of.get(adopt.has(q) ? adopt.get(q) : q);
+  const used=new Set();
+  order.forEach(q=>{ delete q.partStart; });
+  let prev=0;
+  order.forEach(q=>{
+    const p=pidOf(q);
+    if(p!==prev){ if(p>0 && !used.has(p)){ q.partStart=marks[p]; used.add(p); } prev=p; }
+  });
+  return order;
+}
+// 선택 묶음을 T(안 옮기는 문항) 바로 앞(after=false)/뒤(after=true)로 — T 의 파트로 들어간다
+function _groupMoveNear(qs, sel, T, after){
+  const block=qs.filter(q=>sel.has(q)), rem=qs.filter(q=>!sel.has(q));
+  const t=rem.indexOf(T);
+  if(!block.length || t<0) return null;
+  const at = after ? t+1 : t;
+  return { order:[...rem.slice(0,at), ...block, ...rem.slice(at)], adopt:new Map(block.map(q=>[q,T])) };
+}
+// 선택 묶음 중 맨 앞 문항이 s0(0부터) 번째가 되게 — 맨 위는 0, 맨 아래는 아주 큰 수. 지금보다 아래로 가면 앞 이웃, 아니면 뒤 이웃의 파트
+function _groupToIndex(qs, sel, s0){
+  const block=qs.filter(q=>sel.has(q)), rem=qs.filter(q=>!sel.has(q));
+  if(!block.length || !rem.length) return null;
+  const s=Math.max(0, Math.min(rem.length, s0));
+  const down = s > qs.indexOf(block[0]);
+  const T = (down && s>0) ? rem[s-1] : (s<rem.length ? rem[s] : rem[rem.length-1]);
+  return { order:[...rem.slice(0,s), ...block, ...rem.slice(s)], adopt:new Map(block.map(q=>[q,T])) };
+}
+// 선택한 문항을 각각 한 칸 위(-1)/아래(1)로 — 선택끼리는 서로 넘지 않고, 위(아래)에 선택이 막혀 있으면 그 자리에 머문다
+function _groupStep(qs, sel, delta){
+  const arr=[...qs], n=arr.length, adopt=new Map();
+  if(delta<0){
+    for(let i=1;i<n;i++) if(sel.has(arr[i]) && !sel.has(arr[i-1])){ adopt.set(arr[i], arr[i-1]); [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; }
+  }else{
+    for(let i=n-2;i>=0;i--) if(sel.has(arr[i]) && !sel.has(arr[i+1])){ adopt.set(arr[i], arr[i+1]); [arr[i+1],arr[i]]=[arr[i],arr[i+1]]; }
+  }
+  return adopt.size ? { order:arr, adopt } : null;
+}
+// 계산한 결과를 실제 학습지에 적용 — 지금 편집창에 열려 있는 문항(selectedQIdx)은 객체로 따라가 새 자리를 가리키게 한다
+function _applyGroup(res){
+  const qs=currentWs.questions;
+  if(!res || res.order.every((q,i)=>q===qs[i])){ toast('이미 그 자리입니다'); return; }
+  const selObj = selectedQIdx!==null ? qs[selectedQIdx] : null;
+  currentWs.questions = _reorderKeepingParts(qs, res.order, res.adopt);
+  selectedQIdx = selObj ? currentWs.questions.indexOf(selObj) : null;
+  if(selectedQIdx===-1) selectedQIdx=null;
+  renderQList();
+  toast(`${multiSel.size}개 문항을 옮겼습니다 — 저장해야 반영됩니다`);
+  setTimeout(()=>{
+    const f=currentWs.questions.findIndex(q=>multiSel.has(q));
+    document.querySelector(`.q-card[data-idx="${f}"]`)?.scrollIntoView({block:'nearest'});
+  }, 0);
+}
+function updateMultiBar(){
+  const bar=document.getElementById('q-multi-bar'), btn=document.getElementById('btn-multi');
+  if(bar) bar.classList.toggle('on', multiMode);
+  if(btn){ btn.classList.toggle('active', multiMode); btn.textContent = multiMode ? '☑ 여러 문항 이동 끄기' : '☑ 여러 문항 이동'; }
+  document.getElementById('q-list')?.classList.toggle('multi-on', multiMode);
+  const n=multiSel.size, total=currentWs?.questions?.length||0;
+  const c=document.getElementById('mm-count'); if(c) c.textContent = n ? `${n}개 선택 (전체 ${total}개)` : '선택한 문항 없음';
+  bar?.querySelectorAll('[data-needsel]').forEach(b=>{ b.disabled = !n; });
+  const pos=document.getElementById('mm-pos'); if(pos) pos.max = Math.max(1, total-n+1);
+}
+window.toggleMultiMode = function(){
+  if(!currentWs) return;
+  multiMode = !multiMode;
+  if(!multiMode){ multiSel.clear(); multiLast=null; }
+  renderQList();
+};
+window.multiToggle = function(idx, ev){
+  const qs=currentWs?.questions||[], q=qs[idx]; if(!q) return;
+  if(ev && ev.shiftKey && multiLast && qs.includes(multiLast)){
+    const a=qs.indexOf(multiLast);
+    for(let k=Math.min(a,idx); k<=Math.max(a,idx); k++) multiSel.add(qs[k]);   // Shift: 마지막으로 누른 문항부터 여기까지 선택
+  }else{
+    if(multiSel.has(q)) multiSel.delete(q); else multiSel.add(q);
+    multiLast=q;
+  }
+  renderQList();
+};
+window.multiSelectAll = function(){ (currentWs?.questions||[]).forEach(q=>multiSel.add(q)); renderQList(); };
+window.multiSelectNone = function(){ multiSel.clear(); multiLast=null; renderQList(); };
+window.multiStep = function(delta){ if(currentWs && multiSel.size) _applyGroup(_groupStep(currentWs.questions, multiSel, delta)); };
+window.multiToEdge = function(dir){ if(currentWs && multiSel.size) _applyGroup(_groupToIndex(currentWs.questions, multiSel, dir<0 ? 0 : 1e9)); };
+window.multiToPos = function(){
+  if(!currentWs || !multiSel.size) return;
+  const v=parseInt(document.getElementById('mm-pos')?.value, 10);
+  if(!(v>=1)){ toast('옮길 위치(번호)를 입력하세요'); return; }
+  _applyGroup(_groupToIndex(currentWs.questions, multiSel, v-1));
+};
+// 선택한 카드를 끌어 idx 번 카드(또는 그 파트 구분선) 자리에 놓았다 — 지금보다 아래쪽이면 그 카드 뒤로, 위쪽이면 앞으로
+window.multiDropOn = function(idx, isExtra, onDivider){
+  if(isExtra){ toast('자동생성 문항 자리로는 옮길 수 없습니다'); return; }
+  const qs=currentWs.questions, T=qs[idx];
+  if(!T || multiSel.has(T)) return;
+  const first=qs.findIndex(q=>multiSel.has(q));
+  _applyGroup(_groupMoveNear(qs, multiSel, T, onDivider ? false : first<idx));
 };
 
 // ── 문항 선택 → 패널 ──

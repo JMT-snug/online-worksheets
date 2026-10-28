@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.5">
+  <meta name="app-version" content="14.6">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -947,7 +947,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=13.9"></script>
+<script src="grading.js?v=14.6"></script>
 <script src="ai-lab.js?v=1.8"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -3767,10 +3767,12 @@ async function startQuiz(ws) {
   _pCanvasIdx = -1;   // 보관함이 바뀌었으니 '지금 캔버스의 주인'도 새로 잡는다
   // ── 저장된 진도 복원 ──
   _wsDataLoaded = false; // 로드 전: 저장 차단
+  (window._graphFbLogByWs=window._graphFbLogByWs||{})[ws.id]={};   // 지난 그래프 피드백 — 아래에서 저장된 기록을 읽어 채운다 (v14.6)
   try{
     const _saved=await getDoc(doc(db,"records",user.email,"worksheets",ws.id));
     if(_saved.exists()){
       const _d=_saved.data(); const _pq=_d.perQuestion||{};
+      if(_d.graphFeedbackLog && typeof _d.graphFeedbackLog==='object') window._graphFbLogByWs[ws.id]={..._d.graphFeedbackLog};
       // 완료 여부 무관하게 항상 복원
       ws.questions.forEach((q,i)=>{
         const s=_pq[q.id]; if(!s) return;
@@ -5119,6 +5121,16 @@ function answerHtml(raw){
 }
 
 
+/* 💬 학생이 그래프를 고쳐 다시 낼 때(v14.6): 고치기 전 답안(prev)에 받은 피드백을 「이전 피드백」으로 남긴다.
+   선생님이 저장할 때 이미 graphFeedbackLog 에 쌓였으면 그대로 두고, 아직 안 쌓인 것(이 기능이 생기기 전에 받은 피드백)만 건진다 — 날짜는 모르므로 ''.
+   화면용 사본(_graphFbLogByWs)을 바로 고쳐 renderQuestion() 이 이전 피드백을 보여 주게 하고, 기록에 새로 써야 할 { 문항id: 로그 } 를 돌려준다(없으면 null). */
+function keepFeedbackBeforeResubmit(wsId, qid, prev){
+  const store=((window._graphFbLogByWs=window._graphFbLogByWs||{})[wsId]=(window._graphFbLogByWs[wsId]||{}));
+  const nx=feedbackLogAfterSave(store[qid], prev.feedback, prev.drawing, '');
+  store[qid]=nx.log;
+  return nx.changed ? { [qid]: nx.log } : null;
+}
+
 function renderGraphQ(q, panel, qHeadHtml, prevAns){
   const isNL = q.graphType==='numberline';
   const prevDrawing   = prevAns?.drawing||null;
@@ -5135,6 +5147,16 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
   const gradeBadgeText = prevCorrect===true ? '⭕ 정답 · 제출 완료'
     : prevCorrect===false ? '❌ 오답 — 다시 그려서 제출'
     : prevDrawing ? '📤 채점 대기 중' : '그래프를 그린 후 제출';
+
+  /* 💬 최신 피드백과 이전 피드백 (v14.6) — 최신은 지금 답안에 대한 글(파란 상자·「최신」 표시), 이전은 고치기 전 답안에 받은 글(회색 점선 틀 안에 작게).
+     최신 피드백이 없으면(고쳐 내서 채점 대기 중) 이전 피드백을 펼쳐 두어 무엇을 고치라고 했는지 볼 수 있게 한다. 로그는 기록의 graphFeedbackLog (grading.js 주석 참고) */
+  const _fbv = feedbackView((window._graphFbLogByWs||{})[curWS?.id]?.[q.id], prevDrawing, prevFeedback);
+  const _fbLatestHtml = _fbv.latest
+    ? `<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:4px solid var(--accent);border-radius:4px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px"><span style="background:var(--accent);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700">최신</span><b>💬 선생님 피드백</b>${_fbv.latest.at?`<span style="font-size:11px;color:var(--ink3)">${formatFbAt(_fbv.latest.at)}</span>`:''}</div>
+        <div style="white-space:pre-line">${_escHtml(_fbv.latest.text)}</div></div>`
+    : '';
+  const _fbEarlierHtml = feedbackEarlierHtml(_fbv.earlier, { open: !_fbv.latest, note: '고치기 전 답안에 받은 피드백' });
 
   panel.innerHTML=`${qHeadHtml}
     <div class="math-input-card">
@@ -5160,7 +5182,7 @@ function renderGraphQ(q, panel, qHeadHtml, prevAns){
         <button onclick="graphClear()" class="btn-back" style="font-size:12px">전체 지우기</button>
         <span style="margin-left:auto;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;${gradeBadgeStyle}">${gradeBadgeText}</span>
       </div>
-      ${prevFeedback?`<div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:4px;font-size:13px;white-space:pre-line">💬 <b>선생님 피드백:</b> ${_escHtml(prevFeedback)}</div>`:''}
+      ${_fbLatestHtml}${_fbEarlierHtml}
       <div class="feedback-strip" id="feedback-strip"></div>
       <div class="ans-btns" onmousedown="event.preventDefault()">
         ${gradeLocked
@@ -6608,6 +6630,7 @@ async function submitQAns(){
     window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
     let _regraded=false;
+    let _fbLogUpd=null;   // 이번 제출로 새로 남겨 둘 지난 피드백 로그(없으면 null) — 아래 저장에 함께 쓴다 (v14.6)
     if(gc){
       const prev=answered[curQIdx]||{};
       /* 학생 답안만 PNG(투명 배경)로 저장 — 작도는 획 레이어와 획순 번호를 합친 한 장(_graphExport, 번호 자리는 이 순간 확정).
@@ -6619,6 +6642,13 @@ async function submitQAns(){
       // ★ 그래프를 새로 그려 제출하면 이전 채점 결과(교사 첨삭·피드백·정오답)를 지운다 ★
       //   예전에는 prev를 그대로 펼쳐 담아, 새 답안 위에 옛 첨삭이 남고 옛 정오답 판정도 유지됐다.
       _regraded = !!(prev.drawing && prev.drawing!==drawing && (prev.teacherDrawing||prev.feedback||prev.correct!=null));
+      /* 💬 고치기 전 답안에 받은 피드백은 지우지 않고 「이전 피드백」으로 남긴다 (v14.6).
+         선생님이 저장할 때 이미 graphFeedbackLog 에 쌓였으면 그대로 두고, 아직 안 쌓인 것(이 기능이 생기기 전에 받은 피드백)만 여기서 건진다.
+         날짜는 모르므로 ''. 화면용 사본(_graphFbLogByWs)도 바로 고쳐서 아래 renderQuestion() 이 이전 피드백을 보여 준다. */
+      if(_regraded && prev.feedback && !isTeacherAcct()){
+        const _fbQid=curWS.questions[curQIdx]?.id;
+        if(_fbQid) _fbLogUpd=keepFeedbackBeforeResubmit(curWS.id,_fbQid,prev);
+      }
       // 작도: 획순 번호가 몇까지 찍혔는지·기준 반지름·벡터 기록(conVec)을 그림과 함께 남긴다 (다시 열 때 이어받음)
       const _stroke={strokeCount:graphConfirmedCount, lastRadius:graphLastRadius,
                      conVec:(window._graphVectors ? window._graphVectors() : null)};
@@ -6656,6 +6686,7 @@ async function submitQAns(){
           worksheetTitle: curWS.title,
           lastUpdated: new Date().toISOString(),
           hasPendingGraph: _pendingNow,   // 교사 채점 대기 (scoring·teacher 에서 채점하면 다시 계산 — 평일 아침 알림 근거)
+          ...(_fbLogUpd ? { graphFeedbackLog: _fbLogUpd } : {}),   // 건진 지난 피드백 (v14.6) — 최상위 필드라 아래 perQuestion 을 다시 써도 남는다
           perQuestion: {
             [_qId]: {
               drawing: _drawing,

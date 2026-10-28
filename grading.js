@@ -7,7 +7,8 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep
+         normalizeMultiAnswer, gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
+         그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -587,4 +588,102 @@ function recordHistoryStats(questions, perQuestion){
   c.firstTryRate = c.total ? Math.round(c.first / c.total * 100) : null;
   c.notAnswered = c.unanswered + c.partial;
   return c;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   그래프 피드백 누적 (grading v14.6 — index 14.6 · scoring 2.7 · teacher 6.10 공용)
+
+   그래프 문항의 선생님 피드백은 perQuestion.{문항id}.feedback 한 칸뿐이라 새로 쓰면 덮어쓰고, 학생이 그래프를 고쳐 다시 내면
+   index 가 첨삭·피드백·판정을 지운다. 이 칸은 「지금 답안에 대한 최신 피드백」으로 그대로 둔다(챗 알림이 그 뜻에 기대고 있다).
+   지난 피드백은 기록 문서 **최상위** graphFeedbackLog[문항id] = [{at, text, d}, …](오래된 것이 앞)에 따로 쌓는다.
+     at   — 마지막으로 저장한 때(ISO). 모르면 ''(옛 기록에서 건져 온 것)
+     text — 피드백 글
+     d    — 그 글을 남긴 학생 답안의 지문(drawingSig). 같은 답안에 대한 수정은 마지막 줄을 덮어쓰고(오타를 고칠 때마다 줄이 늘지 않게),
+            답안이 바뀐 뒤의 피드백은 새 줄로 쌓는다. index 가 학생 기록을 저장해도 이 필드는 건드리지 않는다.
+   최상위인 이유는 graphErrorTypes 와 같다 — index 가 perQuestion.{문항id} 를 정해진 키로 통째로 다시 써서 그 안의 새 키는 지워진다.
+   첨삭 그림(teacherDrawing)은 PNG 문자열이라 쌓으면 문서 1MB 한도에 닿을 수 있어 누적하지 않는다.
+   ═══════════════════════════════════════════════════════════════ */
+const FB_LOG_MAX = 30;   // 문항 하나에 남기는 최대 줄 수 — 넘으면 가장 오래된 것부터 버린다(글이라 이 정도면 한도와 한참 멀다)
+
+/* 학생 답안(PNG 데이터 문자열)의 지문 — 같은 답안인지만 알면 되므로 길이 + 32비트 해시. 답안이 없으면 '' */
+function drawingSig(drawing){
+  const s = String(drawing ?? '');
+  if(!s) return '';
+  let h = 0x811c9dc5;
+  for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return s.length.toString(36) + '.' + (h >>> 0).toString(36);
+}
+/* 저장돼 있던 로그를 믿을 수 있는 꼴로 — 배열이 아니거나 글이 빈 줄은 거른다 */
+function normFbLog(log){
+  return (Array.isArray(log) ? log : [])
+    .filter(e => e && typeof e === 'object' && String(e.text ?? '').trim())
+    .map(e => ({ at: String(e.at ?? ''), text: String(e.text), d: String(e.d ?? '') }));
+}
+/* 피드백을 저장할 때 쌓을 새 로그 — { log, changed }. changed 가 false 면 쓰지 않아도 된다.
+   · 같은 답안(d 가 마지막 줄과 같음)에 대한 저장: 글이 같으면 그대로, 다르면 마지막 줄을 덮어쓰고, 글을 비웠으면 그 줄을 뺀다
+   · 다른 답안(또는 처음): 글이 있으면 새 줄로 쌓는다(글을 비운 저장은 쌓을 것이 없다)
+   nowIso 를 ''로 주면 날짜를 모르는 줄이 된다(학생 화면이 옛 피드백을 건져 둘 때). */
+function feedbackLogAfterSave(log, text, drawing, nowIso){
+  const arr = normFbLog(log);
+  const t = String(text ?? '').trim();
+  const d = drawingSig(drawing);
+  const last = arr[arr.length - 1];
+  const same = !!(last && d && last.d === d);
+  if(!t){
+    if(same){ arr.pop(); return { log: arr, changed: true }; }
+    return { log: arr, changed: false };
+  }
+  if(same){
+    if(last.text === t) return { log: arr, changed: false };
+    arr[arr.length - 1] = { at: String(nowIso ?? ''), text: t, d };
+    return { log: arr, changed: true };
+  }
+  if(last && !d && last.text === t) return { log: arr, changed: false };   // 답안 지문이 없을 때 같은 글을 되풀이 저장해도 줄을 늘리지 않는다
+  arr.push({ at: String(nowIso ?? ''), text: t, d });
+  while(arr.length > FB_LOG_MAX) arr.shift();
+  return { log: arr, changed: true };
+}
+/* 화면에 보여 줄 것 — { latest, earlier }
+   latest  = 지금 답안에 대한 피드백(perQuestion.feedback). 없으면 null. { text, at, n } (at·n 은 로그에서 찾았을 때만, 못 찾으면 '' · 0)
+   earlier = 이전 답안에 남긴 피드백들, 최근 것이 앞. { text, at, n }  (n = 몇 번째로 남긴 피드백인지, 1부터)
+   지금 답안에 대한 줄(로그의 마지막 줄이 이 답안 지문과 같을 때)은 latest 와 겹치므로 earlier 에서 뺀다. */
+function feedbackView(log, drawing, currentFeedback){
+  const arr = normFbLog(log);
+  const d = drawingSig(drawing);
+  const cur = (d && arr.length && arr[arr.length - 1].d === d) ? arr.length - 1 : -1;
+  const text = String(currentFeedback ?? '').trim();
+  const latest = text ? { text, at: cur >= 0 ? arr[cur].at : '', n: cur >= 0 ? cur + 1 : 0 } : null;
+  const earlier = [];
+  for(let i = arr.length - 1; i >= 0; i--){
+    if(i === cur) continue;
+    earlier.push({ text: arr[i].text, at: arr[i].at, n: i + 1 });
+  }
+  return { latest, earlier };
+}
+/* ISO 시각 → '10/28 14:20' (보는 사람의 시계). 모르면 '' */
+function formatFbAt(iso){
+  const t = Date.parse(iso || '');
+  if(!isFinite(t)) return '';
+  const dt = new Date(t), p = n => String(n).padStart(2, '0');
+  return (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
+}
+function _fbEsc(s){
+  return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+/* 이전 피드백 목록 HTML — 학생 화면·scoring·teacher 가 같은 모양으로 쓴다. 최신 피드백과 한눈에 구별되도록 회색 점선 틀 안에 작게 둔다.
+   opts.open = 처음부터 펼칠지(최신 피드백이 없을 때), opts.note = 제목 옆 설명. 이전 피드백이 없으면 ''. */
+function feedbackEarlierHtml(earlier, opts){
+  const list = Array.isArray(earlier) ? earlier : [];
+  if(!list.length) return '';
+  const o = opts || {};
+  const items = list.map(e => {
+    const when = formatFbAt(e.at);
+    return '<div style="margin-top:6px;padding:6px 10px;border-left:3px solid var(--rule,#d1d5db);background:var(--paper,#f9fafb);border-radius:0 6px 6px 0">'
+      + '<div style="font-size:12px;font-weight:600;color:var(--ink2,#4b5563);margin-bottom:2px">' + (e.n ? e.n + '번째 피드백' : '이전 피드백') + (when ? ' · ' + when : '') + '</div>'
+      + '<div style="font-size:13px;color:var(--ink2,#4b5563);white-space:pre-line;word-break:break-word">' + _fbEsc(e.text) + '</div></div>';
+  }).join('');
+  return '<details class="fb-earlier"' + (o.open ? ' open' : '') + ' style="margin-top:8px;padding:6px 10px;border:1px dashed var(--rule,#d1d5db);border-radius:8px">'
+    + '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--ink2,#4b5563)">🕘 이전 피드백 ' + list.length + '개'
+    + (o.note ? ' <span style="font-weight:400">— ' + _fbEsc(o.note) + '</span>' : '') + '</summary>'
+    + items + '</details>';
 }

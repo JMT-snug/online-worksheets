@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.9">
+<meta name="app-version" content="6.10">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,7 +216,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=13.9"></script>
+<script src="grading.js?v=14.6"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -683,7 +683,8 @@ function perQCells(r, uid, wsIdArg){
     // 학생 상세는 한 학생의 여러 학습지를 한 화면에 그리므로 학습지 ID를 키에 포함해야 한다.
     // (없으면 학습지가 달라도 q19끼리 같은 키가 되어 마지막 학습지 기록이 덮어써짐)
     const dkey=(uid||r.uid||"x")+"_"+(wsIdArg||r.wsId||"ws")+"_"+qid;
-    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ,wsId:(wsIdArg||r.wsId)};
+    window._qd[dkey]={studentName:r.studentName||"-",qid,attempts:att||(isCorrect?1:0),wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,v,isExamQ,wsId:(wsIdArg||r.wsId),
+      uid:(uid||r.uid||r.studentEmail||""), rec:r};   // rec: 이 학생 기록 — 지난 그래프 피드백(graphFeedbackLog)을 읽고 쓴다 (v6.10)
     return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQid(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
   }).join("");
   return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
@@ -2086,7 +2087,8 @@ window.renderWSTable=function(wsId){
       else if(isCorrect){ col="var(--green)"; mark=wc>0?`✓(${wc}회)`:"✓"; ttl=`${qid}: 정답${wc>0?` (오답 ${wc}회 후)`:""}`; }
       else { col=wc>=2?"var(--red)":"var(--amber)"; mark=`${wc}회`; ttl=`${fmtQ(qid)}: 오답 ${wc}회`; }
       const dkey=r.uid+"_"+(r.wsId||wsId||"ws")+"_"+qid;   // 학습지 ID 포함 (다른 화면/학습지와 키 충돌 방지)
-      window._qd[dkey]={studentName:r.studentName||"-",qid,uid:r.uid,wsId:r.wsId,v,attempts:att,wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null};
+      window._qd[dkey]={studentName:r.studentName||"-",qid,uid:r.uid,wsId:r.wsId,v,attempts:att,wrong:wc,correct:isCorrect,unanswered,wrongInputs:v.wrongInputs||[],canvasImage:v.canvasImage||null,
+        rec:r};   // rec: 이 학생 기록 — 지난 그래프 피드백(graphFeedbackLog)을 읽고 쓴다 (v6.10)
       return `<div class="qcell" onclick="showQDetail('${dkey}')" title="${ttl}"><span class="qcell-id" style="color:${col}">${fmtQ(qid)}</span><span class="qcell-try" style="color:${col}">${mark}</span></div>`;
     }).join("");
     return `<div style="display:flex;flex-wrap:wrap;gap:3px">${cells}</div>`;
@@ -2919,14 +2921,23 @@ window.saveGraphGrade=async function(key,correct){
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
+/* 💬 이전 피드백 목록 (v6.10) — 이 답안에 대한 최신 피드백(perQuestion.feedback)과 겹치는 줄은 빼고, 학생이 고쳐 내기 전 답안에 남긴 것만 */
+function fbHistoryHtml(d){
+  const v=feedbackView(d.rec?.graphFeedbackLog?.[d.qid], d.v?.drawing, d.v?.feedback);
+  return feedbackEarlierHtml(v.earlier, { open: !v.latest, note: '학생이 고쳐 내기 전 답안에 남긴 글 (학생도 볼 수 있어요)' });
+}
 window.saveGraphFeedback=async function(key){
   const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
   const fb=document.getElementById('graph-feedback-input').value.trim();
   try{
-    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
-      [`perQuestion.${d.qid}.feedback`]: fb,
-    });
+    const upd={ [`perQuestion.${d.qid}.feedback`]: fb };
+    // 지난 피드백 누적 — 같은 답안에 대한 수정은 마지막 줄을 덮어쓰고, 학생이 고쳐 낸 뒤의 피드백은 새 줄로 쌓는다 (scoring 저장과 같은 규칙)
+    const nx=feedbackLogAfterSave(d.rec?.graphFeedbackLog?.[d.qid], fb, d.v.drawing, new Date().toISOString());
+    if(nx.changed) upd[`graphFeedbackLog.${d.qid}`]=nx.log;
+    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId), upd);
     d.v.feedback=fb;
+    if(nx.changed && d.rec) d.rec.graphFeedbackLog={ ...(d.rec.graphFeedbackLog||{}), [d.qid]: nx.log };   // 읽어 둔 기록에도 반영해 다시 열었을 때 저장된 로그가 보이게
+    const hist=document.getElementById('graph-fb-history'); if(hist) hist.innerHTML=fbHistoryHtml(d);
     toast('피드백 저장됨');
   }catch(e){ alert('저장 실패: '+e.message); }
 };
@@ -2990,10 +3001,14 @@ window.showQDetail=function(key){
           <button onclick="saveGraphGrade('${key}',false)"
             style="flex:1;padding:8px;border-radius:8px;border:2px solid ${d.v.correct===false&&d.v.correct!==undefined?'var(--red)':'var(--rule)'};background:${d.v.correct===false&&d.v.correct!==undefined?'#fee2e2':'var(--paper)'};font-size:18px;font-weight:700;cursor:pointer;color:${d.v.correct===false&&d.v.correct!==undefined?'var(--red)':'var(--ink3)'}">❌</button>
         </div>
+        <!-- 💬 피드백 누적 (v6.10): 위 칸은 이 답안에 대한 「최신 피드백」, 아래는 학생이 고쳐 내기 전 답안에 남긴 이전 피드백.
+             이전 피드백은 학생 기록의 graphFeedbackLog[문항id] 에 쌓인다 — grading.js 의 「그래프 피드백 누적」 주석 참고 -->
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:-4px">💬 최신 피드백 <span style="font-weight:400;color:var(--ink3)">— 이 답안에 대한 글 (학생 화면에 가장 위에 보여요)</span></div>
         <textarea id="graph-feedback-input" placeholder="학생에게 피드백 (선택사항)" rows="2"
-          style="width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box">${d.v.feedback||''}</textarea>
+          style="width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box">${escapeAttr(d.v.feedback||'')}</textarea>
         <button onclick="saveGraphFeedback('${key}')"
           style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start">피드백 저장</button>
+        <div id="graph-fb-history">${fbHistoryHtml(d)}</div>
       </div>
     </div>`;
   } else if(_isExam){

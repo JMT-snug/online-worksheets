@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.6">
+<meta name="app-version" content="scoring-v2.7">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -151,6 +151,8 @@ body.mode-feedback .f-q{display:none}
 
 .feedback-box{width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:60px}
 .feedback-box:focus{outline:none;border-color:var(--accent)}
+.fb-label{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.fb-label span{font-weight:400;color:var(--ink3)}
 
 .btn-save{padding:10px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex:1}
 .btn-save:hover{opacity:.9}
@@ -341,7 +343,11 @@ body.mode-feedback .f-q{display:none}
               <button class="judge-btn" id="btn-ng" onclick="setJudgment(false)">❌ 오답</button>
               <button class="judge-btn" id="btn-skip" onclick="setJudgment(null)">보류</button>
             </div>
+            <!-- 💬 피드백 누적 (v2.7): 위 칸은 이 답안에 대한 「최신 피드백」, 아래는 학생이 고쳐 내기 전 답안에 남긴 이전 피드백(학생 화면에도 같은 구분으로 보인다).
+                 이전 피드백은 학생 기록의 graphFeedbackLog[문항id] 에 쌓인다 — grading.js 의 「그래프 피드백 누적」 주석 참고 -->
+            <div class="fb-label">💬 최신 피드백 <span>— 이 답안에 대한 글 (학생 화면에 가장 위에 보여요)</span></div>
             <textarea class="feedback-box" id="feedback" placeholder="선생님 피드백 (선택사항)" onblur="saveCurrent()"></textarea>
+            <div id="fb-history"></div>
 
           </div>
         </div>
@@ -357,7 +363,7 @@ body.mode-feedback .f-q{display:none}
 
 <div class="toast" id="toast"></div>
 
-<script src="grading.js?v=9.3"></script>
+<script src="grading.js?v=14.6"></script>   <!-- 그래프 피드백 누적(feedbackLogAfterSave·feedbackView·feedbackEarlierHtml)을 index·teacher 와 같은 한 곳에서 가져온다 (v2.7) -->
 <script src="ai-lab.js?v=1.6"></script>   <!-- 오답 유형 분류표(buildTaxonomy·typeName) — grading.js 다음에 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -581,6 +587,22 @@ function syncErrType(stu, wsId, qid, code){
     rec.graphErrorTypes = { ...(rec.graphErrorTypes||{}) };
     if(code) rec.graphErrorTypes[qid] = code; else delete rec.graphErrorTypes[qid];
   }
+}
+/* ══════════ 💬 지난 피드백 누적 (v2.7) ══════════
+   perQuestion.feedback 은 「지금 답안에 대한 최신 피드백」 한 칸이라 새로 쓰면 덮어쓰고 학생이 고쳐 내면 지워진다.
+   그래서 저장할 때마다 학생 기록 최상위 graphFeedbackLog[문항id] 에 같이 쌓는다 — 규칙은 grading.js 의 「그래프 피드백 누적」 주석.
+   여기서는 화면에 이전 피드백 목록을 그리고, 저장한 로그를 읽어 둔 기록에 맞춘다. */
+function renderFbHistory(stu){
+  const box = document.getElementById('fb-history'); if(!box) return;
+  const v = feedbackView(stu?.fbLog, stu?.data?.drawing, stu?.data?.feedback);
+  // 최신 피드백이 아직 없으면(학생이 고쳐 내서 비었을 때) 지난 피드백을 펼쳐 두어, 무엇을 지적했는지 보고 이어 쓸 수 있게 한다
+  box.innerHTML = feedbackEarlierHtml(v.earlier, { open: !v.latest, note: '학생이 고쳐 내기 전 답안에 남긴 글 (학생도 볼 수 있어요)' });
+}
+/** 쌓인 로그를 읽어 둔 기록에도 반영 — 학생을 다시 열었을 때 저장된 로그가 보이게 */
+function syncFbLog(stu, wsId, qid, log){
+  stu.fbLog = log;
+  const rec = (allRecords[wsId]||{})[stu.email];
+  if(rec) rec.graphFeedbackLog = { ...(rec.graphFeedbackLog||{}), [qid]: log };
 }
 /** 이미 ❌ 인 학생의 유형을 바꾼다 — 고르는 즉시 저장하고 학생은 그대로 둔다. 아직 판정 전이면 ❌ 를 누를 때 함께 저장된다 */
 window.setErrorType = async function(code){
@@ -1687,7 +1709,8 @@ function loadQuestion(opts){
       name: r.studentName || email.split('@')[0],
       cls: classMap[String(email).toLowerCase()] || "",
       data: r.perQuestion[curQid],
-      errType: String(r.graphErrorTypes?.[curQid] || '')   // 🏷 교사가 ❌ 로 채점하며 고른 오답 유형 (v2.3)
+      errType: String(r.graphErrorTypes?.[curQid] || ''),   // 🏷 교사가 ❌ 로 채점하며 고른 오답 유형 (v2.3)
+      fbLog: Array.isArray(r.graphFeedbackLog?.[curQid]) ? r.graphFeedbackLog[curQid] : []   // 💬 지난 피드백 (v2.7)
     }))
     .filter(s => !myClsNames || (s.cls && myClsNames.has(s.cls))) // 담당 교사: 담당 학급 학생만
     .sort((a,b) => (a.cls||'zzz').localeCompare(b.cls||'zzz','ko') || a.name.localeCompare(b.name, 'ko'));
@@ -1961,6 +1984,7 @@ function showStudent(idx){
   updateJudgeButtons(stu.data.correct);
   showErrType(stu.data.correct === false ? stu.errType : '');   // ❌ 인 학생만 저장된 유형을 보여 준다 (v2.3)
   document.getElementById('feedback').value = stu.data.feedback || '';
+  renderFbHistory(stu);
 }
 
 /* ══════════ ✏️ 펜 전용 모드 ══════════
@@ -2091,6 +2115,10 @@ window.saveCurrent = async function(){
     // 🏷 오답 유형 (v2.3) — ❌ 일 때만 값, 그 밖의 판정이면 null 로 지운다. 최상위 필드에 쓰는 이유는 loadErrTaxonomy 위 주석 참고
     const _errType = errTypeForSave(_curJudgment, document.getElementById('err-type')?.value);
     upd[`graphErrorTypes.${curQid}`] = _errType;
+    // 💬 피드백 누적 (v2.7) — 같은 답안에 대한 수정은 마지막 줄을 덮어쓰고, 학생이 고쳐 낸 뒤의 피드백은 새 줄로 쌓는다(바뀐 게 없으면 쓰지 않는다).
+    //    perQuestion.feedback 은 「지금 답안의 최신 피드백」으로 그대로 쓰고, 지난 것은 최상위 graphFeedbackLog 에 둔다(grading.js 주석 참고)
+    const _fbNext = feedbackLogAfterSave(stu.fbLog, feedback, stu.data.drawing, new Date().toISOString());
+    if(_fbNext.changed) upd[`graphFeedbackLog.${curQid}`] = _fbNext.log;
     // 시험지 문항이면 점수도 판정과 함께 기록 — correct만 쓰면 '⭕인데 0점' 모순 데이터가 됨
     const _ws = WORKSHEETS.find(w=>w.id===curWsId);
     if(_ws?.type==='exam'){
@@ -2117,12 +2145,15 @@ window.saveCurrent = async function(){
         feedback: feedback || null,
         gradedAt: new Date().toISOString(),
         ...(teacherDrawing ? {teacherDrawing} : {}),
-      } }, graphErrorTypes: { [curQid]: _errType } }, {merge:true});
+      } }, graphErrorTypes: { [curQid]: _errType },
+         ...(_fbNext.changed ? { graphFeedbackLog: { [curQid]: _fbNext.log } } : {}) }, {merge:true});
     }
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
     stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)
     syncErrType(stu, curWsId, curQid, _errType);
+    if(_fbNext.changed) syncFbLog(stu, curWsId, curQid, _fbNext.log);
+    renderFbHistory(stu);
     // 색인의 상태도 갱신해 상태 필터·건수가 즉시 반영되게 한다
     graphRows.forEach(r=>{ if(r.email===stu.email && r.wsId===curWsId && r.qid===curQid) r.status = statusOf({correct:_curJudgment}); });
     patchIdx(stu.email, curWsId, curQid, statusOf({correct:_curJudgment}), false, stu.name);   // ⚡ 채점 요약 (v2.0) — 실패해도 채점은 이미 저장됨

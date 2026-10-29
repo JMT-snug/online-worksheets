@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.7">
+<meta name="app-version" content="scoring-v2.8">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -481,7 +481,10 @@ onAuthStateChanged(auth, async u => {
   showPage("main-page");
   await Promise.all([loadCurriculum(), loadClassInfo(), loadGradingIndex(), loadErrTaxonomy()]);   // v1.32: 기록은 학습지를 고를 때 그 학습지 것만 읽는다 (loadWsRecords) · v2.0: 채점 요약(grading_index)이 준비돼 있으면 목록·건수·상태는 그것으로
   { const rb = document.getElementById('btn-rebuild-idx'); if(rb) rb.style.display = BASE_TEACHER_EMAILS.includes(u.email) ? '' : 'none'; }
-  if(!idxMode && BASE_TEACHER_EMAILS.includes(u.email)) toast('ℹ️ 채점 요약이 아직 없어 옛 방식으로 읽습니다 — 🔧 요약 만들기를 한 번 누르면 빨라져요', 5000);
+  if(!idxMode && BASE_TEACHER_EMAILS.includes(u.email)){   // v2.8: 까닭(아직 없음·오래돼서 꺼짐·비어 있음·읽기 실패)마다 다른 문구 + 🔧 버튼에 ⚠
+    const n = idxOffNotice(idxOff || { why: 'none' });
+    syncRebuildBtn(); toast(n.toast, n.ms);
+  }
   buildGraphRows();          // 제출된 그래프 답안 색인 (교차 필터의 기준 데이터)
   refreshFilterOptions();    // 네 목록을 서로 반응하도록 채움
   // 주소로 학습지를 지정해 왔으면(index 헤더의 '채점' 버튼) 그것을 우선한다
@@ -742,21 +745,57 @@ function idxStatusOf(p, g){
 }
 const _idxV = st => st === 'ok' ? 1 : st === 'ng' ? 2 : 0;
 
+/* 요약을 못 쓰는 까닭 (v2.8) — 옛 방식으로 읽을 때 기본 교사에게 「왜 꺼졌는지」를 알려 준다. 요약을 쓰는 중이면 null.
+   none: 한 번도 안 만듦 / dirty: 만든 뒤 학생 기록 삭제·문항 ID 정리 등으로 오래됨(dirtyAt 이 그 시각) / empty: 표시는 있는데 요약 문서가 없음 / error: 읽기 실패 */
+let idxOff = null;
+const REBUILD_TITLE = '전체 답안을 한 번 읽어 채점 여부 요약을 새로 만듭니다 (기본 교사 전용)';
+function idxWhenText(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+/* → { toast, hint, ms } — 까닭마다 문구가 다르다. 「아직 없음」과 「오래돼서 꺼짐」을 같은 말로 하면 원인을 헷갈린다 */
+function idxOffNotice(off){
+  if(!off) return null;
+  if(off.why === 'dirty'){
+    const when = idxWhenText(off.at);
+    return { ms: 9000,
+      toast: '⚠️ 채점 요약이 오래돼서 꺼져 있어요' + (when ? ' (' + when + '에 표시됨)' : '') + ' — 학생 기록 삭제·문항 ID 정리 뒤에 생기는 표시예요. 지금은 옛 방식(느림)으로 읽으니 🔧 요약 만들기를 누르면 다시 빨라져요',
+      hint: '요약이 오래돼서 꺼져 있습니다' + (when ? ' (' + when + '에 표시됨)' : '') + ' — 눌러서 새로 만드세요' };
+  }
+  if(off.why === 'empty')
+    return { ms: 7000, toast: 'ℹ️ 채점 요약 표시는 켜져 있는데 요약 문서가 비어 있어 옛 방식으로 읽습니다 — 🔧 요약 만들기로 다시 채워 주세요',
+      hint: '요약 문서가 비어 있습니다 — 눌러서 새로 만드세요' };
+  if(off.why === 'error')
+    return { ms: 8000, toast: '⚠️ 채점 요약을 읽지 못해 옛 방식으로 읽습니다' + (off.code ? ' (' + off.code + ')' : '') + ' — 새로고침해 보고, 계속되면 규칙(grading_index) 게시를 확인해 주세요',
+      hint: '요약을 읽지 못했습니다 — 새로고침해 보세요' };
+  return { ms: 5000, toast: 'ℹ️ 채점 요약이 아직 없어 옛 방식으로 읽습니다 — 🔧 요약 만들기를 한 번 누르면 빨라져요',
+    hint: '요약을 아직 만들지 않았습니다 — 눌러서 만드세요' };
+}
+const rebuildLabel = () => idxOff ? '🔧 요약 만들기 ⚠' : '🔧 요약 만들기';
+/* 🔧 버튼에 지금 상태를 붙인다 — 알림은 몇 초 뒤 사라지지만 버튼의 ⚠ 와 설명은 남는다 */
+function syncRebuildBtn(){
+  const rb = document.getElementById('btn-rebuild-idx'); if(!rb) return;
+  const n = idxOffNotice(idxOff);
+  rb.textContent = rebuildLabel();
+  rb.title = n ? n.hint + '\n' + REBUILD_TITLE : REBUILD_TITLE;
+}
+
 /* 요약 읽기 — 표시(config/gradingIndex)가 ready 이고 dirty 가 아니며 문서가 있을 때만 idxMode */
 async function loadGradingIndex(){
-  idxMode = false; idxDocs = {};
+  idxMode = false; idxDocs = {}; idxOff = null;
   try{
     const flag = await getDoc(doc(db, 'config', 'gradingIndex'));
     const f = flag.exists() ? flag.data() : {};
-    if(!f.ready){ console.log('[요약] 아직 만들지 않음 → 옛 방식'); return; }
-    if(f.dirty){ console.log('[요약] 오래됐다는 표시 → 옛 방식'); return; }
+    if(!f.ready){ idxOff = { why: 'none' }; console.log('[요약] 아직 만들지 않음 → 옛 방식'); return; }
+    if(f.dirty){ idxOff = { why: 'dirty', at: String(f.dirtyAt || '') }; console.log('[요약] 오래됐다는 표시 → 옛 방식', f.dirtyAt || ''); return; }
     const snap = await getDocs(collection(db, 'grading_index'));
     const docs = {};
     snap.forEach(d => { const x = d.data() || {}; docs[d.id] = { name: x.name || '', p: x.p || {}, g: x.g || {} }; });
     idxDocs = docs;
     idxMode = Object.keys(docs).length > 0;
+    if(!idxMode) idxOff = { why: 'empty' };
     console.log('[요약] 사용', Object.keys(docs).length + '명');
-  }catch(e){ idxMode = false; idxDocs = {}; console.warn('[요약 읽기 실패 — 옛 방식]', e.code || e.message); }
+  }catch(e){ idxMode = false; idxDocs = {}; idxOff = { why: 'error', code: e.code || '' }; console.warn('[요약 읽기 실패 — 옛 방식]', e.code || e.message); }
 }
 
 /* 요약으로 채점 대상 행을 만든다 (그림은 읽지 않는다) */
@@ -859,14 +898,15 @@ window.rebuildGradingIndex = async function(btn){
     }
     await setDoc(doc(db, 'config', 'gradingIndex'), { ready: true, dirty: false, rebuiltAt: nowIso }, { merge: true });
     idxDocs = {}; Object.entries(docs).forEach(([em, d]) => { idxDocs[em] = d; });
-    idxMode = true;
+    idxMode = true; idxOff = null;
     buildGraphRows(); refreshFilterOptions();
     if(curMode === 'feedback') buildStuSelector();
     toast('✅ 요약을 만들었어요 (' + emails.length + '명)', 4000);
   }catch(e){
     console.error(e); toast('요약 만들기 실패: ' + (e.message || e), 5000);
   }finally{
-    if(btn){ btn.disabled = false; btn.textContent = '🔧 요약 만들기'; }
+    if(btn){ btn.disabled = false; }
+    syncRebuildBtn();   // 성공하면 ⚠ 가 사라지고, 실패하면 그대로 남는다
   }
 };
 

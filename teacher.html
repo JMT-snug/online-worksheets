@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.11">
+<meta name="app-version" content="6.12">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -521,7 +521,7 @@ function buildSidebar(){
         <span>${GRADE_LABEL[grade]}</span>
         <span class="sb-chevron ${gradeOpen?'open':''}">›</span>
       </div>
-      <div class="sb-unit-group" id="grade-group-${grade}" style="max-height:${gradeOpen?'2000px':'0'}">`;
+      <div class="sb-unit-group" id="grade-group-${grade}" style="max-height:${gradeOpen?'none':'0'}">`;
     const gradeUnits=UNITS.filter(u=>u.grade===grade);
     gradeUnits.forEach(unit=>{
       const uKey=`${grade}-${unit.id}`;
@@ -534,7 +534,7 @@ function buildSidebar(){
           <span>${unit.title}</span>
           <span class="sb-unit-chevron ${unitOpen?'open':''}">›</span>
         </div>
-        <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'1000px':'0'}">`;
+        <div class="sb-ws-group" id="unit-group-${uKey}" style="max-height:${unitOpen?'none':'0'}">`;
       sheets.forEach(ws=>{
         const done=Object.values(allData).filter(d=>isRecDone(d[ws.id])).length;
         h+=`
@@ -555,23 +555,26 @@ function buildSidebar(){
   nav.querySelectorAll(".sb-ws-item[data-view]").forEach(el=>{
     el.addEventListener("click",()=>navigate(el.dataset.view));
   });
+  /* 펼친 묶음은 높이 제한 없이(max-height:none) 둔다 (v6.12, 2026-10-30 교사 신고 「학습지가 더 있는데 스크롤이 내려가지 않아」).
+     예전엔 학년 2000px · 단원 1000px 으로 고정해 펼쳤는데, 1학년 학습지가 늘어 2000px 을 넘자 그 아래 학습지가
+     overflow:hidden 에 잘려 사이드바를 끝까지 내려도 보이지 않았다(다음 학년 머리줄이 바로 붙어 나옴). */
   nav.querySelectorAll(".sb-grade-header").forEach(el=>{
     el.addEventListener("click",()=>{
       const g=parseInt(el.dataset.grade);
       sbGradeOpen[g]=!sbGradeOpen[g];
       const group=document.getElementById("grade-group-"+g);
       const chevron=el.querySelector(".sb-chevron");
-      if(sbGradeOpen[g]){group.style.maxHeight="2000px";chevron.classList.add("open");}
+      if(sbGradeOpen[g]){group.style.maxHeight="none";chevron.classList.add("open");}
       else{group.style.maxHeight="0";chevron.classList.remove("open");}
     });
   });
   nav.querySelectorAll(".sb-unit-header").forEach(el=>{
     el.addEventListener("click",()=>{
       const uKey=el.dataset.ukey;
-      sbUnitOpen[uKey]=!sbUnitOpen[uKey];
+      sbUnitOpen[uKey]=sbUnitOpen[uKey]===false;   // 처음엔 undefined(=펼침) — 예전 !undefined 는 true 라 첫 클릭에 접히지 않았다
       const group=document.getElementById("unit-group-"+uKey);
       const chevron=el.querySelector(".sb-unit-chevron");
-      if(sbUnitOpen[uKey]!==false){group.style.maxHeight="1000px";chevron.classList.add("open");}
+      if(sbUnitOpen[uKey]){group.style.maxHeight="none";chevron.classList.add("open");}
       else{group.style.maxHeight="0";chevron.classList.remove("open");}
     });
   });

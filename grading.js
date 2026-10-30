@@ -539,8 +539,16 @@ function graphsAllCorrect(questions, perQuestion){
 }
 /* records 문서(rec) 하나가 "완료"인가 — 완료 플래그·완료 시각·전부 응답 중 하나가 있고,
    그래프 문항까지 모두 정답 채점된 경우. questions 가 없으면(학습지를 못 찾음) 옛 규칙 그대로. */
+/* 링크를 뺀 모든 문항이 기록에서 정답인가 (v14.7) — answeredCount·isComplete 는 학생이 마지막으로 저장한 순간의 값이라,
+   그 뒤 선생님이 그래프를 ⭕ 로 매겨 다 맞게 돼도 학생이 다시 저장하기 전엔 「진행 중」으로 남았다(교사 신고, 2026-10-30). */
+function allQuestionsCorrect(questions, perQuestion){
+  const pq = perQuestion || {};
+  const qs = (questions || []).filter(q => q && q.type !== 'link');
+  return qs.length > 0 && qs.every(q => pq[q.id]?.correct === true);
+}
 function recordIsDone(rec, questions){
   if(!rec) return false;
+  if(Array.isArray(questions) && allQuestionsCorrect(questions, rec.perQuestion)) return true;
   const flag = !!(rec.isComplete || rec.completedAt ||
                   (rec.answeredCount && rec.totalCount && rec.answeredCount >= rec.totalCount));
   if(!flag) return false;

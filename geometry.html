@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.2">
+<meta name="app-version" content="geometry-v1.3">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -144,10 +144,13 @@ textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #
 .qbox h5{font-size:12px;color:var(--ink3);margin-bottom:6px;font-weight:700}
 .qbox .row{flex-wrap:wrap}
 .qbox .row label{width:76px}
-.labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:5px 22px}
-.labrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.labn{font-size:12.5px;font-weight:600;color:var(--ink2)}.labn em{font-style:normal;font-weight:500;color:var(--ink3);margin-left:6px;font-size:11.5px}
-.labhd{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--accent);margin-top:4px}
+.labgrid{display:flex;flex-direction:column;gap:3px}
+.labgroup{display:flex;align-items:flex-start;gap:8px 14px;padding:7px 10px;border-radius:9px}
+.labgroup:nth-child(even){background:#f0ede3}      /* 짝수 번째 도형(S2·S4…)에 음영 — S1·S2·S3 가 한눈에 갈리게 */
+.labhd{flex:none;width:90px;font-size:11.5px;font-weight:700;color:var(--accent);padding-top:17px}
+.labcells{display:flex;flex-wrap:wrap;gap:8px 16px;flex:1;min-width:0}
+.labcell{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.labn{font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap}.labn em{font-style:normal;font-weight:500;color:var(--ink3);margin-left:6px;font-size:11.5px}
 .slide{display:flex;align-items:center;gap:8px;flex:1}
 .slide input[type=range]{flex:1;accent-color:var(--accent)}
 .slide em{font-style:normal;width:44px;text-align:right;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
@@ -194,7 +197,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.2</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.3</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -482,15 +485,16 @@ function labBox(f) {
   const multi = new Set(opts.map(o => o.of)).size > 1;
   let last = null, rows = '';
   opts.forEach(o => {
-    if (multi && o.of !== last) rows += '<div class="labhd">' + esc(o.shape) + '</div>';
+    if (o.of !== last) { if (last !== null) rows += '</div></div>'; rows += '<div class="labgroup">' + (multi ? '<div class="labhd">' + esc(o.shape) + '</div>' : '') + '<div class="labcells">'; }
     last = o.of;
     const l = labs.find(x => x.of === o.of && x.kind === o.kind), m = l ? l.show : 'none';
     const val = o.known ? o.text + (o.src === 'derived' ? ' · 계산' : '') : '정해지지 않음';
-    rows += '<div class="labrow"><span class="labn">' + esc(o.ko) + '<em>' + esc(val) + (m === 'text' ? ' · 직접 쓴 글자' : '') + '</em></span>'
+    rows += '<div class="labcell"><span class="labn">' + esc(o.ko) + '<em>' + esc(val) + (m === 'text' ? ' · 직접 쓴 글자' : '') + '</em></span>'
       + '<div class="seg" data-lab="' + esc(o.of + '|' + o.kind) + '">'
       + [['none', '없음'], ['value', '값'], ['x', 'x']].map(p => '<button data-v="' + p[0] + '" class="' + (m === p[0] ? 'on' : '') + '"' + (p[0] === 'value' && !o.known ? ' disabled title="' + LAB_TIP_UNKNOWN + '"' : '') + '>' + p[1] + '</button>').join('')
       + '</div></div>';
   });
+  if (last !== null) rows += '</div></div>';
   return '<div class="qbox" style="grid-column:1/-1"><h5>표시할 수치 — 그림에 보일 길이를 골라요(길이 자체는 바뀌지 않아요)</h5><div class="labgrid">' + rows + '</div>'
     + '<div class="acts"><button class="btn" data-act2="labsoff">모두 끄기</button><button class="btn" data-act2="labsval">값을 아는 수치 모두 보이기</button></div></div>';
 }

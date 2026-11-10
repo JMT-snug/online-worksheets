@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.1">
+<meta name="app-version" content="geometry-v1.2">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -140,9 +140,14 @@ textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #
 .tabbar .badge.e{background:var(--red-lt);color:var(--red)}
 .tabbar .badge.g{background:var(--grn-lt);color:var(--green)}
 .pane{flex:1;min-height:0;overflow:auto;padding:12px 14px}
-.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 22px}
+.qgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 22px}
 .qbox h5{font-size:12px;color:var(--ink3);margin-bottom:6px;font-weight:700}
+.qbox .row{flex-wrap:wrap}
 .qbox .row label{width:76px}
+.labgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:5px 22px}
+.labrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.labn{font-size:12.5px;font-weight:600;color:var(--ink2)}.labn em{font-style:normal;font-weight:500;color:var(--ink3);margin-left:6px;font-size:11.5px}
+.labhd{grid-column:1/-1;font-size:11.5px;font-weight:700;color:var(--accent);margin-top:4px}
 .slide{display:flex;align-items:center;gap:8px;flex:1}
 .slide input[type=range]{flex:1;accent-color:var(--accent)}
 .slide em{font-style:normal;width:44px;text-align:right;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
@@ -189,7 +194,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.1</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.2</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -260,7 +265,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 0, 1];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 0, 2];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -467,6 +472,37 @@ function viewCtl() {
     ? { ortho, a: { label: '좌우 돌리기', min: -90, max: 90, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '위·아래', min: 3, max: 85, val: Math.round(v.pitch || 20), key: 'pitch', unit: '°' } }
     : { ortho, a: { label: '좌우 돌리기', min: -45, max: 90, val: Math.round((v.depthAngle == null ? 45 : v.depthAngle) - 45), key: 'depthAngle', unit: '°' }, b: { label: '깊이(밑면 넓이)', min: 15, max: 100, val: Math.round(100 * (v.depthScale == null ? .5 : v.depthScale)), key: 'depthScale', unit: '%' } };
 }
+/* 「표시할 수치」 — 엔진이 알려 준 목록(labelOptions)으로, 수치마다 [없음][값][x] 를 고른다.
+   값: 그 길이의 실제 값을 글자로(말했거나 계산된 길이만) · x: 미지수로 표시(값을 몰라도 가능) · 없음: 그림에서 뺌. 길이 자체는 바뀌지 않는다. */
+const LAB_TIP_UNKNOWN = '이 길이는 아직 말하지 않아서 값을 보일 수 없어요. 대화창에 숫자를 알려 주거나 x 로 표시하세요.';
+function labBox(f) {
+  const opts = f.labelOptions || [];
+  if (!opts.length) return '';
+  const labs = (S.spec && S.spec.marks && S.spec.marks.labels) || [];
+  const multi = new Set(opts.map(o => o.of)).size > 1;
+  let last = null, rows = '';
+  opts.forEach(o => {
+    if (multi && o.of !== last) rows += '<div class="labhd">' + esc(o.shape) + '</div>';
+    last = o.of;
+    const l = labs.find(x => x.of === o.of && x.kind === o.kind), m = l ? l.show : 'none';
+    const val = o.known ? o.text + (o.src === 'derived' ? ' · 계산' : '') : '정해지지 않음';
+    rows += '<div class="labrow"><span class="labn">' + esc(o.ko) + '<em>' + esc(val) + (m === 'text' ? ' · 직접 쓴 글자' : '') + '</em></span>'
+      + '<div class="seg" data-lab="' + esc(o.of + '|' + o.kind) + '">'
+      + [['none', '없음'], ['value', '값'], ['x', 'x']].map(p => '<button data-v="' + p[0] + '" class="' + (m === p[0] ? 'on' : '') + '"' + (p[0] === 'value' && !o.known ? ' disabled title="' + LAB_TIP_UNKNOWN + '"' : '') + '>' + p[1] + '</button>').join('')
+      + '</div></div>';
+  });
+  return '<div class="qbox" style="grid-column:1/-1"><h5>표시할 수치 — 그림에 보일 길이를 골라요(길이 자체는 바뀌지 않아요)</h5><div class="labgrid">' + rows + '</div>'
+    + '<div class="acts"><button class="btn" data-act2="labsoff">모두 끄기</button><button class="btn" data-act2="labsval">값을 아는 수치 모두 보이기</button></div></div>';
+}
+/** 사양의 라벨에서 (of, kind) 하나를 mode(none|value|x)로 — 없으면 더하고, none 이면 뺀다. 같은 칸의 id·위치(offset)는 그대로 둔다 */
+function setLabel(sp, of, kind, mode) {
+  const m = Object.assign({}, sp.marks), labs = (m.labels || []).slice();
+  const i = labs.findIndex(l => l.of === of && l.kind === kind);
+  if (mode === 'none') { if (i >= 0) labs.splice(i, 1); }
+  else if (i >= 0) { const l = Object.assign({}, labs[i], { show: mode }); delete l.text; labs[i] = l; }
+  else labs.push({ kind, of, show: mode });
+  m.labels = labs; sp.marks = m;
+}
 function paneHtml(tab) {
   const f = S.fig, st = (S.spec && S.spec.style) || {}, v = (S.spec && S.spec.view) || {};
   const seg = (label, key, opts) => '<div class="row"><label>' + label + '</label><div class="seg" data-ctrl="' + key + '">' + opts.map(o => '<button data-v="' + o[0] + '" class="' + (String(st[key]) === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>';
@@ -474,7 +510,7 @@ function paneHtml(tab) {
     if (!f) return '<p class="note">그림이 나오면 여기서 시점·꾸밈을 말 없이 바로 바꿀 수 있어요(길이는 바뀌지 않아요).</p>';
     const net = f.spec.kind === 'net', c = viewCtl();
     const sl = (o, id) => '<div class="row"><label>' + o.label + '</label><div class="slide"><input type="range" min="' + o.min + '" max="' + o.max + '" value="' + o.val + '" data-sl="' + id + '"' + (net ? ' disabled' : '') + '><em id="v-' + id + '">' + o.val + o.unit + '</em></div></div>';
-    return '<div class="qgrid"><div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
+    return '<div class="qgrid">' + labBox(f) + '<div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
       + '<div class="row"><label>투영</label><div class="seg" data-proj="1"><button data-v="oblique" class="' + (!c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>사각 투영(교과서식)</button><button data-v="ortho" class="' + (c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>정사영(입체적)</button></div></div>'
       + sl(c.a, 'a') + sl(c.b, 'b')
       + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button></div>'
@@ -528,7 +564,7 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ═══════════════ 결과 반영 ═══════════════ */
 function figFrom(r) {
-  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {},
+  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {}, labelOptions: r.labelOptions || [],
     checks: (r.checks || []).map(c => ({ name: c.name, ok: !!c.ok })), checksTotal: (r.checks || []).length, checksOk: (r.checks || []).filter(c => c.ok).length, attempts: r.attempts || [] };
 }
 function commit(r, why) {
@@ -710,7 +746,7 @@ async function revalidate(why) {
   try {
     const v = await local('/validate', { spec, userText: accText('') }, 30000);
     if (v && v.spec) {
-      S.spec = v.spec; if (S.fig) { S.fig.spec = v.spec; S.fig.issues = v.issues || []; S.fig.reference = v.reference || {}; S.fig.resolved = v.resolved || {}; }
+      S.spec = v.spec; if (S.fig) { S.fig.spec = v.spec; S.fig.issues = v.issues || []; S.fig.reference = v.reference || {}; S.fig.resolved = v.resolved || {}; S.fig.labelOptions = v.labelOptions || []; }
       const w = (v.issues || []).filter(i => i.level === 'warn' && i.rule);
       S.msgs.push({ role: 's', text: why + ' — ' + (w.length ? '학년 규칙 경고 ' + w.length + '개 (검증 결과 탭)' : '학년 규칙에 맞아요') });
       if (w.length) S.tab = 'check';
@@ -808,6 +844,12 @@ document.addEventListener('click', e => {
   if (t.dataset.q != null) { $('#inp').value = QUICK[+t.dataset.q][1]; $('#inp').focus(); toast('Enter 를 누르면 보내요 — 문장을 고쳐서 보내도 돼요.'); return; }
   if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); return; }
   if (t.dataset.act) { const [i, j] = t.dataset.act.split(':').map(Number); actFn(S.msgs[i].acts[j]); return; }
+  if (t.closest('[data-lab]') && t.dataset.v) { const [of, kind] = t.closest('[data-lab]').dataset.lab.split('|'), v = t.dataset.v; redraw(sp => setLabel(sp, of, kind, v), '표시할 수치를 바꿔 다시 그리는 중…'); return; }
+  if (t.dataset.act2 === 'labsoff' || t.dataset.act2 === 'labsval') {
+    const opts = (S.fig && S.fig.labelOptions) || [], on = t.dataset.act2 === 'labsval';
+    redraw(sp => { opts.forEach(o => { if (!on) setLabel(sp, o.of, o.kind, 'none'); else if (o.known) setLabel(sp, o.of, o.kind, 'value'); }); }, on ? '아는 수치를 모두 보이는 중…' : '표시할 수치를 모두 끄는 중…');
+    return;
+  }
   if (t.dataset.act2 === 'viewreset') { redraw(sp => { delete sp.view; }, '기본 시점으로 다시 그리는 중…', '시점을 기본으로 되돌렸어요'); return; }
   if (t.dataset.copy) { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(S.spec, null, 2)); toast('사양 JSON 을 복사했어요.'); return; }
   if (t.id === 'btnRetry') { connect(); return; }

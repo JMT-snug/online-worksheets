@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="app-version" content="geometry-v1.0">
+<title>도형 이미지 제작</title>
+<style>
+:root{
+  --cream:#faf8f3;--paper:#fff;--rule:#e8e4d9;--rule2:#d6d1c4;
+  --ink:#1c1917;--ink2:#44403c;--ink3:#a8a29e;
+  --accent:#1d4ed8;--acc-lt:#eff6ff;--acc-dk:#1e40af;
+  --green:#15803d;--grn-lt:#dcfce7;
+  --red:#b91c1c;--red-lt:#fee2e2;
+  --amber:#b45309;--amb-lt:#fef3c7;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;font-size:14px;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.45}
+
+/* ── 헤더 ── */
+.top{display:flex;align-items:center;gap:14px;padding:0 16px;height:54px;background:var(--paper);border-bottom:1px solid var(--rule);flex:none}
+.brand{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
+.brand small{font-size:11px;font-weight:600;color:var(--ink3);margin-left:2px}
+.sp{flex:1}
+.pill{display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;font-size:12.5px;font-weight:600;border:1px solid var(--rule);background:var(--cream);cursor:default;white-space:nowrap}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--ink3);display:inline-block;flex:none}
+.pill.ok{background:var(--grn-lt);border-color:#86efac;color:#166534}.pill.ok i{background:#16a34a;box-shadow:0 0 0 3px #bbf7d0}
+.pill.wait{background:var(--amb-lt);border-color:#fcd34d;color:#92400e}.pill.wait i{background:#d97706;animation:blink 1s infinite}
+.pill.off{background:var(--red-lt);border-color:#fca5a5;color:#991b1b;cursor:pointer}.pill.off i{background:#dc2626}
+@keyframes blink{50%{opacity:.25}}
+.pill u{font-weight:500;text-underline-offset:3px;opacity:.85}
+.xbtn{border:1px solid var(--rule);background:var(--paper);border-radius:8px;padding:6px 11px;font-size:13px;color:var(--ink2)}
+.xbtn:hover{background:var(--cream)}
+
+/* ── 본문 ── */
+.grid{flex:1;min-height:0;display:grid;grid-template-columns:392px minmax(0,1fr);gap:12px;padding:12px}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);box-shadow:0 1px 2px rgba(28,25,23,.04)}
+.card h3{font-size:12px;font-weight:700;color:var(--ink3);letter-spacing:.3px;margin-bottom:6px}
+
+.cond{padding:9px 13px 10px;flex:none}
+.row{display:flex;align-items:center;gap:8px;margin-top:5px}
+.row label{width:62px;font-size:12.5px;font-weight:600;color:var(--ink2);flex:none}
+.seg{display:inline-flex;border:1px solid var(--rule2);border-radius:8px;overflow:hidden;background:var(--paper)}
+.seg button{border:0;border-right:1px solid var(--rule);background:transparent;padding:5px 11px;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+.seg button:not(.on):hover:not(:disabled){background:var(--acc-lt)}
+
+.chat{flex:1;min-height:0;display:flex;flex-direction:column}
+.msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 13px 6px;display:flex;flex-direction:column;gap:11px}
+.msgs::-webkit-scrollbar,.pane::-webkit-scrollbar{width:8px}
+.msgs::-webkit-scrollbar-thumb,.pane::-webkit-scrollbar-thumb{background:#d6d3d1;border-radius:8px}
+.bub{max-width:92%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}
+.bub.u{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap}
+.bub.a{align-self:flex-start;background:var(--cream);border:1px solid var(--rule);border-bottom-left-radius:4px;width:100%;max-width:100%}
+.bub.a .t{font-weight:800;font-size:13.5px}
+.bub.a .t.err{color:var(--red)}
+.bub.a .sum{margin-top:3px;color:var(--ink2);font-size:13px}
+.sysmsg{align-self:center;font-size:11.5px;color:var(--ink3);background:#f5f5f4;border-radius:12px;padding:3px 11px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{display:inline-flex;gap:5px;align-items:flex-start;font-size:12px;line-height:1.4;padding:4px 9px;border-radius:8px;border:1px solid var(--rule2);background:var(--paper);color:var(--ink2)}
+.chip b{font-weight:700;white-space:nowrap}
+.chip.ok{background:var(--grn-lt);border-color:#86efac;color:#14532d}
+.chip.info{background:var(--acc-lt);border-color:#bfdbfe;color:#1e3a8a}
+.chip.warn{background:var(--amb-lt);border-color:#fcd34d;color:#78350f}
+.chip.err{background:var(--red-lt);border-color:#fca5a5;color:#7f1d1d}
+.chip.kept{background:#f5f5f4;color:#57534e}
+.sug{margin-top:7px;font-size:12.5px;color:var(--ink2);background:var(--paper);border-left:3px solid var(--amber);padding:6px 9px;border-radius:0 6px 6px 0}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.btn{border:1px solid var(--rule2);background:var(--paper);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.btn:hover{background:var(--acc-lt);border-color:#93c5fd;color:var(--acc-dk)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:var(--acc-dk)}
+.ex{margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.ex button{text-align:left;border:1px dashed #93c5fd;background:var(--acc-lt);color:var(--acc-dk);border-radius:9px;padding:6px 10px;font-size:12.5px;line-height:1.4}
+.ex button:hover{background:#dbeafe}
+.typing{align-self:flex-start;display:flex;align-items:center;gap:4px;padding:11px 14px;background:var(--cream);border:1px solid var(--rule);border-radius:14px;border-bottom-left-radius:4px}
+.typing span{width:7px;height:7px;border-radius:50%;background:#a8a29e;animation:bounce 1.1s infinite}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1}}
+.typing em{font-style:normal;font-size:12px;color:var(--ink3);margin-left:6px}
+
+.composer{border-top:1px solid var(--rule);padding:8px 11px 10px;flex:none}
+.modebar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);margin-bottom:6px}
+.modebar b{font-weight:700}
+.quick{display:flex;flex-wrap:nowrap;gap:5px;margin-bottom:7px;overflow-x:auto;padding-bottom:4px}
+.quick::-webkit-scrollbar{height:5px}.quick::-webkit-scrollbar-thumb{background:#d6d3d1;border-radius:5px}
+.quick button{border:1px solid var(--rule2);background:var(--paper);border-radius:14px;padding:3px 10px;font-size:12px;color:var(--ink2);white-space:nowrap;flex:none}
+.quick button:hover{background:var(--acc-lt);border-color:#93c5fd;color:var(--acc-dk)}
+.inrow{display:flex;gap:7px;align-items:flex-end}
+textarea{flex:1;resize:none;border:1px solid var(--rule2);border-radius:10px;padding:8px 10px;font:inherit;font-size:13.5px;line-height:1.5;outline:none;background:var(--cream);min-height:56px;max-height:120px}
+textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #dbeafe}
+.send{border:0;background:var(--accent);color:#fff;border-radius:10px;padding:0 16px;height:56px;font-size:14px;font-weight:700}
+.send:hover:not(:disabled){background:var(--acc-dk)}
+
+/* ── 미리보기 ── */
+.prev{flex:1.5;min-height:0;display:flex;flex-direction:column}
+.ptool{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--rule);flex:none;flex-wrap:wrap}
+.ptool .ttl{font-weight:800;font-size:14px}
+.ptool .sub{font-size:12px;color:var(--ink3)}
+.zoom{display:inline-flex;align-items:center;gap:2px}
+.zoom button{border:1px solid var(--rule2);background:var(--paper);width:28px;height:28px;border-radius:7px;font-size:15px;line-height:1;color:var(--ink2)}
+.zoom button:hover{background:var(--acc-lt)}
+.zoom span{width:46px;text-align:center;font-size:12px;color:var(--ink2)}
+.stage{flex:1;min-height:0;position:relative;overflow:auto;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:0 0 var(--r) var(--r)}
+.stage.checker{background:conic-gradient(#e7e5e4 25%,#fff 0 50%,#e7e5e4 0 75%,#fff 0) 0 0/20px 20px}
+.stage img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;transition:transform .15s,opacity .2s;display:block}
+.stage.busy img{opacity:.35;filter:grayscale(.4)}
+.empty{text-align:center;color:var(--ink3);padding:20px;max-width:430px}
+.empty .big{font-size:54px;opacity:.55;margin-bottom:6px}
+.empty p{font-size:13.5px;line-height:1.6;color:var(--ink2)}
+.empty .ex{align-items:stretch;margin-top:14px}
+.spin{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(255,255,255,.55);z-index:3}
+.spin .ring{width:38px;height:38px;border:4px solid #dbeafe;border-top-color:var(--accent);border-radius:50%;animation:rot .8s linear infinite}
+.spin small{color:var(--ink2);font-size:12.5px;font-weight:600}
+@keyframes rot{to{transform:rotate(360deg)}}
+.cant{border:2px dashed #fca5a5;background:#fff7f7;border-radius:12px;padding:22px 26px;max-width:440px;text-align:center}
+.cant .big{font-size:40px}
+.cant h4{color:var(--red);margin:4px 0 6px}
+.cant p{font-size:13px;color:var(--ink2);line-height:1.6}
+.off-card{max-width:480px;text-align:left;background:#fff;border:1px solid var(--rule);border-radius:12px;padding:18px 22px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+.off-card h4{font-size:16px;margin-bottom:10px}
+.off-card ol{padding-left:20px;font-size:13.5px;line-height:1.9;color:var(--ink2)}
+.off-card code{background:var(--cream);border:1px solid var(--rule);border-radius:5px;padding:0 5px;font-size:12.5px}
+.off-card .nb{margin-top:10px;font-size:12px;color:var(--ink3);line-height:1.55}
+
+/* ── 탭 ── */
+.tabs{flex:1;min-height:210px;display:flex;flex-direction:column}
+.tabbar{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid var(--rule);flex:none}
+.tabbar button{border:0;background:transparent;padding:9px 12px 8px;font-size:13px;font-weight:600;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabbar button:hover{color:var(--ink2)}
+.tabbar button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.tabbar .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;font-size:11px;line-height:17px;border-radius:9px;background:var(--amb-lt);color:var(--amber);font-weight:800}
+.tabbar .badge.e{background:var(--red-lt);color:var(--red)}
+.tabbar .badge.g{background:var(--grn-lt);color:var(--green)}
+.pane{flex:1;min-height:0;overflow:auto;padding:12px 14px}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 22px}
+.qbox h5{font-size:12px;color:var(--ink3);margin-bottom:6px;font-weight:700}
+.qbox .row label{width:76px}
+.slide{display:flex;align-items:center;gap:8px;flex:1}
+.slide input[type=range]{flex:1;accent-color:var(--accent)}
+.slide em{font-style:normal;width:44px;text-align:right;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.note{font-size:11.5px;color:var(--ink3);line-height:1.5;margin-top:8px}
+.note b{color:var(--green)}
+pre.json{font-family:Consolas,'D2Coding',monospace;font-size:12px;line-height:1.55;background:#1c1917;color:#e7e5e4;border-radius:9px;padding:11px 13px;overflow:auto;white-space:pre}
+pre.json .k{color:#93c5fd}pre.json .s{color:#86efac}pre.json .n{color:#fcd34d}pre.json .b{color:#f9a8d4}
+.copy{position:sticky;float:right;top:0;border:1px solid #57534e;background:#292524;color:#d6d3d1;border-radius:6px;font-size:11.5px;padding:2px 9px}
+.iss{border:1px solid var(--rule2);border-left-width:4px;border-radius:8px;padding:8px 11px;margin-bottom:7px;font-size:13px;line-height:1.5}
+.iss.error{border-left-color:#dc2626;background:#fff7f7}.iss.warn{border-left-color:#d97706;background:#fffbeb}.iss.info{border-left-color:#2563eb;background:#f8faff}
+.iss code{font-size:11.5px;background:#fff;border:1px solid var(--rule);border-radius:4px;padding:0 4px;color:var(--ink3);margin-right:6px}
+.iss .sg{margin-top:3px;color:var(--ink2);font-size:12.5px}
+.okline{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--grn-lt);border:1px solid #86efac;border-radius:8px;color:#14532d;font-weight:700;font-size:13px;margin-bottom:9px}
+details{margin-top:8px;font-size:12.5px;color:var(--ink2)}
+details summary{cursor:pointer;color:var(--accent);font-weight:600}
+details ul{margin:6px 0 0 18px;line-height:1.7}
+.ref{background:var(--cream);border:1px solid var(--rule);border-radius:9px;padding:10px 13px;margin-bottom:8px;font-size:13.5px;line-height:1.7}
+.ref small{display:block;color:var(--ink3);font-size:11.5px;margin-bottom:2px;font-weight:700}
+.log{font-family:Consolas,'D2Coding',monospace;font-size:12px;line-height:1.75;color:var(--ink2)}
+.log div::before{content:attr(data-t);color:var(--ink3);margin-right:9px}
+
+/* ── 아래 막대 ── */
+.bar{display:flex;align-items:center;gap:12px;padding:0 16px;height:60px;background:var(--paper);border-top:1px solid var(--rule);flex:none}
+.hist{display:flex;align-items:center;gap:6px}
+.hist button{border:1px solid var(--rule2);background:var(--paper);border-radius:8px;width:34px;height:34px;font-size:16px;color:var(--ink2)}
+.hist button:hover:not(:disabled){background:var(--acc-lt)}
+.hist span{font-size:12px;color:var(--ink3);min-width:60px;text-align:center}
+.vsep{width:1px;height:30px;background:var(--rule)}
+.bar label{font-size:12.5px;color:var(--ink2);font-weight:600}
+.bar small{color:var(--ink3);font-size:11.5px}
+.go{border:0;background:var(--green);color:#fff;border-radius:10px;padding:0 22px;height:40px;font-size:15px;font-weight:800;box-shadow:0 2px 0 #166534}
+.go:hover:not(:disabled){background:#166534}
+.go small{display:block;font-size:10.5px;font-weight:500;opacity:.9;margin-top:-1px;color:#fff}
+.dl{border:1px solid var(--rule2);background:var(--paper);border-radius:9px;padding:0 14px;height:38px;font-size:13px;font-weight:700;color:var(--ink2)}
+.dl:hover:not(:disabled){background:var(--acc-lt)}
+.toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#1c1917;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;max-width:520px;text-align:center;line-height:1.5}
+.toast.show{opacity:1}
+.banner{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 18px;border-radius:12px;font-size:13.5px;font-weight:700;z-index:35;box-shadow:0 8px 24px rgba(0,0,0,.2);display:none;align-items:center;gap:12px}
+.banner.show{display:flex}
+.banner button{border:1px solid rgba(255,255,255,.7);background:transparent;color:#fff;border-radius:8px;padding:3px 10px;font-weight:700;font-size:12.5px}
+@media (max-width:900px){body{overflow:auto}.grid{grid-template-columns:1fr;grid-auto-rows:minmax(420px,auto)}.qgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.0</small></div>
+  <div class="sp"></div>
+  <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
+  <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
+</header>
+
+<main class="grid">
+  <section class="col">
+    <div class="card cond">
+      <h3>이 문항의 조건 <span title="학년과 구하는 값은 AI 가 바꾸지 않아요. 문제에 필요한 길이가 빠졌는지, 그 학년에서 배운 방법으로 풀 수 있는지 대화창 아래에서 알려 드려요." style="cursor:help;font-weight:500">ⓘ</span></h3>
+      <div class="row"><label>학년</label>
+        <div class="seg" id="segGrade"><button data-v="1">중1</button><button data-v="2">중2</button><button data-v="3">중3</button></div>
+      </div>
+      <div class="row"><label>구하는 값</label>
+        <div class="seg" id="segPurpose"><button data-v="none">없음</button><button data-v="volume">부피</button><button data-v="surface">겉넓이</button><button data-v="both">둘 다</button></div>
+      </div>
+      <div class="row"><label>그림 종류</label>
+        <div class="seg" id="segKind"><button data-v="solid">겨냥도</button><button data-v="net">전개도</button></div>
+      </div>
+    </div>
+
+    <div class="card chat">
+      <div class="msgs" id="msgs"></div>
+      <div class="composer">
+        <div class="modebar"><span id="modeTxt"></span><button class="btn" id="btnMode" style="padding:2px 9px;font-size:12px"></button></div>
+        <div class="quick" id="quick"></div>
+        <div class="inrow">
+          <textarea id="inp" rows="2" placeholder="도형을 말로 설명하세요.&#10;예) 밑면이 한 변 4cm인 정사각형이고 높이가 6cm인 정사각뿔"></textarea>
+          <button class="send" id="btnSend">보내기<br><small style="font-weight:500;font-size:10.5px">Enter</small></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="card prev">
+      <div class="ptool">
+        <div><div class="ttl" id="pTitle">—</div><div class="sub" id="pSub"></div></div>
+        <div class="sp"></div>
+        <div class="seg" id="segBg" title="내보낼 이미지의 배경"><button data-v="white">흰 배경</button><button data-v="transparent">투명 배경</button></div>
+        <div class="zoom"><button id="zOut" title="줄이기">−</button><span id="zTxt">100%</span><button id="zIn" title="키우기">＋</button><button id="zFit" title="맞춤" style="width:auto;padding:0 8px;font-size:12px">맞춤</button></div>
+      </div>
+      <div class="stage" id="stage"></div>
+    </div>
+    <div class="card tabs">
+      <div class="tabbar" id="tabbar"></div>
+      <div class="pane" id="pane"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="bar">
+  <div class="hist"><button id="btnUndo" title="이전 그림으로">↶</button><span id="histTxt">그림 없음</span><button id="btnRedo" title="다음 그림으로">↷</button></div>
+  <div class="vsep"></div>
+  <label>이미지 크기</label>
+  <div class="seg" id="segSize"><button data-v="small">작게</button><button data-v="normal">보통</button><button data-v="large">크게</button></div>
+  <small id="sizeTxt"></small>
+  <div class="sp"></div>
+  <small id="ctx"></small>
+  <button class="dl" id="btnPng">⬇ PNG 저장</button>
+  <button class="go" id="btnGo">📥 문항에 넣기<small>「도형 제작」 이미지로 첨부돼요</small></button>
+</footer>
+
+<div class="toast" id="toast"></div>
+<div class="banner" id="banner"><span>✅ 문항에 넣었어요 — 편집기에서 <b>[적용]</b>을 눌러야 저장돼요.</span><button id="banClose">이 창 닫기</button><button id="banStay">계속 고치기</button></div>
+
+<script>
+'use strict';
+/* ═══════════════ 설정 ═══════════════ */
+const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
+const AI_TOKEN = 'snug-ai-assist';
+const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
+const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
+const PARAMS = new URLSearchParams(location.search);
+const OPENER_ORIGIN = ORIGINS_OK.includes(PARAMS.get('o')) ? PARAMS.get('o') : '*';
+const hasOpener = () => { try { return !!(window.opener && window.opener !== window && !window.opener.closed); } catch (e) { return false; } };   // 편집기가 열어 준 팝업인가(매번 확인 — 편집기 창이 닫혔을 수 있다)
+const SIZE_SCALE = { small: 0.8, normal: 1.2, large: 2.0 };       // 그림의 긴 변 ≈ 900px × scale
+const SIZE_PX = { small: 720, normal: 1080, large: 1800 };
+const MAX_HIST = 30;
+
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pad2 = n => ('0' + n).slice(-2);
+
+const KO = { cuboid: '직육면체', prism: '각기둥', pyramid: '각뿔', frustum_pyramid: '각뿔대', cylinder: '원기둥', cone: '원뿔', frustum_cone: '원뿔대', sphere: '구', hemisphere: '반구', vertex_hull: '꼭짓점을 이은 입체' };
+const DIMKO = { w: '가로', d: '세로', h: '높이', a: '한 변', b: '다른 변', c: '빗변', n: '변의 수', r: '반지름', l: '모선', s: '옆면 높이', s2: '옆면 높이(2)', e: '옆모서리', a1: '아랫밑', a2: '윗밑', H: '큰 뿔의 높이', hs: '작은 뿔의 높이', r1: '아랫밑 반지름', r2: '윗밑 반지름', L: '큰 원뿔의 모선', l2: '작은 원뿔의 모선', h2: '작은 원뿔의 높이', bh: '밑면의 높이', base_area: '밑넓이' };
+const NKO = { 3: '삼', 4: '사', 5: '오', 6: '육', 7: '칠', 8: '팔', 9: '구', 10: '십', 11: '십일', 12: '십이' };
+const CATKO = { view: '시점', dims: '치수', labels: '길이 표시', names: '꼭짓점 이름', style: '꾸밈', structure: '도형 구성' };
+const EXAMPLES = [
+  '밑면이 한 변 4cm인 정사각형이고 옆면의 높이가 5cm인 정사각뿔. 꼭짓점은 A~E, 밑변과 옆면 높이를 표시해줘.',
+  '반지름 3cm, 높이 4cm인 원기둥 위에 반지름 3cm인 반구를 올린 도형. 부피를 구하는 문제야.',
+  '반지름 3cm, 모선 5cm인 원뿔을 전개도로 그려줘. 호의 길이랑 중심각도 보여줘.',
+  '반지름 3cm, 높이 6cm인 원기둥을 축을 지나게 잘라서 단면에 빗금을 쳐줘.',
+];
+const QUICK = [
+  ['⟲ 왼쪽 20°', '왼쪽으로 20도 돌려줘'], ['⟳ 오른쪽 20°', '오른쪽으로 20도 돌려줘'], ['위에서 더 보기', '위에서 더 내려다보이게 해줘'],
+  ['가려진 선 점선', '가려진 모서리를 점선으로 표시해줘'], ['흑백', '흑백으로 바꿔줘'], ['꼭짓점 이름', '꼭짓점을 A부터 차례로 표시해줘'],
+  ['높이 표시', '높이를 표시해줘'], ['전개도로', '전개도로 그려줘'],
+];
+
+/* ═══════════════ 상태 ═══════════════ */
+const S = {
+  server: 'wait', waitShown: false, countdown: 25, info: null,
+  grade: 1, purpose: 'none', kind: 'solid', bg: 'white', size: 'normal', zoom: 1, tab: 'quick',
+  msgs: [], busy: false, busyTxt: '', spec: null, fig: null, cant: null, hist: [], hi: -1,
+  texts: [], trusted: '', forceNew: false, label: '', pendingInit: null, lastFail: null, log: [], sent: false,
+};
+function logp(msg) { const d = new Date(); S.log.push([pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()), msg]); if (S.log.length > 80) S.log.shift(); }
+
+/* ═══════════════ 통신 ═══════════════ */
+async function local(path, body, ms) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms || 120000);
+  try {
+    const r = await fetch(LOCAL + path, body === undefined ? { signal: ctl.signal } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctl.signal });
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+let connectSeq = 0;
+async function connect() {
+  const my = ++connectSeq, t0 = Date.now();
+  S.server = 'wait'; S.waitShown = false; S.countdown = 25; renderTop();
+  const timer = setInterval(() => { if (my !== connectSeq) { clearInterval(timer); return; } const s = (Date.now() - t0) / 1000; S.waitShown = s > 1.8; S.countdown = Math.max(0, 25 - Math.floor(s)); renderTop(); }, 500);
+  try {
+    const r = await local('/ping', undefined, 25000);
+    if (my !== connectSeq) return;
+    if (r && r.ok) { S.server = 'ok'; S.info = r; logp('렌더 서버 연결됨 (엔진 ' + (r.engine || '?') + ' · Manim ' + (r.manim || '?') + ')'); } else S.server = 'off';
+  } catch (e) { if (my === connectSeq) { S.server = 'off'; logp('렌더 서버 연결 실패: ' + (e && e.name === 'AbortError' ? '시간 초과(25초)' : '접속 거부·차단')); } }
+  clearInterval(timer);
+  render();
+  if (S.server === 'ok' && S.pendingInit) { const p = S.pendingInit; S.pendingInit = null; restore(p); }
+}
+async function callAi(payload) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 150000), t0 = Date.now();
+  try {
+    const r = await fetch(AI_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: AI_TOKEN, action: 'geometryAi' }, payload)), signal: ctl.signal });
+    const j = await r.json();
+    logp('AI(' + payload.mode + ') ' + ((Date.now() - t0) / 1000).toFixed(1) + '초' + (j.ok ? '' : ' — 오류: ' + String(j.error).slice(0, 80)));
+    if (!j.ok) throw new Error(j.error || 'AI 오류');
+    return j;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('AI 응답이 너무 늦어요(150초). 잠시 뒤 다시 시도해 주세요.');
+    throw e;
+  } finally { clearTimeout(t); }
+}
+const renderSpec = (spec, userText) => local('/render', { spec, userText, opts: { scale: SIZE_SCALE[S.size], bg: S.bg } }, 180000);
+
+/* ═══════════════ 요약·글자 ═══════════════ */
+function shapeName(sh) {
+  const d = sh.dims || {};
+  if (sh.type === 'cuboid' && d.a != null) return '정육면체';
+  const sq = (d.base === 'rect') && (d.b == null || d.b === d.a);
+  if (sh.type === 'prism' && sq) return '정사각기둥';
+  if (sh.type === 'pyramid' && sq) return '정사각뿔';
+  if (sh.type === 'prism' && (d.base || 'regular') === 'regular' && NKO[d.n || 3]) return '정' + NKO[d.n || 3] + '각기둥';
+  if (sh.type === 'pyramid' && (d.base || 'regular') === 'regular' && NKO[d.n || 4]) return '정' + NKO[d.n || 4] + '각뿔';
+  if (sh.type === 'frustum_pyramid' && NKO[d.n || 4]) return '정' + NKO[d.n || 4] + '각뿔대';
+  return KO[sh.type] || sh.type;
+}
+const nfmt = v => (Math.round(v * 100) / 100).toString();
+function summarize(spec) {
+  const parts = spec.shapes.map(sh => {
+    const d = sh.dims || {};
+    const dd = Object.keys(d).filter(k => typeof d[k] === 'number' && k !== 'n').slice(0, 4).map(k => (DIMKO[k] || k) + ' ' + nfmt(d[k]) + (k === 'base_area' ? ' cm²' : ' cm'));
+    return '<b>' + esc(shapeName(sh)) + '</b>' + (dd.length ? ' · ' + esc(dd.join(' · ')) : '');
+  });
+  let s = parts.join(' + ');
+  if (spec.section) s += ' · 단면';
+  if (spec.kind === 'net') s += ' · 전개도';
+  return s;
+}
+function titleOf(spec) {
+  const names = spec.shapes.map(shapeName).join(' + ');
+  return names + (spec.kind === 'net' ? ' — 전개도' : spec.section ? ' — 단면' : '');
+}
+function dimNums(spec) {
+  const out = [];
+  (spec.shapes || []).forEach(sh => Object.keys(sh.dims || {}).forEach(k => { if (typeof sh.dims[k] === 'number') out.push(String(sh.dims[k])); }));
+  return out.join(' ');
+}
+const accText = extra => (S.texts.join(' ') + ' ' + extra + ' ' + S.trusted).trim();
+
+/* ═══════════════ 그리기 ═══════════════ */
+function render() { renderTop(); renderCond(); renderMsgs(); renderQuick(); renderStage(); renderTabs(); renderBar(); }
+function renderTop() {
+  const p = $('#pill'), t = $('#pillTxt');
+  if (S.server === 'ok') { p.className = 'pill ok'; t.innerHTML = '렌더 서버 연결됨 <span style="opacity:.7;font-weight:500">· Manim ' + esc((S.info && S.info.manim) || '') + '</span>'; }
+  else if (S.server === 'wait') {
+    p.className = 'pill wait';
+    t.innerHTML = S.waitShown ? '연결 허용을 기다리는 중… <b>' + S.countdown + '초</b> <u>(주소창 근처 「허용」을 눌러 주세요)</u>' : '렌더 서버 확인 중…';
+  } else { p.className = 'pill off'; t.innerHTML = '렌더 서버에 연결되지 않았어요 <u>켜는 법</u>'; }
+}
+function renderCond() {
+  $$('#segGrade button').forEach(b => b.classList.toggle('on', +b.dataset.v === S.grade));
+  $$('#segPurpose button').forEach(b => b.classList.toggle('on', b.dataset.v === S.purpose));
+  $$('#segKind button').forEach(b => b.classList.toggle('on', b.dataset.v === S.kind));
+  $$('#segBg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.bg));
+  $$('#segSize button').forEach(b => b.classList.toggle('on', b.dataset.v === S.size));
+  $('#sizeTxt').textContent = '긴 변 약 ' + SIZE_PX[S.size] + 'px';
+  $('#ctx').textContent = hasOpener() ? (S.label || '편집기 문항 이미지') : '단독 실행 — 문항에 넣으려면 편집기에서 열어 주세요';
+}
+const chipHtml = c => '<span class="chip ' + c.k + '">' + (c.b ? '<b>' + esc(c.b) + '</b>' : '') + '<span>' + esc(c.t) + '</span></span>';
+function renderMsgs() {
+  const box = $('#msgs');
+  box.innerHTML = S.msgs.map((m, i) => {
+    if (m.role === 'u') return '<div class="bub u">' + esc(m.text) + '</div>';
+    if (m.role === 's') return '<div class="sysmsg">' + esc(m.text) + '</div>';
+    let h = '<div class="bub a">';
+    if (m.title) h += '<div class="t' + (m.err ? ' err' : '') + '">' + esc(m.title) + '</div>';
+    if (m.text) h += '<div class="sum">' + m.text + '</div>';
+    if (m.chips && m.chips.length) h += '<div class="chips">' + m.chips.map(chipHtml).join('') + '</div>';
+    if (m.sug) h += '<div class="sug">💡 ' + esc(m.sug) + '</div>';
+    if (m.examples) h += '<div class="ex">' + EXAMPLES.map((e, j) => '<button data-ex="' + j + '">' + esc(e) + '</button>').join('') + '</div>';
+    if (m.acts && m.acts.length) h += '<div class="acts">' + m.acts.map((a, j) => '<button class="btn ' + (a.pri ? 'pri' : '') + '" data-act="' + i + ':' + j + '">' + esc(a.t) + '</button>').join('') + '</div>';
+    return h + '</div>';
+  }).join('') + (S.busy ? '<div class="typing"><span></span><span></span><span></span><em>' + esc(S.busyTxt || '처리 중…') + '</em></div>' : '');
+  box.scrollTop = box.scrollHeight;
+  const editing = !!S.spec && !S.forceNew;
+  $('#modeTxt').innerHTML = editing ? '✏️ <b>지금 그림을 고쳐요</b> (말한 것만 바뀌어요)' : '🆕 <b>새 도형을 만들어요</b>';
+  $('#btnMode').textContent = editing ? '＋ 새 도형으로' : (S.spec ? '↩ 지금 그림 고치기' : '');
+  $('#btnMode').style.display = (S.spec || S.forceNew) ? '' : 'none';
+}
+function renderQuick() { $('#quick').innerHTML = QUICK.map((q, i) => '<button data-q="' + i + '" title="누르면 입력칸에 문장이 들어가요">' + esc(q[0]) + '</button>').join(''); }
+function renderStage() {
+  const st = $('#stage'), f = S.fig;
+  st.className = 'stage' + (S.bg === 'transparent' ? ' checker' : '') + (S.busy ? ' busy' : '');
+  $('#pTitle').textContent = S.cant ? '그릴 수 없어요' : f ? f.title : '그림이 아직 없어요';
+  $('#pSub').textContent = f && !S.cant ? (f.spec.kind === 'net' ? '전개도' : '겨냥도') + ' · ' + f.width + '×' + f.height + 'px · 그리는 데 ' + (f.sec || '?') + '초' : '';
+  let h = '';
+  if (S.server === 'off') {
+    const onLocal = location.origin === LOCAL;
+    h = '<div class="off-card"><h4>🔌 렌더 서버가 꺼져 있어요</h4><ol><li>폴더 <code>도형엔진</code> 의 <code>실행.bat</code> 을 <b>더블클릭</b>하세요.</li><li>검은 창에 <code>http://127.0.0.1:8790</code> 안내가 나오면 준비 끝 — <b>그 창은 계속 켜 두세요</b>.</li><li>처음 한 번 Chrome 이 「이 기기의 다른 앱·서비스에 접근」을 물으면 <b>허용</b>.</li></ol>'
+      + '<div class="acts"><button class="btn pri" id="btnRetry">다시 연결해 보기</button>' + (onLocal ? '' : '<button class="btn" id="btnDirect">서버 주소로 열기</button>') + '</div>'
+      + '<p class="nb">이 주소에서 막히면 <code>http://127.0.0.1:8790/geometry.html</code> 로 여세요(같은 화면, 허용 질문 없음 — 편집기와도 그대로 연결돼요). 환경이 의심스러우면 <code>환경점검.bat</code>.</p></div>';
+  } else if (S.cant) {
+    h = '<div class="cant"><div class="big">🚫</div><h4>' + esc(S.cant.title) + '</h4><p>' + esc(S.cant.text) + '</p></div>';
+  } else if (!f) {
+    h = '<div class="empty"><div class="big">🧊</div><p><b>왼쪽에 도형을 말로 설명해 보세요.</b><br>숫자는 적은 것만 쓰고, 적지 않은 길이는 보기 좋은 비율로 그려요. 그림이 나오면 「오른쪽으로 20도 돌려줘」「높이 표시해줘」처럼 고쳐 달라고 말할 수 있어요.</p>'
+      + '<div class="ex">' + EXAMPLES.slice(0, 3).map((e, j) => '<button data-ex="' + j + '">' + esc(e) + '</button>').join('') + '</div></div>';
+  } else {
+    h = '<img id="fig" alt="' + esc(f.title) + '" src="data:image/png;base64,' + f.png + '" style="transform:scale(' + S.zoom + ')">';
+  }
+  if (S.busy) h += '<div class="spin"><div class="ring"></div><small>' + esc(S.busyTxt || '그리는 중…') + '</small></div>';
+  st.innerHTML = h;
+  $('#zTxt').textContent = Math.round(S.zoom * 100) + '%';
+}
+const TABS = [['quick', '빠른 조절'], ['json', '사양 JSON'], ['check', '검증 결과'], ['ref', '참고 값'], ['log', '로그']];
+function renderTabs() {
+  const f = S.fig;
+  const nE = (S.cant ? S.cant.issues.filter(i => i.level === 'error').length || 1 : 0);
+  const nW = f ? f.issues.filter(i => i.level === 'warn').length : 0;
+  $('#tabbar').innerHTML = TABS.map(t => {
+    let b = '';
+    if (t[0] === 'check') b = nE ? '<span class="badge e">' + nE + '</span>' : nW ? '<span class="badge">' + nW + '</span>' : f ? '<span class="badge g">✓</span>' : '';
+    return '<button data-tab="' + t[0] + '" class="' + (S.tab === t[0] ? 'on' : '') + '">' + t[1] + b + '</button>';
+  }).join('');
+  $('#pane').innerHTML = paneHtml(S.tab);
+}
+function colorJson(obj) {
+  const s = esc(JSON.stringify(obj, null, 2));
+  return s.replace(/(&quot;[^&]*?&quot;)(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g, (m, str, colon, num, bool) => {
+    if (str) return colon ? '<span class="k">' + str + '</span>' + colon : '<span class="s">' + str + '</span>';
+    if (num) return '<span class="n">' + num + '</span>';
+    return '<span class="b">' + bool + '</span>';
+  });
+}
+const issHtml = i => '<div class="iss ' + i.level + '"><code>' + esc(i.code) + (i.rule ? ' · ' + esc(i.rule) : '') + '</code>' + esc(i.msg) + (i.suggest ? '<div class="sg">💡 ' + esc(i.suggest) + '</div>' : '') + '</div>';
+function viewCtl() {
+  const v = (S.spec && S.spec.view) || {}, ortho = v.projection === 'ortho';
+  return ortho
+    ? { ortho, a: { label: '좌우 돌리기', min: -90, max: 90, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '위·아래', min: 3, max: 85, val: Math.round(v.pitch || 20), key: 'pitch', unit: '°' } }
+    : { ortho, a: { label: '좌우 돌리기', min: -45, max: 90, val: Math.round((v.depthAngle == null ? 45 : v.depthAngle) - 45), key: 'depthAngle', unit: '°' }, b: { label: '깊이(밑면 넓이)', min: 15, max: 100, val: Math.round(100 * (v.depthScale == null ? .5 : v.depthScale)), key: 'depthScale', unit: '%' } };
+}
+function paneHtml(tab) {
+  const f = S.fig, st = (S.spec && S.spec.style) || {}, v = (S.spec && S.spec.view) || {};
+  const seg = (label, key, opts) => '<div class="row"><label>' + label + '</label><div class="seg" data-ctrl="' + key + '">' + opts.map(o => '<button data-v="' + o[0] + '" class="' + (String(st[key]) === o[0] ? 'on' : '') + '">' + o[1] + '</button>').join('') + '</div></div>';
+  if (tab === 'quick') {
+    if (!f) return '<p class="note">그림이 나오면 여기서 시점·꾸밈을 말 없이 바로 바꿀 수 있어요(길이는 바뀌지 않아요).</p>';
+    const net = f.spec.kind === 'net', c = viewCtl();
+    const sl = (o, id) => '<div class="row"><label>' + o.label + '</label><div class="slide"><input type="range" min="' + o.min + '" max="' + o.max + '" value="' + o.val + '" data-sl="' + id + '"' + (net ? ' disabled' : '') + '><em id="v-' + id + '">' + o.val + o.unit + '</em></div></div>';
+    return '<div class="qgrid"><div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
+      + '<div class="row"><label>투영</label><div class="seg" data-proj="1"><button data-v="oblique" class="' + (!c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>사각 투영(교과서식)</button><button data-v="ortho" class="' + (c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>정사영(입체적)</button></div></div>'
+      + sl(c.a, 'a') + sl(c.b, 'b')
+      + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button></div>'
+      + '<p class="note"><b>치수(길이)는 바뀌지 않아요.</b> 길이를 바꾸려면 대화창에 「높이를 6cm로」처럼 숫자와 함께 말하세요.</p></div>'
+      + '<div class="qbox"><h5>꾸밈</h5>'
+      + seg('색', 'color', [['color', '색'], ['bw', '흑백(인쇄용)']])
+      + seg('가려진 선', 'hidden', [['dashed', '점선'], ['none', '숨김']])
+      + seg('면', 'faces', [['none', '투명'], ['light', '연하게 칠함']])
+      + seg('길이 표시', 'dimArc', [['arc', '점선 호'], ['arrow', '화살표'], ['none', '글자만']])
+      + '<div class="row"><label>글자 크기</label><div class="slide"><input type="range" min="60" max="200" step="10" value="' + Math.round(100 * (st.fontScale || 1)) + '" data-sl="font"><em id="v-font">' + Math.round(100 * (st.fontScale || 1)) + '%</em></div></div></div></div>';
+  }
+  if (tab === 'json') {
+    if (!f) return '<p class="note">그림을 만들면 AI 가 만든 사양(JSON)이 여기에 보여요. 사양에는 길이·구조만 있고, 그림은 이 사양을 받은 프로그램이 그려요.</p>';
+    return '<button class="copy" data-copy="1">복사</button><pre class="json">' + colorJson(S.spec) + '</pre>';
+  }
+  if (tab === 'check') {
+    let h = '';
+    if (S.cant) h += S.cant.issues.map(issHtml).join('');
+    if (f) {
+      h += f.issues.filter(i => i.level === 'error').map(issHtml).join('');
+      h += '<div class="okline">✓ 엔진 내부 검사 ' + f.checksOk + '/' + f.checksTotal + '개 통과 <span style="font-weight:500;opacity:.8">— 길이·넓이·가림·겹침을 계산으로 다시 확인했어요</span></div>';
+      h += f.issues.filter(i => i.level !== 'error').map(issHtml).join('');
+      h += '<details><summary>검사 항목 보기</summary><ul>' + f.checks.map(c => '<li>' + (c.ok ? '✓ ' : '✗ ') + esc(c.name) + '</li>').join('') + '</ul></details>';
+    }
+    return h || '<p class="note">검증 결과는 그림을 만들면 여기에 나와요. 빨강은 그릴 수 없는 오류, 노랑은 학년·표시 경고, 파랑은 안내예요.</p>';
+  }
+  if (tab === 'ref') {
+    if (!f) return '<p class="note">「구하는 값」을 고르고 그림을 만들면, 정답 확인용 겉넓이·부피 참고 값이 여기에 나와요.</p>';
+    let h = '';
+    const r = f.reference || {};
+    ['volume', 'surface'].forEach(k => { if (r[k]) h += '<div class="ref"><small>' + (k === 'volume' ? '부피' : '겉넓이') + ' (엔진이 공식으로 계산)</small>' + esc(r[k].text) + '</div>'; });
+    if (r.section) h += '<div class="ref"><small>단면</small>' + esc(r.section.text) + '</div>';
+    if (r.net) h += '<div class="ref"><small>전개도 — ' + esc(r.net.layout) + '</small>' + r.net.lines.map(esc).join('<br>') + '</div>';
+    if (!h) h = '<p class="note">「구하는 값」을 고르지 않아서 참고 값이 없어요.</p>';
+    return h + '<p class="note">이 값은 <b>교사 확인용</b>이에요. 학생 화면에는 나가지 않고, 이미지에도 들어가지 않아요.</p>';
+  }
+  return '<div class="log">' + (S.log.length ? S.log.map(l => '<div data-t="' + l[0] + '">' + esc(l[1]) + '</div>').join('') : '<div data-t="">기록이 아직 없어요.</div>') + '</div>';
+}
+function renderBar() {
+  const n = S.hist.length;
+  $('#histTxt').textContent = n ? '그림 ' + (S.hi + 1) + ' / ' + n : '그림 없음';
+  $('#btnUndo').disabled = !(S.hi > 0) || S.busy;
+  $('#btnRedo').disabled = !(S.hi >= 0 && S.hi < n - 1) || S.busy;
+  const can = !!S.fig && !S.cant && S.server === 'ok' && !S.busy;
+  $('#btnGo').disabled = !can || !hasOpener();
+  $('#btnGo').title = hasOpener() ? '' : '편집기의 [🧊 이미지 제작] 버튼으로 열어야 문항에 넣을 수 있어요';
+  $('#btnPng').disabled = !can;
+}
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3000); }
+
+/* ═══════════════ 결과 반영 ═══════════════ */
+function figFrom(r) {
+  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {},
+    checks: (r.checks || []).map(c => ({ name: c.name, ok: !!c.ok })), checksTotal: (r.checks || []).length, checksOk: (r.checks || []).filter(c => c.ok).length, attempts: r.attempts || [] };
+}
+function commit(r, why) {
+  S.spec = r.spec; S.fig = figFrom(r); S.cant = null;
+  S.kind = r.spec.kind === 'net' ? 'net' : 'solid'; S.grade = r.spec.grade || S.grade; S.purpose = r.spec.purpose || 'none';
+  S.hist = S.hist.slice(0, S.hi + 1); S.hist.push({ spec: clone(r.spec), fig: S.fig }); if (S.hist.length > MAX_HIST) S.hist.shift(); S.hi = S.hist.length - 1;
+  logp('그림 완성(' + why + ') — 그리기 ' + (r.sec || '?') + '초 · 시도 ' + ((r.attempts || []).length || 1) + '회 · 검사 ' + S.fig.checksOk + '/' + S.fig.checksTotal);
+}
+function derivedChip(r) {
+  const out = [];
+  Object.keys((r.resolved && r.resolved.shapes) || {}).forEach(id => {
+    const sh = r.resolved.shapes[id];
+    ['h', 'l', 's', 'L', 'l2', 'c', 'H', 'hs'].forEach(k => { if (sh.src && sh.src[k] === 'derived' && typeof sh.dims[k] === 'number') out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' cm'); });
+  });
+  return out.length ? { k: 'info', b: '계산한 길이', t: out.slice(0, 3).join(', ') + ' — 말에 없어서 프로그램이 계산했어요(그림에 표시하려면 말해 주세요).' } : null;
+}
+function issueChips(r) {
+  const out = [];
+  (r.issues || []).forEach(i => {
+    if (i.level === 'warn') out.push({ k: 'warn', b: i.rule || '확인', t: i.msg });
+    else if (i.level === 'info' && ['VIEW_AUTO', 'INSCRIBED_DERIVED', 'NET_IGNORED'].includes(i.code)) out.push({ k: 'info', b: '안내', t: i.msg });
+  });
+  return out;
+}
+function noteChips(ai) {
+  const out = [], n = (ai && ai.notes) || {};
+  if (n.defaultsUsed && n.defaultsUsed.length) out.push({ k: 'info', b: '기본 비율', t: '말에 없는 ' + n.defaultsUsed.join(', ') + ' 은(는) 보기 좋은 비율로 그렸어요.' });
+  (n.curriculum || []).forEach(c => out.push({ k: 'warn', b: '학년 안내', t: c }));
+  if (n.ask) out.push({ k: 'info', b: 'AI 가 물어요', t: n.ask });
+  return out;
+}
+function cardOk(r, ctx) {
+  const chips = [];
+  if (ctx.fixNotes && ctx.fixNotes.length) chips.push({ k: 'warn', b: 'AI 가 고친 곳', t: ctx.fixNotes.join(', ') + ' — 입력한 숫자가 서로 맞지 않아서예요. 맞는지 확인해 주세요.' });
+  if (ctx.editing && ctx.guard) {
+    const g = ctx.guard, rev = (g.reverted || []).map(x => x.category), changed = (g.changed || []).filter(c => !rev.includes(c));
+    const kept = Object.keys(CATKO).filter(c => !changed.includes(c));
+    if (changed.length) chips.push({ k: 'ok', b: '바꿈', t: changed.map(c => CATKO[c]).join(' · ') });
+    else chips.push({ k: 'warn', b: '바뀐 것 없음', t: '요청을 반영하지 못했어요. 다르게 말해 보세요.' });
+    chips.push({ k: 'kept', b: '그대로', t: kept.map(c => CATKO[c]).join(' · ') });
+    (g.notes || []).forEach(n => chips.push({ k: 'warn', b: '지킴', t: n }));
+  }
+  const dc = derivedChip(r); if (dc) chips.push(dc);
+  issueChips(r).forEach(c => chips.push(c));
+  noteChips(ctx.ai).forEach(c => chips.push(c));
+  const ex = ctx.ai && ctx.ai.notes && ctx.ai.notes.explain;
+  const fixed = ctx.fixNotes && ctx.fixNotes.length;
+  return { role: 'a', title: fixed ? '고쳐서 그렸어요 — 확인해 주세요' : ctx.restored ? '저장된 그림을 불러왔어요 ✓' : ctx.editing ? '고쳤어요 ✓' : r.spec.kind === 'net' ? '전개도로 그렸어요 ✓' : '그렸어요 ✓',
+    text: ctx.restored ? summarize(r.spec) : (ctx.editing && ex ? esc(ex) + '<br>' : '') + summarize(r.spec), chips };
+}
+function cardFail(r, ctx) {
+  const errs = (r.issues || []).filter(i => i.level === 'error');
+  const first = errs[0] || {};
+  let title = '그릴 수 없어요 ✕', text = first.msg || '알 수 없는 오류';
+  if (r.stage === 'postcheck') { title = '엔진 내부 검사에서 걸렸어요 ✕'; }
+  if (r.stage === 'render' || r.stage === 'image') { title = '그리는 중 문제가 생겼어요 ✕'; text = (r.error && r.error.msg) || text; }
+  const chips = errs.slice(0, 4).map(i => ({ k: 'err', b: i.code, t: i.msg }));
+  const ask = ctx.ai && ctx.ai.notes && ctx.ai.notes.ask;
+  if (ask) chips.push({ k: 'info', b: 'AI 가 물어요', t: ask });
+  const acts = [{ t: '내 말을 고쳐 다시 쓰기', fn: 'refill', val: ctx.text }];
+  if (r.stage === 'validate' && S.lastFail) acts.push({ t: 'AI 에게 한 번 더 고치게 하기', fn: 'aifix' });
+  return { role: 'a', err: true, title, text: esc(text), chips, sug: first.suggest || (r.error && r.error.how) || '', acts };
+}
+function showCant(r, ctx) {
+  const errs = (r.issues || []).filter(i => i.level === 'error');
+  S.cant = { title: r.stage === 'validate' ? '이 입력으로는 그릴 수 없어요' : '그림을 만들지 못했어요', text: (errs[0] && errs[0].msg) || (r.error && r.error.msg) || '원인을 알 수 없어요.', issues: errs.length ? errs : [{ level: 'error', code: r.stage || 'ERROR', msg: (r.error && r.error.msg) || '그림을 만들지 못했어요.', suggest: r.error && r.error.how }] };
+  S.tab = 'check';
+}
+
+/* ═══════════════ 파이프라인: 말 → AI → 엔진 검증 → 그리기 ═══════════════ */
+function dimDiff(a, b) {      // 치수가 비워지거나 바뀐 곳 — 「AI 가 고친 곳」 안내용
+  const out = [], bm = {};
+  (b.shapes || []).forEach(sh => { bm[sh.id] = sh.dims || {}; });
+  (a.shapes || []).forEach(sh => Object.keys(sh.dims || {}).forEach(k => {
+    if (typeof sh.dims[k] !== 'number') return;
+    const nv = (bm[sh.id] || {})[k];
+    if (nv === undefined) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' cm 를 비웠어요');
+    else if (nv !== sh.dims[k]) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' → ' + nfmt(nv) + ' cm');
+  }));
+  return out;
+}
+async function fixLoop(ctx, spec, r, maxTries) {
+  let tries = 0;
+  while (!r.ok && r.stage === 'validate' && tries < maxTries) {
+    const errs = (r.issues || []).filter(i => i.level === 'error');
+    if (!errs.length) break;
+    S.lastFail = { ctx, spec: r.spec || spec, errs };
+    S.busyTxt = 'AI 가 오류를 고치는 중… (' + (tries + 1) + '/' + maxTries + ')'; renderMsgs(); renderStage();
+    const fx = await callAi({ mode: 'fix', grade: S.grade, text: ctx.text, spec: r.spec || spec, issues: errs });
+    ctx.ai = fx;
+    const before = JSON.stringify(spec), prevSpec = spec;
+    spec = fx.spec; spec.grade = S.grade; spec.purpose = S.purpose;
+    ctx.fixNotes = (ctx.fixNotes || []).concat(dimDiff(prevSpec, spec));
+    if (ctx.editing && ctx.prevKind) spec.kind = spec.kind || ctx.prevKind;
+    tries++;
+    if (JSON.stringify(spec) === before) { logp('AI 가 사양을 바꾸지 않았어요(질문: ' + ((fx.notes && fx.notes.ask) || '없음') + ')'); break; }
+    S.busyTxt = '다시 검증하고 그리는 중…'; renderMsgs(); renderStage();
+    r = await renderSpec(spec, ctx.userText);
+  }
+  return { r, spec };
+}
+async function runPipeline(text, editing) {
+  const ctx = { text, editing, prevKind: S.spec && S.spec.kind };
+  ctx.userText = editing ? accText(text) : text;
+  const ai = await callAi({ mode: editing ? 'edit' : 'new', grade: S.grade, text, spec: editing ? S.spec : undefined });
+  ctx.ai = ai;
+  let spec = ai.spec;
+  if (!editing && spec.purpose && spec.purpose !== 'none' && S.purpose === 'none') S.purpose = spec.purpose;
+  spec.grade = S.grade; spec.purpose = S.purpose;
+  if (editing) {
+    S.busyTxt = '요청한 것만 바뀌었는지 확인하는 중…'; renderMsgs(); renderStage();
+    const g = await local('/apply', { prev: S.spec, next: spec, intent: ai.intent || [], userText: text }, 30000);
+    if (!g || g.ok === false) throw new Error((g && g.error) || '차이 확인 실패');
+    ctx.guard = g; spec = g.spec; spec.grade = S.grade; spec.purpose = S.purpose;
+    ctx.userText = accText(text) + ' ' + dimNums(spec);
+  }
+  S.busyTxt = '엔진이 검증하고 그리는 중… 약 3초'; renderMsgs(); renderStage();
+  let r = await renderSpec(spec, ctx.userText);
+  const fx = await fixLoop(ctx, spec, r, 2); r = fx.r; spec = fx.spec;
+  if (r.ok) {
+    if (editing) S.texts.push(text); else S.texts = [text];
+    S.trusted = dimNums(r.spec);
+    commit(r, editing ? '수정' : '새 도형');
+    S.msgs.push(cardOk(r, ctx));
+    S.forceNew = false;
+  } else {
+    S.lastFail = S.lastFail || { ctx, spec: r.spec || spec, errs: (r.issues || []).filter(i => i.level === 'error') };
+    showCant(r, ctx);
+    S.msgs.push(cardFail(r, ctx));
+    logp('그리기 실패(' + r.stage + '): ' + String(((r.issues || []).filter(i => i.level === 'error')[0] || {}).msg || (r.error && r.error.msg) || '').slice(0, 100));
+  }
+}
+async function guarded(fn, label) {
+  if (S.busy) return;
+  if (S.server !== 'ok') { toast('렌더 서버에 먼저 연결해 주세요.'); return; }
+  S.busy = true; S.busyTxt = label; render();
+  try { await fn(); }
+  catch (e) {
+    const m = String((e && e.message) || e);
+    if (e && (e.name === 'TypeError' || e.name === 'AbortError') && /fetch|Failed|abort/i.test(m)) { S.server = 'off'; S.msgs.push({ role: 'a', err: true, title: '렌더 서버와 연결이 끊겼어요', text: '서버 창이 꺼졌거나 응답이 너무 늦어요. 서버를 켜고 다시 해 주세요.' }); }
+    else S.msgs.push({ role: 'a', err: true, title: '잠깐, 문제가 생겼어요 ✕', text: esc(m), acts: [{ t: '다시 시도', fn: 'again' }] });
+    logp('오류: ' + m.slice(0, 120));
+  }
+  S.busy = false; render();
+}
+async function ask(text, forceNew) {
+  text = String(text || '').trim();
+  if (!text || S.busy) return;
+  const editing = !!S.spec && !S.forceNew && !forceNew;
+  S.lastText = text; S.lastEditing = editing;
+  S.msgs.push({ role: 'u', text });
+  const qp = editing ? quickParse(text, S.spec) : null;
+  if (qp) {     // AI 를 거치지 않고 규칙으로 바로 처리
+    if (qp.bg) S.bg = qp.bg;
+    logp('빠른 명령(AI 없이): ' + qp.descs.join(', '));
+    await redraw(qp.mutate, '바꿔서 다시 그리는 중… 약 3초', null);
+    if (S.fig && !S.cant) S.msgs.push({ role: 'a', title: '바로 바꿨어요 ✓', text: esc(qp.descs.join(' · ')) + ' <span style="color:var(--ink3)">(AI 없이 바로 처리)</span>', chips: [{ k: 'ok', b: '바꿈', t: qp.touchesView ? '시점' : '꾸밈' }, { k: 'kept', b: '그대로', t: '치수 · 길이 표시 · 꼭짓점 이름 · 도형 구성' }] });
+    render();
+    return;
+  }
+  await guarded(() => runPipeline(text, editing), 'AI 가 사양을 만드는 중…');
+}
+/* 말 없이 시점·꾸밈·크기·종류만 바꿔 다시 그린다(AI 를 거치지 않는다 — 길이는 건드리지 않는다) */
+async function redraw(mutator, label, okMsg) {
+  if (!S.spec || S.busy) return;
+  if (S.server !== 'ok') { toast('렌더 서버에 먼저 연결해 주세요.'); return; }
+  const spec = clone(S.spec); mutator(spec);
+  S.busy = true; S.busyTxt = label; render();
+  try {
+    const r = await renderSpec(spec, accText(''));
+    if (r.ok) { commit(r, '빠른 조절'); if (okMsg) S.msgs.push({ role: 's', text: okMsg }); }
+    else { const e = (r.issues || []).filter(i => i.level === 'error')[0]; toast((e && e.msg) || '그리지 못했어요.'); logp('빠른 조절 실패: ' + ((e && e.msg) || r.stage)); S.kind = S.spec.kind === 'net' ? 'net' : 'solid'; }
+  } catch (e) { S.server = 'off'; toast('렌더 서버와 연결이 끊겼어요.'); }
+  S.busy = false; render();
+}
+async function revalidate(why) {
+  if (!S.spec || S.server !== 'ok' || S.busy) return;
+  const spec = clone(S.spec); spec.grade = S.grade; spec.purpose = S.purpose;
+  try {
+    const v = await local('/validate', { spec, userText: accText('') }, 30000);
+    if (v && v.spec) {
+      S.spec = v.spec; if (S.fig) { S.fig.spec = v.spec; S.fig.issues = v.issues || []; S.fig.reference = v.reference || {}; S.fig.resolved = v.resolved || {}; }
+      const w = (v.issues || []).filter(i => i.level === 'warn' && i.rule);
+      S.msgs.push({ role: 's', text: why + ' — ' + (w.length ? '학년 규칙 경고 ' + w.length + '개 (검증 결과 탭)' : '학년 규칙에 맞아요') });
+      if (w.length) S.tab = 'check';
+    }
+  } catch (e) { /* 서버가 없으면 조용히 넘어간다 */ }
+  render();
+}
+async function restore(p) {      // 편집기가 보낸 저장된 사양을 다시 그린다
+  if (S.server !== 'ok') { S.pendingInit = p; return; }
+  if (p.grade) S.grade = p.grade;
+  const spec = p.spec; spec.grade = S.grade;
+  S.trusted = dimNums(spec); S.texts = [];
+  const ctx = { text: '', editing: false, restored: true, userText: S.trusted };
+  S.busy = true; S.busyTxt = '저장된 그림을 다시 그리는 중…'; render();
+  try {
+    const r = await renderSpec(spec, S.trusted);
+    if (r.ok) { commit(r, '불러오기'); S.msgs = [welcomeMsg(), cardOk(r, ctx)]; }
+    else { S.msgs.push(cardFail(r, ctx)); showCant(r, ctx); }
+  } catch (e) { S.msgs.push({ role: 'a', err: true, title: '저장된 그림을 그리지 못했어요', text: esc(String(e.message || e)) }); }
+  S.busy = false; render();
+}
+const welcomeMsg = () => ({ role: 'a', title: '🧊 어떤 도형을 만들까요?', text: '도형을 <b>말로</b> 설명해 주세요. 입체의 종류와 길이를 적으면 돼요. 두 도형을 쌓거나 안에 넣고, 자르고, 전개도로 펼치는 것도 말로 할 수 있어요.', examples: true });
+
+/* ═══════════════ 편집기와 주고받기 ═══════════════ */
+function post(msg) { if (hasOpener()) { try { window.opener.postMessage(msg, OPENER_ORIGIN); } catch (e) { toast('편집기 창에 연결하지 못했어요.'); } } }
+window.addEventListener('message', ev => {
+  if (!ORIGINS_OK.includes(ev.origin) && !(location.protocol === 'file:' && ev.origin === 'null')) return;
+  if (ev.source !== window.opener) return;
+  const d = ev.data || {};
+  if (d.type === 'geometry-init') {
+    S.label = d.label || '';
+    if (d.grade >= 1 && d.grade <= 3) S.grade = d.grade;
+    let spec = d.spec;
+    if (typeof spec === 'string') { try { spec = JSON.parse(spec); } catch (e) { spec = null; } }
+    renderCond();
+    if (spec && spec.shapes && spec.shapes.length) restore({ grade: S.grade, spec });
+    else { renderCond(); }
+  }
+});
+function sendToQuestion() {
+  const f = S.fig; if (!f || S.cant || S.busy) return;
+  post({ type: 'geometry-image', dataUrl: 'data:image/png;base64,' + f.png, spec: JSON.stringify(S.spec) });
+  S.sent = true; $('#banner').classList.add('show'); logp('편집기 문항에 넣음');
+}
+function savePng() {
+  const f = S.fig; if (!f) return;
+  const a = document.createElement('a'); a.href = 'data:image/png;base64,' + f.png;
+  a.download = '도형_' + f.title.replace(/[^\w가-힣]+/g, '_') + (S.bg === 'transparent' ? '_투명' : '') + '.png';
+  document.body.appendChild(a); a.click(); a.remove(); toast('PNG 파일을 저장했어요.');
+}
+
+
+/* ═══════════════ 흔한 명령은 AI 없이 바로 ═══════════════
+   「오른쪽으로 20도」「흑백으로」「점선으로」 같은 시점·꾸밈 명령은 규칙으로 정확하게 처리한다(즉시·무료·항상 같은 결과, 길이는 절대 안 건드림).
+   빠른 AI 모델이 설명만 쓰고 값을 안 바꾸거나 이상한 값(depthAngle 360)을 내는 일이 있어서다(2026-11-10). 길이·이름·표시·구조·복잡한 말은 AI 가 맡는다. */
+const clampN = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+function quickParse(text, spec) {
+  const t = String(text).replace(/\s+/g, ' ').trim();
+  if (!spec || t.length > 46) return null;
+  if (/(각뿔|원뿔|원기둥|각기둥|직육면체|정육면체|반구|뿔대|구의|전개도|단면|꼭짓점|이름|높이|반지름|모선|cm|센티|\d\s*번)/.test(t) && !/(오른쪽|왼쪽)(으로)?\s*\d*\s*도/.test(t)) return null;
+  const ops = [];
+  const ortho = () => ((spec.view || {}).projection || 'oblique') === 'ortho';
+  let m;
+  if (/(돌려|돌리|회전|틀어|기울)/.test(t) && (m = t.match(/(오른쪽|왼쪽)(?:으로)?\s*(\d+)?\s*도?/))) {
+    const n = (m[2] ? +m[2] : 20) * (m[1] === '오른쪽' ? 1 : -1);
+    ops.push([(n > 0 ? '오른쪽으로 ' : '왼쪽으로 ') + Math.abs(n) + '° 돌렸어요', sp => { const v = Object.assign({}, sp.view); if (v.projection === 'ortho') v.yaw = clampN((v.yaw || 0) + n, -180, 180); else v.depthAngle = clampN((v.depthAngle == null ? 45 : v.depthAngle) + n, -45, 135); sp.view = v; }]);
+  }
+  if (/(위에서|내려다|밑면.{0,4}넓|윗면.{0,4}넓|위쪽에서)/.test(t) && !/(아래에서|올려다)/.test(t)) ops.push(['위에서 더 내려다보이게 했어요', sp => { const v = Object.assign({}, sp.view); if (v.projection === 'ortho') v.pitch = clampN((v.pitch || 20) + 15, 3, 85); else v.depthScale = clampN((v.depthScale == null ? .5 : v.depthScale) + .2, .1, 1); sp.view = v; }]);
+  if (/(아래에서|옆에서|올려다|납작하게)/.test(t)) ops.push(['더 옆에서 보이게 했어요', sp => { const v = Object.assign({}, sp.view); if (v.projection === 'ortho') v.pitch = clampN((v.pitch || 20) - 15, 3, 85); else v.depthScale = clampN((v.depthScale == null ? .5 : v.depthScale) - .2, .1, 1); sp.view = v; }]);
+  if (/(기본|처음|원래).{0,3}시점/.test(t)) ops.push(['시점을 기본으로 되돌렸어요', sp => { delete sp.view; }]);
+  if (/정사영/.test(t)) ops.push(['정사영으로 바꿨어요', sp => { sp.view = Object.assign({}, sp.view, { projection: 'ortho' }); }]);
+  if (/(사각 ?투영|교과서(식|처럼)?)/.test(t)) ops.push(['사각 투영(교과서식)으로 바꿨어요', sp => { sp.view = Object.assign({}, sp.view, { projection: 'oblique' }); }]);
+  const st = (k, v, d) => ops.push([d, sp => { sp.style = Object.assign({}, sp.style, { [k]: v }); }]);
+  if (/(흑백|인쇄)/.test(t)) st('color', 'bw', '흑백(인쇄용)으로 바꿨어요');
+  else if (/(컬러|색으로|색 모드|색깔로|색상으로)/.test(t)) st('color', 'color', '색으로 바꿨어요');
+  if (/(가려진|뒤쪽|안 ?보이는|보이지 않는|숨은).{0,8}(없애|지워|숨겨|빼)|숨겨/.test(t)) st('hidden', 'none', '가려진 선을 숨겼어요');
+  else if (/점선/.test(t) && !/점선 ?호/.test(t) || /(가려진|뒤쪽|안 ?보이는|보이지 않는|숨은).{0,8}(보이게|표시)/.test(t)) st('hidden', 'dashed', '가려진 선을 점선으로 보이게 했어요');
+  if (/배경/.test(t)) { if (/투명/.test(t)) ops.push(['배경을 투명으로 바꿨어요', null, 'bg', 'transparent']); else if (/(흰|하얀)/.test(t)) ops.push(['배경을 흰색으로 바꿨어요', null, 'bg', 'white']); }
+  else if (/투명/.test(t)) st('faces', 'none', '면을 투명하게 했어요');
+  else if (/(연하게|색칠|칠해|채워)/.test(t)) st('faces', 'light', '면을 연하게 칠했어요');
+  if (/화살표/.test(t)) st('dimArc', 'arrow', '길이 표시를 화살표로 바꿨어요');
+  else if (/점선 ?호/.test(t)) st('dimArc', 'arc', '길이 표시를 점선 호로 바꿨어요');
+  else if (/글자만/.test(t)) st('dimArc', 'none', '길이 표시를 글자만으로 바꿨어요');
+  if (/글자.{0,5}(크게|키워)/.test(t)) ops.push(['글자를 키웠어요', sp => { const f = (sp.style || {}).fontScale || 1; sp.style = Object.assign({}, sp.style, { fontScale: clampN(Math.round(f * 125) / 100, .6, 2) }); }]);
+  if (/글자.{0,5}(작게|줄여)/.test(t)) ops.push(['글자를 줄였어요', sp => { const f = (sp.style || {}).fontScale || 1; sp.style = Object.assign({}, sp.style, { fontScale: clampN(Math.round(f * 80) / 100, .6, 2) }); }]);
+  if (!ops.length) return null;
+  return { descs: ops.map(o => o[0]), bg: (ops.find(o => o[2] === 'bg') || [])[3] || null, mutate: sp => ops.forEach(o => o[1] && o[1](sp)), touchesView: ops.some(o => /돌렸|내려다|옆에서|시점|정사영|사각 투영/.test(o[0])) };
+}
+
+/* ═══════════════ 이벤트 ═══════════════ */
+document.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.ex != null) { ask(EXAMPLES[+t.dataset.ex], true); return; }
+  if (t.dataset.q != null) { $('#inp').value = QUICK[+t.dataset.q][1]; $('#inp').focus(); toast('Enter 를 누르면 보내요 — 문장을 고쳐서 보내도 돼요.'); return; }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); return; }
+  if (t.dataset.act) { const [i, j] = t.dataset.act.split(':').map(Number); actFn(S.msgs[i].acts[j]); return; }
+  if (t.dataset.act2 === 'viewreset') { redraw(sp => { delete sp.view; }, '기본 시점으로 다시 그리는 중…', '시점을 기본으로 되돌렸어요'); return; }
+  if (t.dataset.copy) { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(S.spec, null, 2)); toast('사양 JSON 을 복사했어요.'); return; }
+  if (t.id === 'btnRetry') { connect(); return; }
+  if (t.id === 'btnDirect') { location.href = LOCAL + '/geometry.html' + (hasOpener() ? '?o=' + encodeURIComponent(OPENER_ORIGIN === '*' ? '' : OPENER_ORIGIN) : ''); return; }
+  if (t.closest('#segGrade')) { S.grade = +t.dataset.v; renderCond(); revalidate('학년을 중' + S.grade + ' 으로 바꿨어요'); return; }
+  if (t.closest('#segPurpose')) { S.purpose = t.dataset.v; renderCond(); revalidate('구하는 값을 바꿨어요'); return; }
+  if (t.closest('#segKind')) { const k = t.dataset.v; if (!S.spec) { S.kind = k; renderCond(); toast(k === 'net' ? '「…를 전개도로 그려줘」라고 말하면 전개도로 그려요.' : ''); return; } if (k === (S.spec.kind || 'solid')) return; S.kind = k; redraw(sp => { sp.kind = k; if (k === 'net' && !sp.net) sp.net = { layout: 'auto', fold: 'dashed', glueMarks: false }; }, k === 'net' ? '전개도로 펼치는 중…' : '겨냥도로 그리는 중…', k === 'net' ? '전개도로 바꿨어요(길이는 그대로)' : '겨냥도로 바꿨어요'); return; }
+  if (t.closest('#segBg')) { S.bg = t.dataset.v; renderCond(); renderStage(); if (S.spec) redraw(() => { }, '배경을 바꿔 다시 그리는 중…'); return; }
+  if (t.closest('#segSize')) { S.size = t.dataset.v; renderCond(); if (S.spec) redraw(() => { }, '크기를 바꿔 다시 그리는 중…'); return; }
+  if (t.closest('[data-proj]')) { const p = t.dataset.v; redraw(sp => { sp.view = Object.assign({}, sp.view, { projection: p }); }, '투영을 바꿔 다시 그리는 중…', p === 'ortho' ? '정사영으로 바꿨어요(길이는 그대로)' : '사각 투영으로 바꿨어요(길이는 그대로)'); return; }
+  if (t.closest('[data-ctrl]')) { const k = t.closest('[data-ctrl]').dataset.ctrl, v = t.dataset.v; redraw(sp => { sp.style = Object.assign({}, sp.style, { [k]: v }); }, '꾸밈을 바꿔 다시 그리는 중…'); return; }
+});
+function actFn(a) {
+  if (a.fn === 'refill') { $('#inp').value = a.val || ''; $('#inp').focus(); S.forceNew = !S.spec ? false : S.forceNew; toast('말을 고쳐서 Enter 로 보내세요.'); }
+  else if (a.fn === 'aifix' && S.lastFail) {
+    const lf = S.lastFail; guarded(async () => {
+      const ctx = lf.ctx; let r = { ok: false, stage: 'validate', issues: lf.errs, spec: lf.spec };
+      const fx = await fixLoop(ctx, lf.spec, r, 1); r = fx.r;
+      if (r.ok) { if (ctx.editing) S.texts.push(ctx.text); else S.texts = [ctx.text]; S.trusted = dimNums(r.spec); commit(r, '고치기'); S.msgs.push(cardOk(r, ctx)); S.forceNew = false; }
+      else { showCant(r, ctx); S.msgs.push(cardFail(r, ctx)); }
+    }, 'AI 가 오류를 고치는 중…');
+  } else if (a.fn === 'again') { if (S.lastText) { S.msgs.pop(); ask(S.lastText); } }
+}
+document.addEventListener('input', e => {
+  const s = e.target.dataset && e.target.dataset.sl; if (!s) return;
+  const el = $('#v-' + s); if (el) el.textContent = e.target.value + (s === 'font' ? '%' : s === 'b' && !viewCtl().ortho ? '%' : '°');
+});
+document.addEventListener('change', e => {
+  const s = e.target.dataset && e.target.dataset.sl; if (!s) return;
+  const val = +e.target.value;
+  if (s === 'font') redraw(sp => { sp.style = Object.assign({}, sp.style, { fontScale: val / 100 }); }, '글자 크기를 바꿔 다시 그리는 중…');
+  else { const c = viewCtl(); const key = (s === 'a' ? c.a : c.b).key;
+    redraw(sp => { const v = Object.assign({}, sp.view); v[key] = key === 'depthAngle' ? 45 + val : key === 'depthScale' ? val / 100 : val; sp.view = v; }, '시점을 바꿔 다시 그리는 중…'); }
+});
+$('#btnSend').onclick = () => { const v = $('#inp').value.trim(); if (v) { $('#inp').value = ''; ask(v); } };
+$('#inp').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#btnSend').click(); } });
+$('#btnMode').onclick = () => { S.forceNew = !S.forceNew; renderMsgs(); $('#inp').focus(); };
+$('#zIn').onclick = () => { S.zoom = Math.min(3, S.zoom + .25); renderStage(); };
+$('#zOut').onclick = () => { S.zoom = Math.max(.25, S.zoom - .25); renderStage(); };
+$('#zFit').onclick = () => { S.zoom = 1; renderStage(); };
+function gotoHist(i) { const h = S.hist[i]; if (!h) return; S.hi = i; S.spec = clone(h.spec); S.fig = h.fig; S.cant = null; S.kind = h.spec.kind === 'net' ? 'net' : 'solid'; S.purpose = h.spec.purpose || 'none'; S.grade = h.spec.grade || S.grade; S.trusted = dimNums(h.spec); render(); }
+$('#btnUndo').onclick = () => { if (S.hi > 0) gotoHist(S.hi - 1); };
+$('#btnRedo').onclick = () => { if (S.hi < S.hist.length - 1) gotoHist(S.hi + 1); };
+$('#btnGo').onclick = sendToQuestion;
+$('#btnPng').onclick = savePng;
+$('#banClose').onclick = () => { window.close(); setTimeout(() => toast('이 창은 직접 닫아 주세요.'), 400); };
+$('#banStay').onclick = () => $('#banner').classList.remove('show');
+$('#btnClose').onclick = () => { window.close(); setTimeout(() => toast('이 창은 직접 닫아 주세요.'), 400); };
+$('#pill').onclick = () => { if (S.server === 'off') connect(); };
+
+/* ═══════════════ 시작 ═══════════════ */
+S.msgs = [welcomeMsg()];
+render();
+connect();
+if (hasOpener()) post({ type: 'geometry-ready' });      // 편집기가 학년·저장된 사양을 geometry-init 으로 돌려준다
+</script>
+</body>
+</html>

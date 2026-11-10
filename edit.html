@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v6.7">
+<meta name="app-version" content="edit-v7.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -575,6 +575,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               눈금·격자 없는 빈 화면입니다. 학생은 <b>눈금 없는 자(직선)</b>와 <b>컴퍼스(원)</b>만으로 그립니다 — 따로 설정할 값이 없습니다.
             </div>
           </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+              <button type="button" id="btn-geom" onclick="openGeometryMaker()" class="img-btn" style="font-weight:700">🧊 이미지 제작</button>
+              <span id="geom-note" style="font-size:12px;color:var(--ink3);line-height:1.5">입체도형·전개도·단면을 말로 설명하면 그림으로 만들어 줘요 (내 PC 에서 도형 렌더 서버를 켜 두어야 해요)</span>
+            </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
             <div id="q-img-preview" style="margin-top:8px;display:none">
               <img id="q-img-tag" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--rule)">
@@ -1733,6 +1737,7 @@ function showPanel(item){
     // 이미지 URL 로드
     const imgUrl = item.imageUrl||'';
     document.getElementById('q-img-url').value = imgUrl;
+    _geomStore = (item.geomSpec && imgUrl) ? { u:imgUrl, s:String(item.geomSpec) } : null; updateGeomBtn();
     if(imgUrl){
       document.getElementById('q-img-tag').src = bustCache(imgUrl);
       document.getElementById('q-img-preview').style.display = '';
@@ -2129,6 +2134,7 @@ window.saveQuestion = async function(){
     }
     if(currentWs.questions[qIdxS]?.partStart) qData.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     _keepAiTraps(qData, currentWs.questions[qIdxS]);
+    _keepGeom(qData);
     currentWs.questions[qIdxS]=_addScore(_withHint(qData));
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
@@ -2169,6 +2175,7 @@ window.saveQuestion = async function(){
     };
     if(currentWs.questions[qIdxS]?.partStart) _step3Q.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     _keepAiTraps(_step3Q, currentWs.questions[qIdxS]);
+    _keepGeom(_step3Q);
     currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(null, true); return;
   }
@@ -2256,6 +2263,7 @@ window.saveQuestion = async function(){
       q.options=opts; q.answer=ans;
     }
     if(qIdx >= 0 && qIdx < currentWs.questions.length){
+      _keepGeom(q);
       _addScore(_withHint(q));
       currentWs.questions[qIdx] = q;
     }
@@ -2664,6 +2672,7 @@ window.previewLocalImage = function(input){
 
 window.clearImage = function(){
   document.getElementById('q-img-url').value = '';
+  _geomStore = null; updateGeomBtn();
   document.getElementById('q-img-preview').style.display = 'none';
   document.getElementById('q-img-file').value = '';
   const link = document.getElementById('q-img-link-input'); if(link) link.value = '';
@@ -2706,8 +2715,49 @@ function _imgEsc(t){
   return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/** 이미지(data URL) 하나를 Drive에 올리고 현재 문항에 첨부한다 */
-async function attachImage(dataUrl, label){
+/* ══════════ 🧊 도형 이미지 제작 (v7.0) ══════════
+   [🧊 이미지 제작] → 팝업 geometry.html 이 열리고, 말로 설명한 도형을 그림으로 만들어 이 문항의 이미지로 돌려준다.
+   주고받는 말(postMessage):  팝업 → 여기 {type:'geometry-ready'}  →  여기 → 팝업 {type:'geometry-init', grade, spec, label}
+                              팝업 → 여기 {type:'geometry-image', dataUrl, spec}  →  attachImage(dataUrl,'도형 제작',spec)
+   spec(그림을 만든 사양 JSON 글자)은 문항 q.geomSpec 에 저장해 두었다가, 다시 열면 그림을 고칠 수 있게 돌려준다.
+   이미지를 지우거나 다른 이미지로 바꾸면(주소가 달라지면) geomSpec 도 저절로 버린다 — _geomStore.u 가 지금 이미지 주소와 같을 때만 저장한다. */
+let _geomWin = null, _geomTarget = null, _geomStore = null;   // _geomStore = {u: 이미지 주소, s: 사양 JSON 글자}
+const GEOM_ORIGINS = [location.origin, 'http://127.0.0.1:8790', 'http://localhost:8790'];
+function _curImgUrl(){ return (document.getElementById('q-img-url')?.value||'').trim(); }
+function _geomSaved(){ return (_geomStore && _geomStore.u && _geomStore.u===_curImgUrl()) ? _geomStore.s : ''; }
+function updateGeomBtn(){
+  const b=document.getElementById('btn-geom'), n=document.getElementById('geom-note'); if(!b||!n) return;
+  const has=!!_geomSaved();
+  b.textContent = has ? '🧊 그림 다시 열어 고치기' : '🧊 이미지 제작';
+  n.textContent = has ? '이 그림은 「도형 제작」으로 만든 거라 다시 열어 길이·시점·표시를 고칠 수 있어요.' : '입체도형·전개도·단면을 말로 설명하면 그림으로 만들어 줘요 (내 PC 에서 도형 렌더 서버를 켜 두어야 해요)';
+}
+/** 저장 직전에 호출 — 이미지가 도형 제작이 만든 그대로일 때만 사양을 문항에 붙인다 */
+function _keepGeom(q){ const g=_geomSaved(); if(g) q.geomSpec=g; else delete q.geomSpec; return q; }
+window.openGeometryMaker = function(){
+  if(selectedQIdx===null || !currentWs){ alert('먼저 문항을 선택해 주세요.'); return; }
+  _geomTarget = { qIdx:selectedQIdx, wsId:currentWs.id||'' };
+  _geomWin = window.open('geometry.html?o='+encodeURIComponent(location.origin), 'geometryMaker', 'width=1100,height=780');
+  if(!_geomWin){ alert('팝업이 막혀 있어요. 주소창 오른쪽의 「팝업 차단됨」 표시를 눌러 허용한 뒤 다시 눌러 주세요.'); return; }
+  try{ _geomWin.focus(); }catch(e){}
+};
+window.addEventListener('message', ev=>{
+  if(!_geomWin || ev.source!==_geomWin || !GEOM_ORIGINS.includes(ev.origin)) return;
+  const d = ev.data||{};
+  if(d.type==='geometry-ready'){
+    _geomWin.postMessage({ type:'geometry-init', grade:parseInt(document.getElementById('ws-grade').value)||1,
+      spec:_geomSaved()||null, label:'문항 '+curQuestionNo()+'번 · 이미지' }, ev.origin);
+  } else if(d.type==='geometry-image'){
+    if(typeof d.dataUrl!=='string' || !d.dataUrl.startsWith('data:image/png;base64,')) return;
+    if(selectedQIdx===null || !currentWs){ alert('문항이 선택돼 있지 않아 그림을 넣지 못했어요. 문항을 고른 뒤 다시 눌러 주세요.'); return; }
+    if(_geomTarget && (selectedQIdx!==_geomTarget.qIdx || (currentWs.id||'')!==_geomTarget.wsId)){
+      if(!confirm('도형 제작을 연 뒤에 선택한 문항이 바뀌었어요.\n지금 선택한 문항('+curQuestionNo()+'번)에 그림을 넣을까요?')) return;
+    }
+    attachImage(d.dataUrl, '도형 제작', typeof d.spec==='string' ? d.spec.slice(0,20000) : '');
+  }
+});
+
+/** 이미지(data URL) 하나를 Drive에 올리고 현재 문항에 첨부한다. geomSpec(도형 제작이 쓴 사양)을 주면 다시 열어 고칠 수 있게 함께 기억한다 */
+async function attachImage(dataUrl, label, geomSpec){
   if(selectedQIdx===null || !currentWs){ alert('먼저 문항을 선택해 주세요.'); return; }
   const st   = document.getElementById('q-img-status');
   const hint = document.getElementById('q-img-hint');
@@ -2719,6 +2769,7 @@ async function attachImage(dataUrl, label){
     const out = await callImgWebApp({ action:'uploadQuestionImage', image:dataUrl,
       wsId: currentWs.id||'', qNo: curQuestionNo() });
     document.getElementById('q-img-url').value = out.url;
+    _geomStore = geomSpec ? { u:out.url, s:geomSpec } : null; updateGeomBtn();
     document.getElementById('q-img-tag').src   = bustCache(out.url);
     if(st) st.textContent = `저장됨: ${out.name}`;
     toast('이미지 첨부됨 — [적용]을 눌러야 문항에 저장됩니다');

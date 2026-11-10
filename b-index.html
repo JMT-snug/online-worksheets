@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.8">
+  <meta name="app-version" content="14.9">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -614,7 +614,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .step3-tab.done{color:var(--green)}
 .step3-tab.locked{opacity:.4;cursor:default}
 .step3-body{padding:14px 16px}
-.step3-label{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:0;line-height:1.6}
+.step3-label{font-size:16px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:0;line-height:1.8}   /* 본 지문(.problem-card .q-text 16px) 과 같은 크기 — v14.9 (13px → 16px) */
 .step3-hint{font-size:12px;color:var(--ink3);margin-bottom:8px;background:var(--cream);padding:6px 10px;border-radius:6px}
 /* 이미 해결한 단계를 다시 열어 봤을 때 — 답칸 대신 그때 쓴 답을 보여 주는 칸 */
 .step3-solved{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -4882,17 +4882,14 @@ function renderMultiQ(q, panel){
       <div class="q-num">
         문제 ${curQIdx+1} / ${curWS.questions.length}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>${qSrcHtml(q)}
-        <!-- multi 는 처음에 '동류항 찾기' 전용으로 만들어서 배지에 '동류항'이 박혀 있었다.
-             지금은 점·선·면, 평면에서의 위치관계 등 어느 단원에서나 쓰므로 거짓 라벨이 됐고
-             (학생 3명·교사 1명이 같은 날 신고), 문항 데이터에 유형명이 없으므로
-             화면에서 하는 일 그대로인 '모두 고르기'로 바꿨다. 단원 이름을 넣지 말 것. -->
-        <span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">모두 고르기</span>
+        <!-- v14.9: 난도 옆의 '모두 고르기' 배지와 선지 위의 '해당하는 것을 모두 선택하세요' 안내를 뺐다 — 정답이 1개인 문항에서
+             학생이 헷갈린다는 교사 지적(2026-11-11). 정답이 여러 개인 문항은 교사가 문제 글에 「모두 고르시오」를 직접 적는다.
+             (배지에는 한때 '동류항'이 박혀 있어 거짓 라벨이 됐다 — 유형명·단원 이름을 다시 넣지 말 것.) -->
       </div>
       <div class="q-text" style="margin-top:4px;line-height:1.8">${mathStyle(normTex(q.text))}</div>
       ${imgHtmlM}
     </div>
     <div class="math-input-card">
-      <div class="ans-hint"><strong>해당하는 것을 모두 선택하세요</strong></div>
       <div class="multi-grid ${(()=>{
           const maxLen=Math.max(0,...q.options.map(optVisibleLen));
           if(maxLen>10) return 'cols1';                 // 선택지가 길면 1열(4x1)
@@ -6195,7 +6192,7 @@ function renderStep3Body(q){
     const opts=step.options||[];
     const maxLen=Math.max(0,...opts.map(optVisibleLen));
     const cols = maxLen>10 ? 'cols1' : opts.length===4 ? 'cols2' : opts.length===3 ? 'cols3' : '';
-    const hintHtml = `<div class="step3-hint">${step.hint ? '💡 '+step.hint : '💡 해당하는 것을 모두 선택하세요'}</div>`;
+    const hintHtml = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>` : '';   // v14.9: 자동 안내(해당하는 것을 모두 선택하세요)는 뺐고 교사가 적은 힌트만
     body.innerHTML=labelHtml+hintHtml+`
       <div class="multi-grid ${cols}" id="multi-grid">
         ${opts.map((opt,k)=>

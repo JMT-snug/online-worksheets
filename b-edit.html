@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v7.0">
+<meta name="app-version" content="edit-v7.1">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -3165,7 +3165,7 @@ function renderSteps(){
         <label style="font-size:11px">답 유형</label>
         <select onchange="setStepType(${i},this.value)" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         ${isMultiStep ? `
-        <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · 학생은 해당하는 것을 모두 고릅니다)</span></label>
+        <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · 학생 화면에 「모두 고르시오」 안내는 자동으로 붙지 않으니, 정답이 여러 개면 문제 글에 직접 적어 주세요)</span></label>
         ${optRows}
         <button class="btn-add-opt" onclick="addStepOption(${i})" style="margin-bottom:4px">＋ 선지 추가</button>` : `
         <label style="font-size:11px">정답${(stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>

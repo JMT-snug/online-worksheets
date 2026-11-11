@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.6">
+<meta name="app-version" content="geometry-v1.7">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -80,6 +80,13 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .askr em{font-style:normal;color:var(--ink3);font-size:12px}
 .askq{font-size:12.5px;color:var(--ink2);background:var(--acc-lt);border-radius:8px;padding:6px 9px}
 .asko{font-size:11.5px;color:var(--ink3);display:flex;gap:5px;align-items:center}
+.und{font-size:12.5px;color:var(--ink2);background:var(--paper);border:1px solid var(--rule2);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:7px 10px}
+.und div{margin-top:3px;line-height:1.5}
+.codebox{margin-top:8px;max-height:230px;overflow:auto;white-space:pre;font:12px/1.5 Consolas,monospace;background:#1c1917;color:#e7e5e4;border-radius:8px;padding:9px 11px}
+.trust{padding:7px 10px;border-radius:8px;font-size:12.5px;margin-bottom:8px;border:1px solid;line-height:1.5}
+.trust.green{background:var(--grn-lt);border-color:#86efac;color:#14532d}
+.trust.yellow{background:var(--amb-lt);border-color:#fcd34d;color:#78350f}
+.trust.red{background:var(--red-lt);border-color:#fca5a5;color:#7f1d1d}
 .btn{border:1px solid var(--rule2);background:var(--paper);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
 .btn:hover{background:var(--acc-lt);border-color:#93c5fd;color:var(--acc-dk)}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -204,7 +211,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.6</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.7</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -278,7 +285,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 2, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 3, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -311,6 +318,9 @@ const EXAMPLES = [
   '밑면이 아랫변 10cm, 윗변 4cm, 높이 3cm인 사다리꼴이고 기둥의 높이가 8cm인 사다리꼴 기둥. 부피를 구하는 문제야.',
   '밑면이 한 변 4cm인 정사각형이고 높이 6cm, 옆모서리 7.5cm인 비스듬한 사각기둥. 높이와 옆모서리를 표시해줘.',
   '반지름 3cm, 중심각 120°인 부채꼴을 밑면으로 하고 높이가 5cm인 기둥. 부피와 겉넓이를 구하는 문제야.',
+  '반지름 3cm, 중심각 270°인 부채꼴을 밑면으로 하는 기둥(높이 5cm)을 그려줘.',
+  '한 모서리가 3cm인 정이십면체.',
+  '관의 반지름이 1cm이고 가운데에서 관의 중심까지 4cm인 도넛 모양(토러스).',
 ];
 const QUICK = [
   ['⟲ 왼쪽 20°', '왼쪽으로 20도 돌려줘'], ['⟳ 오른쪽 20°', '오른쪽으로 20도 돌려줘'], ['위에서 더 보기', '위에서 더 내려다보이게 해줘'],
@@ -381,6 +391,7 @@ function shapeBase(sh) {
     if (d.base === 'sector') return '부채꼴 기둥';
     return BASEKO[d.base] + ' 밑면 ' + (sh.type === 'prism' ? '각기둥' : sh.type === 'pyramid' ? '각뿔' : '각뿔대');
   }
+  if (sh.type === 'free') return '자유 구성 입체';
   if (sh.type === 'cuboid' && d.a != null) return '정육면체';
   const sq = (d.base === 'rect') && (d.b == null || d.b === d.a);
   if (sh.type === 'prism' && sq) return '정사각기둥';
@@ -392,6 +403,7 @@ function shapeBase(sh) {
 }
 const nfmt = v => (Math.round(v * 100) / 100).toString();
 function summarize(spec) {
+  if (spec.kind === 'code') return '<b>코드 모드</b> · AI 가 쓴 Manim 코드로 그렸어요(🔴 검증 안 됨)';
   const parts = spec.shapes.map(sh => {
     const d = sh.dims || {};
     const dd = Object.keys(d).filter(k => typeof d[k] === 'number' && k !== 'n').slice(0, 4).map(k => (DIMKO[k] || k) + ' ' + nfmt(d[k]) + dunit(k));
@@ -403,12 +415,16 @@ function summarize(spec) {
   return s;
 }
 function titleOf(spec) {
+  if (spec.kind === 'code') return '코드 모드 그림';
   const names = spec.shapes.map(shapeName).join(' + ');
   return names + (spec.kind === 'net' ? ' — 전개도' : spec.section ? ' — 단면' : '');
 }
 function dimNums(spec) {
   const out = [];
-  (spec.shapes || []).forEach(sh => Object.keys(sh.dims || {}).forEach(k => { if (typeof sh.dims[k] === 'number') out.push(String(sh.dims[k])); }));
+  (spec.shapes || []).forEach(sh => {
+    Object.keys(sh.dims || {}).forEach(k => { if (typeof sh.dims[k] === 'number') out.push(String(sh.dims[k])); });
+    if (sh.free && sh.free.params) Object.keys(sh.free.params).forEach(k => { const v = sh.free.params[k].v; if (typeof v === 'number') out.push(String(v)); });     // 자유 구성의 값
+  });
   return out.join(' ');
 }
 const accText = extra => (S.texts.join(' ') + ' ' + extra + ' ' + S.trusted).trim();
@@ -445,6 +461,7 @@ function renderMsgs() {
     if (m.text) h += '<div class="sum">' + m.text + '</div>';
     if (m.chips && m.chips.length) h += '<div class="chips">' + m.chips.map(chipHtml).join('') + '</div>';
     if (m.form) h += formHtml(m);
+    if (m.codeText) h += '<pre class="codebox">' + esc(m.codeText) + '</pre><div class="acts"><button class="btn pri" data-codego="run">이 코드로 그리기</button><button class="btn" data-codego="no">그리지 않기</button></div>';
     if (m.sug) h += '<div class="sug">💡 ' + esc(m.sug) + '</div>';
     if (m.examples) h += '<div class="ex">' + EXAMPLES.map((e, j) => '<button data-ex="' + j + '">' + esc(e) + '</button>').join('') + '</div>';
     if (m.acts && m.acts.length) h += '<div class="acts">' + m.acts.map((a, j) => '<button class="btn ' + (a.pri ? 'pri' : '') + '" data-act="' + i + ':' + j + '">' + esc(a.t) + '</button>').join('') + '</div>';
@@ -546,7 +563,10 @@ function paneHtml(tab) {
     if (!f) return '<p class="note">그림이 나오면 여기서 시점·꾸밈을 말 없이 바로 바꿀 수 있어요(길이는 바뀌지 않아요).</p>';
     const net = f.spec.kind === 'net', c = viewCtl();
     const sl = (o, id) => '<div class="row"><label>' + o.label + '</label><div class="slide"><input type="range" min="' + o.min + '" max="' + o.max + '" value="' + o.val + '" data-sl="' + id + '"' + (net ? ' disabled' : '') + '><em id="v-' + id + '">' + o.val + o.unit + '</em></div></div>';
-    return '<div class="qgrid">' + labBox(f) + '<div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
+    const nameBox = (f.vertexTop && f.vertexTop.length && !net)
+      ? '<div class="qbox" style="grid-column:1/-1"><h5>꼭짓점 이름 — 그림에서 <b>위에 있는 점부터</b> 알파벳을 붙여요</h5><div class="acts"><button class="btn" data-act2="nametop">위에서부터 A B C … 붙이기</button><button class="btn" data-act2="nameclear">이름 지우기</button></div>'
+        + '<p class="note">점 ' + f.vertexTop.length + '개에 붙여요. 시점을 바꾸면 이름은 그 점에 그대로 붙어 있어요(다시 누르면 새 위치 기준으로 붙여요).</p></div>' : '';
+    return '<div class="qgrid">' + labBox(f) + nameBox + '<div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
       + '<div class="row"><label>투영</label><div class="seg" data-proj="1"><button data-v="oblique" class="' + (!c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>사각 투영(교과서식)</button><button data-v="ortho" class="' + (c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>정사영(입체적)</button></div></div>'
       + sl(c.a, 'a') + sl(c.b, 'b')
       + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button></div>'
@@ -565,10 +585,11 @@ function paneHtml(tab) {
   }
   if (tab === 'check') {
     let h = '';
+    if (f && f.trust) h += '<div class="trust ' + esc(f.trust.level) + '"><b>' + esc(f.trust.label) + '</b> — ' + f.trust.why.map(esc).join(' ') + '</div>';
     if (S.cant) h += S.cant.issues.map(issHtml).join('');
     if (f) {
       h += f.issues.filter(i => i.level === 'error').map(issHtml).join('');
-      h += '<div class="okline">✓ 엔진 내부 검사 ' + f.checksOk + '/' + f.checksTotal + '개 통과 <span style="font-weight:500;opacity:.8">— 길이·넓이·가림·겹침을 계산으로 다시 확인했어요</span></div>';
+      if (f.checksTotal) h += '<div class="okline">✓ 엔진 내부 검사 ' + f.checksOk + '/' + f.checksTotal + '개 통과 <span style="font-weight:500;opacity:.8">— 길이·넓이·가림·겹침을 계산으로 다시 확인했어요</span></div>';
       h += f.issues.filter(i => i.level !== 'error').map(issHtml).join('');
       h += '<details><summary>검사 항목 보기</summary><ul>' + f.checks.map(c => '<li>' + (c.ok ? '✓ ' : '✗ ') + esc(c.name) + '</li>').join('') + '</ul></details>';
     }
@@ -601,7 +622,7 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ═══════════════ 결과 반영 ═══════════════ */
 function figFrom(r) {
-  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {}, labelOptions: r.labelOptions || [],
+  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {}, labelOptions: r.labelOptions || [], trust: r.trust || null, understood: r.understood || {}, vertexTop: r.vertexTop || [],
     checks: (r.checks || []).map(c => ({ name: c.name, ok: !!c.ok })), checksTotal: (r.checks || []).length, checksOk: (r.checks || []).filter(c => c.ok).length, attempts: r.attempts || [] };
 }
 function commit(r, why) {
@@ -637,10 +658,14 @@ function noteChips(ai, ctx) {
 /* ═══════════════ 확인 단계: 빠진 값을 그리기 전에 묻는다 ═══════════════ */
 const askKey = n => n.shape + ':' + n.key;
 const needsLeft = (needs, acked) => (needs || []).filter(n => !acked.has(askKey(n)));
-function setDimIn(spec, shape, key, val) {            // 입력한 값을 사양에 넣는다(변의 수는 정수)
+function setDimIn(spec, shape, key, val) {            // 입력한 값을 사양에 넣는다(변의 수는 정수, 자유 구성은 params 의 값)
   const sh = (spec.shapes || []).find(x => x.id === shape); if (!sh) return false;
+  if (sh.type === 'free' && sh.free && sh.free.params && sh.free.params[key]) { sh.free.params[key].v = val; return true; }
   sh.dims = sh.dims || {}; sh.dims[key] = key === 'n' ? Math.round(val) : val; return true;
 }
+/* 꼭짓점 이름 — 그림에서 위에 있는 점부터 A, B, C … (엔진이 vertexTop 으로 위에서 아래 순서를 줌) */
+const letterOf = i => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
+function namesTopDown(ids) { const o = {}; (ids || []).forEach((id, i) => { o[id] = letterOf(i); }); return o; }
 function applyAsk(spec, needs, vals) {                // vals: { 'S1:ang': '60' } → 숫자로 읽히는 것만. 반환: 넣은 값의 글 (근거 문장에 덧붙임)
   const words = [];
   (needs || []).forEach(n => {
@@ -652,24 +677,30 @@ function applyAsk(spec, needs, vals) {                // vals: { 'S1:ang': '60' 
   return words;
 }
 function cardAsk(p) {
-  const n = p.needs.length;
-  return { role: 'a', title: '확인할 게 있어요 — 그리기 전에', ask: true,
-    text: (n ? '말에 없는 값이 <b>' + n + '개</b> 있어요. 아는 값은 적어 주세요 — <b>비워 두면 표시용 비율로 그려요</b>(그 길이는 그림에 값으로 표시되지 않아요).' : '') + (p.askAi ? (n ? '<br>' : '') + '말이 정확하지 않은 곳이 있어요.' : ''),
-    form: { needs: p.needs, askAi: p.askAi || '' } };
+  const n = p.needs.length, und = p.und || [];
+  return { role: 'a', title: und.length ? '이렇게 이해했어요 — 맞는지 확인해 주세요' : '확인할 게 있어요 — 그리기 전에', ask: true,
+    text: (n ? '말에 없는 값이 <b>' + n + '개</b> 있어요. 아는 값은 적어 주세요 — <b>비워 두면 표시용 비율로 그려요</b>(그 길이는 그림에 값으로 표시되지 않아요).' : '') + (p.askAi ? (n ? '<br>' : '') + '말이 정확하지 않은 곳이 있어요.' : '')
+      + (!n && !p.askAi && und.length ? '아래 내용이 말씀하신 대로인지 보고 [이대로 그리기]를 눌러 주세요. 다르면 대화창에 고쳐 말해 주세요.' : ''),
+    form: { needs: p.needs, askAi: p.askAi || '', und } };
 }
 function formHtml(m) {
   const f = m.form; if (!f) return '';
   let h = '<div class="askf">';
+  if (f.und && f.und.length) h += '<div class="und"><b>이렇게 이해했어요</b>' + f.und.map(x => '<div>' + esc(x) + '</div>').join('') + '</div>';
   f.needs.forEach(n => {
     const ph = n.used != null ? '표시용 ' + nfmt(n.used) : '';
     h += '<div class="askr"><div class="nm">' + esc(n.shapeKo) + ' · <b>' + esc(n.ko) + '</b>' + (n.alt ? '<small>' + esc(n.alt) + '</small>' : '') + (n.kind === 'assumed' ? '<small>「비스듬한」만 말해서 높이의 절반으로 기울였어요</small>' : '') + '</div>'
       + '<input type="number" step="' + (n.int ? 1 : 'any') + '" min="0" ' + (n.max != null ? 'max="' + n.max + '" ' : '') + 'data-ask="' + esc(askKey(n)) + '" placeholder="' + esc(ph) + '"><em>' + esc(n.unit || '') + '</em></div>';
   });
   if (f.askAi) h += '<div class="askq">❓ ' + esc(f.askAi) + '</div><input type="text" data-askai placeholder="답을 적으면 그 말을 보태 다시 만들어요(비우면 지금 모양으로 그려요)" style="width:100%;box-sizing:border-box;border:1px solid var(--rule2);border-radius:7px;padding:5px 8px;font-size:13px">';
-  h += '<label class="asko"><input type="checkbox" data-askoff> 다음부터 묻지 않고 표시용 비율로 그리기</label>';
+  h += '<label class="asko"><input type="checkbox" data-askoff> 다음부터 빠진 값은 묻지 않고 표시용 비율로 그리기</label>';
   h += '<div class="acts"><button class="btn pri" data-askgo="go">' + (f.needs.length ? '이 값으로 그리기' : '이대로 그리기') + '</button>'
     + (f.needs.length ? '<button class="btn" data-askgo="skip">값 없이 표시용 비율로 그리기</button>' : '') + '</div></div>';
   return h;
+}
+function cardCode(spec, restored) {
+  return { role: 'a', title: restored ? '저장된 코드 그림이에요 — 다시 그리려면 확인해 주세요' : '코드 모드 — 실행하기 전에 읽어 보세요', codeText: spec.code || '',
+    text: '이 도형은 알려진 도형·자유 구성으로 그릴 수 없어 AI 가 <b>Manim 코드</b>를 썼어요. <b>엔진이 길이·가림·값을 검증하지 않는 🔴 그림</b>이에요. 코드를 읽어 보고 [이 코드로 그리기]를 누르세요(허용된 것만 쓰는지 안전 검사를 먼저 해요).' };
 }
 function cardOk(r, ctx) {
   const chips = [];
@@ -751,7 +782,12 @@ async function runPipeline(text, editing) {
   let spec = ai.spec;
   if (!editing && spec.purpose && spec.purpose !== 'none' && S.purpose === 'none') S.purpose = spec.purpose;
   spec.grade = S.grade; spec.purpose = S.purpose;
-  if (editing) {
+  if (spec.kind === 'code') {                    // 코드 모드: AI 가 쓴 코드를 보여 주고, 선생님이 누르면 안전 검사 후 실행
+    S.pend = { code: true, spec, ctx, text, editing };
+    S.msgs.push(cardCode(spec)); logp('코드 모드: AI 가 코드를 냈어요(실행 전 확인)');
+    return;
+  }
+  if (editing && S.spec && S.spec.kind !== 'code') {
     S.busyTxt = '요청한 것만 바뀌었는지 확인하는 중…'; renderMsgs(); renderStage();
     const g = await local('/apply', { prev: S.spec, next: spec, intent: ai.intent || [], userText: text }, 30000);
     if (!g || g.ok === false) throw new Error((g && g.error) || '차이 확인 실패');
@@ -759,15 +795,17 @@ async function runPipeline(text, editing) {
     ctx.userText = accText(text) + ' ' + dimNums(spec);
   }
   // 확인 단계: 말에 없어서 표시용 비율로 채운 핵심 길이가 있으면(엔진이 알려 줌) 그리기 전에 묻는다. 시점·꾸밈·표시만 바꾸는 수정은 묻지 않는다.
-  const chg = editing ? ((ctx.guard && ctx.guard.changed) || []).filter(c => !((ctx.guard.reverted || []).some(x => x.category === c))) : ['dims', 'structure'];
-  if (S.askMissing && (chg.includes('dims') || chg.includes('structure'))) {
+  const chg = editing && ctx.guard ? ((ctx.guard.changed) || []).filter(c => !((ctx.guard.reverted || []).some(x => x.category === c))) : ['dims', 'structure'];
+  const hasFree = (spec.shapes || []).some(x => x.type === 'free');
+  if ((S.askMissing || hasFree) && (chg.includes('dims') || chg.includes('structure'))) {
     S.busyTxt = '빠진 값이 있는지 확인하는 중…'; renderMsgs(); renderStage();
     const v = await local('/validate', { spec, userText: ctx.userText }, 30000);
     if (v && v.ok) {
-      const left = needsLeft(v.needs, S.acked), q = !editing && ai.notes && ai.notes.ask ? ai.notes.ask : '';
-      if (left.length || q) {
-        S.pend = { spec: v.spec || spec, ctx, needs: left, text, editing, askAi: q };
-        S.msgs.push(cardAsk(S.pend)); logp('확인 단계: 빠진 값 ' + left.length + '개' + (q ? ' · AI 질문 있음' : ''));
+      const left = S.askMissing ? needsLeft(v.needs, S.acked) : [], q = !editing && ai.notes && ai.notes.ask ? ai.notes.ask : '';
+      const und = hasFree ? [].concat.apply([], Object.keys(v.understood || {}).map(k => v.understood[k])) : [];      // 자유 구성은 「이렇게 이해했어요」를 항상 보여 준다
+      if (left.length || q || und.length) {
+        S.pend = { spec: v.spec || spec, ctx, needs: left, text, editing, askAi: q, und };
+        S.msgs.push(cardAsk(S.pend)); logp('확인 단계: 빠진 값 ' + left.length + '개' + (q ? ' · AI 질문 있음' : '') + (und.length ? ' · 이해한 내용 ' + und.length + '줄' : ''));
         return;
       }
     }
@@ -791,8 +829,25 @@ async function finishDraw(ctx, spec, editing, text) {
     logp('그리기 실패(' + r.stage + '): ' + String(((r.issues || []).filter(i => i.level === 'error')[0] || {}).msg || (r.error && r.error.msg) || '').slice(0, 100));
   }
 }
+function submitCode(mode) {                      // 코드 카드의 [이 코드로 그리기] / [그리지 않기]
+  const p = S.pend; if (!p || !p.code || S.busy) return;
+  const card = S.msgs.find(m => m.codeText);
+  S.pend = null;
+  if (mode !== 'run') { if (card) { card.codeText = null; card.title = '코드는 실행하지 않았어요'; card.text = '대화창에 고쳐 말하면 AI 가 다시 써요.'; } render(); return; }
+  if (card) { card.codeText = null; card.title = '코드를 실행해요'; card.text = '안전 검사를 하고 실행하는 중이에요…'; }
+  guarded(async () => {
+    S.busyTxt = '안전 검사 후 코드를 실행하는 중… 약 5초'; renderMsgs(); renderStage();
+    const r = await renderSpec(p.spec, '');
+    if (r.ok) {
+      S.texts = [p.text]; S.trusted = '';
+      commit(r, '코드 모드');
+      S.msgs.push({ role: 'a', title: '코드로 그렸어요 (🔴 검증 안 됨)', text: summarize(r.spec), chips: [{ k: 'warn', b: '직접 확인', t: '길이·가림·값을 엔진이 검증하지 않았어요. 모양과 숫자를 눈으로 확인해 주세요.' }] });
+      S.forceNew = false;
+    } else { showCant(r, p.ctx); S.msgs.push(cardFail(r, p.ctx)); }
+  }, '코드를 실행하는 중…');
+}
 function submitAsk(mode) {                       // 확인 카드의 [그리기] 버튼
-  const p = S.pend; if (!p || S.busy) return;
+  const p = S.pend; if (!p || p.code || S.busy) return;
   const vals = {}; $$('[data-ask]').forEach(el => { vals[el.dataset.ask] = el.value; });
   const aiEl = $('[data-askai]'), aiAns = aiEl ? aiEl.value.trim() : '', off = $('[data-askoff]');
   if (off && off.checked) { S.askMissing = false; saveAsk(); }
@@ -827,10 +882,10 @@ async function ask(text, forceNew) {
   if (!text || S.busy) return;
   const editing = !!S.spec && !S.forceNew && !forceNew;
   S.lastText = text; S.lastEditing = editing;
-  if (S.pend) { const c = S.msgs.find(m => m.form); if (c) { c.form = null; c.text = '새 말을 보내서 이 확인은 건너뛰었어요.'; c.title = '확인 건너뜀'; } S.pend = null; }
+  if (S.pend) { const c = S.msgs.find(m => m.form || m.codeText); if (c) { c.form = null; c.codeText = null; c.text = '새 말을 보내서 이 확인은 건너뛰었어요.'; c.title = '확인 건너뜀'; } S.pend = null; }
   if (!editing) S.acked = new Set();
   S.msgs.push({ role: 'u', text });
-  const qp = editing ? quickParse(text, S.spec) : null;
+  const qp = editing && S.spec.kind !== 'code' ? quickParse(text, S.spec) : null;
   if (qp) {     // AI 를 거치지 않고 규칙으로 바로 처리
     if (qp.bg) S.bg = qp.bg;
     logp('빠른 명령(AI 없이): ' + qp.descs.join(', '));
@@ -855,7 +910,7 @@ async function redraw(mutator, label, okMsg) {
   S.busy = false; render();
 }
 async function revalidate(why) {
-  if (!S.spec || S.server !== 'ok' || S.busy) return;
+  if (!S.spec || S.spec.kind === 'code' || S.server !== 'ok' || S.busy) return;
   const spec = clone(S.spec); spec.grade = S.grade; spec.purpose = S.purpose;
   try {
     const v = await local('/validate', { spec, userText: accText('') }, 30000);
@@ -872,6 +927,10 @@ async function restore(p) {      // 편집기가 보낸 저장된 사양을 다�
   if (S.server !== 'ok') { S.pendingInit = p; return; }
   if (p.grade) S.grade = p.grade;
   const spec = p.spec; spec.grade = S.grade;
+  if (spec.kind === 'code') {      // 저장된 코드는 자동으로 실행하지 않는다 — 선생님이 읽고 누르게
+    S.pend = { code: true, spec, ctx: { text: '', editing: false, restored: true }, text: '', editing: false };
+    S.msgs = [welcomeMsg(), cardCode(spec, true)]; render(); return;
+  }
   S.trusted = dimNums(spec); S.texts = [];
   const ctx = { text: '', editing: false, restored: true, userText: S.trusted };
   S.busy = true; S.busyTxt = '저장된 그림을 다시 그리는 중…'; render();
@@ -959,6 +1018,9 @@ document.addEventListener('click', e => {
   if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); return; }
   if (t.dataset.act) { const [i, j] = t.dataset.act.split(':').map(Number); actFn(S.msgs[i].acts[j]); return; }
   if (t.dataset.askgo) { submitAsk(t.dataset.askgo); return; }
+  if (t.dataset.codego) { submitCode(t.dataset.codego); return; }
+  if (t.dataset.act2 === 'nametop') { redraw(sp => { sp.marks = Object.assign({}, sp.marks, { names: namesTopDown((S.fig && S.fig.vertexTop) || []) }); }, '꼭짓점 이름을 붙여 다시 그리는 중…', '위에서부터 A, B, C … 이름을 붙였어요'); return; }
+  if (t.dataset.act2 === 'nameclear') { redraw(sp => { sp.marks = Object.assign({}, sp.marks, { names: {} }); }, '꼭짓점 이름을 지워 다시 그리는 중…', '꼭짓점 이름을 지웠어요'); return; }
   if (t.closest('[data-lab]') && t.dataset.v) { const [of, kind] = t.closest('[data-lab]').dataset.lab.split('|'), v = t.dataset.v; redraw(sp => setLabel(sp, of, kind, v), '표시할 수치를 바꿔 다시 그리는 중…'); return; }
   if (t.dataset.act2 === 'labsoff' || t.dataset.act2 === 'labsval') {
     const opts = (S.fig && S.fig.labelOptions) || [], on = t.dataset.act2 === 'labsval';

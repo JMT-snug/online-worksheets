@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.3">
+<meta name="app-version" content="geometry-v1.4">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -197,7 +197,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.3</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.4</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -268,7 +268,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 0, 2];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 0, 3];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -546,11 +546,12 @@ function paneHtml(tab) {
     if (!f) return '<p class="note">「구하는 값」을 고르고 그림을 만들면, 정답 확인용 겉넓이·부피 참고 값이 여기에 나와요.</p>';
     let h = '';
     const r = f.reference || {};
-    ['volume', 'surface'].forEach(k => { if (r[k]) h += '<div class="ref"><small>' + (k === 'volume' ? '부피' : '겉넓이') + ' (엔진이 공식으로 계산)</small>' + esc(r[k].text) + '</div>'; });
+    ['volume', 'surface'].forEach(k => { if (r[k]) h += '<div class="ref"><small>' + (k === 'volume' ? '부피' : '겉넓이') + ' (엔진이 공식으로 계산한 참값)</small>' + esc(r[k].text) + '</div>'; });
     if (r.section) h += '<div class="ref"><small>단면</small>' + esc(r.section.text) + '</div>';
     if (r.net) h += '<div class="ref"><small>전개도 — ' + esc(r.net.layout) + '</small>' + r.net.lines.map(esc).join('<br>') + '</div>';
     if (!h) h = '<p class="note">「구하는 값」을 고르지 않아서 참고 값이 없어요.</p>';
-    return h + '<p class="note">이 값은 <b>교사 확인용</b>이에요. 학생 화면에는 나가지 않고, 이미지에도 들어가지 않아요.</p>';
+    return h + '<p class="note">π·근호(√)는 <b>근삿값으로 바꾸지 않고 식 그대로</b> 써요. 정오각형처럼 정확한 식이 없는 값만 ≈ 로 보여요.</p>'
+      + '<p class="note">이 값은 <b>교사 확인용</b>이에요. 학생 화면에는 나가지 않고, 이미지에도 들어가지 않아요.</p>';
   }
   return '<div class="log">' + (S.log.length ? S.log.map(l => '<div data-t="' + l[0] + '">' + esc(l[1]) + '</div>').join('') : '<div data-t="">기록이 아직 없어요.</div>') + '</div>';
 }
@@ -602,12 +603,13 @@ function noteChips(ai) {
 }
 function cardOk(r, ctx) {
   const chips = [];
+  let noChange = false;           // 수정 요청인데 가드를 거친 뒤 바뀐 것이 하나도 없음
   if (ctx.fixNotes && ctx.fixNotes.length) chips.push({ k: 'warn', b: 'AI 가 고친 곳', t: ctx.fixNotes.join(', ') + ' — 입력한 숫자가 서로 맞지 않아서예요. 맞는지 확인해 주세요.' });
   if (ctx.editing && ctx.guard) {
     const g = ctx.guard, rev = (g.reverted || []).map(x => x.category), changed = (g.changed || []).filter(c => !rev.includes(c));
     const kept = Object.keys(CATKO).filter(c => !changed.includes(c));
     if (changed.length) chips.push({ k: 'ok', b: '바꿈', t: changed.map(c => CATKO[c]).join(' · ') });
-    else chips.push({ k: 'warn', b: '바뀐 것 없음', t: '요청을 반영하지 못했어요. 다르게 말해 보세요.' });
+    else { noChange = true; chips.push({ k: 'warn', b: '바뀐 것 없음', t: '요청을 반영하지 못했어요. 이 도구가 아직 못 그리는 모양이거나 말이 잘 안 맞았을 수 있어요 — 다르게 말해 보세요.' }); }
     chips.push({ k: 'kept', b: '그대로', t: kept.map(c => CATKO[c]).join(' · ') });
     (g.notes || []).forEach(n => chips.push({ k: 'warn', b: '지킴', t: n }));
   }
@@ -616,8 +618,9 @@ function cardOk(r, ctx) {
   noteChips(ctx.ai).forEach(c => chips.push(c));
   const ex = ctx.ai && ctx.ai.notes && ctx.ai.notes.explain;
   const fixed = ctx.fixNotes && ctx.fixNotes.length;
-  return { role: 'a', title: fixed ? '고쳐서 그렸어요 — 확인해 주세요' : ctx.restored ? '저장된 그림을 불러왔어요 ✓' : ctx.editing ? '고쳤어요 ✓' : r.spec.kind === 'net' ? '전개도로 그렸어요 ✓' : '그렸어요 ✓',
-    text: ctx.restored ? summarize(r.spec) : (ctx.editing && ex ? esc(ex) + '<br>' : '') + summarize(r.spec), chips };
+  if (noChange && ex) chips.push({ k: 'info', b: 'AI 의 설명(반영되지 않았어요)', t: ex });
+  return { role: 'a', title: noChange ? '바뀐 것이 없어요' : fixed ? '고쳐서 그렸어요 — 확인해 주세요' : ctx.restored ? '저장된 그림을 불러왔어요 ✓' : ctx.editing ? '고쳤어요 ✓' : r.spec.kind === 'net' ? '전개도로 그렸어요 ✓' : '그렸어요 ✓',
+    text: ctx.restored ? summarize(r.spec) : (ctx.editing && ex && !noChange ? esc(ex) + '<br>' : '') + summarize(r.spec), chips };
 }
 function cardFail(r, ctx) {
   const errs = (r.issues || []).filter(i => i.level === 'error');

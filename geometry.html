@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.10">
+<meta name="app-version" content="geometry-v1.11">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -220,7 +220,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.10</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.11</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -752,6 +752,8 @@ function cardFail(r, ctx) {
   if (r.stage === 'postcheck') { title = '엔진 내부 검사에서 걸렸어요 ✕'; }
   if (r.stage === 'render' || r.stage === 'image') { title = '그리는 중 문제가 생겼어요 ✕'; text = (r.error && r.error.msg) || text; }
   const chips = errs.slice(0, 4).map(i => ({ k: 'err', b: i.code, t: i.msg }));
+  if (sideGlueHint(ctx.text, r.spec)) chips.push({ k: 'info', b: '옆으로 붙이는 합성은 아직 없어요', t: '이 도구의 합성은 「위에 쌓기·안에 넣기·내접·파내기」만 그려요. 두 도형을 옆면끼리 붙이는 합성은 아직 못 그려요.' });
+  if (ctx.fixRefused) chips.push({ k: 'info', b: 'AI 가 고치려다 멈췄어요', t: ctx.fixRefused.why + ' — 그림이 달라지거나 확인 없이 코드가 실행되므로 받아들이지 않았어요.' + (ctx.fixRefused.say ? ' (AI 의 말: ' + ctx.fixRefused.say + ')' : '') });
   const ask = ctx.ai && ctx.ai.notes && ctx.ai.notes.ask;
   if (ask) chips.push({ k: 'info', b: 'AI 가 물어요', t: ask });
   const acts = [{ t: '내 말을 고쳐 다시 쓰기', fn: 'refill', val: ctx.text }];
@@ -765,6 +767,20 @@ function showCant(r, ctx) {
 }
 
 /* ═══════════════ 파이프라인: 말 → AI → 엔진 검증 → 그리기 ═══════════════ */
+/** 고침 고리에서 AI 가 내놓은 「고친 사양」을 그대로 받아도 되는가. 받으면 안 되면 그 까닭(글), 괜찮으면 ''.
+ *  ① 코드 모드로 바꾸기 — 코드 모드는 선생님이 코드를 읽고 [실행]을 눌러야만 도는데, 고침 고리는 그 확인을 건너뛴다
+ *  ② 도형을 빼기 — 못 그리는 도형을 말없이 지우면 「고쳤다」며 다른 그림이 나온다(2026-11-12: 부채꼴 기둥을 빼고 삼각기둥만 그림) */
+function fixRefusal(prev, next) {
+  if (!next || typeof next !== 'object') return '고친 사양이 비어 있었어요';
+  if (next.kind === 'code' && (!prev || prev.kind !== 'code')) return 'Manim 코드로 바꿔 그리려 했어요';
+  const n0 = prev && Array.isArray(prev.shapes) ? prev.shapes.length : 0, n1 = Array.isArray(next.shapes) ? next.shapes.length : 0;
+  if (n1 < n0) return '도형 ' + (n0 - n1) + '개를 빼서 고치려 했어요';
+  return '';
+}
+/** 「옆면끼리 붙어 있다」처럼 두 도형을 옆으로 붙이는 말인데 도형이 둘 이상인가 — 이 엔진의 합성(위에 쌓기·안에 넣기·내접·파내기)에는 옆으로 붙이기가 없다 */
+function sideGlueHint(text, spec) {
+  return Array.isArray(spec && spec.shapes) && spec.shapes.length >= 2 && /옆면(끼리|을|이)?\s*(붙|맞대|맞닿)|옆(으로|에)\s*(붙|나란)|나란히\s*(붙|놓)/.test(String(text || ''));
+}
 function dimDiff(a, b) {      // 치수가 비워지거나 바뀐 곳 — 「AI 가 고친 곳」 안내용
   const out = [], bm = {};
   (b.shapes || []).forEach(sh => { bm[sh.id] = sh.dims || {}; });
@@ -778,12 +794,19 @@ function dimDiff(a, b) {      // 치수가 비워지거나 바뀐 곳 — 「AI 
 }
 async function fixLoop(ctx, spec, r, maxTries) {
   let tries = 0;
+  ctx.fixRefused = null;
   while (!r.ok && r.stage === 'validate' && tries < maxTries) {
     const errs = (r.issues || []).filter(i => i.level === 'error');
     if (!errs.length) break;
     S.lastFail = { ctx, spec: r.spec || spec, errs };
     S.busyTxt = 'AI 가 오류를 고치는 중… (' + (tries + 1) + '/' + maxTries + ')'; renderMsgs(); renderStage();
     const fx = await callAi({ mode: 'fix', grade: S.grade, text: ctx.text, spec: r.spec || spec, issues: errs });
+    const refuse = fixRefusal(r.spec || spec, fx && fx.spec);
+    if (refuse) {      // 도형을 빼거나 코드 모드로 돌려 「고쳤다」고 하지 않는다 — 원래 오류를 그대로 알리고 AI 의 말만 덧붙임
+      ctx.fixRefused = { why: refuse, say: (fx && fx.notes && (fx.notes.explain || fx.notes.ask)) || '' };
+      logp('AI 가 고친 사양을 받지 않았어요: ' + refuse);
+      break;
+    }
     ctx.ai = fx;
     const before = JSON.stringify(spec), prevSpec = spec;
     spec = fx.spec; spec.grade = S.grade; spec.purpose = S.purpose;

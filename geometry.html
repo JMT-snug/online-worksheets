@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.9">
+<meta name="app-version" content="geometry-v1.10">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -220,7 +220,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.9</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.10</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -263,7 +263,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
         <div><div class="ttl" id="pTitle">—</div><div class="sub" id="pSub"></div></div>
         <div class="sp"></div>
         <span class="rotlab">끌어 돌리기</span>
-        <div class="seg" id="segRot" title="그림 위에서 마우스(손가락)로 끌면 돌아가요 — 좌우만·위아래만·자유롭게 고르세요(전개도·코드 모드는 돌릴 수 없어요)"><button data-v="lr">↔ 좌우</button><button data-v="ud">↕ 상하</button><button data-v="free">✥ 자유</button></div>
+        <div class="seg" id="segRot" title="그림 위에서 마우스(손가락)로 끌면 돌아가요 — 지금 보이는 화면을 기준으로: 좌우 = 화면의 세로축 둘레, 상하 = 화면의 가로축 둘레, 자유 = 둘 다(전개도·코드 모드는 돌릴 수 없어요)"><button data-v="lr">↔ 좌우</button><button data-v="ud">↕ 상하</button><button data-v="free">✥ 자유</button></div>
         <div class="seg" id="segBg" title="내보낼 이미지의 배경"><button data-v="white">흰 배경</button><button data-v="transparent">투명 배경</button></div>
         <div class="zoom"><button id="zOut" title="줄이기">−</button><span id="zTxt">100%</span><button id="zIn" title="키우기">＋</button><button id="zFit" title="맞춤" style="width:auto;padding:0 8px;font-size:12px">맞춤</button></div>
       </div>
@@ -296,7 +296,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 5, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 6, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -536,7 +536,8 @@ const issHtml = i => '<div class="iss ' + i.level + '"><code>' + esc(i.code) + (
 function viewCtl() {
   const v = (S.spec && S.spec.view) || {}, ortho = v.projection === 'ortho';
   return ortho
-    ? { ortho, a: { label: '좌우 돌리기', min: -180, max: 180, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '위·아래', min: -85, max: 85, val: Math.round(v.pitch == null ? 20 : v.pitch), key: 'pitch', unit: '°' } }
+    ? { ortho, a: { label: '도형 좌우 돌리기', min: -180, max: 180, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '내려다보는 각', min: -85, max: 85, val: Math.round(v.pitch == null ? 20 : v.pitch), key: 'pitch', unit: '°' },
+      c: { label: '화면 기울기', min: -180, max: 180, val: Math.round(v.roll || 0), key: 'roll', unit: '°' } }
     : { ortho, a: { label: '좌우 돌리기', min: -45, max: 90, val: Math.round((v.depthAngle == null ? 45 : v.depthAngle) - 45), key: 'depthAngle', unit: '°' }, b: { label: '깊이(밑면 넓이)', min: 15, max: 100, val: Math.round(100 * (v.depthScale == null ? .5 : v.depthScale)), key: 'depthScale', unit: '%' } };
 }
 /* 「표시할 수치」 — 엔진이 알려 준 목록(labelOptions)으로, 수치마다 [없음][값][x] 를 고른다.
@@ -583,9 +584,9 @@ function paneHtml(tab) {
         + '<p class="note">점 ' + f.vertexTop.length + '개에 붙여요. 시점을 바꾸면 이름은 그 점에 그대로 붙어 있어요(다시 누르면 새 위치 기준으로 붙여요).</p></div>' : '';
     return '<div class="qgrid">' + labBox(f) + nameBox + '<div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
       + '<div class="row"><label>투영</label><div class="seg" data-proj="1"><button data-v="oblique" class="' + (!c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>사각 투영(교과서식)</button><button data-v="ortho" class="' + (c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>정사영(입체적)</button></div></div>'
-      + sl(c.a, 'a') + sl(c.b, 'b')
-      + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button></div>'
-      + '<p class="note">그림 위에서 <b>마우스로 끌어서</b> 돌릴 수도 있어요 — 위쪽 「끌어 돌리기」 버튼으로 좌우만·위아래만·자유롭게를 고르세요.</p>'
+      + sl(c.a, 'a') + sl(c.b, 'b') + (c.c ? sl(c.c, 'c') : '')
+      + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button>' + (c.c ? '<button class="btn" data-act2="levelroll"' + (net || !c.c.val ? ' disabled' : '') + ' title="끌어 돌려서 비스듬히 기운 그림을 도형의 위쪽이 화면 위쪽이 되도록 바로 세워요(보는 방향은 그대로)">똑바로 세우기</button>' : '') + '</div>'
+      + '<p class="note">그림 위에서 <b>마우스로 끌어서</b> 돌릴 수도 있어요 — 지금 보이는 화면 기준으로 돌고, 위쪽 「끌어 돌리기」 버튼으로 좌우만·위아래만·자유롭게를 고르세요. 그림이 기울어졌으면 [똑바로 세우기].</p>'
       + '<p class="note"><b>치수(길이)는 바뀌지 않아요.</b> 길이를 바꾸려면 대화창에 「높이를 6cm로」처럼 숫자와 함께 말하세요.</p></div>'
       + '<div class="qbox"><h5>꾸밈</h5>'
       + seg('색', 'color', [['color', '색'], ['bw', '흑백(인쇄용)']])
@@ -927,20 +928,40 @@ async function ask(text, forceNew) {
 }
 /* ═══ 드래그 돌리기: 순수 계산 ═══ */
 const ROT_K = 0.45;                                              // 한 픽셀을 끌 때 도는 각(°)
+const D2R = Math.PI / 180;
 const rotClamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrap180 = a => { const w = ((a + 180) % 360 + 360) % 360 - 180; return w === -180 ? 180 : w; };
-/* 끌기 시작 시점 v0({yaw,pitch}) 에서 화면 dx,dy 픽셀 끌었을 때의 새 시점. mode: 'lr' 좌우만 · 'ud' 위아래만 · 'free' 둘 다.
-   오른쪽으로 끌면 도형의 앞면이 오른쪽으로(yaw 감소), 아래로 끌면 윗면이 더 보이게(pitch 증가) */
-function rotView(v0, dx, dy, mode) {
-  let yaw = v0.yaw, pitch = v0.pitch;
-  if (mode !== 'ud') yaw = wrap180(v0.yaw - dx * ROT_K);
-  if (mode !== 'lr') pitch = rotClamp(v0.pitch + dy * ROT_K, -85, 85);
-  return { yaw: Math.round(yaw), pitch: Math.round(pitch) };      // 정수 도(AI 사양의 view 는 정수)
+/* 시점(yaw·pitch·roll) → 화면 행렬: 행 u(화면 오른쪽)·v(화면 위)·d(보는 사람 쪽)가 세계 좌표의 단위벡터. 엔진 view.py 의 정사영(+roll)과 같은 식 */
+function viewMatrix(yaw, pitch, roll) {
+  const y = yaw * D2R, p = pitch * D2R, r = (roll || 0) * D2R;
+  const u0 = [Math.cos(y), Math.sin(y), 0];
+  const v0 = [-Math.sin(p) * Math.sin(y), Math.sin(p) * Math.cos(y), Math.cos(p)];
+  const d = [Math.sin(y) * Math.cos(p), -Math.cos(y) * Math.cos(p), Math.sin(p)];
+  const c = Math.cos(r), s = Math.sin(r);
+  return [u0.map((x, i) => x * c + v0[i] * s), u0.map((x, i) => -x * s + v0[i] * c), d];
 }
-/* 엔진 view.py 의 정사영과 같은 식: u=화면 오른쪽, v=화면 위, d=보는 사람 쪽 */
-function orthoBasis(yaw, pitch) {
-  const y = yaw * Math.PI / 180, p = pitch * Math.PI / 180;
-  return { u: [Math.cos(y), Math.sin(y), 0], v: [-Math.sin(p) * Math.sin(y), Math.sin(p) * Math.cos(y), Math.cos(p)], d: [Math.sin(y) * Math.cos(p), -Math.cos(y) * Math.cos(p), Math.sin(p)] };
+function orthoBasis(yaw, pitch, roll) { const M = viewMatrix(yaw, pitch, roll); return { u: M[0], v: M[1], d: M[2] }; }
+/* 화면 행렬 → yaw·pitch·roll(정수 도). pitch 는 ±85° 까지(그 이상은 85°), 시선이 거의 수직이면 yaw 는 prevYaw */
+function viewFromMatrix(M, prevYaw) {
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const pitch = rotClamp(Math.asin(rotClamp(M[2][2], -1, 1)) / D2R, -85, 85);
+  const yaw = (Math.abs(M[2][0]) + Math.abs(M[2][1]) < 1e-6) ? (prevYaw || 0) : Math.atan2(M[2][0], -M[2][1]) / D2R;
+  const B = viewMatrix(yaw, pitch, 0);
+  const roll = Math.atan2(dot(M[0], B[1]), dot(M[0], B[0])) / D2R;
+  return { yaw: Math.round(wrap180(yaw)), pitch: Math.round(pitch), roll: Math.round(wrap180(roll)) };
+}
+/* 끌기 시작 시점 v0({yaw,pitch,roll}) 에서 화면 dx,dy 픽셀 끌었을 때의 새 시점 — **지금 보이는 화면을 기준**으로 돈다.
+   오른쪽으로 끌면 도형이 화면의 세로축을 중심으로(앞면이 오른쪽으로), 아래로 끌면 가로축을 중심으로(윗면이 이쪽으로) 돈다.
+   mode: 'lr' 화면 좌우로만 · 'ud' 화면 위아래로만 · 'free' 둘 다 */
+function rotView(v0, dx, dy, mode) {
+  const M = viewMatrix(v0.yaw, v0.pitch, v0.roll);
+  const th = mode === 'ud' ? 0 : dx * ROT_K * D2R, ph = mode === 'lr' ? 0 : dy * ROT_K * D2R;
+  const ct = Math.cos(th), st = Math.sin(th), cp = Math.cos(ph), sp = Math.sin(ph);
+  const u = M[0].map((x, i) => x * ct + M[2][i] * st);              // 화면 세로축 둘레로 th
+  const d1 = M[0].map((x, i) => -x * st + M[2][i] * ct);
+  const v = M[1].map((x, i) => x * cp - d1[i] * sp);                // 화면 가로축 둘레로 ph
+  const d = M[1].map((x, i) => x * sp + d1[i] * cp);
+  return viewFromMatrix([u, v, d], v0.yaw);
 }
 /* 철사 선(3D 점 목록들)의 중심 c 와 외접구 반지름 R — 돌려도 그림 크기가 일정하도록 */
 function wireInfo(wire) {
@@ -951,9 +972,9 @@ function wireInfo(wire) {
   wire.forEach(pl => pl.forEach(P => { R = Math.max(R, Math.hypot(P[0] - c[0], P[1] - c[1], P[2] - c[2])); }));
   return { c, R };
 }
-/* 철사 선을 W×H 화면 위의 선분들로: [x1,y1,x2,y2,깊이등급(0 뒤 … 3 앞)] */
-function projectWire(wire, info, yaw, pitch, W, H) {
-  const B = orthoBasis(yaw, pitch), s = 0.42 * Math.min(W, H) / info.R, c = info.c, out = [];
+/* 철사 선을 W×H 화면 위의 선분들로: [x1,y1,x2,y2,깊이등급(0 뒤 … 3 앞)]. view = {yaw,pitch,roll} */
+function projectWire(wire, info, view, W, H) {
+  const B = orthoBasis(view.yaw, view.pitch, view.roll), s = 0.42 * Math.min(W, H) / info.R, c = info.c, out = [];
   wire.forEach(pl => {
     let prev = null;
     pl.forEach(P => {
@@ -1100,6 +1121,7 @@ document.addEventListener('click', e => {
     redraw(sp => { opts.forEach(o => { if (!on) setLabel(sp, o.of, o.kind, 'none'); else if (o.known) setLabel(sp, o.of, o.kind, 'value'); }); }, on ? '아는 수치를 모두 보이는 중…' : '표시할 수치를 모두 끄는 중…');
     return;
   }
+  if (t.dataset.act2 === 'levelroll') { redraw(sp => { sp.view = Object.assign({}, sp.view, { roll: 0 }); }, '똑바로 세워 다시 그리는 중…', '그림을 똑바로 세웠어요(보는 방향은 그대로)'); return; }
   if (t.dataset.act2 === 'viewreset') { redraw(sp => { delete sp.view; }, '기본 시점으로 다시 그리는 중…', '시점을 기본으로 되돌렸어요'); return; }
   if (t.dataset.copy) { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(S.spec, null, 2)); toast('사양 JSON 을 복사했어요.'); return; }
   if (t.id === 'btnRetry') { connect(); return; }
@@ -1133,13 +1155,13 @@ document.addEventListener('change', e => {
   const s = e.target.dataset && e.target.dataset.sl; if (!s) return;
   const val = +e.target.value;
   if (s === 'font') redraw(sp => { sp.style = Object.assign({}, sp.style, { fontScale: val / 100 }); }, '글자 크기를 바꿔 다시 그리는 중…');
-  else { const c = viewCtl(); const key = (s === 'a' ? c.a : c.b).key;
+  else { const c = viewCtl(); const key = (s === 'a' ? c.a : s === 'c' ? c.c : c.b).key;
     redraw(sp => { const v = Object.assign({}, sp.view); v[key] = key === 'depthAngle' ? 45 + val : key === 'depthScale' ? val / 100 : val; sp.view = v; }, '시점을 바꿔 다시 그리는 중…'); }
 });
 /* ═══════════════ 그림을 끌어서 돌리기(좌우·상하·자유) ═══════════════ */
 const rotAvail = () => !!(S.fig && !S.cant && S.fig.spec && S.fig.spec.kind !== 'net' && S.fig.spec.kind !== 'code' && S.fig.wire && S.fig.wire.length);
 const canRotate = () => rotAvail() && !S.busy && S.server === 'ok';
-const ROT_LABEL = { lr: '↔ 좌우로만', ud: '↕ 위·아래로만', free: '✥ 자유롭게' };
+const ROT_LABEL = { lr: '↔ 화면 좌우로만', ud: '↕ 화면 위·아래로만', free: '✥ 자유롭게' };
 const fmtDeg = x => String(Math.round(x * 10) / 10);
 function rotMount(withHud) {
   const stg = $('#stage');
@@ -1164,14 +1186,14 @@ function rotPaint(v) {
   const W = cv.clientWidth, H = cv.clientHeight, dpr = cv.width / Math.max(1, W), ctx = cv.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = ROT.color;
-  const segs = projectWire(S.fig.wire, ROT.info, v.yaw, v.pitch, W, H), AL = [.2, .38, .62, .95], LW = [1, 1.2, 1.6, 2.1];
+  const segs = projectWire(S.fig.wire, ROT.info, v, W, H), AL = [.2, .38, .62, .95], LW = [1, 1.2, 1.6, 2.1];
   for (let b = 0; b < 4; b++) {
     ctx.globalAlpha = AL[b]; ctx.lineWidth = LW[b]; ctx.beginPath();
     segs.forEach(g => { if (g[4] === b) { ctx.moveTo(g[0], g[1]); ctx.lineTo(g[2], g[3]); } });
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  if (ROT.hud) ROT.hud.textContent = '좌우 ' + fmtDeg(v.yaw) + '° · 위·아래 ' + fmtDeg(v.pitch) + '° — 손을 떼면 다시 그려요';
+  if (ROT.hud) ROT.hud.textContent = '좌우 ' + fmtDeg(v.yaw) + '° · 위·아래 ' + fmtDeg(v.pitch) + '°' + (v.roll ? ' · 기울기 ' + fmtDeg(v.roll) + '°' : '') + ' — 손을 떼면 다시 그려요';
 }
 function rotSync() {                                      // renderStage 가 끝날 때마다: 커서·버튼·안내, 그리는 동안엔 철사 미리보기를 유지
   const st = $('#stage'); if (!st) return;
@@ -1199,19 +1221,19 @@ function rotSync() {                                      // renderStage 가 끝
     if (ROT.hud) ROT.hud.remove();
     ROT.cv = ROT.hud = null;
     stg.classList.remove('rotating', 'dragging');
-    const nv = ROT.v, same = Math.abs(nv.yaw - ROT.v0.yaw) < .05 && Math.abs(nv.pitch - ROT.v0.pitch) < .05 && !ROT.conv;
+    const nv = ROT.v, same = nv.yaw === ROT.v0.yaw && nv.pitch === ROT.v0.pitch && nv.roll === ROT.v0.roll && !ROT.conv;
     if (cancel || same) return;
     if (ROT.conv) toast('사각 투영은 돌릴 수 없어서 정사영으로 바꿔 돌렸어요.');
-    logp('끌어서 돌림(' + ROT_LABEL[ROT.mode] + '): 좌우 ' + fmtDeg(nv.yaw) + '° · 위·아래 ' + fmtDeg(nv.pitch) + '°');
+    logp('끌어서 돌림(' + ROT_LABEL[ROT.mode] + '): 좌우 ' + fmtDeg(nv.yaw) + '° · 위·아래 ' + fmtDeg(nv.pitch) + '° · 기울기 ' + fmtDeg(nv.roll) + '°');
     ROT.hold = nv;
-    redraw(sp => { sp.view = Object.assign({}, sp.view, { projection: 'ortho', yaw: nv.yaw, pitch: nv.pitch }); }, '돌린 방향으로 다시 그리는 중…', null);
+    redraw(sp => { sp.view = Object.assign({}, sp.view, { projection: 'ortho', yaw: nv.yaw, pitch: nv.pitch, roll: nv.roll }); }, '돌린 방향으로 다시 그리는 중…', null);
   }
   stg.addEventListener('pointerdown', e => {
     if (e.button !== 0 || ROT.on || !canRotate()) return;
     if (e.offsetX > stg.clientWidth || e.offsetY > stg.clientHeight) return;      // 스크롤바를 누른 것
     const v = (S.spec && S.spec.view) || {}, ortho = v.projection === 'ortho';
     ROT.conv = !ortho;
-    ROT.v0 = { yaw: ortho && isFinite(+v.yaw) ? +v.yaw : 30, pitch: ortho && isFinite(+v.pitch) ? +v.pitch : 20 };
+    ROT.v0 = { yaw: ortho && isFinite(+v.yaw) ? Math.round(+v.yaw) : 30, pitch: ortho && isFinite(+v.pitch) ? Math.round(+v.pitch) : 20, roll: ortho && isFinite(+v.roll) ? Math.round(+v.roll) : 0 };
     ROT.v = Object.assign({}, ROT.v0);
     ROT.on = true; ROT.moved = false; ROT.id = e.pointerId; ROT.x0 = e.clientX; ROT.y0 = e.clientY;
     try { stg.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.5">
+<meta name="app-version" content="geometry-v1.6">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -73,6 +73,13 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .chip.kept{background:#f5f5f4;color:#57534e}
 .sug{margin-top:7px;font-size:12.5px;color:var(--ink2);background:var(--paper);border-left:3px solid var(--amber);padding:6px 9px;border-radius:0 6px 6px 0}
 .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.askf{margin-top:9px;display:flex;flex-direction:column;gap:6px}
+.askr{display:grid;grid-template-columns:minmax(0,1fr) 92px 28px;gap:6px;align-items:center;font-size:12.5px;color:var(--ink2)}
+.askr .nm small{display:block;font-size:11px;color:var(--ink3)}
+.askr input{width:100%;box-sizing:border-box;border:1px solid var(--rule2);border-radius:7px;padding:4px 7px;font-size:13px;background:var(--paper)}
+.askr em{font-style:normal;color:var(--ink3);font-size:12px}
+.askq{font-size:12.5px;color:var(--ink2);background:var(--acc-lt);border-radius:8px;padding:6px 9px}
+.asko{font-size:11.5px;color:var(--ink3);display:flex;gap:5px;align-items:center}
 .btn{border:1px solid var(--rule2);background:var(--paper);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
 .btn:hover{background:var(--acc-lt);border-color:#93c5fd;color:var(--acc-dk)}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -197,7 +204,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.5</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.6</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -215,6 +222,9 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
       </div>
       <div class="row"><label>그림 종류</label>
         <div class="seg" id="segKind"><button data-v="solid">겨냥도</button><button data-v="net">전개도</button></div>
+      </div>
+      <div class="row"><label>빠진 값</label>
+        <div class="seg" id="segAsk" title="말에 없는 길이가 있으면 그리기 전에 물어볼지 정해요"><button data-v="1">묻기</button><button data-v="0">표시용 비율로</button></div>
       </div>
     </div>
 
@@ -268,7 +278,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 1, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 2, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -314,7 +324,10 @@ const S = {
   grade: 1, purpose: 'none', kind: 'solid', bg: 'white', size: 'normal', zoom: 1, tab: 'quick',
   msgs: [], busy: false, busyTxt: '', spec: null, fig: null, cant: null, hist: [], hi: -1,
   texts: [], trusted: '', forceNew: false, label: '', pendingInit: null, lastFail: null, log: [], sent: false,
+  askMissing: true, acked: new Set(), pend: null,     // 확인 단계: 빠진 값을 그리기 전에 묻는다
 };
+try { S.askMissing = localStorage.getItem('geomAskMissing') !== '0'; } catch (e) { /* 저장 못 해도 기본(묻기) */ }
+const saveAsk = () => { try { localStorage.setItem('geomAskMissing', S.askMissing ? '1' : '0'); } catch (e) { /* 무시 */ } };
 function logp(msg) { const d = new Date(); S.log.push([pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()), msg]); if (S.log.length > 80) S.log.shift(); }
 
 /* ═══════════════ 통신 ═══════════════ */
@@ -412,6 +425,7 @@ function renderTop() {
   } else { p.className = 'pill off'; t.innerHTML = '렌더 서버에 연결되지 않았어요 <u>켜는 법</u>'; }
 }
 function renderCond() {
+  $$('#segAsk button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === S.askMissing));
   $$('#segGrade button').forEach(b => b.classList.toggle('on', +b.dataset.v === S.grade));
   $$('#segPurpose button').forEach(b => b.classList.toggle('on', b.dataset.v === S.purpose));
   $$('#segKind button').forEach(b => b.classList.toggle('on', b.dataset.v === S.kind));
@@ -430,6 +444,7 @@ function renderMsgs() {
     if (m.title) h += '<div class="t' + (m.err ? ' err' : '') + '">' + esc(m.title) + '</div>';
     if (m.text) h += '<div class="sum">' + m.text + '</div>';
     if (m.chips && m.chips.length) h += '<div class="chips">' + m.chips.map(chipHtml).join('') + '</div>';
+    if (m.form) h += formHtml(m);
     if (m.sug) h += '<div class="sug">💡 ' + esc(m.sug) + '</div>';
     if (m.examples) h += '<div class="ex">' + EXAMPLES.map((e, j) => '<button data-ex="' + j + '">' + esc(e) + '</button>').join('') + '</div>';
     if (m.acts && m.acts.length) h += '<div class="acts">' + m.acts.map((a, j) => '<button class="btn ' + (a.pri ? 'pri' : '') + '" data-act="' + i + ':' + j + '">' + esc(a.t) + '</button>').join('') + '</div>';
@@ -611,12 +626,50 @@ function issueChips(r) {
   });
   return out;
 }
-function noteChips(ai) {
-  const out = [], n = (ai && ai.notes) || {};
-  if (n.defaultsUsed && n.defaultsUsed.length) out.push({ k: 'info', b: '기본 비율', t: '말에 없는 ' + n.defaultsUsed.join(', ') + ' 은(는) 보기 좋은 비율로 그렸어요.' });
+function noteChips(ai, ctx) {
+  const out = [], n = (ai && ai.notes) || {}, filled = new Set((ctx && ctx.filled) || []);
+  const du = (n.defaultsUsed || []).filter(x => !filled.has(x));          // 확인 카드에서 값을 적은 것은 더 이상 「기본 비율」이 아니다
+  if (du.length) out.push({ k: 'info', b: '기본 비율', t: '말에 없는 ' + du.join(', ') + ' 은(는) 보기 좋은 비율로 그렸어요.' });
   (n.curriculum || []).forEach(c => out.push({ k: 'warn', b: '학년 안내', t: c }));
   if (n.ask) out.push({ k: 'info', b: 'AI 가 물어요', t: n.ask });
   return out;
+}
+/* ═══════════════ 확인 단계: 빠진 값을 그리기 전에 묻는다 ═══════════════ */
+const askKey = n => n.shape + ':' + n.key;
+const needsLeft = (needs, acked) => (needs || []).filter(n => !acked.has(askKey(n)));
+function setDimIn(spec, shape, key, val) {            // 입력한 값을 사양에 넣는다(변의 수는 정수)
+  const sh = (spec.shapes || []).find(x => x.id === shape); if (!sh) return false;
+  sh.dims = sh.dims || {}; sh.dims[key] = key === 'n' ? Math.round(val) : val; return true;
+}
+function applyAsk(spec, needs, vals) {                // vals: { 'S1:ang': '60' } → 숫자로 읽히는 것만. 반환: 넣은 값의 글 (근거 문장에 덧붙임)
+  const words = [];
+  (needs || []).forEach(n => {
+    const raw = vals[askKey(n)], v = raw == null || String(raw).trim() === '' ? NaN : Number(raw);
+    if (!isFinite(v) || v <= 0) return;
+    if (n.max != null && v > n.max) return;
+    if (setDimIn(spec, n.shape, n.key, v)) words.push(n.ko + ' ' + v + (n.unit === '°' ? '도' : n.unit === 'cm' ? 'cm' : ''));
+  });
+  return words;
+}
+function cardAsk(p) {
+  const n = p.needs.length;
+  return { role: 'a', title: '확인할 게 있어요 — 그리기 전에', ask: true,
+    text: (n ? '말에 없는 값이 <b>' + n + '개</b> 있어요. 아는 값은 적어 주세요 — <b>비워 두면 표시용 비율로 그려요</b>(그 길이는 그림에 값으로 표시되지 않아요).' : '') + (p.askAi ? (n ? '<br>' : '') + '말이 정확하지 않은 곳이 있어요.' : ''),
+    form: { needs: p.needs, askAi: p.askAi || '' } };
+}
+function formHtml(m) {
+  const f = m.form; if (!f) return '';
+  let h = '<div class="askf">';
+  f.needs.forEach(n => {
+    const ph = n.used != null ? '표시용 ' + nfmt(n.used) : '';
+    h += '<div class="askr"><div class="nm">' + esc(n.shapeKo) + ' · <b>' + esc(n.ko) + '</b>' + (n.alt ? '<small>' + esc(n.alt) + '</small>' : '') + (n.kind === 'assumed' ? '<small>「비스듬한」만 말해서 높이의 절반으로 기울였어요</small>' : '') + '</div>'
+      + '<input type="number" step="' + (n.int ? 1 : 'any') + '" min="0" ' + (n.max != null ? 'max="' + n.max + '" ' : '') + 'data-ask="' + esc(askKey(n)) + '" placeholder="' + esc(ph) + '"><em>' + esc(n.unit || '') + '</em></div>';
+  });
+  if (f.askAi) h += '<div class="askq">❓ ' + esc(f.askAi) + '</div><input type="text" data-askai placeholder="답을 적으면 그 말을 보태 다시 만들어요(비우면 지금 모양으로 그려요)" style="width:100%;box-sizing:border-box;border:1px solid var(--rule2);border-radius:7px;padding:5px 8px;font-size:13px">';
+  h += '<label class="asko"><input type="checkbox" data-askoff> 다음부터 묻지 않고 표시용 비율로 그리기</label>';
+  h += '<div class="acts"><button class="btn pri" data-askgo="go">' + (f.needs.length ? '이 값으로 그리기' : '이대로 그리기') + '</button>'
+    + (f.needs.length ? '<button class="btn" data-askgo="skip">값 없이 표시용 비율로 그리기</button>' : '') + '</div></div>';
+  return h;
 }
 function cardOk(r, ctx) {
   const chips = [];
@@ -632,7 +685,7 @@ function cardOk(r, ctx) {
   }
   const dc = derivedChip(r); if (dc) chips.push(dc);
   issueChips(r).forEach(c => chips.push(c));
-  noteChips(ctx.ai).forEach(c => chips.push(c));
+  noteChips(ctx.ai, ctx).forEach(c => chips.push(c));
   const ex = ctx.ai && ctx.ai.notes && ctx.ai.notes.explain;
   const fixed = ctx.fixNotes && ctx.fixNotes.length;
   if (noChange && ex) chips.push({ k: 'info', b: 'AI 의 설명(반영되지 않았어요)', t: ex });
@@ -705,6 +758,23 @@ async function runPipeline(text, editing) {
     ctx.guard = g; spec = g.spec; spec.grade = S.grade; spec.purpose = S.purpose;
     ctx.userText = accText(text) + ' ' + dimNums(spec);
   }
+  // 확인 단계: 말에 없어서 표시용 비율로 채운 핵심 길이가 있으면(엔진이 알려 줌) 그리기 전에 묻는다. 시점·꾸밈·표시만 바꾸는 수정은 묻지 않는다.
+  const chg = editing ? ((ctx.guard && ctx.guard.changed) || []).filter(c => !((ctx.guard.reverted || []).some(x => x.category === c))) : ['dims', 'structure'];
+  if (S.askMissing && (chg.includes('dims') || chg.includes('structure'))) {
+    S.busyTxt = '빠진 값이 있는지 확인하는 중…'; renderMsgs(); renderStage();
+    const v = await local('/validate', { spec, userText: ctx.userText }, 30000);
+    if (v && v.ok) {
+      const left = needsLeft(v.needs, S.acked), q = !editing && ai.notes && ai.notes.ask ? ai.notes.ask : '';
+      if (left.length || q) {
+        S.pend = { spec: v.spec || spec, ctx, needs: left, text, editing, askAi: q };
+        S.msgs.push(cardAsk(S.pend)); logp('확인 단계: 빠진 값 ' + left.length + '개' + (q ? ' · AI 질문 있음' : ''));
+        return;
+      }
+    }
+  }
+  await finishDraw(ctx, spec, editing, text);
+}
+async function finishDraw(ctx, spec, editing, text) {
   S.busyTxt = '엔진이 검증하고 그리는 중… 약 3초'; renderMsgs(); renderStage();
   let r = await renderSpec(spec, ctx.userText);
   const fx = await fixLoop(ctx, spec, r, 2); r = fx.r; spec = fx.spec;
@@ -720,6 +790,24 @@ async function runPipeline(text, editing) {
     S.msgs.push(cardFail(r, ctx));
     logp('그리기 실패(' + r.stage + '): ' + String(((r.issues || []).filter(i => i.level === 'error')[0] || {}).msg || (r.error && r.error.msg) || '').slice(0, 100));
   }
+}
+function submitAsk(mode) {                       // 확인 카드의 [그리기] 버튼
+  const p = S.pend; if (!p || S.busy) return;
+  const vals = {}; $$('[data-ask]').forEach(el => { vals[el.dataset.ask] = el.value; });
+  const aiEl = $('[data-askai]'), aiAns = aiEl ? aiEl.value.trim() : '', off = $('[data-askoff]');
+  if (off && off.checked) { S.askMissing = false; saveAsk(); }
+  const card = S.msgs.find(m => m.form); if (card) { card.form = null; card.text = esc(aiAns ? '답을 보태 다시 만들게요: ' + aiAns : mode === 'skip' ? '값 없이 표시용 비율로 그려요.' : '적어 준 값으로 그려요.'); card.title = '확인했어요'; }
+  S.pend = null;
+  if (aiAns) {                                   // AI 의 질문에 답했다 → 말에 보태 처음부터 다시(적은 숫자는 말로 풀어 넣는다)
+    const extra = mode === 'go' ? applyAsk(clone(p.spec), p.needs, vals).join(', ') : '';
+    ask(p.text + ' (' + aiAns + (extra ? ', ' + extra : '') + ')', !p.editing);
+    return;
+  }
+  const spec = clone(p.spec), words = mode === 'go' ? applyAsk(spec, p.needs, vals) : [];
+  p.needs.forEach(n => S.acked.add(askKey(n)));  // 물었으니 같은 값은 다시 묻지 않는다(입력했든 비웠든)
+  p.ctx.filled = mode === 'go' ? p.needs.filter(n => { const v = Number(vals[askKey(n)]); return vals[askKey(n)] != null && String(vals[askKey(n)]).trim() !== '' && isFinite(v) && v > 0; }).map(n => n.key) : [];
+  p.ctx.userText = p.ctx.userText + ' ' + dimNums(spec) + ' ' + words.join(' ');
+  guarded(() => finishDraw(p.ctx, spec, p.editing, p.text), '엔진이 검증하고 그리는 중… 약 3초');
 }
 async function guarded(fn, label) {
   if (S.busy) return;
@@ -739,6 +827,8 @@ async function ask(text, forceNew) {
   if (!text || S.busy) return;
   const editing = !!S.spec && !S.forceNew && !forceNew;
   S.lastText = text; S.lastEditing = editing;
+  if (S.pend) { const c = S.msgs.find(m => m.form); if (c) { c.form = null; c.text = '새 말을 보내서 이 확인은 건너뛰었어요.'; c.title = '확인 건너뜀'; } S.pend = null; }
+  if (!editing) S.acked = new Set();
   S.msgs.push({ role: 'u', text });
   const qp = editing ? quickParse(text, S.spec) : null;
   if (qp) {     // AI 를 거치지 않고 규칙으로 바로 처리
@@ -868,6 +958,7 @@ document.addEventListener('click', e => {
   if (t.dataset.q != null) { $('#inp').value = QUICK[+t.dataset.q][1]; $('#inp').focus(); toast('Enter 를 누르면 보내요 — 문장을 고쳐서 보내도 돼요.'); return; }
   if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); return; }
   if (t.dataset.act) { const [i, j] = t.dataset.act.split(':').map(Number); actFn(S.msgs[i].acts[j]); return; }
+  if (t.dataset.askgo) { submitAsk(t.dataset.askgo); return; }
   if (t.closest('[data-lab]') && t.dataset.v) { const [of, kind] = t.closest('[data-lab]').dataset.lab.split('|'), v = t.dataset.v; redraw(sp => setLabel(sp, of, kind, v), '표시할 수치를 바꿔 다시 그리는 중…'); return; }
   if (t.dataset.act2 === 'labsoff' || t.dataset.act2 === 'labsval') {
     const opts = (S.fig && S.fig.labelOptions) || [], on = t.dataset.act2 === 'labsval';
@@ -878,6 +969,7 @@ document.addEventListener('click', e => {
   if (t.dataset.copy) { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(S.spec, null, 2)); toast('사양 JSON 을 복사했어요.'); return; }
   if (t.id === 'btnRetry') { connect(); return; }
   if (t.id === 'btnDirect') { location.href = LOCAL + '/geometry.html' + (hasOpener() ? '?o=' + encodeURIComponent(OPENER_ORIGIN === '*' ? '' : OPENER_ORIGIN) : ''); return; }
+  if (t.closest('#segAsk')) { S.askMissing = t.dataset.v === '1'; saveAsk(); renderCond(); toast(S.askMissing ? '말에 없는 값은 그리기 전에 물어볼게요.' : '말에 없는 값은 묻지 않고 표시용 비율로 그려요.'); return; }
   if (t.closest('#segGrade')) { S.grade = +t.dataset.v; renderCond(); revalidate('학년을 중' + S.grade + ' 으로 바꿨어요'); return; }
   if (t.closest('#segPurpose')) { S.purpose = t.dataset.v; renderCond(); revalidate('구하는 값을 바꿨어요'); return; }
   if (t.closest('#segKind')) { const k = t.dataset.v; if (!S.spec) { S.kind = k; renderCond(); toast(k === 'net' ? '「…를 전개도로 그려줘」라고 말하면 전개도로 그려요.' : ''); return; } if (k === (S.spec.kind || 'solid')) return; S.kind = k; redraw(sp => { sp.kind = k; if (k === 'net' && !sp.net) sp.net = { layout: 'auto', fold: 'dashed', glueMarks: false }; }, k === 'net' ? '전개도로 펼치는 중…' : '겨냥도로 그리는 중…', k === 'net' ? '전개도로 바꿨어요(길이는 그대로)' : '겨냥도로 바꿨어요'); return; }

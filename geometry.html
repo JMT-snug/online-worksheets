@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.8">
+<meta name="app-version" content="geometry-v1.9">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -126,6 +126,15 @@ textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px #
 .stage.checker{background:conic-gradient(#e7e5e4 25%,#fff 0 50%,#e7e5e4 0 75%,#fff 0) 0 0/20px 20px}
 .stage img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center;transition:transform .15s,opacity .2s;display:block}
 .stage.busy img{opacity:.35;filter:grayscale(.4)}
+.stage.rot{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage.rot.dragging{cursor:grabbing}
+.stage.rot img{-webkit-user-drag:none;user-select:none;pointer-events:none}
+.stage.rotating img{opacity:.1;filter:none}
+.stage canvas.rotcv{position:absolute;pointer-events:none}
+.stage .rothud{position:absolute;pointer-events:none;font-size:12px;background:rgba(28,25,23,.8);color:#fff;border-radius:999px;padding:3px 12px;white-space:nowrap}
+.stage .rothint{position:absolute;left:10px;bottom:8px;pointer-events:none;font-size:11.5px;color:var(--ink3);background:rgba(255,255,255,.82);border-radius:999px;padding:2px 10px}
+.rotlab{font-size:12px;color:var(--ink3);white-space:nowrap}
+#segRot button:disabled{opacity:.4;cursor:not-allowed}
 .empty{text-align:center;color:var(--ink3);padding:20px;max-width:430px}
 .empty .big{font-size:54px;opacity:.55;margin-bottom:6px}
 .empty p{font-size:13.5px;line-height:1.6;color:var(--ink2)}
@@ -211,7 +220,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.8</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.9</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -253,6 +262,8 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
       <div class="ptool">
         <div><div class="ttl" id="pTitle">—</div><div class="sub" id="pSub"></div></div>
         <div class="sp"></div>
+        <span class="rotlab">끌어 돌리기</span>
+        <div class="seg" id="segRot" title="그림 위에서 마우스(손가락)로 끌면 돌아가요 — 좌우만·위아래만·자유롭게 고르세요(전개도·코드 모드는 돌릴 수 없어요)"><button data-v="lr">↔ 좌우</button><button data-v="ud">↕ 상하</button><button data-v="free">✥ 자유</button></div>
         <div class="seg" id="segBg" title="내보낼 이미지의 배경"><button data-v="white">흰 배경</button><button data-v="transparent">투명 배경</button></div>
         <div class="zoom"><button id="zOut" title="줄이기">−</button><span id="zTxt">100%</span><button id="zIn" title="키우기">＋</button><button id="zFit" title="맞춤" style="width:auto;padding:0 8px;font-size:12px">맞춤</button></div>
       </div>
@@ -285,7 +296,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 4, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 5, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -339,6 +350,8 @@ const S = {
 };
 try { S.askMissing = localStorage.getItem('geomAskMissing') !== '0'; } catch (e) { /* 저장 못 해도 기본(묻기) */ }
 const saveAsk = () => { try { localStorage.setItem('geomAskMissing', S.askMissing ? '1' : '0'); } catch (e) { /* 무시 */ } };
+const ROT = { mode: 'free', on: false, moved: false, id: null, x0: 0, y0: 0, v0: null, v: null, conv: false, info: null, cv: null, hud: null, raf: 0, hold: null, color: '#1c1917' };   // 끌어 돌리기 상태
+try { const m = localStorage.getItem('geomRotMode'); if (m === 'lr' || m === 'ud' || m === 'free') ROT.mode = m; } catch (e) { /* 기본(자유) */ }
 function logp(msg) { const d = new Date(); S.log.push([pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds()), msg]); if (S.log.length > 80) S.log.shift(); }
 
 /* ═══════════════ 통신 ═══════════════ */
@@ -492,11 +505,12 @@ function renderStage() {
     h = '<div class="empty"><div class="big">🧊</div><p><b>왼쪽에 도형을 말로 설명해 보세요.</b><br>숫자는 적은 것만 쓰고, 적지 않은 길이는 보기 좋은 비율로 그려요. 그림이 나오면 「오른쪽으로 20도 돌려줘」「높이 표시해줘」처럼 고쳐 달라고 말할 수 있어요.</p>'
       + '<div class="ex">' + EXAMPLES.slice(0, 3).map((e, j) => '<button data-ex="' + j + '">' + esc(e) + '</button>').join('') + '</div></div>';
   } else {
-    h = '<img id="fig" alt="' + esc(f.title) + '" src="data:image/png;base64,' + f.png + '" style="transform:scale(' + S.zoom + ')">';
+    h = '<img id="fig" alt="' + esc(f.title) + '" src="data:image/png;base64,' + f.png + '" style="transform:scale(' + S.zoom + ')" draggable="false"><div class="rothint" id="rotHint"></div>';
   }
   if (S.busy) h += '<div class="spin"><div class="ring"></div><small>' + esc(S.busyTxt || '그리는 중…') + '</small></div>';
   st.innerHTML = h;
   $('#zTxt').textContent = Math.round(S.zoom * 100) + '%';
+  rotSync();
 }
 const TABS = [['quick', '빠른 조절'], ['json', '사양 JSON'], ['check', '검증 결과'], ['ref', '참고 값'], ['log', '로그']];
 function renderTabs() {
@@ -522,7 +536,7 @@ const issHtml = i => '<div class="iss ' + i.level + '"><code>' + esc(i.code) + (
 function viewCtl() {
   const v = (S.spec && S.spec.view) || {}, ortho = v.projection === 'ortho';
   return ortho
-    ? { ortho, a: { label: '좌우 돌리기', min: -90, max: 90, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '위·아래', min: 3, max: 85, val: Math.round(v.pitch || 20), key: 'pitch', unit: '°' } }
+    ? { ortho, a: { label: '좌우 돌리기', min: -180, max: 180, val: Math.round(v.yaw || 0), key: 'yaw', unit: '°' }, b: { label: '위·아래', min: -85, max: 85, val: Math.round(v.pitch == null ? 20 : v.pitch), key: 'pitch', unit: '°' } }
     : { ortho, a: { label: '좌우 돌리기', min: -45, max: 90, val: Math.round((v.depthAngle == null ? 45 : v.depthAngle) - 45), key: 'depthAngle', unit: '°' }, b: { label: '깊이(밑면 넓이)', min: 15, max: 100, val: Math.round(100 * (v.depthScale == null ? .5 : v.depthScale)), key: 'depthScale', unit: '%' } };
 }
 /* 「표시할 수치」 — 엔진이 알려 준 목록(labelOptions)으로, 수치마다 [없음][값][x] 를 고른다.
@@ -565,12 +579,13 @@ function paneHtml(tab) {
     const net = f.spec.kind === 'net', c = viewCtl();
     const sl = (o, id) => '<div class="row"><label>' + o.label + '</label><div class="slide"><input type="range" min="' + o.min + '" max="' + o.max + '" value="' + o.val + '" data-sl="' + id + '"' + (net ? ' disabled' : '') + '><em id="v-' + id + '">' + o.val + o.unit + '</em></div></div>';
     const nameBox = (f.vertexTop && f.vertexTop.length && !net)
-      ? '<div class="qbox" style="grid-column:1/-1"><h5>꼭짓점 이름 — 그림에서 <b>위에 있는 점부터</b> 알파벳을 붙여요</h5><div class="acts"><button class="btn" data-act2="nametop">위에서부터 A B C … 붙이기</button><button class="btn" data-act2="nameclear">이름 지우기</button></div>'
+      ? '<div class="qbox" style="grid-column:1/-1"><h5>꼭짓점 이름 — 그림에서 <b>위에 있는 점부터, 같은 높이에서는 반시계 방향으로</b> 알파벳을 붙여요</h5><div class="acts"><button class="btn" data-act2="nametop">위에서부터 반시계로 A B C … 붙이기</button><button class="btn" data-act2="nameclear">이름 지우기</button></div>'
         + '<p class="note">점 ' + f.vertexTop.length + '개에 붙여요. 시점을 바꾸면 이름은 그 점에 그대로 붙어 있어요(다시 누르면 새 위치 기준으로 붙여요).</p></div>' : '';
     return '<div class="qgrid">' + labBox(f) + nameBox + '<div class="qbox"><h5>시점 — 보이는 방향만 바뀌어요(+는 오른쪽·위)' + (net ? ' (전개도에는 시점이 없어요)' : '') + '</h5>'
       + '<div class="row"><label>투영</label><div class="seg" data-proj="1"><button data-v="oblique" class="' + (!c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>사각 투영(교과서식)</button><button data-v="ortho" class="' + (c.ortho ? 'on' : '') + '"' + (net ? ' disabled' : '') + '>정사영(입체적)</button></div></div>'
       + sl(c.a, 'a') + sl(c.b, 'b')
       + '<div class="acts"><button class="btn" data-act2="viewreset"' + (net ? ' disabled' : '') + '>기본 시점으로</button></div>'
+      + '<p class="note">그림 위에서 <b>마우스로 끌어서</b> 돌릴 수도 있어요 — 위쪽 「끌어 돌리기」 버튼으로 좌우만·위아래만·자유롭게를 고르세요.</p>'
       + '<p class="note"><b>치수(길이)는 바뀌지 않아요.</b> 길이를 바꾸려면 대화창에 「높이를 6cm로」처럼 숫자와 함께 말하세요.</p></div>'
       + '<div class="qbox"><h5>꾸밈</h5>'
       + seg('색', 'color', [['color', '색'], ['bw', '흑백(인쇄용)']])
@@ -623,7 +638,7 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ═══════════════ 결과 반영 ═══════════════ */
 function figFrom(r) {
-  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {}, labelOptions: r.labelOptions || [], trust: r.trust || null, understood: r.understood || {}, vertexTop: r.vertexTop || [],
+  return { png: r.png, width: r.width, height: r.height, sec: r.sec, spec: r.spec, title: titleOf(r.spec), issues: r.issues || [], reference: r.reference || {}, resolved: r.resolved || {}, labelOptions: r.labelOptions || [], trust: r.trust || null, understood: r.understood || {}, vertexTop: r.vertexTop || [], wire: r.wire || [],
     checks: (r.checks || []).map(c => ({ name: c.name, ok: !!c.ok })), checksTotal: (r.checks || []).length, checksOk: (r.checks || []).filter(c => c.ok).length, attempts: r.attempts || [] };
 }
 function commit(r, why) {
@@ -664,7 +679,7 @@ function setDimIn(spec, shape, key, val) {            // 입력한 값을 사양
   if (sh.type === 'free' && sh.free && sh.free.params && sh.free.params[key]) { sh.free.params[key].v = val; return true; }
   sh.dims = sh.dims || {}; sh.dims[key] = key === 'n' ? Math.round(val) : val; return true;
 }
-/* 꼭짓점 이름 — 그림에서 위에 있는 점부터 A, B, C … (엔진이 vertexTop 으로 위에서 아래 순서를 줌) */
+/* 꼭짓점 이름 — 그림에서 위에 있는 점부터 A, B, C …, 같은 높이에서는 반시계 방향(엔진이 vertexTop 으로 그 순서를 줌) */
 const letterOf = i => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
 function namesTopDown(ids) { const o = {}; (ids || []).forEach((id, i) => { o[id] = letterOf(i); }); return o; }
 /* AI 가 꼭짓점 id 순서(아래·앞쪽부터)대로 A, B, C … 를 붙였는가 — 「꼭짓점에 A부터 이름을」 같은 말이면 이렇게 온다. 이 경우는 위에서부터로 다시 붙인다(교사 요청) */
@@ -804,10 +819,10 @@ async function runPipeline(text, editing) {
   // 「A부터 차례로」 같은 이름은 그림에서 위에 있는 점부터 붙인다(처음 만들 때도, 고칠 때도). 이미 그렇게 붙은 이름은 그대로 둔다.
   const nm0 = spec.marks && spec.marks.names;
   if (isSeqNames(nm0) && JSON.stringify(nm0) !== JSON.stringify(editing && S.spec && S.spec.marks ? S.spec.marks.names : null)) {
-    S.busyTxt = '꼭짓점 이름을 위에서부터 붙이는 중…'; renderMsgs(); renderStage();
+    S.busyTxt = '꼭짓점 이름을 위에서부터 반시계로 붙이는 중…'; renderMsgs(); renderStage();
     const vt = await local('/validate', { spec, userText: ctx.userText }, 30000);
     const kk = Array.isArray(nm0) ? nm0.length : Object.keys(nm0).length;
-    if (vt && vt.vertexTop && vt.vertexTop.length) { spec.marks = Object.assign({}, spec.marks, { names: namesTopDown(vt.vertexTop.slice(0, kk)) }); logp('꼭짓점 이름 ' + kk + '개를 위에서부터 붙였어요'); }
+    if (vt && vt.vertexTop && vt.vertexTop.length) { spec.marks = Object.assign({}, spec.marks, { names: namesTopDown(vt.vertexTop.slice(0, kk)) }); logp('꼭짓점 이름 ' + kk + '개를 위에서부터(같은 높이는 반시계) 붙였어요'); }
   }
   const chg = editing && ctx.guard ? ((ctx.guard.changed) || []).filter(c => !((ctx.guard.reverted || []).some(x => x.category === c))) : ['dims', 'structure'];
   const hasFree = (spec.shapes || []).some(x => x.type === 'free');
@@ -910,6 +925,50 @@ async function ask(text, forceNew) {
   }
   await guarded(() => runPipeline(text, editing), 'AI 가 사양을 만드는 중…');
 }
+/* ═══ 드래그 돌리기: 순수 계산 ═══ */
+const ROT_K = 0.45;                                              // 한 픽셀을 끌 때 도는 각(°)
+const rotClamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const wrap180 = a => { const w = ((a + 180) % 360 + 360) % 360 - 180; return w === -180 ? 180 : w; };
+/* 끌기 시작 시점 v0({yaw,pitch}) 에서 화면 dx,dy 픽셀 끌었을 때의 새 시점. mode: 'lr' 좌우만 · 'ud' 위아래만 · 'free' 둘 다.
+   오른쪽으로 끌면 도형의 앞면이 오른쪽으로(yaw 감소), 아래로 끌면 윗면이 더 보이게(pitch 증가) */
+function rotView(v0, dx, dy, mode) {
+  let yaw = v0.yaw, pitch = v0.pitch;
+  if (mode !== 'ud') yaw = wrap180(v0.yaw - dx * ROT_K);
+  if (mode !== 'lr') pitch = rotClamp(v0.pitch + dy * ROT_K, -85, 85);
+  return { yaw: Math.round(yaw), pitch: Math.round(pitch) };      // 정수 도(AI 사양의 view 는 정수)
+}
+/* 엔진 view.py 의 정사영과 같은 식: u=화면 오른쪽, v=화면 위, d=보는 사람 쪽 */
+function orthoBasis(yaw, pitch) {
+  const y = yaw * Math.PI / 180, p = pitch * Math.PI / 180;
+  return { u: [Math.cos(y), Math.sin(y), 0], v: [-Math.sin(p) * Math.sin(y), Math.sin(p) * Math.cos(y), Math.cos(p)], d: [Math.sin(y) * Math.cos(p), -Math.cos(y) * Math.cos(p), Math.sin(p)] };
+}
+/* 철사 선(3D 점 목록들)의 중심 c 와 외접구 반지름 R — 돌려도 그림 크기가 일정하도록 */
+function wireInfo(wire) {
+  const mn = [1e18, 1e18, 1e18], mx = [-1e18, -1e18, -1e18];
+  wire.forEach(pl => pl.forEach(P => { for (let i = 0; i < 3; i++) { if (P[i] < mn[i]) mn[i] = P[i]; if (P[i] > mx[i]) mx[i] = P[i]; } }));
+  const c = [0, 1, 2].map(i => (mn[i] + mx[i]) / 2);
+  let R = 1e-9;
+  wire.forEach(pl => pl.forEach(P => { R = Math.max(R, Math.hypot(P[0] - c[0], P[1] - c[1], P[2] - c[2])); }));
+  return { c, R };
+}
+/* 철사 선을 W×H 화면 위의 선분들로: [x1,y1,x2,y2,깊이등급(0 뒤 … 3 앞)] */
+function projectWire(wire, info, yaw, pitch, W, H) {
+  const B = orthoBasis(yaw, pitch), s = 0.42 * Math.min(W, H) / info.R, c = info.c, out = [];
+  wire.forEach(pl => {
+    let prev = null;
+    pl.forEach(P => {
+      const q0 = P[0] - c[0], q1 = P[1] - c[1], q2 = P[2] - c[2];
+      const x = W / 2 + s * (q0 * B.u[0] + q1 * B.u[1] + q2 * B.u[2]);
+      const y = H / 2 - s * (q0 * B.v[0] + q1 * B.v[1] + q2 * B.v[2]);
+      const d = (q0 * B.d[0] + q1 * B.d[1] + q2 * B.d[2]) / info.R;
+      if (prev) out.push([prev[0], prev[1], x, y, rotClamp(Math.floor((((prev[2] + d) / 2) + 1) / 2 * 4), 0, 3)]);
+      prev = [x, y, d];
+    });
+  });
+  return out;
+}
+/* ═══ /드래그 돌리기: 순수 계산 ═══ */
+
 /* 말 없이 시점·꾸밈·크기·종류만 바꿔 다시 그린다(AI 를 거치지 않는다 — 길이는 건드리지 않는다) */
 async function redraw(mutator, label, okMsg) {
   if (!S.spec || S.busy) return;
@@ -1033,7 +1092,7 @@ document.addEventListener('click', e => {
   if (t.dataset.act) { const [i, j] = t.dataset.act.split(':').map(Number); actFn(S.msgs[i].acts[j]); return; }
   if (t.dataset.askgo) { submitAsk(t.dataset.askgo); return; }
   if (t.dataset.codego) { submitCode(t.dataset.codego); return; }
-  if (t.dataset.act2 === 'nametop') { redraw(sp => { sp.marks = Object.assign({}, sp.marks, { names: namesTopDown((S.fig && S.fig.vertexTop) || []) }); }, '꼭짓점 이름을 붙여 다시 그리는 중…', '위에서부터 A, B, C … 이름을 붙였어요'); return; }
+  if (t.dataset.act2 === 'nametop') { redraw(sp => { sp.marks = Object.assign({}, sp.marks, { names: namesTopDown((S.fig && S.fig.vertexTop) || []) }); }, '꼭짓점 이름을 붙여 다시 그리는 중…', '위에서부터 반시계 방향으로 A, B, C … 이름을 붙였어요'); return; }
   if (t.dataset.act2 === 'nameclear') { redraw(sp => { sp.marks = Object.assign({}, sp.marks, { names: {} }); }, '꼭짓점 이름을 지워 다시 그리는 중…', '꼭짓점 이름을 지웠어요'); return; }
   if (t.closest('[data-lab]') && t.dataset.v) { const [of, kind] = t.closest('[data-lab]').dataset.lab.split('|'), v = t.dataset.v; redraw(sp => setLabel(sp, of, kind, v), '표시할 수치를 바꿔 다시 그리는 중…'); return; }
   if (t.dataset.act2 === 'labsoff' || t.dataset.act2 === 'labsval') {
@@ -1049,6 +1108,7 @@ document.addEventListener('click', e => {
   if (t.closest('#segGrade')) { S.grade = +t.dataset.v; renderCond(); revalidate('학년을 중' + S.grade + ' 으로 바꿨어요'); return; }
   if (t.closest('#segPurpose')) { S.purpose = t.dataset.v; renderCond(); revalidate('구하는 값을 바꿨어요'); return; }
   if (t.closest('#segKind')) { const k = t.dataset.v; if (!S.spec) { S.kind = k; renderCond(); toast(k === 'net' ? '「…를 전개도로 그려줘」라고 말하면 전개도로 그려요.' : ''); return; } if (k === (S.spec.kind || 'solid')) return; S.kind = k; redraw(sp => { sp.kind = k; if (k === 'net' && !sp.net) sp.net = { layout: 'auto', fold: 'dashed', glueMarks: false }; }, k === 'net' ? '전개도로 펼치는 중…' : '겨냥도로 그리는 중…', k === 'net' ? '전개도로 바꿨어요(길이는 그대로)' : '겨냥도로 바꿨어요'); return; }
+  if (t.closest('#segRot')) { if (t.disabled) return; ROT.mode = t.dataset.v; try { localStorage.setItem('geomRotMode', ROT.mode); } catch (er) { /* 저장 못 해도 무방 */ } rotSync(); toast('끌어 돌리기: ' + ROT_LABEL[ROT.mode]); return; }
   if (t.closest('#segBg')) { S.bg = t.dataset.v; renderCond(); renderStage(); if (S.spec) redraw(() => { }, '배경을 바꿔 다시 그리는 중…'); return; }
   if (t.closest('#segSize')) { S.size = t.dataset.v; renderCond(); if (S.spec) redraw(() => { }, '크기를 바꿔 다시 그리는 중…'); return; }
   if (t.closest('[data-proj]')) { const p = t.dataset.v; redraw(sp => { sp.view = Object.assign({}, sp.view, { projection: p }); }, '투영을 바꿔 다시 그리는 중…', p === 'ortho' ? '정사영으로 바꿨어요(길이는 그대로)' : '사각 투영으로 바꿨어요(길이는 그대로)'); return; }
@@ -1076,6 +1136,97 @@ document.addEventListener('change', e => {
   else { const c = viewCtl(); const key = (s === 'a' ? c.a : c.b).key;
     redraw(sp => { const v = Object.assign({}, sp.view); v[key] = key === 'depthAngle' ? 45 + val : key === 'depthScale' ? val / 100 : val; sp.view = v; }, '시점을 바꿔 다시 그리는 중…'); }
 });
+/* ═══════════════ 그림을 끌어서 돌리기(좌우·상하·자유) ═══════════════ */
+const rotAvail = () => !!(S.fig && !S.cant && S.fig.spec && S.fig.spec.kind !== 'net' && S.fig.spec.kind !== 'code' && S.fig.wire && S.fig.wire.length);
+const canRotate = () => rotAvail() && !S.busy && S.server === 'ok';
+const ROT_LABEL = { lr: '↔ 좌우로만', ud: '↕ 위·아래로만', free: '✥ 자유롭게' };
+const fmtDeg = x => String(Math.round(x * 10) / 10);
+function rotMount(withHud) {
+  const stg = $('#stage');
+  if (!stg || !S.fig || !S.fig.wire) return false;
+  const W = stg.clientWidth, H = stg.clientHeight, dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas'); cv.className = 'rotcv';
+  cv.style.left = stg.scrollLeft + 'px'; cv.style.top = stg.scrollTop + 'px'; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
+  stg.appendChild(cv); ROT.cv = cv;
+  if (withHud) {
+    const hud = document.createElement('div'); hud.className = 'rothud';
+    hud.style.left = (stg.scrollLeft + 10) + 'px'; hud.style.top = (stg.scrollTop + H - 34) + 'px';
+    stg.appendChild(hud); ROT.hud = hud;
+  }
+  ROT.info = wireInfo(S.fig.wire);
+  try { ROT.color = (getComputedStyle(document.documentElement).getPropertyValue('--ink') || '').trim() || '#1c1917'; } catch (e) { /* 기본 색 */ }
+  return true;
+}
+function rotPaint(v) {
+  ROT.raf = 0;
+  const cv = ROT.cv; if (!cv || !S.fig) return;
+  const W = cv.clientWidth, H = cv.clientHeight, dpr = cv.width / Math.max(1, W), ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = ROT.color;
+  const segs = projectWire(S.fig.wire, ROT.info, v.yaw, v.pitch, W, H), AL = [.2, .38, .62, .95], LW = [1, 1.2, 1.6, 2.1];
+  for (let b = 0; b < 4; b++) {
+    ctx.globalAlpha = AL[b]; ctx.lineWidth = LW[b]; ctx.beginPath();
+    segs.forEach(g => { if (g[4] === b) { ctx.moveTo(g[0], g[1]); ctx.lineTo(g[2], g[3]); } });
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (ROT.hud) ROT.hud.textContent = '좌우 ' + fmtDeg(v.yaw) + '° · 위·아래 ' + fmtDeg(v.pitch) + '° — 손을 떼면 다시 그려요';
+}
+function rotSync() {                                      // renderStage 가 끝날 때마다: 커서·버튼·안내, 그리는 동안엔 철사 미리보기를 유지
+  const st = $('#stage'); if (!st) return;
+  if (!S.busy) ROT.hold = null;
+  st.classList.toggle('rot', canRotate() || (ROT.on && ROT.moved));
+  $$('#segRot button').forEach(b => { b.classList.toggle('on', b.dataset.v === ROT.mode); b.disabled = !rotAvail(); });
+  const h = $('#rotHint'); if (h) h.textContent = canRotate() ? '끌어서 돌려 보세요 · ' + ROT_LABEL[ROT.mode] : '';
+  if (ROT.on && ROT.moved && rotAvail()) { st.classList.add('rotating', 'dragging'); if (rotMount(true)) rotPaint(ROT.v); }      // 끄는 도중 화면이 다시 그려졌을 때
+  else if (ROT.hold && S.busy && rotAvail()) { st.classList.add('rotating'); if (rotMount(false)) rotPaint(ROT.hold); }           // 놓은 뒤 새로 그리는 동안
+}
+(function () {
+  const stg = $('#stage');
+  function begin() {
+    ROT.moved = true;
+    stg.classList.add('rotating', 'dragging');
+    rotMount(true);
+  }
+  function finish(e, cancel) {
+    if (!ROT.on || e.pointerId !== ROT.id) return;
+    ROT.on = false;
+    try { stg.releasePointerCapture(e.pointerId); } catch (er) { /* 무시 */ }
+    if (!ROT.moved) return;
+    ROT.moved = false; cancelAnimationFrame(ROT.raf); ROT.raf = 0;
+    if (ROT.cv) ROT.cv.remove();
+    if (ROT.hud) ROT.hud.remove();
+    ROT.cv = ROT.hud = null;
+    stg.classList.remove('rotating', 'dragging');
+    const nv = ROT.v, same = Math.abs(nv.yaw - ROT.v0.yaw) < .05 && Math.abs(nv.pitch - ROT.v0.pitch) < .05 && !ROT.conv;
+    if (cancel || same) return;
+    if (ROT.conv) toast('사각 투영은 돌릴 수 없어서 정사영으로 바꿔 돌렸어요.');
+    logp('끌어서 돌림(' + ROT_LABEL[ROT.mode] + '): 좌우 ' + fmtDeg(nv.yaw) + '° · 위·아래 ' + fmtDeg(nv.pitch) + '°');
+    ROT.hold = nv;
+    redraw(sp => { sp.view = Object.assign({}, sp.view, { projection: 'ortho', yaw: nv.yaw, pitch: nv.pitch }); }, '돌린 방향으로 다시 그리는 중…', null);
+  }
+  stg.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || ROT.on || !canRotate()) return;
+    if (e.offsetX > stg.clientWidth || e.offsetY > stg.clientHeight) return;      // 스크롤바를 누른 것
+    const v = (S.spec && S.spec.view) || {}, ortho = v.projection === 'ortho';
+    ROT.conv = !ortho;
+    ROT.v0 = { yaw: ortho && isFinite(+v.yaw) ? +v.yaw : 30, pitch: ortho && isFinite(+v.pitch) ? +v.pitch : 20 };
+    ROT.v = Object.assign({}, ROT.v0);
+    ROT.on = true; ROT.moved = false; ROT.id = e.pointerId; ROT.x0 = e.clientX; ROT.y0 = e.clientY;
+    try { stg.setPointerCapture(e.pointerId); } catch (er) { /* 무시 */ }
+    e.preventDefault();
+  });
+  stg.addEventListener('pointermove', e => {
+    if (!ROT.on || e.pointerId !== ROT.id) return;
+    const dx = e.clientX - ROT.x0, dy = e.clientY - ROT.y0;
+    if (!ROT.moved) { if (Math.hypot(dx, dy) < 4) return; begin(); }
+    ROT.v = rotView(ROT.v0, dx, dy, ROT.mode);
+    if (!ROT.raf) ROT.raf = requestAnimationFrame(() => rotPaint(ROT.v));
+  });
+  stg.addEventListener('pointerup', e => finish(e, false));
+  stg.addEventListener('pointercancel', e => finish(e, true));
+})();
 $('#btnSend').onclick = () => { const v = $('#inp').value.trim(); if (v) { $('#inp').value = ''; ask(v); } };
 $('#inp').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#btnSend').click(); } });
 $('#btnMode').onclick = () => { S.forceNew = !S.forceNew; renderMsgs(); $('#inp').focus(); };

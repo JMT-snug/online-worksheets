@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.4">
+<meta name="app-version" content="geometry-v1.5">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -197,7 +197,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.4</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.5</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -268,7 +268,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 0, 3];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 1, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -287,7 +287,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const pad2 = n => ('0' + n).slice(-2);
 
 const KO = { cuboid: '직육면체', prism: '각기둥', pyramid: '각뿔', frustum_pyramid: '각뿔대', cylinder: '원기둥', cone: '원뿔', frustum_cone: '원뿔대', sphere: '구', hemisphere: '반구', vertex_hull: '꼭짓점을 이은 입체' };
-const DIMKO = { w: '가로', d: '세로', h: '높이', a: '한 변', b: '다른 변', c: '빗변', n: '변의 수', r: '반지름', l: '모선', s: '옆면 높이', s2: '옆면 높이(2)', e: '옆모서리', a1: '아랫밑', a2: '윗밑', H: '큰 뿔의 높이', hs: '작은 뿔의 높이', r1: '아랫밑 반지름', r2: '윗밑 반지름', L: '큰 원뿔의 모선', l2: '작은 원뿔의 모선', h2: '작은 원뿔의 높이', bh: '밑면의 높이', base_area: '밑넓이' };
+const DIMKO = { w: '가로', d: '세로', h: '높이', a: '한 변', b: '다른 변', c: '빗변', n: '변의 수', r: '반지름', l: '모선', s: '옆면 높이', s2: '옆면 높이(2)', e: '옆모서리', a1: '아랫밑', a2: '윗밑', H: '큰 뿔의 높이', hs: '작은 뿔의 높이', r1: '아랫밑 반지름', r2: '윗밑 반지름', L: '큰 원뿔의 모선', l2: '작은 원뿔의 모선', h2: '작은 원뿔의 높이', bh: '밑면의 높이', base_area: '밑넓이',
+  ang: '각', d1: '대각선', d2: '다른 대각선', leg: '옆변', lean: '옆으로 민 거리', tilt: '기울어진 각', k: '닮음비' };
+const dunit = k => k === 'base_area' ? ' cm²' : (k === 'ang' || k === 'tilt') ? '°' : k === 'k' ? '' : ' cm';
+const BASEKO = { triangle: '삼각형', parallelogram: '평행사변형', rhombus: '마름모', trapezoid: '사다리꼴', kite: '연꼴', sector: '부채꼴' };
 const NKO = { 3: '삼', 4: '사', 5: '오', 6: '육', 7: '칠', 8: '팔', 9: '구', 10: '십', 11: '십일', 12: '십이' };
 const CATKO = { view: '시점', dims: '치수', labels: '길이 표시', names: '꼭짓점 이름', style: '꾸밈', structure: '도형 구성' };
 const EXAMPLES = [
@@ -295,6 +298,9 @@ const EXAMPLES = [
   '반지름 3cm, 높이 4cm인 원기둥 위에 반지름 3cm인 반구를 올린 도형. 부피를 구하는 문제야.',
   '반지름 3cm, 모선 5cm인 원뿔을 전개도로 그려줘. 호의 길이랑 중심각도 보여줘.',
   '반지름 3cm, 높이 6cm인 원기둥을 축을 지나게 잘라서 단면에 빗금을 쳐줘.',
+  '밑면이 아랫변 10cm, 윗변 4cm, 높이 3cm인 사다리꼴이고 기둥의 높이가 8cm인 사다리꼴 기둥. 부피를 구하는 문제야.',
+  '밑면이 한 변 4cm인 정사각형이고 높이 6cm, 옆모서리 7.5cm인 비스듬한 사각기둥. 높이와 옆모서리를 표시해줘.',
+  '반지름 3cm, 중심각 120°인 부채꼴을 밑면으로 하고 높이가 5cm인 기둥. 부피와 겉넓이를 구하는 문제야.',
 ];
 const QUICK = [
   ['⟲ 왼쪽 20°', '왼쪽으로 20도 돌려줘'], ['⟳ 오른쪽 20°', '오른쪽으로 20도 돌려줘'], ['위에서 더 보기', '위에서 더 내려다보이게 해줘'],
@@ -351,6 +357,17 @@ const renderSpec = (spec, userText) => local('/render', { spec, userText, opts: 
 /* ═══════════════ 요약·글자 ═══════════════ */
 function shapeName(sh) {
   const d = sh.dims || {};
+  const leans = ['prism', 'pyramid', 'frustum_pyramid', 'cylinder', 'cone', 'frustum_cone'].includes(sh.type) &&
+    (d.lean != null || d.tilt != null || d.oblique === true || ((sh.type === 'prism' || sh.type === 'cylinder') && d.e != null && d.h != null && d.e > d.h + 1e-9));
+  const nm = shapeBase(sh);
+  return leans ? '비스듬한 ' + nm : nm;
+}
+function shapeBase(sh) {
+  const d = sh.dims || {};
+  if (BASEKO[d.base] && ['prism', 'pyramid', 'frustum_pyramid'].includes(sh.type)) {
+    if (d.base === 'sector') return '부채꼴 기둥';
+    return BASEKO[d.base] + ' 밑면 ' + (sh.type === 'prism' ? '각기둥' : sh.type === 'pyramid' ? '각뿔' : '각뿔대');
+  }
   if (sh.type === 'cuboid' && d.a != null) return '정육면체';
   const sq = (d.base === 'rect') && (d.b == null || d.b === d.a);
   if (sh.type === 'prism' && sq) return '정사각기둥';
@@ -364,7 +381,7 @@ const nfmt = v => (Math.round(v * 100) / 100).toString();
 function summarize(spec) {
   const parts = spec.shapes.map(sh => {
     const d = sh.dims || {};
-    const dd = Object.keys(d).filter(k => typeof d[k] === 'number' && k !== 'n').slice(0, 4).map(k => (DIMKO[k] || k) + ' ' + nfmt(d[k]) + (k === 'base_area' ? ' cm²' : ' cm'));
+    const dd = Object.keys(d).filter(k => typeof d[k] === 'number' && k !== 'n').slice(0, 4).map(k => (DIMKO[k] || k) + ' ' + nfmt(d[k]) + dunit(k));
     return '<b>' + esc(shapeName(sh)) + '</b>' + (dd.length ? ' · ' + esc(dd.join(' · ')) : '');
   });
   let s = parts.join(' + ');
@@ -648,8 +665,8 @@ function dimDiff(a, b) {      // 치수가 비워지거나 바뀐 곳 — 「AI 
   (a.shapes || []).forEach(sh => Object.keys(sh.dims || {}).forEach(k => {
     if (typeof sh.dims[k] !== 'number') return;
     const nv = (bm[sh.id] || {})[k];
-    if (nv === undefined) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' cm 를 비웠어요');
-    else if (nv !== sh.dims[k]) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' → ' + nfmt(nv) + ' cm');
+    if (nv === undefined) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + dunit(k) + ' 를 비웠어요');
+    else if (nv !== sh.dims[k]) out.push((DIMKO[k] || k) + ' ' + nfmt(sh.dims[k]) + ' → ' + nfmt(nv) + dunit(k));
   }));
   return out;
 }

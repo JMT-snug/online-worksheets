@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.14">
+<meta name="app-version" content="geometry-v1.15">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -220,7 +220,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.14</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.15</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -296,7 +296,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 9, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 10, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -333,6 +333,9 @@ const EXAMPLES = [
   '한 모서리가 3cm인 정이십면체.',
   '한 모서리가 4cm인 정육면체에서 한 꼭짓점을 잘라낸 입체.',
   '관의 반지름이 1cm이고 가운데에서 관의 중심까지 4cm인 도넛 모양(토러스).',
+  '한 모서리가 2cm인 맹거 스펀지 1단계. 작은 정육면체의 한 모서리를 표시해줘.',
+  '한 모서리가 1cm인 정육면체 7개를 붙여 만든 십자(+) 모양 입체. 부피와 겉넓이를 구하는 문제야.',
+  '밑면이 바깥 반지름 5cm, 안쪽 반지름 3cm인 속이 빈 원기둥(높이 7cm). 두 반지름과 높이를 표시해줘.',
 ];
 const QUICK = [
   ['⟲ 왼쪽 20°', '왼쪽으로 20도 돌려줘'], ['⟳ 오른쪽 20°', '오른쪽으로 20도 돌려줘'], ['위에서 더 보기', '위에서 더 내려다보이게 해줘'],
@@ -405,7 +408,7 @@ function shapeBase(sh) {
     if (d.base === 'sector') return '부채꼴 기둥';
     return BASEKO[d.base] + ' 밑면 ' + (sh.type === 'prism' ? '각기둥' : sh.type === 'pyramid' ? '각뿔' : '각뿔대');
   }
-  if (sh.type === 'free') return '자유 구성 입체';
+  if (sh.type === 'free') return (sh.free && sh.free.solid && sh.free.solid.op === 'voxels') ? (sh.free.solid.preset === 'menger' ? '맹거 스펀지' : '쌓기나무(정육면체를 붙인 입체)') : '자유 구성 입체';
   if (sh.type === 'cuboid' && d.a != null) return '정육면체';
   const sq = (d.base === 'rect') && (d.b == null || d.b === d.a);
   if (sh.type === 'prism' && sq) return '정사각기둥';

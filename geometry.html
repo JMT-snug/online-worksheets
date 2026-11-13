@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-version" content="geometry-v1.15">
+<meta name="app-version" content="geometry-v1.16">
 <title>도형 이미지 제작</title>
 <style>
 :root{
@@ -220,7 +220,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 <body>
 
 <header class="top">
-  <div class="brand">🧊 도형 이미지 제작 <small>v1.15</small></div>
+  <div class="brand">🧊 도형 이미지 제작 <small>v1.16</small></div>
   <div class="sp"></div>
   <div id="pill" class="pill wait" role="status"><i></i><span id="pillTxt">렌더 서버 확인 중…</span></div>
   <button class="xbtn" id="btnClose" title="이 창 닫기">닫기 ✕</button>
@@ -296,7 +296,7 @@ details ul{margin:6px 0 0 18px;line-height:1.7}
 /* ═══════════════ 설정 ═══════════════ */
 const AI_URL   = 'https://script.google.com/macros/s/AKfycbxlfk09F9LFEwl7MUeUg3ujfoNOjJomX28SNyjc9lnDBJYJYebBudsxqQtuVk9KZ1Wp/exec';   // edit 의 AI_WEBAPP_URL 과 같은 웹앱(액션 geometryAi)
 const AI_TOKEN = 'snug-ai-assist';
-const ENGINE_MIN = [1, 10, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
+const ENGINE_MIN = [1, 11, 0];                                 // 이 화면이 필요로 하는 엔진 버전(그보다 낮은 서버는 껐다 켜야 새 규칙이 적용됨)
 const engineOld = v => { const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/); if (!m) return true; for (let i = 0; i < 3; i++) { if (+m[i + 1] !== ENGINE_MIN[i]) return +m[i + 1] < ENGINE_MIN[i]; } return false; };
 const LOCAL    = 'http://127.0.0.1:8790';                    // 선생님 PC 의 도형 렌더 서버(도형엔진/실행.bat)
 const ORIGINS_OK = ['https://jmt-snug.github.io', 'http://127.0.0.1:8790', 'http://localhost:8790'];
@@ -336,6 +336,8 @@ const EXAMPLES = [
   '한 모서리가 2cm인 맹거 스펀지 1단계. 작은 정육면체의 한 모서리를 표시해줘.',
   '한 모서리가 1cm인 정육면체 7개를 붙여 만든 십자(+) 모양 입체. 부피와 겉넓이를 구하는 문제야.',
   '밑면이 바깥 반지름 5cm, 안쪽 반지름 3cm인 속이 빈 원기둥(높이 7cm). 두 반지름과 높이를 표시해줘.',
+  '한 모서리가 6cm인 정육면체의 각 면 가운데에서 반대편 면까지 한 변이 2cm인 정사각형 구멍을 세 방향으로 모두 뚫은 입체.',
+  '한 모서리가 3cm인 정육면체의 윗면 가운데에서 아랫면까지 지름 1cm인 원기둥 모양 구멍을 뚫은 입체. 구멍의 지름을 표시해줘.',
 ];
 const QUICK = [
   ['⟲ 왼쪽 20°', '왼쪽으로 20도 돌려줘'], ['⟳ 오른쪽 20°', '오른쪽으로 20도 돌려줘'], ['위에서 더 보기', '위에서 더 내려다보이게 해줘'],
@@ -408,7 +410,7 @@ function shapeBase(sh) {
     if (d.base === 'sector') return '부채꼴 기둥';
     return BASEKO[d.base] + ' 밑면 ' + (sh.type === 'prism' ? '각기둥' : sh.type === 'pyramid' ? '각뿔' : '각뿔대');
   }
-  if (sh.type === 'free') return (sh.free && sh.free.solid && sh.free.solid.op === 'voxels') ? (sh.free.solid.preset === 'menger' ? '맹거 스펀지' : '쌓기나무(정육면체를 붙인 입체)') : '자유 구성 입체';
+  if (sh.type === 'free') return (sh.free && sh.free.solid && sh.free.solid.op === 'program') ? '프로그램으로 만든 입체' : (sh.free && sh.free.solid && sh.free.solid.op === 'voxels') ? (sh.free.solid.preset === 'menger' ? '맹거 스펀지' : '쌓기나무(정육면체를 붙인 입체)') : '자유 구성 입체';
   if (sh.type === 'cuboid' && d.a != null) return '정육면체';
   const sq = (d.base === 'rect') && (d.b == null || d.b === d.a);
   if (sh.type === 'prism' && sq) return '정사각기둥';
@@ -603,7 +605,10 @@ function paneHtml(tab) {
   }
   if (tab === 'json') {
     if (!f) return '<p class="note">그림을 만들면 AI 가 만든 사양(JSON)이 여기에 보여요. 사양에는 길이·구조만 있고, 그림은 이 사양을 받은 프로그램이 그려요.</p>';
-    return '<button class="copy" data-copy="1">복사</button><pre class="json">' + colorJson(S.spec) + '</pre>';
+    const progs = ((S.spec && S.spec.shapes) || []).filter(isProgram);
+    const codeBox = progs.map(sh => '<div class="note" style="margin:4px 0"><b>프로그램 코드(읽기용)</b> — ' + esc(sh.id) + ' · AI 가 쓴 CadQuery 코드를 CAD 커널이 실행해 이 입체를 만들었어요</div><pre class="json" style="white-space:pre-wrap">' + esc(sh.free.solid.code || '') + '</pre>'
+      + (sh.free.solid.volume_expr || sh.free.solid.surface_expr ? '<div class="note">AI 가 손으로 계산한 식 — 부피: <code>' + esc(sh.free.solid.volume_expr || '(없음)') + '</code> · 겉넓이: <code>' + esc(sh.free.solid.surface_expr || '(없음)') + '</code></div>' : '')).join('');
+    return codeBox + '<button class="copy" data-copy="1">복사</button><pre class="json">' + colorJson(S.spec) + '</pre>';
   }
   if (tab === 'check') {
     let h = '';
@@ -797,12 +802,14 @@ function dimDiff(a, b) {      // 치수가 비워지거나 바뀐 곳 — 「AI 
   }));
   return out;
 }
+const isComplexErr = i => i.code === 'PROGRAM_COMPLEX' || (i.code === 'FREE_VOXEL' && /너무 많아/.test(i.msg || ''));
 async function fixLoop(ctx, spec, r, maxTries) {
   let tries = 0;
   ctx.fixRefused = null;
   while (!r.ok && r.stage === 'validate' && tries < maxTries) {
     const errs = (r.issues || []).filter(i => i.level === 'error');
     if (!errs.length) break;
+    if (errs.every(isComplexErr)) { logp('모서리가 너무 많은 입체라 AI 가 고칠 수 없어요(그대로 알려요)'); S.lastFail = { ctx, spec: r.spec || spec, errs }; break; }      // 복잡도 오류는 AI 가 고쳐도 같다 — 몇 분을 헛되이 기다리지 않게
     S.lastFail = { ctx, spec: r.spec || spec, errs };
     S.busyTxt = 'AI 가 오류를 고치는 중… (' + (tries + 1) + '/' + maxTries + ')'; renderMsgs(); renderStage();
     const fx = await callAi({ mode: 'fix', grade: S.grade, text: ctx.text, spec: r.spec || spec, issues: errs });
@@ -823,6 +830,22 @@ async function fixLoop(ctx, spec, r, maxTries) {
     r = await renderSpec(spec, ctx.userText);
   }
   return { r, spec };
+}
+/** 프로그램 모드: AI 가 손으로 계산한 부피·겉넓이와 CAD 커널이 잰 값이 어긋나면(PROGRAM_FORMULA — 경고) 코드나 식이 틀린 것일 수 있어, 그림을 보이기 전에 AI 에게 **한 번** 고치게 한다.
+ *  식이 틀린 거짓 경보도 있어(실험: 정답 그림인데 식만 틀린 경우) 한 번만 묻고, 그래도 어긋나면 그림은 그리되 확인 카드에 경고로 보인다. */
+const isProgram = sh => sh && sh.type === 'free' && sh.free && sh.free.solid && sh.free.solid.op === 'program';
+const formulaIssues = v => ((v && v.issues) || []).filter(i => i.code === 'PROGRAM_FORMULA');
+async function programFormulaFix(ctx, spec, v) {
+  if (!(spec.shapes || []).some(isProgram) || ctx.formulaTried || !formulaIssues(v).length) return { spec, v };
+  ctx.formulaTried = true;
+  S.busyTxt = 'AI 의 식과 커널 값이 달라 AI 가 다시 확인하는 중…'; renderMsgs(); renderStage();
+  const errs = formulaIssues(v).map(i => Object.assign({}, i, { level: 'error' }));         // 서버는 error 만 고치기 재료로 받는다
+  const fx = await callAi({ mode: 'fix', grade: S.grade, text: ctx.text, spec: v.spec || spec, issues: errs });
+  if (fixRefusal(v.spec || spec, fx && fx.spec)) { logp('식 불일치를 고치려던 AI 의 사양을 받지 않았어요'); return { spec, v }; }
+  const spec2 = fx.spec; spec2.grade = S.grade; spec2.purpose = S.purpose;
+  const v2 = await local('/validate', { spec: spec2, userText: ctx.userText }, 90000);
+  if (v2 && v2.ok) { ctx.ai = fx; logp('식 불일치: AI 가 코드를 다시 확인했어요' + (formulaIssues(v2).length ? '(여전히 어긋남 — 확인 카드에 경고로 보여요)' : '(해결)')); return { spec: v2.spec || spec2, v: v2 }; }
+  return { spec, v };
 }
 async function runPipeline(text, editing) {
   const ctx = { text, editing, prevKind: S.spec && S.spec.kind };
@@ -857,10 +880,11 @@ async function runPipeline(text, editing) {
   const hasFree = (spec.shapes || []).some(x => x.type === 'free') || hasJoin(spec);       // 붙인 기둥도 「이렇게 이해했어요」(붙인 변)를 보여 준다
   if ((S.askMissing || hasFree) && (chg.includes('dims') || chg.includes('structure'))) {
     S.busyTxt = '빠진 값이 있는지 확인하는 중…'; renderMsgs(); renderStage();
-    const v = await local('/validate', { spec, userText: ctx.userText }, 30000);
+    let v = await local('/validate', { spec, userText: ctx.userText }, hasFree ? 90000 : 30000);
+    if (v && v.ok && !editing) { const pf = await programFormulaFix(ctx, spec, v); spec = pf.spec; v = pf.v; }
     if (v && v.ok) {
       const left = S.askMissing ? needsLeft(v.needs, S.acked) : [], q = !editing && ai.notes && ai.notes.ask ? ai.notes.ask : '';
-      const und = hasFree ? [].concat.apply([], Object.keys(v.understood || {}).map(k => v.understood[k])) : [];      // 자유 구성은 「이렇게 이해했어요」를 항상 보여 준다
+      const und = hasFree ? [].concat.apply([], Object.keys(v.understood || {}).map(k => v.understood[k])).concat(formulaIssues(v).map(i => '⚠ ' + i.msg)) : [];      // 자유 구성은 「이렇게 이해했어요」를 항상 보여 준다(프로그램 모드는 식 불일치 경고도)
       if (left.length || q || und.length) {
         S.pend = { spec: v.spec || spec, ctx, needs: left, text, editing, askAi: q, und };
         S.msgs.push(cardAsk(S.pend)); logp('확인 단계: 빠진 값 ' + left.length + '개' + (q ? ' · AI 질문 있음' : '') + (und.length ? ' · 이해한 내용 ' + und.length + '줄' : ''));

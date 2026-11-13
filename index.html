@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.9">
+  <meta name="app-version" content="14.10">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -2498,10 +2498,10 @@ function wsBlockedFor(ws, email){
   return !allowed.includes(String(email||'').toLowerCase());
 }
 
-/* 들어가기 직전 잠금 재확인 (v10.1)
+/* 들어가기 직전 잠금 재확인 (v10.1) · 문항 재확인 (v14.10)
    학생 목록은 잠금 여부를 표시하지 않고(모든 카드가 똑같이 보이고 눌림), 들어갈 때
    서버에서 그 학습지 문서를 다시 읽어 판정한다. 로그인 때 읽어 둔 값이 수업 중
-   잠금/해제로 낡아도 새로고침 없이 맞게 동작한다. 교사는 항상 통과라 읽지 않는다.
+   잠금/해제로 낡아도 새로고침 없이 맞게 동작한다. 교사는 잠금은 항상 통과라 판정하지 않는다.
    읽기 실패(오프라인 등)면 로그인 때 읽어 둔 값으로 판정한다. */
 function applyLockFields(ws,d){
   ws.status=d.status;
@@ -2510,12 +2510,27 @@ function applyLockFields(ws,d){
   ws.partUnlocked=d.partUnlocked||{};
   ws.partAllowed=d.partAllowed||{};
 }
-async function refreshWsLock(ws){
-  if(!ws?.id || (user && TEACHER_EMAILS.includes(user.email))) return;
+/* 들어가기 직전 서버에서 그 학습지 문서를 한 번 다시 읽어 ① 잠금 ② 문항을 최신으로 맞춘다 (v14.10).
+   ② 가 없던 때는 로그인할 때 읽어 둔 문항으로 첫 화면을 그렸다 — index 를 켜 둔 채 교사가 edit 에서 오타·정답을 고치면
+   들어가자마자 보이는 문제(보통 첫 문항)가 낡은 글이었고, 실시간 구독(watchWs)의 첫 알림은 「지금 보는 문항」이라 보류돼
+   다른 문항에 갔다 와야 바뀌었다. 지금은 그리기 전에 읽으므로 처음부터 최신이다. 문항이 추가·삭제·재배치돼도 새로고침이 필요 없다.
+   · 교사는 잠금은 읽지 않는다(항상 통과) — 문항만 최신으로(고친 것을 index 로 확인할 때 낡은 글이 안 보이게)
+   · 복습 학습지는 문서의 questions 가 비어 있고 문항은 매번 따로 뽑으므로 건드리지 않는다
+   · 읽기 실패(오프라인 등)·문서/문항이 없음이면 읽어 둔 값 그대로 — 입장을 막지 않는다 */
+async function refreshWsFresh(ws){
+  if(!ws?.id) return;
+  const isTeacher=!!(user && TEACHER_EMAILS.includes(user.email));
   try{
     const snap=await getDoc(doc(db,'curriculum',ws.id));
-    if(snap.exists()) applyLockFields(ws,snap.data());
-  }catch(e){ console.warn('[잠금 재확인 실패 — 저장된 값으로 판정]',e?.message||e); }
+    if(!snap.exists()) return;
+    const d=snap.data();
+    if(!isTeacher) applyLockFields(ws,d);
+    if(ws.type!=='review' && Array.isArray(d.questions) && d.questions.length){
+      if(JSON.stringify(d.questions)!==JSON.stringify(ws._orig||ws.questions)){
+        ws._orig=d.questions; ws.questions=d.questions;   // startQuiz 가 이어서 _orig 에서 (셔플·시험지 변환을 거쳐) 화면용 배열을 만든다
+      }
+    }
+  }catch(e){ console.warn('[입장 전 재확인 실패 — 읽어 둔 값으로 진행]',e?.message||e); }
 }
 /* 막혔을 때: 목록에서 누른 경우엔 목록에 그대로 두고, 새로고침 복원·알림 바로가기 등은 단원 화면으로 */
 function wsBlockedAlert(ws){
@@ -2577,27 +2592,42 @@ function qToast(msg){
       _pendingQ 에 넣어 두었다가 renderQuestion()이 다음에 돌 때(= 다른 문항으로
       넘어가거나 그 문항으로 되돌아올 때) 적용한다.
 
-   ⚠️ 문항이 추가·삭제·재배치된 경우는 데이터를 갈아끼우지 않는다 — answered 배열이
+   ⚠️ 문항이 추가·삭제·재배치된 경우는 화면의 순서·개수를 바꾸지 않는다 — answered 배열이
       인덱스 기준이라 순서가 바뀌면 지금까지의 답이 엉뚱한 문항에 붙는다.
-      이때는 새로고침을 안내만 한다. */
+      이때는 새로고침을 안내만 한다. (학습지를 다시 열면 입장할 때 refreshWsFresh 가 최신 구조로 읽는다)
+
+   v14.10 — 문항을 「자리」가 아니라 「문항 id」로 짝짓는다. 지문·정답·선지는 한 문항 객체라 같은 길로 바뀌는데,
+   예전엔 자리로 짝지어서 ① 랜덤 출제(셔플)를 켜면 열자마자 거짓 「수정되었어요」 안내가 뜨고 오타 수정은 하나도 안 닿았고
+   ② 문항이 하나라도 추가·삭제되면 그 학습지의 오타 수정이 통째로 버려졌고
+   ③ 시험지에서는 「최종 답 1칸」으로 바꿔 둔 단계형이 서버 원본(단계형)으로 되돌려졌다. */
 let _pendingQ=null;       // {idx, q} — 지금 보고 있는 문항의 보류된 새 내용
 let _reloadNotified=false; // 구조 변경 안내는 한 번만
 
 function applyLiveQuestions(ws, incoming){
   if(!Array.isArray(incoming) || !Array.isArray(ws.questions)) return;
   const cur=ws.questions;
-  // 구조(개수·순서)가 바뀌었으면 건드리지 않는다
-  const sameShape = incoming.length===cur.length
-    && incoming.every((q,i)=>String(q?.id??i)===String(cur[i]?.id??i));
-  if(!sameShape){
-    if(!_reloadNotified){
-      _reloadNotified=true;
-      qToast('📝 학습지가 수정되었어요 — 새로고침하면 반영됩니다');
-    }
-    return;
+  const base=Array.isArray(ws._orig) ? ws._orig : cur;   // 셔플·시험지 변환 전의 원본 순서
+  const idOf=(q,i)=>String(q?.id??i);
+  const conv = window._examMode ? examQuestion : (q=>q);    // 시험지는 화면용으로 바꾼 모양과 맞춰서 비교한다
+  const raw=new Map(); incoming.forEach((q,i)=>raw.set(idOf(q,i),q));
+  // 구조(개수·구성·순서)는 원본 순서와 비교한다 — 셔플된 화면 순서가 아니라
+  const sameShape = incoming.length===base.length
+    && incoming.every((q,i)=>idOf(q,i)===idOf(base[i],i));
+  if(!sameShape && !_reloadNotified){
+    _reloadNotified=true;
+    qToast('📝 학습지가 수정되었어요 — 새로고침하면 반영됩니다');
   }
-  incoming.forEach((nq,i)=>{
-    if(JSON.stringify(nq)===JSON.stringify(cur[i])) return;   // 그대로면 넘어간다
+  // 원본 배열이 화면 배열과 따로 있으면(셔플·시험지) 거기도 최신으로 — 다음에 다시 열 때 낡은 글이 안 나오게
+  if(base!==cur) base.forEach((q,j)=>{
+    const nq=raw.get(idOf(q,j));
+    if(nq && JSON.stringify(nq)!==JSON.stringify(q)) base[j]=nq;
+  });
+  // 같은 id 의 문항끼리 갱신 — 구조가 바뀌었어도 남아 있는 문항의 수정은 안전하게 닿는다(자리가 아니라 id 로 찾으므로)
+  cur.forEach((q,i)=>{
+    const src=raw.get(idOf(q,i));
+    if(!src) return;                                          // 삭제된 문항은 그대로 둔다
+    const nq=conv(src);
+    if(JSON.stringify(nq)===JSON.stringify(q)) return;        // 그대로면 넘어간다
     if(i===curQIdx){ _pendingQ={idx:i, q:nq}; return; }        // 보고 있는 문항은 보류
     cur[i]=nq;
   });
@@ -3718,9 +3748,29 @@ async function pickReviewSample(pool, sourceDocs){
   }
 }
 
+/* 시험지 모드: 단계형(step3)을 최종 답 1개만 받는 문항으로 바꾼다 (startQuiz 와 교사 수정 실시간 반영 applyLiveQuestions 가 같이 쓴다 — v14.10).
+   실시간 반영이 서버 원본(단계형)을 그대로 끼워 넣으면 시험 도중 단계형이 되살아나 답이 저장되지 않으므로 같은 변환을 거쳐야 한다. */
+function examQuestion(q){
+  if(!q || q.type!=='step3') return q;
+  const steps=getSteps(q);
+  const last=steps[steps.length-1]||{};
+  // 마지막 단계가 객관식이면 문항 「객관식」으로 바꿔 선지·답안 캡처·채점을 그대로 쓴다
+  if(last.answerType==='multi'){
+    return {...q, type:'multi', _origType:'step3',
+      options: last.options||[],
+      answer: last.answer||[],
+      text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 고르세요)</span>'};
+  }
+  return {...q, type:'word', _origType:'step3',
+    answerType: last.answerType==='expr' ? 'expr' : 'text',
+    answer: last.answer,
+    answerAlt: last.answerAlt||[],
+    text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 입력하세요)</span>'};
+}
+
 let _activeWsId=null;
 async function startQuiz(ws) {
-  if(!ws._reviewBase) await refreshWsLock(ws);   // 목록 클릭·새로고침 복원·알림 바로가기 모두 여기서 최신 잠금 확인 (v10.1)
+  if(!ws._reviewBase) await refreshWsFresh(ws);   // 목록 클릭·새로고침 복원·알림 바로가기 모두 여기서 최신 잠금(v10.1)·최신 문항(v14.10) 확인
   if(wsBlockedFor(ws, user?.email)){ wsBlockedAlert(ws); return; }
   _activeWsId=ws.id; _wsIsCompleted=false; _reviewAttemptSaved=false;
   try{ sessionStorage.setItem('lastQuizWsId', ws.id); }catch(e){}
@@ -3746,23 +3796,7 @@ async function startQuiz(ws) {
   // 학생이 입력한 답이 null로 저장되던 사고('1학기 복습' 문항 단위 대량 유실)의 원인.
   // word로 변환하면 기존 렌더·답안 캡처·채점(judgeAnswer)을 그대로 재사용한다.
   if(window._examMode){
-    ws.questions = ws.questions.map(q=>{
-      if(q.type!=='step3') return q;
-      const steps=getSteps(q);
-      const last=steps[steps.length-1]||{};
-      // 마지막 단계가 객관식이면 문항 「객관식」으로 바꿔 선지·답안 캡처·채점을 그대로 쓴다
-      if(last.answerType==='multi'){
-        return {...q, type:'multi', _origType:'step3',
-          options: last.options||[],
-          answer: last.answer||[],
-          text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 고르세요)</span>'};
-      }
-      return {...q, type:'word', _origType:'step3',
-        answerType: last.answerType==='expr' ? 'expr' : 'text',
-        answer: last.answer,
-        answerAlt: last.answerAlt||[],
-        text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 입력하세요)</span>'};
-    });
+    ws.questions = ws.questions.map(examQuestion);
   }
   attempts=new Array(ws.questions.length).fill(0);
   answered=new Array(ws.questions.length).fill(false);

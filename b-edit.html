@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v7.2">
+<meta name="app-version" content="edit-v7.3">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -638,7 +638,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
           <!-- 객관식 선지 -->
           <div id="field-options" class="field" style="display:none">
-            <label>선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답)</span></label>
+            <label>선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · Enter 로 줄바꿈)</span></label>
             <div id="options-list"></div>
             <button class="btn-add-opt" onclick="addOption()">＋ 선지 추가</button>
           </div>
@@ -1846,32 +1846,41 @@ function renderOptions(opts, answers){
   /* 학생 화면 index.html 의 fracText() 와 같은 정규화 — 이중 백슬래시만 단일로 되돌린다.
      예전에는 여기에 .replace(/\\\(/g,'\(') 가 더 있었는데, JS 에서 '\(' 는 '(' 이라
      \(3x=2x-6\) 가 (3x=2x-6) 으로 바뀌어 구분자가 사라졌다 → 선지 미리보기가 늘 맨 텍스트로 나왔다. */
-  const toDisplay = s => _bqSpace((s||'').replace(/\\\\/g,'\\'));
+  const toDisplay = _optHtml;
   opts.forEach((opt,i)=>{
     const row = document.createElement('div');
     row.className='option-row';
     row.style.cssText='display:flex;flex-direction:column;gap:4px;margin-bottom:8px;background:var(--cream);border-radius:6px;padding:6px 8px;border:1px solid var(--rule)';
+    /* 선지 입력칸은 여러 줄 입력(<textarea>, v7.3) — Enter 로 줄바꿈. 한 줄 높이로 시작해 줄이 늘면 stepLabelFit 이 키운다.
+       안의 글은 _taEsc 로 이스케이프(글 속의 </textarea>·&amp; 가 칸을 깨거나 글을 바꿔 보이지 않게). .field textarea 의 min-height:70px 는 인라인으로 눌러 둔다. */
     row.innerHTML=`
       <div style="display:flex;align-items:center;gap:6px">
         <input type="checkbox" class="option-check" id="opt-chk-${i}" ${answers.includes(i)?'checked':''}>
         <span style="font-size:11px;font-weight:600;color:var(--ink3)">선지 ${i+1}</span>
         <button class="btn-rm-opt" onclick="removeOption(${i})" style="margin-left:auto">✕</button>
       </div>
-      <input class="option-input" id="opt-${i}" value="${(opt||'').replace(/"/g,'&quot;')}"
-        placeholder="LaTeX 입력 예: \\(3x=2x-6\\)"
-        oninput="updateOptPreview(${i})" style="background:#fff">
+      <textarea class="option-input" id="opt-${i}" rows="${Math.max(1,String(opt||'').split('\n').length)}"
+        placeholder="LaTeX 입력 예: \\(3x=2x-6\\) · Enter 로 줄바꿈"
+        oninput="updateOptPreview(${i});stepLabelFit(this)" autocapitalize="off" autocorrect="off" spellcheck="false"
+        style="background:#fff;min-height:0;flex:none;resize:vertical">${_taEsc(opt)}</textarea>
       <div class="latex-preview" id="opt-prev-${i}" style="min-height:30px;text-align:left;padding:6px 10px;font-size:13px">${toDisplay(opt)||'미리보기'}</div>`;
     list.appendChild(row);
   });
+  list.querySelectorAll('textarea').forEach(stepLabelFit);   // 줄 수·긴 글에 맞춰 높이 (안 보이는 중이면 rows 그대로)
   // 전체 MathJax 렌더
   if(window.MathJax?.typesetPromise)
     MathJax.typesetPromise([document.getElementById('options-list')]).catch(()=>{});
+}
+/* 선지 미리보기 글 — 학생 화면 renderOption 과 같은 규칙(v7.3): 이중 백슬래시만 단일로, 앞뒤 빈 줄은 버리고, 줄바꿈은 <br>.
+   ⚠️ 줄바꿈 변환은 _bqSpace 뒤에 한다 — 먼저 바꾸면 줄마다 홀로 있는 $ 두 개 사이가 수식으로 잘못 잡힌다. */
+function _optHtml(s){
+  return _bqSpace(String(s??'').replace(/\\\\/g,'\\').replace(/^\n+|\n+$/g,'')).replace(/\n/g,'<br>');
 }
 window.updateOptPreview = function(i){
   const val = document.getElementById(`opt-${i}`)?.value || '';
   const prev = document.getElementById(`opt-prev-${i}`);
   if(!prev) return;
-  const disp = _bqSpace(val.replace(/\\\\/g,'\\'));   // toDisplay 와 같은 정규화 (구분자를 지우지 않는다)
+  const disp = _optHtml(val);   // toDisplay 와 같은 정규화 (구분자를 지우지 않는다)
   prev.innerHTML = disp || '미리보기';
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([prev]).catch(()=>{});
 };
@@ -2258,7 +2267,7 @@ window.saveQuestion = async function(){
       q.type='multi';
       q.text=text;
       const imgUrl3=document.getElementById('q-img-url').value.trim(); if(imgUrl3) q.imageUrl=imgUrl3; else delete q.imageUrl;
-      const opts=[...document.querySelectorAll('[id^="opt-"]:not([id^="opt-chk-"]):not([id^="opt-prev-"])')].map(el=>el.value);
+      const opts=[...document.querySelectorAll('[id^="opt-"]:not([id^="opt-chk-"]):not([id^="opt-prev-"])')].map(el=>el.value.replace(/^\n+|\n+$/g,''));   // v7.3: 앞뒤의 빈 줄만 정리
       const ans=[...document.querySelectorAll('[id^="opt-chk-"]')].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
       q.options=opts; q.answer=ans;
     }
@@ -3059,7 +3068,7 @@ window.setStepType = function(i, val){
 };
 /* 객관식 단계의 선지 — 문항 「객관식」의 선지 편집과 같은 모양(체크 = 정답, 수식 미리보기).
    입력 중에는 다시 그리지 않는다(포커스 유지) — 추가·삭제·체크 해제만 다시 그린다. */
-const stepOptDisplay = s => _bqSpace((s||'').replace(/\\\\/g,'\\'));
+const stepOptDisplay = s => _optHtml(s);   // 문항 「객관식」 선지 미리보기와 같은 규칙 — 줄바꿈 → <br> (v7.3)
 window.addStepOption = function(i){
   const s=editSteps[i]; if(!s) return;
   s.options=s.options||[]; s.options.push('');
@@ -3092,7 +3101,7 @@ function stepsFromEditor(list){
     if(at==='multi'){
       const raw=(s.options||[]).map(t=>String(t??''));
       const keep=[]; raw.forEach((t,k)=>{ if(t.trim()!=='') keep.push(k); });
-      o.options=keep.map(k=>raw[k]);
+      o.options=keep.map(k=>raw[k].replace(/^\n+|\n+$/g,''));   // v7.3: 선지 안의 줄바꿈은 유지, 앞뒤의 빈 줄(실수로 누른 Enter)만 정리
       const ans=(Array.isArray(s.answer)?s.answer:[]).map(k=>keep.indexOf(k)).filter(k=>k>=0);
       o.answer=[...new Set(ans)].sort((a,b)=>a-b);
       if(o.options.length<2) problems.push(`${si+1}단계: 선지를 2개 이상 입력하세요`);
@@ -3150,7 +3159,7 @@ function renderSteps(){
             <span style="font-size:11px;font-weight:600;color:var(--ink3)">선지 ${j+1}</span>
             <button class="btn-rm-opt" onclick="removeStepOption(${i},${j})" style="margin-left:auto">✕</button>
           </div>
-          <input value="${(opt||'').replace(/"/g,'&quot;')}" oninput="updateStepOption(${i},${j},this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="LaTeX 입력 예: \\(3x=2x-6\\)" style="background:#fff">
+          <textarea rows="${Math.max(1,String(opt||'').split('\n').length)}" oninput="updateStepOption(${i},${j},this.value);stepLabelFit(this)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="LaTeX 입력 예: \\(3x=2x-6\\) · Enter 로 줄바꿈" style="background:#fff;min-height:0;resize:vertical">${_taEsc(opt)}</textarea>
           <div class="latex-preview" id="step-opt-prev-${i}-${j}" style="min-height:28px;text-align:left;padding:6px 10px;font-size:13px">${stepOptDisplay(opt)||'미리보기'}</div>
         </div>`).join('');
     return `
@@ -3165,7 +3174,7 @@ function renderSteps(){
         <label style="font-size:11px">답 유형</label>
         <select onchange="setStepType(${i},this.value)" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
         ${isMultiStep ? `
-        <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · 학생 화면에 「모두 고르시오」 안내는 자동으로 붙지 않으니, 정답이 여러 개면 문제 글에 직접 적어 주세요)</span></label>
+        <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · Enter 로 줄바꿈 · 학생 화면에 「모두 고르시오」 안내는 자동으로 붙지 않으니, 정답이 여러 개면 문제 글에 직접 적어 주세요)</span></label>
         ${optRows}
         <button class="btn-add-opt" onclick="addStepOption(${i})" style="margin-bottom:4px">＋ 선지 추가</button>` : `
         <label style="font-size:11px">정답${(stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>

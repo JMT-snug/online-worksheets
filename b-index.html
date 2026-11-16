@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.10">
+  <meta name="app-version" content="14.11">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -596,6 +596,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   color:var(--ink);cursor:pointer;text-align:center;
   transition:all .12s;user-select:none;min-height:40px;
   display:flex;align-items:center;justify-content:center;}
+.multi-opt .mopt-body{display:block;line-height:1.5}   /* 줄바꿈이 든 선지(v14.11) — flex 버튼 안에서 <br> 가 먹도록 한 덩어리로 */
 .multi-opt:hover{border-color:var(--accent)}
 .multi-opt.sel{background:var(--acc-lt);border-color:var(--accent);color:var(--accent);font-weight:700}
 .multi-opt.ok{background:var(--grn-lt);border-color:var(--green);color:var(--green)}
@@ -3253,7 +3254,17 @@ const DIFFS=["","★","★★","★★★","★★★★","★★★★★"];
 function renderOption(opt){
   if(!opt) return opt;
   // 저장된 텍스트가 이중 백슬래시(\\( ... \\))일 수 있어 단일로 정규화한 뒤, 구분자 안 backtick → 반칸 공백·양끝 반칸(_bqSpace)만 적용한다.
-  return _bqSpace(String(opt).replace(/\\\\/g,'\\'));
+  /* v14.11: 선지 안의 줄바꿈(edit 선지 칸에서 Enter)은 <br> 로 바꾼다. 앞뒤의 빈 줄(실수로 누른 Enter)은 버린다.
+     ⚠️ 줄바꿈 변환은 _bqSpace 뒤에 한다 — 먼저 <br> 로 바꾸면 줄마다 홀로 있는 $ (예: 「$5」 줄과 「$7」 줄)가
+     같은 줄처럼 이어져 두 달러 사이가 수식으로 잘못 잡힌다(_bqSpace 의 $…$ 는 줄바꿈을 못 넘는다). */
+  return _bqSpace(String(opt).replace(/\\\\/g,'\\').replace(/^\n+|\n+$/g,'')).replace(/\n/g,'<br>');
+}
+/* 선지 버튼의 안쪽 (v14.11) — 줄바꿈(<br>)이 든 선지만 한 덩어리(span)로 감싼다.
+   .multi-opt 가 display:flex 라서 글 조각·<br>·인라인 수식이 각각 flex 항목이 되면 <br> 가 줄을 바꾸지 못한다(링크 버튼 v8.38 과 같은 함정).
+   한 줄 선지는 예전과 똑같은 모양으로 둔다(감싸지 않음). 손으로 <br> 를 적어 둔 옛 선지도 같이 고쳐진다. */
+function renderOptionBtn(opt){
+  const h=renderOption(opt);
+  return (typeof h==='string' && /<br\s*\/?>/i.test(h)) ? `<span class="mopt-body">${h}</span>` : h;
 }
 /* 선택지 보이는 글자수 추정 (LaTeX/HTML 제거) — 2x2 vs 1열 판단용 */
 function optVisibleLen(opt){
@@ -4933,7 +4944,7 @@ function renderMultiQ(q, panel){
         })()}" id="multi-grid">
         ${q.options.map((opt,i)=>
           `<button class="multi-opt" id="mopt-${i}"
-            onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${renderOption(opt)}</button>`
+            onmousedown="event.preventDefault()" onclick="toggleMulti(${i})">${renderOptionBtn(opt)}</button>`
         ).join('')}
       </div>
       <button class="btn-multi-submit" onmousedown="event.preventDefault()" onclick="submitMulti()">확인</button>
@@ -6231,7 +6242,7 @@ function renderStep3Body(q){
       <div class="multi-grid ${cols}" id="multi-grid">
         ${opts.map((opt,k)=>
           `<button class="multi-opt" id="mopt-${k}"
-            onmousedown="event.preventDefault()" onclick="toggleMulti(${k})">${renderOption(opt)}</button>`
+            onmousedown="event.preventDefault()" onclick="toggleMulti(${k})">${renderOptionBtn(opt)}</button>`
         ).join('')}
       </div>
       <button class="btn-multi-submit" onmousedown="event.preventDefault()" onclick="submitStep3(${st.curStep})">확인</button>

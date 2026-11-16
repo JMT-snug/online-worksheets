@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v7.1">
+<meta name="app-version" content="edit-v7.2">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -3159,8 +3159,8 @@ function renderSteps(){
           <span style="font-size:12px;font-weight:700;color:${color}">📌 ${i+1}단계</span>
           <button onclick="removeStep(${i})" style="background:var(--red-lt);color:var(--red);border:none;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer">단계 삭제</button>
         </div>
-        <label style="font-size:11px">단계 지시문 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \\(...\\))</span></label>
-        <input value="${(s.label||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'label',this.value);updateStepPreview(${i})" placeholder="예: \\(3x=2x-6\\) 을 푸시오." style="margin-bottom:6px">
+        <label style="font-size:11px">단계 지시문 <span style="font-weight:400;color:var(--ink3)">(LaTeX: \\(...\\) · Enter 로 줄바꿈)</span></label>
+        <textarea rows="${Math.max(2,String(s.label||'').split('\n').length)}" oninput="updateStep(${i},'label',this.value);stepLabelFit(this);updateStepPreview(${i})" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="예: \\(3x=2x-6\\) 을 푸시오." style="margin-bottom:6px;min-height:0;resize:vertical">${_taEsc(s.label)}</textarea>
         <div class="latex-preview" id="step-prev-${i}" style="min-height:28px;text-align:left;padding:6px 10px;font-size:13px;margin:0 0 6px">${stepDisplay(s.label)||'미리보기'}</div>
         <label style="font-size:11px">답 유형</label>
         <select onchange="setStepType(${i},this.value)" style="margin-bottom:6px;width:100%;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:13px">${typeOpts}</select>
@@ -3181,10 +3181,24 @@ function renderSteps(){
         <input value="${(s.hint||'').replace(/"/g,'&quot;')}" oninput="updateStep(${i},'hint',this.value)" placeholder="힌트">
       </div>`;
   }).join('');
+  // 단계 지시문 입력칸 높이를 글 길이에 맞춘다(줄 수로 잡은 rows 가 시작값 — 긴 줄이 접혀도 안 잘리게)
+  c.querySelectorAll('textarea').forEach(stepLabelFit);
   // 단계 지시문 미리보기를 한 번에 렌더 (선지 미리보기와 같은 방식)
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([c]).catch(()=>{});
 }
 window.renderSteps=renderSteps;
+
+/* 단계 지시문은 여러 줄 입력칸(<textarea>, v7.2) — 안의 글을 그대로 보이게 이스케이프한다.
+   & 와 < 를 막지 않으면 저장된 글에 </textarea> 나 &amp; 같은 것이 있을 때 입력칸이 깨지거나 글이 바뀌어 보인다. */
+function _taEsc(s){
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+/* 입력칸 높이를 내용에 맞춘다. 화면에 안 보이는 중이면 scrollHeight 가 0 이라 건드리지 않고 rows 로 둔다. */
+window.stepLabelFit = function(el){
+  if(!el || !el.style) return;
+  el.style.height='auto';
+  if(el.scrollHeight>0) el.style.height=(el.scrollHeight+2)+'px';
+};
 
 /* 단계 지시문 미리보기 — 선지의 toDisplay 와 같은 정규화(이중 백슬래시만 단일로).
    updateStep 은 상태만 바꾸고 다시 그리지 않으므로, 입력 중 포커스를 잃지 않는다. */

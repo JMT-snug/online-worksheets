@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v8.1">
+<meta name="app-version" content="edit-v8.2">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -306,8 +306,6 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
         style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 단원 ID 정리</button>
       <button class="hdr-btn" onclick="openImageCleanup()" title="문항 이미지 폴더에서 어느 학습지에도 안 쓰이는 그림을 찾아 휴지통으로 보냅니다"
         style="background:#134e4a;color:#99f6e4;border:1px solid #0f766e">🧹 이미지 정리</button>
-      <button class="hdr-btn" onclick="openListConvert()" title="정답에 쉼표가 든 예전 문항·단계를 찾아 「📋 리스트」 유형으로 바꿉니다 (미리 보고 고른 것만)"
-        style="background:#1e3a8a;color:#bfdbfe;border:1px solid #3b82f6">📋 쉼표 답 변환</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -2935,162 +2933,7 @@ window.importDriveLink = function(raw){
    ③ 고른 것은 trashQuestionImages 로 휴지통에 보낸다(영구 삭제 아님 — 30일 복구 가능).
    판정은 "학습지에 없음" 쪽으로만 틀릴 수 없게 보수적으로 한다 — ID 패턴이 문서 어디에라도
    있으면 '사용 중'으로 친다. */
-/* ══════════ 📋 쉼표 답 → 리스트형 변환 (v8.0) ══════════
-   v8.0 부터 여러 답은 「📋 리스트」 유형으로만 받는다(한글 용어·숫자·식 유형의 정답엔 쉼표 금지).
-   예전에 만든 쉼표 답(「3, 23」·「x축, y축」·「모서리 BC, 모서리 BE」…)을 찾아 리스트형으로 바꾸는 한 번짜리 도구.
-   ① 모든 학습지(curriculum)를 읽어 정답·대안 정답에 괄호 밖 쉼표가 있는 문항·단계를 모은다.
-   ② 항목 유형(텍스트/숫자/식)과 「순서대로」를 짐작해 보여 준다 — 선생님이 줄마다 고칠 수 있다.
-   ③ 체크한 줄만, 학습지마다 Firestore 최신 문서를 다시 읽어 그 문항(id)·단계만 바꿔 updateDoc 한다
-      (다른 필드는 건드리지 않는다. 읽은 뒤 정답이 바뀐 문항은 건너뛴다).
-   대안 정답 중 새 규칙으로 이미 같은 답이 되는 것(「차수, 문자」 ↔ 「문자, 차수」 — 순서 무관일 때)은 빼고,
-   쉼표 없는 대안 정답(「234」 같은)은 그대로 둔다(항목 1개짜리 목록으로 비교된다). */
-const CV_ORDER_WORDS = /차례|순서|부터|순으로/;
-const CV_BLANK_MARKS = /_{2,}|O{2,}|○|□|◯|\(\s*\)/;
-function cvGuessItemType(vals){
-  const items = vals.flatMap(v=>splitAnsList(String(v??''))).map(x=>x.trim()).filter(Boolean);
-  if(items.some(x=>/[가-힣]/.test(x))) return 'text';
-  if(items.every(x=>!/[a-zA-Z]/.test(normPi(x).replace(/π/g,'')) && isFinite(evalAnswer(x)))) return 'number';
-  return 'expr';
-}
-/* 「차례로·순서·부터」가 있으면 순서대로. 대안 정답에 순서만 바꾼 목록이 있으면 순서 무관.
-   빈칸 채우기(___·OO·□)는 칸 순서가 있으니 순서대로. 나머지는 순서 무관(기본). */
-function cvGuessOrdered(text, vals){
-  if(CV_ORDER_WORDS.test(String(text||''))) return true;
-  const lists = vals.filter(v=>isListAnswer(String(v??''))).map(v=>splitAnsList(String(v)).map(x=>x.replace(/\s+/g,'').toLowerCase()));
-  for(let i=0;i<lists.length;i++) for(let j=i+1;j<lists.length;j++){
-    const a=lists[i], b=lists[j];
-    if(a.length===b.length && a.join('\u0001')!==b.join('\u0001') && [...a].sort().join('\u0001')===[...b].sort().join('\u0001')) return false;
-  }
-  if(CV_BLANK_MARKS.test(String(text||''))) return true;
-  return false;
-}
-/* 정답·대안 정답을 리스트형 정답 한 개 + 대안 정답들로 정리한다 */
-function cvBuildAnswers(vals, itemType, ordered){
-  const norm = v => isListAnswer(v) ? splitAnsList(v).join(', ') : String(v).trim();
-  const kept=[];
-  vals.map(v=>String(v??'').trim()).filter(Boolean).forEach(v=>{
-    const nv=norm(v);
-    const dup = kept.some(k=>gradeList({answer:k, answerAlt:[], listItemType:itemType, listOrdered:ordered}, nv));
-    if(!dup) kept.push(nv);
-  });
-  // 정답 자리에는 쉼표가 있는 것(목록)을 먼저
-  const first = kept.findIndex(k=>isListAnswer(k));
-  if(first>0) kept.unshift(kept.splice(first,1)[0]);
-  return { answer: kept[0]||'', answerAlt: kept.slice(1) };
-}
-/** 학습지 목록에서 바꿀 줄을 모은다. 반환: [{wsId, wsTitle, qIdx, qId, stepIdx, curType, text, vals, itemType, ordered}] */
-function cvScan(wsList){
-  const rows=[];
-  const SKIP=new Set(['multi','graph','link','pool_random','step3']);
-  (wsList||[]).forEach(ws=>{
-    (ws.questions||[]).forEach((q,qi)=>{
-      if(q.type==='step3'){
-        (q.steps||[]).forEach((s,si)=>{
-          if(s.answerType==='multi' || s.answerType==='list') return;
-          const vals=[s.answer, ...(s.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='');
-          if(!vals.some(v=>isListAnswer(String(v)))) return;
-          const text=(q.text||'')+'\n'+(s.label||'');
-          rows.push({wsId:ws.id, wsTitle:ws.title||ws.id, qIdx:qi, qId:q.id, stepIdx:si, curType:s.answerType||'number',
-            label:String(s.label||'').replace(/\s+/g,' ').slice(0,60), text, vals:vals.map(String),
-            itemType:cvGuessItemType(vals), ordered:cvGuessOrdered(text, vals)});
-        });
-        return;
-      }
-      if(SKIP.has(q.type) || q.answerType==='list') return;
-      const vals=[q.answer, ...(q.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='');
-      if(!vals.some(v=>isListAnswer(String(v)))) return;
-      const text=q.text||'';
-      rows.push({wsId:ws.id, wsTitle:ws.title||ws.id, qIdx:qi, qId:q.id, stepIdx:null,
-        curType:q.type==='word'?(q.answerType||'text'):q.type,
-        label:String(text).replace(/<[^>]+>/g,'').replace(/\s+/g,' ').slice(0,60), text, vals:vals.map(String),
-        itemType:cvGuessItemType(vals), ordered:cvGuessOrdered(text, vals)});
-    });
-  });
-  return rows;
-}
-/** 한 줄의 변환을 문항 배열(questions)에 적용한다. 바꿨으면 true, 읽은 뒤 정답이 달라졌으면 false */
-function cvApplyRow(questions, row){
-  let qi = questions.findIndex(q=>q.id===row.qId);
-  if(qi<0) return false;
-  const q = questions[qi];
-  const {answer, answerAlt} = cvBuildAnswers(row.vals, row.itemType, row.ordered);
-  const same = (o)=>JSON.stringify([o.answer, ...(o.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='').map(String))===JSON.stringify(row.vals);
-  if(row.stepIdx!=null){
-    const s = (q.steps||[])[row.stepIdx];
-    if(!s || !same(s)) return false;
-    const ns = {...s, answerType:'list', listItemType:row.itemType, listOrdered:!!row.ordered, answer, answerAlt};
-    if(!answerAlt.length) delete ns.answerAlt;
-    q.steps = q.steps.map((x,k)=>k===row.stepIdx?ns:x);
-    return true;
-  }
-  if(!same(q)) return false;
-  const nq = {...q, type:'word', answerType:'list', listItemType:row.itemType, listOrdered:!!row.ordered, answer, answerAlt};
-  delete nq.factorMode; delete nq.answerFrac;
-  questions[qi] = nq;
-  return true;
-}
-let _cvRows = [];
-const _cvEsc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const CV_TYPE_LABEL = {text:'📝 한글 용어', number:'🔢 숫자', expr:'🔣 식', equation:'🔢 숫자'};
-window.openListConvert = async function(){
-  const modal=document.getElementById('cv-modal'), body=document.getElementById('cv-body'), status=document.getElementById('cv-status');
-  modal.style.display='flex'; body.innerHTML=''; status.textContent='학습지 전체를 읽는 중…';
-  document.getElementById('cv-tools').style.display='none';
-  try{
-    const snap = await getDocs(collection(db,'curriculum'));
-    const all = snap.docs.map(d=>({id:d.id, ...d.data()}));
-    _cvRows = cvScan(all).map(r=>({...r, on:true}));
-    if(!_cvRows.length){ status.textContent='쉼표가 든 정답이 없습니다. 바꿀 것이 없어요. 🎉'; return; }
-    status.textContent = `학습지 ${new Set(_cvRows.map(r=>r.wsId)).size}개에서 쉼표 답 ${_cvRows.length}개를 찾았습니다. 항목 유형·순서대로를 확인하고 [변환]을 누르세요.`;
-    document.getElementById('cv-tools').style.display='flex';
-    cvRender();
-  }catch(e){ status.textContent='읽기 실패: '+e.message; console.error(e); }
-};
-function cvRender(){
-  const body=document.getElementById('cv-body');
-  body.innerHTML = _cvRows.map((r,i)=>{
-    const out = cvBuildAnswers(r.vals, r.itemType, r.ordered);
-    return `<tr style="border-top:1px solid var(--rule);vertical-align:top${r.on?'':';opacity:.45'}">
-      <td style="padding:6px 4px"><input type="checkbox" ${r.on?'checked':''} onchange="cvSet(${i},'on',this.checked)" style="width:auto;margin:0"></td>
-      <td style="padding:6px 4px;font-size:12px"><b>${_cvEsc(r.wsTitle)}</b><br>${r.qIdx+1}번${r.stepIdx!=null?` · ${r.stepIdx+1}단계`:''} <span style="color:var(--ink3)">(${CV_TYPE_LABEL[r.curType]||r.curType})</span><div style="color:var(--ink3);font-size:11px">${_cvEsc(r.label)}</div></td>
-      <td style="padding:6px 4px;font-size:12px">${r.vals.map(_cvEsc).join('<br>')}</td>
-      <td style="padding:6px 4px"><select onchange="cvSet(${i},'itemType',this.value)" style="font-size:12px;padding:3px">
-        ${[['text','📝 텍스트'],['number','🔢 숫자'],['expr','🔣 식']].map(([v,l])=>`<option value="${v}" ${r.itemType===v?'selected':''}>${l}</option>`).join('')}
-      </select><label style="display:flex;gap:4px;align-items:center;font-size:12px;font-weight:400;margin:6px 0 0;cursor:pointer"><input type="checkbox" ${r.ordered?'checked':''} onchange="cvSet(${i},'ordered',this.checked)" style="width:auto;margin:0">순서대로</label></td>
-      <td style="padding:6px 4px;font-size:12px"><b>${_cvEsc(out.answer)}</b>${out.answerAlt.length?`<div style="color:var(--ink3)">대안: ${out.answerAlt.map(_cvEsc).join(' / ')}</div>`:''}</td>
-    </tr>`;
-  }).join('');
-  const n=_cvRows.filter(r=>r.on).length;
-  document.getElementById('cv-count').textContent = `${n}개 선택`;
-}
-window.cvSet = function(i, k, v){ if(_cvRows[i]){ _cvRows[i][k]=v; cvRender(); } };
-window.cvCheckAll = function(on){ _cvRows.forEach(r=>r.on=on); cvRender(); };
-window.runListConvert = async function(){
-  const pick=_cvRows.filter(r=>r.on);
-  if(!pick.length){ toast('변환할 줄을 선택하세요'); return; }
-  const wsIds=[...new Set(pick.map(r=>r.wsId))];
-  if(!confirm(`학습지 ${wsIds.length}개의 쉼표 답 ${pick.length}개를 「📋 리스트」 유형으로 바꿉니다.\n학생 화면에 바로 반영됩니다. 계속할까요?`)) return;
-  const status=document.getElementById('cv-status');
-  let done=0, skipped=0, failed=0;
-  for(const wsId of wsIds){
-    try{
-      status.textContent=`저장 중… (${wsIds.indexOf(wsId)+1}/${wsIds.length})`;
-      const ref=doc(db,'curriculum',wsId);
-      const data=(await getDoc(ref)).data();
-      if(!data){ skipped+=pick.filter(r=>r.wsId===wsId).length; continue; }
-      const questions=JSON.parse(JSON.stringify(data.questions||[]));
-      let changed=0;
-      pick.filter(r=>r.wsId===wsId).forEach(r=>{ if(cvApplyRow(questions, r)){ changed++; done++; } else skipped++; });
-      if(changed) await updateDoc(ref, {questions, lastModified:new Date().toISOString()});
-    }catch(e){ failed+=pick.filter(r=>r.wsId===wsId).length; console.error('[리스트형 변환]', wsId, e); }
-  }
-  status.textContent=`✅ ${done}개 변환${skipped?` · ${skipped}개 건너뜀(그사이 정답이 바뀜)`:''}${failed?` · ❌ ${failed}개 실패(콘솔 확인)`:''}`;
-  toast(`리스트형으로 ${done}개 변환`);
-  await loadAll();
-  if(currentWs){ const w=worksheets.find(x=>x.id===currentWs.id); if(w) selectWsLocal(w); }
-  _cvRows=_cvRows.filter(r=>!r.on); cvRender();
-};
-
+/* 📋 「쉼표 답 → 리스트형 변환」 도구(edit v8.0~8.1)는 2026-11-17 변환을 마친 뒤 v8.2 에서 뺐다 — 코드는 이전_버전/edit_v8.1.html (openListConvert·cvScan…) */
 let _imgCleanupFiles = [];   // 마지막 조회에서 '안 쓰임'으로 나온 파일들
 
 function _collectDriveIds(v, set){
@@ -4054,35 +3897,6 @@ window._jumpToQuestion = function(qIdx){
       <button type="button" id="img-cleanup-run" onclick="runImageCleanup()" style="margin-left:auto;background:var(--red);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer">🗑 선택한 그림 휴지통으로</button>
     </div>
     <div id="img-cleanup-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;overflow-y:auto;max-height:52vh;padding:4px"></div>
-  </div>
-</div>
-<!-- 📋 쉼표 답 → 리스트형 변환 (v8.0) — openListConvert -->
-<div id="cv-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
-  <div style="background:var(--paper);border-radius:14px;padding:20px;width:min(1000px,94vw);max-height:88vh;display:flex;flex-direction:column;gap:10px">
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <span style="font-weight:700;font-size:16px">📋 쉼표 답 → 리스트형 변환</span>
-      <button onclick="document.getElementById('cv-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink3)">✕</button>
-    </div>
-    <div style="font-size:12px;line-height:1.6;color:var(--ink3);background:var(--cream);border-radius:8px;padding:8px 10px">
-      정답·대안 정답에 쉼표가 든 문항·단계를 모두 찾았습니다. 「📋 리스트」 유형은 기본이 <b>순서 상관없이</b> 채점이고,
-      <b>순서대로</b>를 켜면 적힌 순서와 같아야 정답입니다. 지문에 「차례로·순서·부터」나 빈칸(OO·___)이 있으면 순서대로로 짐작해 두었으니 줄마다 확인하세요.
-      항목 유형이 숫자·식이면 학생에게 <b>쉼표 버튼이 있는 키패드</b>, 텍스트면 글자 칸이 나옵니다.
-      예전에 맞던 답은 변환 뒤에도 모두 정답입니다(순서만 바꾼 대안 정답은 순서 무관이면 하나로 합쳐집니다).
-      ⚠️ 지금 편집 중인 문항에 저장 안 한 내용이 있으면 먼저 저장하세요.
-    </div>
-    <div id="cv-status" style="font-size:13px;font-weight:600">준비 중…</div>
-    <div id="cv-tools" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
-      <button type="button" class="img-btn" onclick="cvCheckAll(true)">모두 선택</button>
-      <button type="button" class="img-btn" onclick="cvCheckAll(false)">모두 해제</button>
-      <span id="cv-count" style="color:var(--ink3)"></span>
-      <button type="button" onclick="runListConvert()" style="margin-left:auto;background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer">📋 선택한 것 리스트형으로 변환</button>
-    </div>
-    <div style="overflow-y:auto;max-height:58vh">
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="font-size:11px;color:var(--ink3);text-align:left"><th></th><th>학습지 · 문항</th><th>지금 정답 · 대안 정답</th><th>항목 · 순서</th><th>변환 후</th></tr></thead>
-        <tbody id="cv-body"></tbody>
-      </table>
-    </div>
   </div>
 </div>
 </body>

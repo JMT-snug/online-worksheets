@@ -127,6 +127,8 @@ function aiAnswerSummary(q){
     return `${i+1}단계 정답:${s.answer}`;
   }).join(' / ');
   if(q.type==='word' && q.answerType==='list' && q.answer) return `${q.answer} (리스트 · ${q.listOrdered?'순서대로':'순서 무관'} — 쉼표로 여러 답)`;   // 📋 리스트형 (v1.9)
+  // ▦ 표 빈칸 (v2.0, grading.js 16.0 tableText) — 문항 글에는 표가 없으므로 표를 글로 펴서 보낸다. 학생 답은 「㉠ 5  ㉡ 9」 꼴
+  if(q.type==='table' && typeof tableText==='function') return `표(행은 / · 칸은 | · 빈칸 [㉠=정답]): ${tableText(q, true)} — 빈칸이 모두 맞아야 정답, 학생 답은 「㉠ 값 ㉡ 값」 꼴`;
   return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
 }
 
@@ -276,7 +278,7 @@ function freqWrongStats(ws, allData){
       v.wrongInputs.forEach(w=>{
         const raw=String(w??'').trim();
         const blank = raw==='' || raw==='(빈칸)';
-        const shown = blank ? '(빈칸)' : ansForCompare(q, raw).slice(0,40);
+        const shown = blank ? '(빈칸)' : ansForCompare(q, raw).slice(0, q?.type==='table'?200:40);   // ▦ 표 빈칸 답은 칸이 많으면 40자를 넘는다 (v2.0 — teacher 6.16 과 같게)
         const key = blank ? '(빈칸)' : trapNorm(shown);
         const cur=m.get(key)||{wrong:shown, uids:new Set(), blank};
         cur.uids.add(uid); m.set(key,cur);

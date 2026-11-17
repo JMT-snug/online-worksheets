@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="15.2">
+  <meta name="app-version" content="16.0">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -738,6 +738,18 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .tp-bar-fill{height:100%;border-radius:4px;transition:width .3s}
 .tp-cls-num{font-size:12px;font-weight:700;min-width:40px;text-align:right}
 .tp-refresh{font-size:11px;color:var(--ink3);padding:8px 16px;text-align:right;flex-shrink:0}
+/* ▦ 표 빈칸 (v16.0) */
+.tblq-wrap{overflow-x:auto;margin:4px 0 10px}
+.tblq{border-collapse:collapse;margin:0 auto;font-size:15px}
+.tblq td{border:1.5px solid #94a3b8;padding:6px 10px;text-align:center;vertical-align:middle;min-width:52px;background:var(--paper)}
+.tblq td.tblq-head{background:#f1f5f9;font-weight:700}
+.tblq td.tblq-b{background:#fffbeb;padding:4px}
+.tblq .tblq-lab{display:block;font-size:11px;font-weight:800;color:var(--amber);line-height:1.2;text-align:left}
+.tblq .tblq-k{min-width:64px;min-height:34px;border:1.5px dashed #f59e0b;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px 6px;font-size:16px}
+.tblq .tblq-k.active{border-style:solid;border-color:var(--accent);box-shadow:0 0 0 2px var(--acc-lt)}
+.tblq input.tblq-t{width:100%;min-width:72px;height:34px;box-sizing:border-box;border:1.5px dashed #f59e0b;border-radius:6px;padding:0 8px;font-size:15px;font-weight:700;font-family:inherit;color:var(--ink);background:#fff;outline:none;text-align:center}
+.tblq input.tblq-t:focus{border-style:solid;border-color:var(--accent)}
+.tblq .tblq-done{font-weight:700;color:var(--green)}
 </style>
 </head>
 <body>
@@ -948,8 +960,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=15.1"></script>
-<script src="ai-lab.js?v=1.9"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
+<script src="grading.js?v=16.0"></script>
+<script src="ai-lab.js?v=2.0"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1883,7 +1895,7 @@ function buildExamAIPayload(ex){
        지금 틀린 문항(여러 번 낸 오답 포함) · 틀렸다가 고친 문항 · 안 푼 문항을 나눠 보낸다.
        예전에는 지금 틀린 문항의 마지막 오답만 보내서, 고친 문항과 안 푼 문항이 진단에 안 보였다. */
     const wrongItems=[], recoveredItems=[], unansweredItems=[];
-    const qTextOf=(q,n)=>String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').slice(0,n);
+    const qTextOf=(q,n)=>(String(q.text||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'')+(q.type==='table'?'\n[표] '+tableText(q,false):'')).slice(0,n);   // ▦ 표 빈칸은 표도 글로 (v16.0)
     const correctAnsOf=q=>q.type==='multi'   // 객관식은 내 답과 같은 꼴로 "2,4번 (보기 글)" (v8.98)
       ? (q.answer||[]).map(i=>i+1).join(',')+'번 ('+(q.options||[]).filter((_,i)=>(q.answer||[]).includes(i)).join(' / ')+')'
       : q.answer;
@@ -3696,6 +3708,7 @@ function reviewUsable(q){
   if(t==='graph'||t==='link'||t==='pool_random') return false;
   const hasAns=v=>v!==undefined && v!==null && String(v).trim()!=='';
   if(t==='multi') return Array.isArray(q.options) && q.options.length>0 && Array.isArray(q.answer) && q.answer.length>0;
+  if(t==='table'){ const bl=tableBlanks(q); return bl.length>0 && bl.every(b=>b.a!==''); }   // ▦ 표 빈칸 (v16.0)
   if(t==='step3'){
     const st=getSteps(q);
     return st.length>0 && st.every(s=> s && (s.answerType==='multi' ? (Array.isArray(s.answer) && s.answer.length>0) : hasAns(s.answer)));
@@ -4196,6 +4209,7 @@ function renderQuestion() {
     const tEl=document.getElementById('exam-timer');
     if(tEl){ tEl.style.display='inline'; startExamTimer(); }
   }
+  _tblLive=null;   // ▦ 표 빈칸 상태 연결을 끊고 (아래에서 qTokens 를 비우므로) — 표 문항이면 renderTableQ 가 다시 잇는다
   qTokens=[]; qEditPart=null; qCursorIdx=0;
   // 이전 문제 feedback 완전 초기화 (정답 잠깐 표시 방지)
   const fbEl=document.getElementById("feedback-strip");
@@ -4227,13 +4241,13 @@ function renderQuestion() {
       <div class="q-num">
         ${_qNum}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>${qSrcHtml(q)}${window._examMode&&q.score!=null?` <span style="font-size:11px;font-weight:700;color:#0891b2;background:#cffafe;padding:2px 8px;border-radius:10px;margin-left:6px">${q.score}점</span>`:""}
-        ${isWord?`<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">${q.answerType==='list'?'리스트':'용어'}</span>`:q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':q.type==="link"?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">링크</span>':((q.text||"").includes("=")&&!(q.text||"").includes("일 때")&&!(q.text||"").includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
+        ${isWord?`<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">${q.answerType==='list'?'리스트':'용어'}</span>`:q.type==="table"?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">표 빈칸</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':q.type==="link"?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">링크</span>':((q.text||"").includes("=")&&!(q.text||"").includes("일 때")&&!(q.text||"").includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
         // 링크 문항: 안내문이 있으면 문장으로 보여 주고, 없으면 비워 둔다
         if(q.type==="link") return (q.text||"").trim()
           ? `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>` : "";
-        if(isWord) return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text))}</div>`;
+        if(isWord || q.type==="table") return `<div class="q-text" style="margin-top:2px">${mergeLaTeX(fracText(q.text||''))}</div>`;
         const isSentence = /[가-힣]/.test(q.text||"");
         if(isSentence) return `<div class="q-text" style="margin-top:2px;line-height:1.8">${fracText(q.text)}</div>`;
         const _hasEq=q.text.includes("=");
@@ -4262,6 +4276,7 @@ function renderQuestion() {
     renderMultiQ(q, panel);
     return;
   }
+  if(q.type==="table"){ renderTableQ(q, panel, qHeadHtml); return; }   // ▦ 표 빈칸 (v16.0)
   if(isLink){
     // ── 링크 페이지 UI ──
     panel.innerHTML=`${qHeadHtml}
@@ -4420,6 +4435,7 @@ function tokensToLatex(){
 
 function qRender(){
   const el=document.getElementById("ans-display"); if(!el)return;
+  if(typeof _tblLive!=='undefined' && _tblLive && _tblLive.active>=0) _tblLive.tok[_tblLive.active]=qTokens;   // ▦ 표 빈칸 (typeof — 이 함수만 잘라 쓰는 검증 하네스에서도 돌게): 지금 칸의 답을 칸 상태에 (qClear 처럼 qTokens 를 새로 만드는 키도 있어서)
   const latex=tokensToLatex();
   /* 학생이 친 글자를 그대로 innerHTML 에 넣으면 부등호가 태그로 읽힌다 — 5<x 를 치면 '<x\)' 가 태그가 되어
      MathJax 구분자가 잘리고 화면에 「\(\displaystyle 5」 가 글자 그대로 남았다(2026-09-18 신고, 작도 학습지 18번).
@@ -4913,6 +4929,26 @@ function quizKeyHandler(e){
         if(allAnswered()) finishQuiz(); else goNextUnanswered(true);
       } else { submitQAns(); }
     }
+    return;
+  }
+  // ▦ 표 빈칸 (v16.0): 고른 키패드 칸(#ans-display)이 있으면 키패드처럼, Enter 는 확인 (글자 칸은 위에서 입력칸이 직접 받는다)
+  if(q?.type==="table"){
+    const _ent=(e.key==="Enter"||e.code==="NumpadEnter");
+    if(answered[curQIdx]===true){
+      if(_ent){ e.preventDefault(); if(allAnswered()) finishQuiz(); else goNextUnanswered(true); }
+      return;
+    }
+    if(!document.getElementById("ans-display")){
+      if(_ent){ e.preventDefault(); submitQAns(); }
+      return;
+    }
+    if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
+    if(e.key==="ArrowLeft" ){e.preventDefault();qArrowLeft(); return;}
+    const v=KMAP[e.key]||KMAP[e.code]; if(!v) return;
+    e.preventDefault();
+    if(v==="TAB") qNextPart();
+    else if(v==="ENTER") submitQAns();
+    else qInput(v);
     return;
   }
   // word 타입
@@ -6527,6 +6563,9 @@ async function submitExamAns(q){
     }
   } else if(q.type==='multi'){
     userAns=[...multiSel].sort((a,b)=>a-b);
+  } else if(q.type==='table'){   // ▦ 표 빈칸 (v16.0) — 「㉠ 5  ㉡ 9」 한 글로 (하나도 안 썼으면 빈 글 = 안 푼 문항)
+    const _tv=tblCollect(q);
+    userAns=_tv.every(v=>!v) ? '' : tableAnsJoin(_tv);
   } else if(q.type==='graph'){
     window._graphConfirmPending?.(); // 작도: 아직 [확인] 안 누른 획이 있으면 제출 전에 자동 확정
     const gc=document.getElementById('graph-answer-canvas');
@@ -6862,6 +6901,7 @@ async function submitQAns(){
       </button>`;
     return;
   }
+  if(q.type==="table"){ submitTableQ(q); return; }   // ▦ 표 빈칸 (v16.0) — 문항 전체 채점
   // ── 용어/수식 문제 채점 ──
   if(q.type==="word"){
     let ok=false, userAns="";
@@ -7194,6 +7234,199 @@ function stepUsesKeypad(step){
 function stepAT(step){
   const at=(step && step.answerType) || 'number';
   return ((at==='number'||at==='expr'||at==='equation') && hasHangul(step && step.answer)) ? 'text' : at;
+}
+
+/* ══════════ ▦ 표 빈칸 (v16.0, 2026-11-17 교사 요청) ══════════
+   표의 빈칸(㉠㉡…)을 채우는 문항 — type:'table', 표는 q.table(grading.js 머리 주석).
+   채점은 문항 전체 하나다 — grading.js gradeTable(빈칸이 모두 맞아야 정답). 어느 칸이 틀렸는지는 보여 주지 않는다(교사 지시).
+   틀려도 쓴 답은 그대로 두어 고쳐 낼 수 있게 하고, 비어 있는 칸이 있으면 채점하지 않고 그 칸을 알려 준다(오답 횟수에 안 셈).
+   입력: 정답에 한글이 있는 칸은 글자 칸(<input>), 나머지는 키패드 칸. 키패드는 표 아래 하나를 같이 쓰고, 고른 키패드 칸(파란 테두리)에 들어간다 —
+   그 칸 <div> 에 id="ans-display" 를 옮겨 붙여 기존 키패드 코드(qInput·qRender·quizKeyHandler)를 그대로 쓴다.
+   칸마다 친 토큰·글은 _tblSt[학습지/문항] 에 둔다(다른 문항에 갔다 와도 남는다). qRender 가 그릴 때마다 지금 칸의 토큰을 거기 적어 둔다(_tblLive).
+   답 글은 「㉠ 5  ㉡ 9」(grading.js tableAnsJoin) — 기록(lastAnswer)·오답 목록·시험 답안이 다른 유형처럼 글 하나다. */
+const _tblSt={};
+let _tblLive=null;   // 지금 화면에 그려진 (아직 안 맞힌) 표 문항의 상태 — renderQuestion 이 비운다
+function tblStateOf(q){
+  const key=(curWS?.id||'')+'/'+q.id;
+  if(!_tblSt[key]) _tblSt[key]={active:-1, tok:{}, txt:{}, restored:false};
+  return _tblSt[key];
+}
+/* 토큰 → LaTeX (커서 없이) — tokensToLatex 는 전역 qTokens 를 그리므로 잠깐 바꿔 끼운다. qEditPart 에 없는 자리를 주면 커서를 안 그린다 */
+function tblTokLatex(tokens){
+  const sv=[qTokens,qEditPart,qCursorIdx];
+  qTokens=tokens||[]; qEditPart={idx:-1, part:'none'};
+  try{ return tokensToLatex(); } finally { qTokens=sv[0]; qEditPart=sv[1]; qCursorIdx=sv[2]; }
+}
+/* 토큰 → 채점용 글 (kbdExprRaw 와 같은 글) */
+function tblTokRaw(tokens){
+  const sv=qTokens; qTokens=tokens||[];
+  try{ return kbdExprRaw(); } finally { qTokens=sv; }
+}
+/* 글로 된 답(시험 답안 되살리기) → 글자 토큰. kbdExprRaw 로 다시 읽으면 같은 글이 된다 */
+function tblRawToTok(raw){ return [...String(raw||'')].map(ch=>({type:'char', val:ch==='-'?'−':ch})); }
+function tblTypeset(els){
+  if(!els.length || !window.MathJax?.typesetPromise) return;
+  if(!window._mjQueue) window._mjQueue=Promise.resolve();
+  window._mjQueue=window._mjQueue.then(()=>{
+    try{ MathJax.typesetClear?.(els); }catch(e){}
+    return MathJax.typesetPromise(els).catch(()=>{});
+  });
+}
+/* 고르지 않은 키패드 칸에 지금까지 친 답을 그린다 */
+function tblPaintStatic(typeset){
+  const st=_tblLive; if(!st) return;
+  const els=[];
+  document.querySelectorAll('.tblq-k').forEach(el=>{
+    const k=Number(el.dataset.k);
+    if(k===st.active) return;
+    const tk=st.tok[k]||[];
+    el.innerHTML = tk.length ? '\\(\\displaystyle '+_escHtml(tblTokLatex(tk))+'\\)' : '';
+    if(tk.length) els.push(el);
+  });
+  if(typeset) tblTypeset(els);
+}
+function renderTableQ(q, panel, qHeadHtml){
+  const t=q.table||{rows:0, cols:0, cells:[]};
+  const bl=tableBlanks(q);
+  const st=tblStateOf(q);
+  const done=answered[curQIdx]===true;
+  const isText=bl.map(b=>tableCellIsText(b));
+  const kIdx=bl.map((b,k)=>isText[k]?-1:k).filter(k=>k>=0);
+  // 시험지: 저장해 둔 답안을 칸에 되살린다 (이번 탭에서 처음 그릴 때 한 번)
+  if(window._examMode && !st.restored){
+    st.restored=true;
+    const ea=answered[curQIdx]?.examAnswer;
+    if(typeof ea==='string' && ea){
+      const v=tableAnsSplit(ea, bl.length);
+      bl.forEach((b,k)=>{ if(!v[k]) return; if(isText[k]) st.txt[k]=v[k]; else st.tok[k]=tblRawToTok(v[k]); });
+    }
+  }
+  if(!kIdx.includes(st.active)) st.active = kIdx.length ? kIdx[0] : -1;
+  const byCell={}; bl.forEach((b,k)=>{ byCell[b.cell]={b,k}; });
+  let th='<div class="tblq-wrap"><table class="tblq">';
+  for(let r=0;r<(t.rows||0);r++){
+    th+='<tr>';
+    for(let c=0;c<(t.cols||0);c++){
+      const i=r*t.cols+c, cell=(t.cells||[])[i]||{};
+      const head=(t.headRow&&r===0)||(t.headCol&&c===0);
+      const bk=byCell[i];
+      if(!bk){ th+=`<td class="${head?'tblq-head':''}">${cell.b?'':fracText(String(cell.t??''))}</td>`; continue; }
+      const {b,k}=bk, lab=`<span class="tblq-lab">${b.label}</span>`;
+      if(done) th+=`<td class="tblq-b">${lab}<span class="tblq-done">${isText[k]?_escHtml(b.a):answerHtml(b.a)}</span></td>`;
+      else if(isText[k]) th+=`<td class="tblq-b">${lab}<input class="tblq-t" data-k="${k}" value="${_escHtml(st.txt[k]||'')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="tblTxt(${k},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}"></td>`;
+      else th+=`<td class="tblq-b">${lab}<div class="tblq-k${k===st.active?' active':''}" data-k="${k}"${k===st.active?' id="ans-display"':''} onclick="tblFocus(${k})"></div></td>`;
+    }
+    th+='</tr>';
+  }
+  th+='</table></div>';
+  const kAns=kIdx.map(k=>[bl[k].a,...bl[k].alt].join(' ')).join(' ');
+  const needComma=kIdx.some(k=>isListAnswer(bl[k].a));
+  panel.innerHTML=`${qHeadHtml}
+    <div class="math-input-card">
+      ${th}
+      ${done?'':`<div class="ans-hint"><span>빈칸 ${bl.map(b=>b.label).join('')} 을 모두 채우고 확인을 누르세요${kIdx.length?' · 키패드 칸은 눌러서 고른 뒤 입력':''} · 모두 맞아야 정답이에요</span></div>`}
+      ${(!done && kIdx.length)?`<div class="kbd-wrap" onmousedown="event.preventDefault()">${buildKeypad(kAns,{comma:needComma})}</div>`:''}
+      ${done?'':`<div class="ans-btns" style="margin-top:8px" onmousedown="event.preventDefault()">
+        <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
+        <button class="btn-clr-ans" onclick="tblClearAll()">모두 지우기</button>
+      </div>`}
+      <div class="feedback-strip" id="feedback-strip"></div>
+      <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
+        ❌ 오답: <span class="attempt-num" id="attempt-num">${attempts[curQIdx]}</span>회
+      </div>
+    </div>`;
+  if(done){
+    _tblLive=null;
+    tblCorrectFb();
+  } else {
+    _tblLive=st;
+    qTokens = st.active>=0 ? (st.tok[st.active]=st.tok[st.active]||[]) : [];
+    qEditPart=null; qCursorIdx=qTokens.length;
+    tblPaintStatic(false);          // 아래 renderMath(panel) 가 함께 그린다
+    if(st.active>=0) qRender();
+    if(_ansFocusNext && !kIdx.length) requestAnimationFrame(()=>panel.querySelector('.tblq-t')?.focus());
+  }
+  setTimeout(()=>renderMath(panel),50);
+}
+window.tblTxt=function(k, el){ const st=_tblLive; if(st) st.txt[k]=el.value; };
+window.tblFocus=function(k){
+  const st=_tblLive; if(!st) return;
+  if(st.active>=0) st.tok[st.active]=qTokens;
+  const old=document.getElementById('ans-display');
+  if(old){ old.removeAttribute('id'); old.classList.remove('active'); }
+  const el=document.querySelector(`.tblq-k[data-k="${k}"]`); if(!el) return;
+  st.active=k;
+  el.id='ans-display'; el.classList.add('active');
+  const ae=document.activeElement; if(ae && ae.classList && ae.classList.contains('tblq-t')) ae.blur();
+  qTokens=st.tok[k]=st.tok[k]||[]; qEditPart=null; qCursorIdx=qTokens.length;
+  tblPaintStatic(true);
+  qRender();
+};
+window.tblClearAll=function(){
+  const st=_tblLive; if(!st) return;
+  st.tok={}; st.txt={};
+  document.querySelectorAll('.tblq-t').forEach(i=>{ i.value=''; });
+  qTokens=[]; qEditPart=null; qCursorIdx=0;
+  if(st.active>=0) st.tok[st.active]=qTokens;
+  tblPaintStatic(false);
+  qRender();
+};
+/* 칸별 답 (빈칸 순서) — 글자 칸은 띄어쓰기를 하나로, 키패드 칸은 채점용 글(kbdExprRaw) */
+function tblCollect(q){
+  const st=_tblLive || tblStateOf(q);
+  if(_tblLive && st.active>=0) st.tok[st.active]=qTokens;
+  document.querySelectorAll('.tblq-t').forEach(i=>{ st.txt[Number(i.dataset.k)]=i.value; });
+  return tableBlanks(q).map((b,k)=> tableCellIsText(b)
+    ? String(st.txt[k]??'').trim().replace(/\s+/g,' ')
+    : tblTokRaw(st.tok[k]).trim());
+}
+function tblCorrectFb(){
+  const fb=document.getElementById("feedback-strip"); if(!fb) return;
+  fb.className="feedback-strip show fb-correct";
+  fb.innerHTML=`✅ 정답!&nbsp;
+    <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
+      style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
+      background:var(--green);color:#fff;font-size:13px;font-weight:700;
+      cursor:pointer;font-family:inherit">
+      ${allAnswered()?'결과 보기 →':'다음 문제 →'}
+    </button>`;
+}
+/* 일반 학습지의 표 빈칸 채점 (submitQAns 가 부른다) */
+function submitTableQ(q){
+  if(answered[curQIdx]===true) return;
+  const fb=document.getElementById("feedback-strip"); if(!fb) return;
+  const bl=tableBlanks(q), vals=tblCollect(q);
+  const emp=bl.filter((b,k)=>!vals[k]);
+  if(emp.length){   // 빈 칸이 있으면 채점하지 않는다 — 어느 칸이 비었는지만 (맞고 틀림은 아님)
+    fb.className="feedback-strip show fb-wrong";
+    fb.innerHTML=`✏️ 아직 비어 있는 칸이 있어요: <strong>${emp.map(b=>b.label).join(' ')}</strong>`;
+    clearTimeout(window._tblEmpT);
+    window._tblEmpT=setTimeout(()=>{ if(fb.innerHTML.indexOf('✏️')===0){ fb.innerHTML=""; fb.className="feedback-strip"; } },1800);
+    return;
+  }
+  const userAns=tableAnsJoin(vals);
+  const ok=judgeAnswer(q, userAns)===true;
+  console.log('[표 채점]', JSON.stringify(userAns), '→', ok?'정답':'오답');
+  if(ok){
+    recordAnswer(curQIdx, userAns, null);   // 재채점용
+    answered[curQIdx]=true; updateStrip(); saveWorksheet();
+    _tblLive=null;
+    // 칸을 잠그고 키패드·버튼을 거둔다 (다시 들어오면 정답이 채워진 표로 그린다)
+    document.querySelectorAll('.tblq-t').forEach(i=>{ i.disabled=true; });
+    const ad=document.getElementById('ans-display'); if(ad){ ad.removeAttribute('id'); ad.classList.remove('active'); }
+    document.querySelectorAll('#quiz-left-panel .kbd-wrap, #quiz-left-panel .ans-btns, #quiz-left-panel .ans-hint').forEach(el=>el.remove());
+    tblCorrectFb();
+  } else {
+    attempts[curQIdx]++;
+    const _ab=document.getElementById("attempt-badge"), _an=document.getElementById("attempt-num");
+    if(_ab) _ab.style.display="flex"; if(_an) _an.textContent=attempts[curQIdx];
+    if(!wrongAnswers[curQIdx].inputs.includes(userAns)){ wrongAnswers[curQIdx].inputs.push(userAns); saveWorksheet(); }
+    fb.className="feedback-strip show fb-wrong";
+    fb.innerHTML="❌ 틀렸어요. 빈칸을 다시 살펴보세요!";   // 어느 칸인지는 알려 주지 않는다 (전체 채점)
+    const lp=document.getElementById("quiz-left-panel");
+    lp.classList.add("shake");
+    setTimeout(()=>{ lp.classList.remove("shake"); fb.innerHTML=""; fb.className="feedback-strip"; },700);
+  }
 }
 
 window.submitQAns=submitQAns;

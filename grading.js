@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), tableBlanks·tableAnsJoin·tableAnsSplit·gradeTable(▦ 표 빈칸, 16.0),gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -521,6 +521,82 @@ function gradeExamWord(q, ans){
   return false;
 }
 
+/* ══════════ ▦ 표 빈칸 (v16.0, 2026-11-17 교사 요청) ══════════
+   표의 몇 칸을 비워 두고 학생이 채우는 문항 — type:'table'.
+     q.table = { rows, cols, cells:[rows*cols 개, 행 순서], headRow, headCol }
+       고정 칸 : {t:'삼각기둥'}            (글 · $수식$ 가능)
+       빈칸    : {b:1, a:'5', alt:['…']}   (정답 · 대안 정답)
+     (Firestore 는 배열 안에 배열을 못 담아서 칸을 한 줄로 펴서 저장한다.)
+   빈칸에는 행 순서대로 ㉠㉡㉢… 이름이 붙는다. 학생 답·정답 글(q.answer)은 「㉠ 5  ㉡ 9  ㉢ 사각뿔」처럼 이름을 붙여 한 글로 잇는다 —
+   기록(lastAnswer·오답 목록·시험 답안)과 교사 화면이 다른 유형처럼 글 하나로 다루게 하려는 것.
+   채점은 문항 전체 하나다(칸별 ⭕/❌ 없음, 교사 지시) — 빈칸이 모두 맞아야 정답.
+   칸 하나는 정답 모양으로 규칙을 고른다: 정답·대안 정답에 한글이 있으면 한글 용어(띄어쓰기 무시), 없으면 식(숫자·분수·식 동치 · 쉼표면 여러 값). */
+const TABLE_LABELS='㉠㉡㉢㉣㉤㉥㉦㉧㉨㉩㉪㉫㉬㉭㉮㉯㉰㉱㉲㉳㉴㉵㉶㉷㉸㉹㉺㉻';
+const TABLE_MAX_BLANKS=TABLE_LABELS.length;   // 28 — edit 가 이보다 많은 빈칸은 막는다
+/* 빈칸 목록 [{cell, label, a, alt}] — 행 순서 */
+function tableBlanks(q){
+  const t=q && q.table;
+  if(!t || !Array.isArray(t.cells)) return [];
+  const out=[];
+  t.cells.forEach((c,i)=>{
+    if(!c || !c.b || out.length>=TABLE_MAX_BLANKS) return;
+    out.push({cell:i, label:TABLE_LABELS[out.length], a:String(c.a??'').trim(),
+      alt:(Array.isArray(c.alt)?c.alt:[]).map(v=>String(v??'').trim()).filter(v=>v!=='')});
+  });
+  return out;
+}
+/* 빈칸 하나가 한글로 답하는 칸인가 (아니면 키패드로 답하는 식·숫자 칸) */
+function tableCellIsText(b){ return /[가-힣]/.test([b&&b.a,...((b&&b.alt)||[])].join(' ')); }
+/* 빈칸 하나를 같은 규칙의 문항 모양으로 — gradeExamWord 로 채점 */
+function tableCellQ(b){
+  return {type:'word', answerType:(tableCellIsText(b)?'text':'expr'), answer:b.a, answerAlt:b.alt||[]};
+}
+/* 칸별 답 배열 → 「㉠ 5  ㉡ 9」 한 글 */
+function tableAnsJoin(vals){
+  return (vals||[]).map((v,i)=>(TABLE_LABELS[i]||'')+' '+String(v??'').trim()).join('  ');
+}
+/* 「㉠ 5  ㉡ 9」 한 글(또는 배열) → 빈칸 n 개의 답 배열 (없는 칸은 '') */
+function tableAnsSplit(ans, n){
+  if(Array.isArray(ans)) return Array.from({length:n},(_,i)=>String(ans[i]??'').trim());
+  const out=new Array(n).fill('');
+  let cur=-1, buf='';
+  for(const ch of String(ans??'')){
+    const k=TABLE_LABELS.indexOf(ch);
+    if(k>=0){ if(cur>=0 && cur<n) out[cur]=buf.trim(); cur=k; buf=''; }
+    else buf+=ch;
+  }
+  if(cur>=0 && cur<n) out[cur]=buf.trim();
+  return out;
+}
+/* 정답 글(q.answer 로 저장해 두는 것) */
+function tableAnswerText(q){ return tableAnsJoin(tableBlanks(q).map(b=>b.a)); }
+/* 표를 글로 — AI(문항 점검·오답 분석)에 보낼 때. 행은 「 / 」, 칸은 「 | 」, 빈칸은 「[㉠]」 (withAns 면 「[㉠=5]」) */
+function tableText(q, withAns){
+  const t=q && q.table;
+  if(!t || !Array.isArray(t.cells)) return '';
+  const lab=tableBlanks(q).reduce((m,b)=>(m[b.cell]=b,m),{});
+  const rows=[];
+  for(let r=0;r<(t.rows||0);r++){
+    const cs=[];
+    for(let c=0;c<(t.cols||0);c++){
+      const i=r*t.cols+c, cell=t.cells[i]||{}, b=lab[i];
+      cs.push(cell.b ? '['+(b?b.label:'?')+(withAns&&b?'='+b.a:'')+']' : String(cell.t??'').trim());
+    }
+    rows.push(cs.join(' | '));
+  }
+  return rows.join(' / ');
+}
+/* 칸마다 맞았는가 (교사 화면·검증용 — 학생에게는 보여 주지 않는다) */
+function tableCellResults(q, ans){
+  const bl=tableBlanks(q), u=tableAnsSplit(ans, bl.length);
+  return bl.map((b,i)=>u[i]!=='' && b.a!=='' && gradeExamWord(tableCellQ(b), u[i]));
+}
+function gradeTable(q, ans){
+  const bl=tableBlanks(q);
+  if(!bl.length) return false;
+  return tableCellResults(q, ans).every(Boolean);
+}
+
 /* ── 입력 형태 검사 (소인수분해 등) — 키패드 토큰 구조 기반 ── */
 function isPrime(n){ n=Math.round(n); if(n<2)return false; for(let i=2;i<=Math.sqrt(n);i++)if(n%i===0)return false; return true; }
 
@@ -556,6 +632,7 @@ function judgeAnswer(q, ans, tokens){
   if(!q) return false;
   const t = q.type;
   if(t==='word' && q.answerType==='list') return gradeList(q, ans);   // 📋 리스트형 (v15.0)
+  if(t==='table') return gradeTable(q, ans);                          // ▦ 표 빈칸 (v16.0)
   if(t==='word' || t==='equation' || t==='word_text' || t==='word_expr'){
     let ok = gradeExamWord(q, ans);
     if(ok && q.factorMode){

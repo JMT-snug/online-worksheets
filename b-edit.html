@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v8.3">
+<meta name="app-version" content="edit-v9.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -271,6 +271,25 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 #add-q-area{flex-shrink:0}
 .meta-card{flex-shrink:0}
 #editor-empty{padding:24px}
+/* ▦ 표 빈칸 편집 (v9.0) */
+.tbl-wrap{overflow-x:auto;margin-top:6px}
+.tbl-ed{border-collapse:collapse;font-size:12px}
+.tbl-ed td{border:1px solid var(--rule);padding:3px;vertical-align:top;background:#fff;min-width:74px}
+.tbl-ed td.tbl-x{border:none;background:none;min-width:0;text-align:center;vertical-align:middle;padding:1px}
+.tbl-ed td.tbl-x button{border:none;background:none;color:var(--ink3);cursor:pointer;font-size:11px;padding:0 3px}
+.tbl-ed td.tbl-x button:hover{color:#dc2626}
+.tbl-ed td.tbl-head{background:#f1f5f9}
+.tbl-ed td.tbl-blank{background:#fef3c7;border-color:#f59e0b}
+.tbl-ed input{width:100%;min-width:62px;box-sizing:border-box;border:1px solid var(--rule);border-radius:4px;padding:3px 5px;font-size:12px;font-family:inherit}
+.tbl-ed .tbl-lab{font-size:11px;font-weight:700;color:#b45309;min-height:14px}
+.tbl-ed .tbl-tg{margin-top:2px;width:100%;border:1px solid var(--rule);border-radius:4px;background:var(--cream);font-size:11px;cursor:pointer;padding:1px 0;font-family:inherit}
+.tbl-ed td.tbl-blank .tbl-tg{background:#f59e0b;color:#fff;border-color:#f59e0b;font-weight:700}
+.tbl-bl-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;margin-top:4px}
+.tbl-bl-row input{flex:1;min-width:120px;border:1px solid var(--rule);border-radius:4px;padding:3px 6px;font-size:12px;font-family:inherit}
+.tbl-prev{border-collapse:collapse;font-size:13px;margin-top:4px}
+.tbl-prev td{border:1px solid #94a3b8;padding:5px 10px;text-align:center;min-width:44px}
+.tbl-prev td.tbl-head{background:#f1f5f9;font-weight:700}
+.tbl-prev td.tbl-blank{background:#fffbeb;color:#b45309;font-weight:700}
 </style>
 </head>
 <body>
@@ -696,6 +715,26 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div id="steps-container"></div>
           </div>
 
+          <!-- ▦ 표 빈칸 (v9.0) — 칸을 눌러 「빈칸」으로 바꾸면 그 칸에 적은 글이 정답이 된다. 그리는 것은 renderTableEditor -->
+          <div id="field-table" class="field" style="display:none">
+            <label>표 만들기</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+              <button type="button" class="btn-add-opt" style="margin:0;width:auto;padding:4px 10px" onclick="tblAddRow()">＋ 행</button>
+              <button type="button" class="btn-add-opt" style="margin:0;width:auto;padding:4px 10px" onclick="tblAddCol()">＋ 열</button>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;margin:0;cursor:pointer"><input type="checkbox" id="tbl-head-row" style="width:auto;margin:0" onchange="tblHead('headRow',this)"> 첫 행 머리글</label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;margin:0;cursor:pointer"><input type="checkbox" id="tbl-head-col" style="width:auto;margin:0" onchange="tblHead('headCol',this)"> 첫 열 머리글</label>
+            </div>
+            <div class="tbl-wrap"><div id="tbl-editor"></div></div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:6px;line-height:1.6">
+              칸 아래 <b>[글]</b> 을 누르면 <b>빈칸</b>(노란 칸)이 되고, 그 칸에 적은 글이 <b>정답</b>입니다. 빈칸에는 행 순서대로 ㉠㉡㉢… 이름이 붙습니다(최대 28칸).
+              고정 칸에는 <code>\(x^2\)</code> 같은 수식도 쓸 수 있어요. 채점은 <b>문항 전체</b>로 합니다 — 빈칸이 모두 맞아야 정답이고, 어느 칸이 틀렸는지는 학생에게 보여 주지 않습니다.
+              정답에 한글이 있으면 학생은 <b>글자 칸</b>, 없으면 <b>키패드</b>(숫자·분수·식)로 답합니다.
+            </div>
+            <div id="tbl-blanks" style="margin-top:8px"></div>
+            <div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--ink2)">학생 화면 미리보기</div>
+            <div class="tbl-wrap"><div id="tbl-preview"></div></div>
+          </div>
+
           <div class="panel-actions">
             <button class="btn-save-q" onclick="saveQuestion()">✓ 적용</button>
             <button class="btn-del-q" onclick="copyQuestion()" style="background:#dbeafe;color:#1d4ed8" title="현재 문항을 클립보드로 복사">📋 복사</button>
@@ -711,7 +750,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 <div class="toast" id="toast"></div>
 
-<script src="grading.js?v=15.1"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다(v6.6·v6.7 — 이 화면은 grading.js 의 새 함수를 쓰지 않는다) -->
+<script src="grading.js?v=16.0"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다. v9.0 부터 ▦ 표 빈칸의 tableBlanks·tableAnswerText·tableCellIsText 를 쓴다 -->
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1718,14 +1757,14 @@ function showPanel(item){
   document.getElementById('panel-editor').style.display='block';
   document.getElementById('panel-title').textContent = '문항 편집';
 
-  altAnswers = []; poolCorrect=[]; poolWrong=[];
+  altAnswers = []; poolCorrect=[]; poolWrong=[]; editTable=null;
 
   {
     // 저장된 type → UI 유형 매핑
     let qtype;
     if(item.type==='word'){
       qtype = item.answerType==='list' ? 'list' : item.answerType==='expr' ? 'word_expr' : 'word_text';
-    } else if(['equation','multi','link','step3','pool_random'].includes(item.type)){
+    } else if(['equation','multi','link','step3','pool_random','table'].includes(item.type)){
       qtype = item.type;
     } else if(item.type==='graph'){
       qtype = 'graph';
@@ -1790,6 +1829,9 @@ function showPanel(item){
     document.getElementById('q-ans-num').value = item.answer??'';
     } else if(qtype==='multi'){
       renderOptions(item.options||[], item.answer||[]);
+    } else if(qtype==='table'){   // ▦ 표 빈칸 (v9.0)
+      editTable=_tblCopy(item.table);
+      renderTableEditor();
     } else if(qtype==='pool_random'){
       document.getElementById('q-pool-badge').value    = item.badge||'';
       document.getElementById('q-pool-question').value = item.question||'';
@@ -1854,11 +1896,15 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
-  ['field-text','field-ans-text','field-list-opts','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint','field-noreview']
+  ['field-text','field-ans-text','field-list-opts','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint','field-noreview','field-table']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   _syncNoReviewField(type);
   if(type==='pool_random'){
     show('field-pool');
+  } else if(type==='table'){   // ▦ 표 빈칸 (v9.0) — 다른 유형에서 바꿔 오면 빈 3×3 표로 시작
+    show('field-text'); show('field-image'); show('field-table'); show('field-hint');
+    if(!editTable) editTable=_tblDefault();
+    renderTableEditor();
   } else if(type==='step3'){
     show('field-text'); show('field-image'); show('field-step3');
   } else if(type==='link'){
@@ -2337,6 +2383,16 @@ window.saveQuestion = async function(){
       const opts=[...document.querySelectorAll('[id^="opt-"]:not([id^="opt-chk-"]):not([id^="opt-prev-"])')].map(el=>el.value.replace(/^\n+|\n+$/g,''));   // v7.3: 앞뒤의 빈 줄만 정리
       const ans=[...document.querySelectorAll('[id^="opt-chk-"]')].map((_,i)=>document.getElementById(`opt-chk-${i}`)?.checked?i:-1).filter(i=>i>=0);
       q.options=opts; q.answer=ans;
+    } else if(type==='table'){
+      /* ▦ 표 빈칸 (v9.0) — 채점은 grading.js gradeTable(문항 전체 하나). q.answer 에는 「㉠ 5  ㉡ 9」 정답 글을 같이 둔다
+         (교사 화면·AI 분석실·오답 목록이 다른 유형처럼 글 하나로 정답을 보여 주게). */
+      const {table, problem} = tableFromEditor(editTable);
+      if(problem){ alert(problem); return; }
+      q.type='table';
+      q.text=text;
+      const imgUrlT=document.getElementById('q-img-url').value.trim(); if(imgUrlT) q.imageUrl=imgUrlT; else delete q.imageUrl;
+      q.table=table;
+      q.answer=tableAnswerText(q);
     }
     if(qIdx >= 0 && qIdx < currentWs.questions.length){
       _keepGeom(q);
@@ -3065,6 +3121,7 @@ const Q_TYPE_DEFS = [
   {val:'list',        icon:'📋', name:'리스트',         badge:'리스트', step:'list',   group:'답을 받는 방식', desc:'여러 답을 쉼표로 · 순서 무관(선택: 순서대로)'},
   {val:'multi',       icon:'☑️', name:'객관식',         badge:'객관식', step:'multi',  group:'답을 받는 방식', desc:'선지에서 모두 고르기'},
   {val:'step3',       icon:'🪜', name:'단계형',         badge:'단계형',                 group:'특수 문항',     desc:'단계별 풀이 과정'},
+  {val:'table',       icon:'▦',  name:'표 빈칸',        badge:'표',                     group:'특수 문항',     desc:'표의 빈칸 채우기 · 전체 채점'},
   {val:'link',        icon:'🔗', name:'링크(다음 문항)', badge:'링크',                  group:'특수 문항',     desc:'바깥 활동으로 가는 링크'},
   {val:'graph',       icon:'📈', name:'그래프 그리기',  badge:'그래프',                 group:'특수 문항',     desc:'수직선/좌표평면/좌표축/작도 답안'},
   {val:'pool_random', icon:'🎲', name:'랜덤 풀',        badge:'랜덤풀',                 group:'특수 문항',     desc:'정답/오답 풀에서 무작위 출제'},
@@ -3097,6 +3154,159 @@ fillQTypeLists();
 const STEP_ANSWER_TYPES = Q_TYPE_DEFS.filter(t=>t.step).map(t=>({val:t.step, label:`${t.icon} ${t.name}`}));
 /* 옛 데이터의 'equation' 은 이제 'expr' 과 같은 것으로 다룬다 */
 const normStepType = at => (at==='equation' ? 'expr' : (at||'number'));
+
+/* ══════════ ▦ 표 빈칸 편집 (v9.0, 2026-11-17 교사 요청) ══════════
+   저장 모양(grading.js 머리 주석과 같다): q.table = {rows, cols, cells:[행 순서로 rows*cols 개], headRow, headCol}
+     고정 칸 {t:'글'} · 빈칸 {b:1, a:'정답', alt:['대안', …]}   — Firestore 는 배열 안 배열을 못 담아 칸을 한 줄로 편다.
+   편집 중인 표는 editTable 하나에 두고, 칸 글을 칠 때는 격자를 다시 그리지 않는다(입력칸 커서가 날아가지 않게) —
+   빈칸 목록·미리보기만 새로 그린다. 행·열 추가/삭제, 빈칸 전환, 머리글 켜기는 격자를 다시 그린다. */
+let editTable=null;
+const TBL_MAX_ROWS=12, TBL_MAX_COLS=8;
+function _tblDefault(){
+  return {rows:3, cols:3, headRow:true, headCol:false, cells:Array.from({length:9},()=>({t:''}))};
+}
+function _tblCell(c){
+  c=c||{};
+  return c.b ? {b:1, a:String(c.a??''), alt:(Array.isArray(c.alt)?c.alt:[]).map(String)} : {t:String(c.t??'')};
+}
+function _tblCopy(t){
+  const r=Number(t&&t.rows), c=Number(t&&t.cols);
+  if(!t || !Array.isArray(t.cells) || !(r>0) || !(c>0)) return _tblDefault();
+  return {rows:r, cols:c, headRow:!!t.headRow, headCol:!!t.headCol,
+    cells:Array.from({length:r*c},(_,i)=>_tblCell(t.cells[i]))};
+}
+/* 행·열을 바꾼 새 표 — keep(r,c) 가 옛 칸 자리(없으면 null)를 돌려준다 */
+function _tblReshape(rows, cols, keep){
+  const old=editTable, cells=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const k=keep(r,c);
+    cells.push(k ? _tblCell(old.cells[k[0]*old.cols+k[1]]) : {t:''});
+  }
+  editTable={...old, rows, cols, cells};
+  renderTableEditor();
+}
+window.tblAddRow=function(){
+  if(editTable.rows>=TBL_MAX_ROWS){ toast(`행은 ${TBL_MAX_ROWS}개까지예요`); return; }
+  _tblReshape(editTable.rows+1, editTable.cols, (r,c)=>r<editTable.rows?[r,c]:null);
+};
+window.tblAddCol=function(){
+  if(editTable.cols>=TBL_MAX_COLS){ toast(`열은 ${TBL_MAX_COLS}개까지예요`); return; }
+  _tblReshape(editTable.rows, editTable.cols+1, (r,c)=>c<editTable.cols?[r,c]:null);
+};
+window.tblDelRow=function(dr){
+  if(editTable.rows<=1){ toast('행이 하나뿐이에요'); return; }
+  _tblReshape(editTable.rows-1, editTable.cols, (r,c)=>[r<dr?r:r+1, c]);
+};
+window.tblDelCol=function(dc){
+  if(editTable.cols<=1){ toast('열이 하나뿐이에요'); return; }
+  _tblReshape(editTable.rows, editTable.cols-1, (r,c)=>[r, c<dc?c:c+1]);
+};
+window.tblToggleBlank=function(i){
+  const c=editTable.cells[i];
+  editTable.cells[i] = c.b ? {t:c.a||''} : {b:1, a:c.t||'', alt:[]};
+  renderTableEditor();
+  setTimeout(()=>document.getElementById('tbl-in-'+i)?.focus(),0);
+};
+window.tblCellInput=function(i, el){
+  const c=editTable.cells[i];
+  if(c.b) c.a=el.value; else c.t=el.value;
+  renderTableSide();
+};
+window.tblAltInput=function(i, el){
+  editTable.cells[i].alt=String(el.value).split('|').map(s=>s.trim()).filter(Boolean);
+};
+window.tblHead=function(key, el){ editTable[key]=!!el.checked; renderTableEditor(); };
+const _tblIsHead=(t,r,c)=>(t.headRow&&r===0)||(t.headCol&&c===0);
+
+function renderTableEditor(){
+  const box=document.getElementById('tbl-editor');
+  if(!box || !editTable) return;
+  const t=editTable;
+  const hr=document.getElementById('tbl-head-row'), hc=document.getElementById('tbl-head-col');
+  if(hr) hr.checked=!!t.headRow; if(hc) hc.checked=!!t.headCol;
+  const labels=tableBlanks({table:t}).reduce((m,b)=>(m[b.cell]=b.label,m),{});
+  let h='<table class="tbl-ed"><tr><td class="tbl-x"></td>';
+  for(let c=0;c<t.cols;c++) h+=`<td class="tbl-x"><button type="button" onclick="tblDelCol(${c})" title="이 열 삭제">✕</button></td>`;
+  h+='</tr>';
+  for(let r=0;r<t.rows;r++){
+    h+=`<tr><td class="tbl-x"><button type="button" onclick="tblDelRow(${r})" title="이 행 삭제">✕</button></td>`;
+    for(let c=0;c<t.cols;c++){
+      const i=r*t.cols+c, cell=t.cells[i];
+      const cls=(cell.b?'tbl-blank':'')+(_tblIsHead(t,r,c)?' tbl-head':'');
+      h+=`<td class="${cls}"><div class="tbl-lab">${cell.b?(labels[i]||'⚠'):''}</div>`
+        +`<input id="tbl-in-${i}" value="${_esc(cell.b?cell.a:cell.t)}" placeholder="${cell.b?'정답':''}" oninput="tblCellInput(${i},this)" autocomplete="off" spellcheck="false">`
+        +`<button type="button" class="tbl-tg" onclick="tblToggleBlank(${i})" title="${cell.b?'고정 글로 되돌리기':'빈칸으로 만들기 — 적어 둔 글이 정답이 됩니다'}">${cell.b?'빈칸':'글'}</button></td>`;
+    }
+    h+='</tr>';
+  }
+  box.innerHTML=h+'</table>';
+  renderTableSide();
+}
+/* 빈칸 목록(정답·입력 방식·대안 정답)과 학생 화면 미리보기 */
+function renderTableSide(){
+  const t=editTable; if(!t) return;
+  const bl=tableBlanks({table:t});
+  const list=document.getElementById('tbl-blanks');
+  if(list){
+    const nAll=t.cells.filter(c=>c.b).length;
+    list.innerHTML = !nAll
+      ? '<div style="font-size:12px;color:#b45309">아직 빈칸이 없어요 — 칸 아래 [글] 을 눌러 빈칸을 만드세요.</div>'
+      : (nAll>TABLE_MAX_BLANKS?`<div style="font-size:12px;color:#dc2626">빈칸은 ${TABLE_MAX_BLANKS}칸까지예요 (지금 ${nAll}칸).</div>`:'')
+        + bl.map(b=>{
+            const kind=!b.a ? '<span style="color:#dc2626">정답을 적어 주세요</span>'
+              : tableCellIsText(b) ? '가 글자 칸' : '⌨️ 키패드';
+            return `<div class="tbl-bl-row"><b style="color:#b45309">${b.label}</b>`
+              +`<span style="min-width:60px">정답 <b>${_esc(b.a)||'—'}</b></span><span style="color:var(--ink3)">${kind}</span>`
+              +`<input value="${_esc((t.cells[b.cell].alt||[]).join(' | '))}" placeholder="대안 정답 (여러 개는 | 로)" oninput="tblAltInput(${b.cell},this)" spellcheck="false"></div>`;
+          }).join('');
+  }
+  const pv=document.getElementById('tbl-preview');
+  if(pv){
+    pv.innerHTML=tablePreviewHtml(t, false);
+    if(window.MathJax?.typesetPromise){ MathJax.typesetClear?.([pv]); MathJax.typesetPromise([pv]).catch(()=>{}); }
+  }
+}
+/* 표를 그린다 — showAns 면 빈칸에 「㉠ 정답」, 아니면 학생이 보는 것처럼 「㉠」 만 */
+function tablePreviewHtml(t, showAns){
+  if(!t || !Array.isArray(t.cells)) return '';
+  const labels=tableBlanks({table:t}).reduce((m,b)=>(m[b.cell]=b,m),{});
+  let h='<table class="tbl-prev">';
+  for(let r=0;r<t.rows;r++){
+    h+='<tr>';
+    for(let c=0;c<t.cols;c++){
+      const i=r*t.cols+c, cell=t.cells[i]||{};
+      const head=_tblIsHead(t,r,c);
+      if(cell.b){
+        const b=labels[i];
+        h+=`<td class="tbl-blank">${b?b.label:'⚠'}${showAns&&b?' '+_esc(b.a):''}</td>`;
+      } else {
+        h+=`<td class="${head?'tbl-head':''}">${prevTex(cell.t)}</td>`;
+      }
+    }
+    h+='</tr>';
+  }
+  return h+'</table>';
+}
+/* 편집 중인 표 → 저장할 표. 문제가 있으면 problem 에 안내 글 */
+function tableFromEditor(t){
+  if(!t) return {problem:'표가 없어요.'};
+  const cells=t.cells.map(c=>{
+    if(!c.b) return {t:String(c.t??'').trim()};
+    const a=String(c.a??'').trim(), alt=(c.alt||[]).map(s=>String(s).trim()).filter(Boolean);
+    const isText=tableCellIsText({a, alt});
+    // 키패드 칸은 원주율을 π 한 글자로 통일한다 (다른 유형과 같다)
+    return {b:1, a:isText?a:_normPi(a), alt:alt.map(s=>isText?s:_normPi(s))};
+  });
+  const blanks=cells.filter(c=>c.b);
+  if(!blanks.length) return {problem:'빈칸이 하나도 없어요.\n칸 아래 [글] 을 눌러 빈칸으로 만들고, 그 칸에 정답을 적어 주세요.'};
+  if(blanks.length>TABLE_MAX_BLANKS) return {problem:`빈칸은 ${TABLE_MAX_BLANKS}칸까지 만들 수 있어요 (지금 ${blanks.length}칸).`};
+  const empty=tableBlanks({table:{cells}}).find(b=>!b.a);
+  if(empty) return {problem:`빈칸 ${empty.label} 에 정답이 없어요.`};
+  const lab=new RegExp('['+TABLE_LABELS+']');
+  const bad=blanks.find(c=>[c.a,...c.alt].some(s=>lab.test(s)));
+  if(bad) return {problem:'정답에 ㉠㉡ 같은 동그라미 글자는 쓸 수 없어요 (빈칸 이름으로 쓰는 글자예요).'};
+  return {table:{rows:t.rows, cols:t.cols, headRow:!!t.headRow, headCol:!!t.headCol, cells}};
+}
 
 window.addStep = function(){
   editSteps.push({ label:'', answerType:'number', answer:'', answerAlt:[], hint:'' });
@@ -3526,6 +3736,7 @@ function _doAddQuestion(type){
   else if(type==='list'){ newQ.type='word'; newQ.answerType='list'; newQ.listItemType='number'; newQ.listOrdered=false; newQ.answerAlt=[]; }
   else if(type==='equation'){ newQ.type='equation'; newQ.answer=0; }
   else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
+  else if(type==='table'){ newQ.type='table'; newQ.table=_tblDefault(); }   // ▦ 표 빈칸 (v9.0)
   else if(type==='step3'){ newQ.type='step3';
     newQ.steps=[
       {label:'방정식을 세우시오.',answerType:'expr',answer:'',answerAlt:[],hint:''},
@@ -3584,6 +3795,8 @@ function renderPreview(){
           </div>`;
         });
         html += `</div>`;
+      } else if(q.type==='table'){   // ▦ 표 빈칸 (v9.0) — 빈칸에 ㉠ 이름과 정답을 함께
+        html += tablePreviewHtml(q.table, true);
       } else if(q.answer!==undefined && q.answer!==''){
         html += `<div class="prev-ans">정답: ${prevTex(q.answer)}</div>`;
       }
@@ -3666,6 +3879,7 @@ function _aiAnswerSummary(q){
     return `${i+1}단계 정답:${s.answer}`;
   }).join(' / ');
   if(q.type==='word' && q.answerType==='list') return q.answer ? `${q.answer} (리스트 · ${q.listOrdered?'순서대로':'순서 무관'} — 쉼표로 여러 답)` : null;   // 📋 v8.0
+  if(q.type==='table') return `표(빈칸 [㉠=정답]): ${tableText(q, true)} — 빈칸이 모두 맞아야 정답`;   // ▦ v9.0
   if(q.type==='word') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   if(q.type==='equation') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   return null;   // graph/link/pool_random 등 — 검토 대상 아님

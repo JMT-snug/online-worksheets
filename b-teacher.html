@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.15">
+<meta name="app-version" content="6.16">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,7 +216,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=15.1"></script>
+<script src="grading.js?v=16.0"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1456,7 +1456,7 @@ function _freqWrongStats(wsId){
       v.wrongInputs.forEach(w=>{
         const raw=String(w??'').trim();
         const blank = raw==='' || raw==='(빈칸)';
-        const shown = blank ? '(빈칸)' : _ansForCompare(q, raw).slice(0,40);
+        const shown = blank ? '(빈칸)' : _ansForCompare(q, raw).slice(0, q?.type==='table'?200:40);   // ▦ 표 빈칸 답은 칸이 많으면 40자를 넘어 서로 다른 답이 한 줄로 합쳐진다 (v6.16)
         const key = blank ? '(빈칸)' : _trapNorm(shown);
         const cur=m.get(key)||{wrong:shown, uids:new Set(), blank};
         cur.uids.add(uid); m.set(key,cur);
@@ -1741,7 +1741,7 @@ function regradeOne(q, ans, tokens){
      그래서 마지막 단계를 같은 유형의 문항으로 바꿔(grading.js stepAsQuestion — index 의 시험지 변환과 같은 규칙) 판정한다.
    · 그래프(수동 채점)·링크(채점 없음)·유형 없는 옛 문항은 judgeAnswer 가 null/false 만 돌려줘 정오가 바뀌어 보이므로 재채점하지 않는다.
    null 이면 이 문항은 재채점 대상이 아니다. */
-const REGRADE_TYPES=new Set(['word','equation','word_text','word_expr','multi']);
+const REGRADE_TYPES=new Set(['word','equation','word_text','word_expr','multi','table']);   // ▦ 표 빈칸(v6.16 · grading.js 16.0 gradeTable) — 답이 「㉠ 5  ㉡ 9」 한 글이라 다른 유형처럼 다시 판정한다
 function regradeTarget(q){
   if(!q) return null;
   if(q.type==='step3'){

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="16.1">
+  <meta name="app-version" content="16.2">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -747,7 +747,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .tblq .tblq-lab{display:block;font-size:11px;font-weight:800;color:var(--amber);line-height:1.2;text-align:left}
 .tblq .tblq-k{min-width:64px;min-height:34px;border:1.5px dashed #f59e0b;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px 6px;font-size:16px}
 .tblq .tblq-k.active{border-style:solid;border-color:var(--accent);box-shadow:0 0 0 2px var(--acc-lt)}
-.tblq input.tblq-t{width:100%;min-width:72px;height:34px;box-sizing:border-box;border:1.5px dashed #f59e0b;border-radius:6px;padding:0 8px;font-size:15px;font-weight:700;font-family:inherit;color:var(--ink);background:#fff;outline:none;text-align:center}
+.tblq input.tblq-t{width:auto;min-width:72px;height:34px;box-sizing:border-box;border:1.5px dashed #f59e0b;border-radius:6px;padding:0 8px;font-size:15px;font-weight:700;font-family:inherit;color:var(--ink);background:#fff;outline:none;text-align:center}
 .tblq input.tblq-t:focus{border-style:solid;border-color:var(--accent)}
 .tblq .tblq-done{font-weight:700;color:var(--green)}
 </style>
@@ -7316,7 +7316,7 @@ function renderTableQ(q, panel, qHeadHtml){
       if(!bk){ th+=`<td class="${head?'tblq-head':''}"${spa}>${cell.b?'':fracText(String(cell.t??''))}</td>`; continue; }
       const {b,k}=bk, lab=`<span class="tblq-lab">${b.label}</span>`;
       if(done) th+=`<td class="tblq-b"${spa}>${lab}<span class="tblq-done">${isText[k]?_escHtml(b.a):answerHtml(b.a)}</span></td>`;
-      else if(isText[k]) th+=`<td class="tblq-b"${spa}>${lab}<input class="tblq-t" data-k="${k}" value="${_escHtml(st.txt[k]||'')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="tblTxt(${k},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}"></td>`;
+      else if(isText[k]) th+=`<td class="tblq-b"${spa}>${lab}<input class="tblq-t" data-k="${k}" size="${tblTxtSize(st.txt[k])}" value="${_escHtml(st.txt[k]||'')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="tblTxt(${k},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}"></td>`;
       else th+=`<td class="tblq-b"${spa}>${lab}<div class="tblq-k${k===st.active?' active':''}" data-k="${k}"${k===st.active?' id="ans-display"':''} onclick="tblFocus(${k})"></div></td>`;
     }
     th+='</tr>';
@@ -7351,7 +7351,14 @@ function renderTableQ(q, panel, qHeadHtml){
   }
   setTimeout(()=>renderMath(panel),50);
 }
-window.tblTxt=function(k, el){ const st=_tblLive; if(st) st.txt[k]=el.value; };
+/* 글자 칸 너비 (v16.2) — <input> 은 크기를 안 주면 글자 20자 너비(약 200px)로 그려져서, 표 안에서 그 열만 넓게 벌어졌다(교사 신고 — 「㉡ 미만」 칸).
+   쓴 글 길이에 맞춰 늘린다(한글은 두 칸으로 셈, 1~30 — 빈 칸은 size 1 + min-width 72px 로 키패드 칸과 같은 너비).
+   정답 길이가 아니라 학생이 쓴 글로 정하므로 정답의 길이를 알려 주지 않는다. */
+function tblTxtSize(v){
+  const n=[...String(v||'')].reduce((s,ch)=>s+(/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(ch)?2:1),0);
+  return Math.max(1, Math.min(30, n));
+}
+window.tblTxt=function(k, el){ const st=_tblLive; if(st) st.txt[k]=el.value; el.size=tblTxtSize(el.value); };
 window.tblFocus=function(k){
   const st=_tblLive; if(!st) return;
   if(st.active>=0) st.tok[st.active]=qTokens;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v8.2">
+<meta name="app-version" content="edit-v8.3">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -638,8 +638,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               <button type="button" class="pi-btn" style="width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px" onclick="insertExp('q-ans-expr')" title="지수 ^( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 지수가 됩니다">지수</button>
             </div>
             <div style="font-size:11px;color:var(--ink3);margin-top:4px">
-              대소문자는 <b>구분하지 않습니다</b> (x 를 X 로 써도 정답).
-              단, 정답에 <code>A</code> 와 <code>a</code> 를 <b>둘 다</b> 쓰면(예: 넓이 A, 한 변 a) 그 문항만 구분해서 채점합니다.
+              대소문자를 <b>구분합니다</b> — 정답이 <code>2x+3</code> 이면 <code>2X+3</code> 은 오답입니다.
+              학생 키패드에는 정답에 쓴 글자가 그 대소문자 그대로 나옵니다.
             </div>
             <div style="font-size:11px;color:var(--ink3);margin-top:4px">
               <b>원주율</b>은 <b>π 버튼</b>으로 넣으세요 (<code>pi</code> · <code>\pi</code> · <code>Math.PI</code> 로 써도 적용할 때 π 로 바뀝니다).
@@ -710,7 +710,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 <div class="toast" id="toast"></div>
 
-<script src="grading.js?v=15.0"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다(v6.6·v6.7 — 이 화면은 grading.js 의 새 함수를 쓰지 않는다) -->
+<script src="grading.js?v=15.1"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다(v6.6·v6.7 — 이 화면은 grading.js 의 새 함수를 쓰지 않는다) -->
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }

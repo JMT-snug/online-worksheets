@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord(15.1 부터 식 답은 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -320,11 +320,13 @@ function exprEquivCheck(userExpr, correctExpr){
      · 둘 다 등식(=)            → eqEquivCheck
      · 둘 다 그냥 식            → exprEquivCheck
    한쪽만 관계식이면 다른 답으로 본다 (정답 x=4 에 4 만 쓴 것은 답이 아니다). */
-function mathEquivCheck(user, correct){
+function mathEquivCheck(user, correct, caseSensitive){
   try{
-    /* 정답이 A 와 a 를 갈라 쓰지 않았다면 대소문자를 무시한다 (x 를 X 로 쳐도 정답).
-       갈라 썼다면 그대로 두어 구분해 채점한다 — A=a² 를 a=A² 로 쓴 것은 다른 답이다. */
-    if(!isCaseSignificant(correct)){
+    /* caseSensitive 면 대소문자를 언제나 구분한다 — 「문자 포함 식」 문항·단계·리스트 식 항목은 gradeExamWord 가 이렇게 부른다
+       (v15.1, 교사 지시 2026-11-17 「문자포함 식 유형 채점에서 대소문자 구분」: 정답 2x+3 에 2X+3 은 오답).
+       caseSensitive 를 주지 않으면 예전 규칙 — 정답이 A 와 a 를 갈라 쓰지 않았다면 대소문자를 무시하고,
+       갈라 썼다면 구분한다(A=a² 를 a=A² 로 쓴 것은 다른 답). */
+    if(!caseSensitive && !isCaseSignificant(correct)){
       user=String(user).toLowerCase();
       correct=String(correct).toLowerCase();
     }
@@ -485,18 +487,19 @@ function gradeExamWord(q, ans){
   }
   const textMode=isTextAnswerQ(q);   // 텍스트 문항이면 수식 판정을 건너뛴다
   // 1) 수학적 동치 — 등식(=)·부등식(<, ≤, >, ≥)·그냥 식을 답 모양대로 갈라 판정
+  //    식 답은 대소문자를 언제나 구분한다(v15.1 — x 와 X 는 다른 문자).
   if(!textMode) try{
-    if(allAns.some(a=>mathEquivCheck(raw, String(a)))) return true;
+    if(allAns.some(a=>mathEquivCheck(raw, String(a), true))) return true;
   }catch(e){}
   // 2) 텍스트 정규화 비교 — 일반 모드와 동일한 normW (≤ 와 <= 는 같은 글자로 본다)
-  //    대소문자는 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (isCaseSignificant)
+  //    대소문자: 식 답은 언제나 구분(v15.1), 한글 용어 답은 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (isCaseSignificant)
   const normW=(s,keepCase)=>{
     const t=normPi(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
       .replace(/\s*,\s*/g,",")
       .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim();
     return keepCase?t:t.toLowerCase();
   };
-  if(allAns.some(a=>{ const ks=isCaseSignificant(a); return normW(a,ks)===normW(raw,ks); })) return true;
+  if(allAns.some(a=>{ const ks=!textMode || isCaseSignificant(a); return normW(a,ks)===normW(raw,ks); })) return true;
   // 3) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
   //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
   //    π 도 같다 — parseFloat("6π")===6 이라 정답 6 에 「6π」가 통과하고, 정답 「6π」에는 소수 근사(18.85)가 통과한다.

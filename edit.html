@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v8.0">
+<meta name="app-version" content="edit-v8.1">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -592,6 +592,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
           <div id="field-ans-text" class="field">
             <label>정답</label>
             <input id="q-ans-text" placeholder="정답 텍스트">
+            <div id="q-ans-text-tools" class="pi-row" style="display:none;margin-top:4px"></div>   <!-- v8.1: 숫자·식 항목 리스트일 때만 π·분수·지수 -->
+            <div class="latex-preview" id="prev-ans-text" style="margin-top:6px;display:none"></div>
             <div style="margin-top:8px">
               <label style="font-size:12px;color:var(--ink3)">대안 정답 (Enter로 추가)</label>
               <input id="q-alt-input" placeholder="대안 정답 입력 후 Enter" onkeydown="addAlt(event)" style="margin-top:4px">
@@ -634,6 +636,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div class="pi-row">
               <input id="q-ans-expr" placeholder="예: 4*a**2, y=30/x, x>3, 6π">
               <button type="button" class="pi-btn" onclick="insertPi('q-ans-expr')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>
+              <button type="button" class="pi-btn" style="width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px" onclick="insertFrac('q-ans-expr')" title="분수 ( )/( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 분자가 됩니다">분수</button>
+              <button type="button" class="pi-btn" style="width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px" onclick="insertExp('q-ans-expr')" title="지수 ^( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 지수가 됩니다">지수</button>
             </div>
             <div style="font-size:11px;color:var(--ink3);margin-top:4px">
               대소문자는 <b>구분하지 않습니다</b> (x 를 X 로 써도 정답).
@@ -644,7 +648,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
               정답에 π 가 있으면 학생 키패드에도 π 버튼이 나옵니다. <code>6π</code> · <code>2πr</code> · <code>(8π)/3</code> 처럼 곱셈 기호는 생략해도 되고, 소수 근사(18.85)는 오답입니다.
               <code>pi</code> 는 <code>2pi*r</code> 처럼 글자와 떼어 써야 π 로 읽힙니다.
             </div>
-            <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px">미리보기</div>
+            <div class="latex-preview" id="prev-ans-expr" style="margin-top:6px;display:none"></div>   <!-- v8.1: 학생 화면·채점이 읽는 모양 (refreshQAnsPreviews) -->
           </div>
 
           <!-- 숫자 답 -->
@@ -653,7 +657,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div class="pi-row">
               <input id="q-ans-num" type="text" placeholder="숫자 또는 분수 입력 (예: 5, -3, 2/3, 8/3, 6π)">
               <button type="button" class="pi-btn" onclick="insertPi('q-ans-num')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>
+              <button type="button" class="pi-btn" style="width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px" onclick="insertFrac('q-ans-num')" title="분수 ( )/( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 분자가 됩니다">분수</button>
+              <button type="button" class="pi-btn" style="width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px" onclick="insertExp('q-ans-num')" title="지수 ^( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 지수가 됩니다">지수</button>
             </div>
+            <div class="latex-preview" id="prev-ans-num" style="margin-top:6px;display:none"></div>   <!-- v8.1: 학생 화면·채점이 읽는 모양과 값 -->
             <div style="font-size:11px;color:var(--ink3);margin-top:4px">
               π 가 든 답(<code>6π</code> · <code>(8π)/3</code>)은 <b>값이 같으면</b> 정답입니다. 학생 키패드에 π 버튼이 나오고, 소수 근사(18.85)는 오답입니다.
             </div>
@@ -1833,6 +1840,7 @@ window.onQTypeChange = function(){
   setQType(document.getElementById('q-type-sel').value);
 };
 function setQType(type){
+  setTimeout(()=>{ if(typeof refreshQAnsPreviews==='function') refreshQAnsPreviews(); }, 0);   // v8.1: 정답 칸 미리보기 — showPanel 이 값을 다 넣은 뒤에
   document.getElementById('q-type-sel').value = type;
   // 링크 문항의 텍스트는 문제가 아니라 '안내문'이므로 라벨·예시를 바꿔 준다
   const _tl=document.getElementById('field-text')?.querySelector('label');
@@ -3267,6 +3275,158 @@ function _hasListComma(s){
   if(typeof isListAnswer==='function') return isListAnswer(String(s??'').trim());
   let d=0; for(const ch of String(s??'')){ if(ch==='('||ch==='[') d++; else if(ch===')'||ch===']') d--; else if(ch===','&&d===0) return true; } return false;
 }
+/* ══════════ 정답 칸의 분수·지수 입력과 미리보기 (v8.1, 2026-11-17 교사 요청 「edit 의 정답 입력 칸에서도 분수, 지수 표기를 정확히」) ══════════
+   정답은 글로 저장된다(「1/9π^2」). 글만 보면 1/(9π²) 인지 π²/9 인지 헷갈리므로, 입력칸 바로 아래에 학생 화면·채점이 읽는 모양 그대로 그려 준다.
+   그리는 함수 answerToTex 는 index 의 것을 글자 하나 다르지 않게 옮겨 왔다 — 두 파일이 같아야 한다(점검/검증_분수지수.js 가 비교한다).
+   읽는 규칙은 채점(grading.js _compileMulti)과 같다: a/b*c = (a/b)c · 2x/3 = (2x)/3 · 지수는 바로 뒤 한 덩이.
+   [분수] 는 ()/() 를, [지수] 는 ^() 를 커서 자리에 넣는다(고른 글이 있으면 그 글을 감싼다). 괄호는 채점·학생 화면에서 알아서 벗겨진다. */
+function answerToTex(raw){
+  let s=normPi(String(raw??'')).replace(/\s+/g,'').replace(/[−–]/g,'-').replace(/×/g,'*').replace(/÷/g,'/')
+          .replace(/\*\*/g,'^').replace(/Math\./g,'');
+  if(!s) return null;
+  s=normalizeRelText(s);   // grading.js: ≤ → <=, ≥ → >=, =< → <=
+  if(!/^[A-Za-z0-9π+\-*\/^().,<>=]+$/.test(s)) return null;
+  if((s.replace(/sqrt/g,'').match(/[A-Za-z]{3,}/)||[]).length) return null;   // 낱말·단위(cm 정도는 변수 곱으로 읽히지만 abc 는 식이 아니다)
+  let i=0;
+  const bad=()=>{ throw new Error('answerToTex'); };
+  const numTok=()=>{ const m=/^\d*\.?\d*/.exec(s.slice(i))[0]; if(!m||m==='.') bad(); i+=m.length; return m; };
+  const group=()=>{ i++; const e=expr(); if(s[i]!==')') bad(); i++; return e; };
+  function atom(){
+    const c=s[i]; if(c===undefined) bad();
+    if(c==='('){ const e=group(); return {tex:`\\left(${e}\\right)`, inner:e, simple:/^([A-Za-z]|\d+\.?\d*|\\pi )$/.test(e)}; }
+    if(s.startsWith('sqrt(',i)){ i+=4; const e=group(); return {tex:`\\sqrt{${e}}`}; }
+    if(/[0-9.]/.test(c)) return {tex:numTok()};
+    if(c==='π'){ i++; return {tex:'\\pi '}; }
+    if(/[A-Za-z]/.test(c)){ i++; return {tex:c}; }
+    return bad();
+  }
+  function exponent(){
+    let neg=''; if(s[i]==='-'){ neg='-'; i++; }
+    const c=s[i]; if(c===undefined) bad();
+    if(c==='(') return neg+group();
+    if(/[0-9.]/.test(c)) return neg+numTok();
+    if(c==='π'){ i++; return neg+'\\pi '; }
+    if(/[A-Za-z]/.test(c)){ i++; return neg+c; }
+    return bad();
+  }
+  function factor(){
+    let neg=false;
+    if(s[i]==='-'){ neg=true; i++; } else if(s[i]==='+') i++;
+    let b=atom();
+    if(s[i]==='^'){ i++; b={tex:`${b.simple?b.inner:b.tex}^{${exponent()}}`}; }   // (x)**(2) 의 군더더기 괄호는 벗긴다
+    return neg ? {tex:'-'+b.tex} : b;
+  }
+  const unwrap=n=>n.inner!==undefined ? n.inner : n.tex;
+  const startsFactor=c=>c!==undefined && /[A-Za-z0-9.π(]/.test(c);
+  function term(){
+    let parts=[factor()];
+    for(;;){
+      const c=s[i];
+      if(c==='*'){ i++; const n=factor(); parts.push({tex:/^[0-9.\-]/.test(n.tex)?'\\times ':''}); parts.push(n); }
+      else if(c==='/'){
+        i++; const den=factor();
+        const num=parts.length===1 ? unwrap(parts[0]) : parts.map(p=>p.tex).join('');
+        parts=[{tex:`\\frac{${num}}{${unwrap(den)}}`}];
+      }
+      else if(startsFactor(c)) parts.push(factor());   // 곱셈 기호 없이 붙인 것: 2x · xy · 2(x+1) · (a)(b) · π(r)
+      else break;
+    }
+    return parts.map(p=>p.tex).join('');
+  }
+  function expr(){
+    let sign=''; if(s[i]==='-'){ sign='-'; i++; } else if(s[i]==='+') i++;
+    let out=sign+term();
+    while(s[i]==='+'||s[i]==='-'){ const op=s[i++]; out+=op+term(); }
+    if(s[i]===','){ i++; out+=',\\,'+expr(); }
+    return out;
+  }
+  try{
+    const REL={'<':'\\lt ','>':'\\gt ','<=':'\\le ','>=':'\\ge ','=':'='};
+    const pieces=s.split(/(<=|>=|<|>|=)/);   // 홀수 칸이 관계 기호
+    return pieces.map((p,k)=>{
+      if(k%2) return REL[p];
+      s=p; i=0; const e=expr(); if(i!==s.length) bad(); return e;
+    }).join('');
+  }catch(e){ return null; }
+}
+window.insertFrac = function(id){
+  const el=document.getElementById(id); if(!el) return;
+  const s=el.selectionStart ?? el.value.length, e=el.selectionEnd ?? s;
+  const sel=el.value.slice(s,e);
+  el.setRangeText(sel ? '('+sel+')/()' : '()/()', s, e, 'end');
+  const p = sel ? s+sel.length+4 : s+1;          // 고른 글이 있으면 분모 칸, 없으면 분자 칸에 커서
+  el.setSelectionRange(p,p);
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.focus();
+};
+window.insertExp = function(id){
+  const el=document.getElementById(id); if(!el) return;
+  const s=el.selectionStart ?? el.value.length, e=el.selectionEnd ?? s;
+  const sel=el.value.slice(s,e);
+  el.setRangeText('^('+sel+')', s, e, 'end');
+  const p = sel ? s+sel.length+3 : s+2;          // 지수 칸 안에 커서
+  el.setSelectionRange(p,p);
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.focus();
+};
+/** π·분수·지수 버튼 묶음 (입력칸 id) */
+function mathBtns(id){
+  const st='width:auto;padding:0 8px;font-style:normal;font-family:inherit;font-size:12px';
+  return `<button type="button" class="pi-btn" onclick="insertPi('${id}')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>`
+       + `<button type="button" class="pi-btn" style="${st}" onclick="insertFrac('${id}')" title="분수 ( )/( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 분자가 됩니다">분수</button>`
+       + `<button type="button" class="pi-btn" style="${st}" onclick="insertExp('${id}')" title="지수 ^( ) 를 넣습니다 — 글을 고르고 누르면 그 글이 지수가 됩니다">지수</button>`;
+}
+/** 미리보기 한 칸의 HTML. kind: 'number' | 'expr' | 'list' */
+function _ansPrevHtml(val, kind){
+  const v=String(val??'').trim();
+  if(!v) return '';
+  let tex=null; try{ tex=answerToTex(v); }catch(e){ tex=null; }
+  if(tex==null){
+    return kind==='list' ? ''
+      : '<span style="color:#b45309;font-size:12px">⚠ 식으로 읽을 수 없는 글이에요 — 학생 화면에는 글자 그대로 보이고, 채점도 글자로 비교합니다.</span>';
+  }
+  let extra='';
+  if(kind==='number'){
+    const n=evalAnswer(_normPi(v));
+    extra = (typeof n==='number' && isFinite(n))
+      ? ` <span style="color:var(--ink3);font-size:12px">≈ ${+n.toFixed(6)}</span>`
+      : ' <span style="color:#b45309;font-size:12px">⚠ 값을 계산할 수 없어요 — 숫자 값 유형은 학생이 무엇을 써도 오답이 됩니다</span>';
+  }
+  return `<span style="color:var(--ink3);font-size:11px">학생 화면·채점은 이렇게 읽어요 →</span> \\(${_esc(tex)}\\)${extra}`;
+}
+/** 입력칸(inputId) 아래 미리보기 칸(prevId)을 다시 그린다. kind 가 없으면 숨긴다 */
+function updateAnsPreview(inputId, prevId, kind){
+  const el=document.getElementById(inputId), box=document.getElementById(prevId);
+  if(!el || !box) return;
+  const h = kind ? _ansPrevHtml(el.value, kind) : '';
+  box.style.display = h ? '' : 'none';
+  box.innerHTML = h;
+  if(h && window.MathJax?.typesetPromise) MathJax.typesetPromise([box]).catch(()=>{});
+}
+window.updateAnsPreview = updateAnsPreview;
+/** 단계 하나의 미리보기 종류 — 숫자·식 단계, 숫자·식 항목의 리스트 단계만 */
+function _stepPrevKind(s){
+  const at=normStepType(s?.answerType);
+  if(at==='number') return 'number';
+  if(at==='expr') return 'expr';
+  if(at==='list' && s.listItemType && s.listItemType!=='text') return 'list';
+  return null;
+}
+window._stepPrevKind = _stepPrevKind;
+/** 문항 편집창의 세 정답 칸 — 지금 고른 유형에 맞는 칸만 그린다 */
+function refreshQAnsPreviews(){
+  const type=document.getElementById('q-type-sel')?.value;
+  updateAnsPreview('q-ans-num','prev-ans-num', type==='equation' ? 'number' : null);
+  updateAnsPreview('q-ans-expr','prev-ans-expr', type==='word_expr' ? 'expr' : null);
+  const listMath = type==='list' && document.getElementById('q-list-item')?.value!=='text';
+  updateAnsPreview('q-ans-text','prev-ans-text', listMath ? 'list' : null);
+  const tools=document.getElementById('q-ans-text-tools'); if(tools) tools.style.display = listMath ? 'flex' : 'none';
+}
+window.refreshQAnsPreviews = refreshQAnsPreviews;
+['q-ans-num','q-ans-expr','q-ans-text'].forEach(id=>document.getElementById(id)?.addEventListener('input', refreshQAnsPreviews));
+document.getElementById('q-list-item')?.addEventListener('change', refreshQAnsPreviews);
+{ const t=document.getElementById('q-ans-text-tools'); if(t) t.innerHTML=mathBtns('q-ans-text'); }
+
 window.insertPi = function(id){
   const el=document.getElementById(id); if(!el) return;
   const s=el.selectionStart ?? el.value.length, e=el.selectionEnd ?? s;
@@ -3428,9 +3588,10 @@ function renderSteps(){
         ${listOpts}
         <label style="font-size:11px">정답${isListStep ? ' <span style="font-weight:400;color:var(--ink3)">(쉼표로 이어 적기 · 기본은 순서 상관없음)</span>' : (stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>
         <div class="pi-row" style="margin-bottom:6px">
-          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isListStep?'예: 3, 23 · x축, y축':stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
-          ${(stType==='number'||stType==='expr'||listMath) ? `<button type="button" class="pi-btn" onclick="insertPi('step-ans-${i}')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>` : ''}
-        </div>`}
+          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value);updateAnsPreview('step-ans-${i}','step-ans-prev-${i}',_stepPrevKind(editSteps[${i}]))" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isListStep?'예: 3, 23 · x축, y축':stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
+          ${(stType==='number'||stType==='expr'||listMath) ? mathBtns('step-ans-'+i) : ''}
+        </div>
+        <div class="latex-preview" id="step-ans-prev-${i}" style="display:none;text-align:left;padding:6px 10px;font-size:13px;margin:-2px 0 6px"></div>`}
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
         <input onkeydown="addStepAlt(event,${i})" placeholder="대안 정답 입력" style="margin-bottom:4px">
@@ -3441,6 +3602,7 @@ function renderSteps(){
   }).join('');
   // 단계 지시문 입력칸 높이를 글 길이에 맞춘다(줄 수로 잡은 rows 가 시작값 — 긴 줄이 접혀도 안 잘리게)
   c.querySelectorAll('textarea').forEach(stepLabelFit);
+  editSteps.forEach((s,i)=>updateAnsPreview('step-ans-'+i, 'step-ans-prev-'+i, _stepPrevKind(s)));   // v8.1: 정답 칸 미리보기
   // 단계 지시문 미리보기를 한 번에 렌더 (선지 미리보기와 같은 방식)
   if(window.MathJax?.typesetPromise) MathJax.typesetPromise([c]).catch(()=>{});
 }

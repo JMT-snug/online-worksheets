@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="15.0">
+  <meta name="app-version" content="15.1">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -4361,6 +4361,31 @@ function latexEsc(s){
           .replace(/π/g,'\\pi ');   // 원주율 π (v13.3) — 저장·채점에는 π 한 글자 그대로 쓰고 화면에서만 \pi 로 그린다
 }
 
+/* 분수·근호 칸의 글을 LaTeX 로 (v15.1) — 칸 안의 ^ 뒤 숫자 묶음(또는 글자·π 하나)을 위첨자 ^{…} 로 그린다.
+   cur: 커서 자리(칸 글의 글자 번호, 없으면 null). 지수 숫자 끝에 있는 커서는 지수 안에 그린다 — 이어 치는 숫자가 지수에 붙기 때문. */
+function partTex(str, cur){
+  const C='|', s=String(str||'');
+  const at=k=>(cur===k?C:'');
+  let out='', i=0;
+  while(i<s.length){
+    if(s[i]==='^'){
+      let j=i+1, digits=false;
+      if(j<s.length && /[\d.]/.test(s[j])){ digits=true; while(j<s.length && /[\d.]/.test(s[j])) j++; }
+      else if(j<s.length && /[a-zA-Zπ]/.test(s[j])) j++;
+      let inner='';
+      for(let k=i+1;k<j;k++) inner+=at(k)+latexEsc(s[k]);
+      if(j===i+1 || digits) inner+=at(j);          // 빈 지수·숫자 지수 끝의 커서는 지수 안
+      out+=at(i)+'^{'+(inner||'\\phantom{0}')+'}';
+      if(j>i+1 && !digits) out+=at(j);             // 글자 지수 뒤의 커서는 밖
+      i=j;
+      if(cur===j) cur=-1;                          // 이미 그린 커서를 다시 그리지 않게
+      continue;
+    }
+    out+=at(i)+latexEsc(s[i]); i++;
+  }
+  out+=at(s.length);
+  return out;
+}
 function tokensToLatex(){
   const CURSOR='|';
   let parts=[];
@@ -4373,8 +4398,8 @@ function tokensToLatex(){
       const ep=qEditPart?.idx===i?qEditPart:null;
       const nc=ep?.part==='num'?(ep.cursor??t.num.length):null;
       const dc=ep?.part==='den'?(ep.cursor??t.den.length):null;
-      const n=nc!=null?(latexEsc(t.num.slice(0,nc))+CURSOR+latexEsc(t.num.slice(nc))):(t.num?latexEsc(t.num):'');
-      const d=dc!=null?(latexEsc(t.den.slice(0,dc))+CURSOR+latexEsc(t.den.slice(dc))):(t.den?latexEsc(t.den):'');
+      const n=partTex(t.num, nc);   // v15.1: 칸 안의 지수(^)를 위첨자로
+      const d=partTex(t.den, dc);
       parts.push('\\dfrac{'+(n||'\\phantom{0}')+'}{'+( d||'\\phantom{0}')+'}');
     } else if(t.type==='exp'){
       const ep2=qEditPart?.idx===i?qEditPart:null;
@@ -4384,7 +4409,7 @@ function tokensToLatex(){
     } else if(t.type==='sqrt'){
       const ep2=qEditPart?.idx===i&&qEditPart.part==='inner'?qEditPart:null;
       const ic=ep2?(ep2.cursor??t.inner.length):null;
-      const inner=ic!=null?(latexEsc(t.inner.slice(0,ic))+CURSOR+latexEsc(t.inner.slice(ic))):(t.inner?latexEsc(t.inner):'');
+      const inner=partTex(t.inner, ic);   // v15.1: 근호 안의 지수(^)도 위첨자로
       parts.push(`\\sqrt{${inner||'\\phantom{0}'}}`);
     }
   });
@@ -4469,7 +4494,8 @@ function qInput(v){
     qEditPart={idx:qCursorIdx,part:'inner',cursor:0};
     qCursorIdx++; qRender(); return;
   } else if(v==="FRAC"||v==="/"){
-    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t&&qEditPart.part==="num"){t.num+=v;} qRender(); return; }
+    /* 분수·근호 칸 안: 분수 안의 분수는 만들지 않는다. 예전에는 분자 칸에서 [분수 입력]을 누르면 칸 끝에 「FRAC」 글자가 붙었다(v15.1 에서 고침) */
+    if(qEditPart){ qRender(); return; }
     let num="";
     if(qCursorIdx>0&&qTokens[qCursorIdx-1]?.type==="char"){
       num=qTokens[qCursorIdx-1].val; qTokens.splice(qCursorIdx-1,1); qCursorIdx--;
@@ -4477,7 +4503,18 @@ function qInput(v){
     qTokens.splice(qCursorIdx,0,{type:"frac",num,den:""});
     qEditPart={idx:qCursorIdx,part:"den",cursor:0};
   } else if(v==="EXP"){
-    if(qEditPart){ const t=qTokens[qEditPart.idx]; if(t) t.expo+=v; qRender(); return; }
+    /* v15.1: 분자·분모·근호 안에서 [지수 입력] — 칸 글의 커서 자리에 ^ 를 넣는다(「π^2」). ^ 뒤에 치는 숫자가 지수가 되고, 화면에는 위첨자로 그린다(partTex).
+       예전에는 분수 토큰에 없는 expo 필드에 「EXP」 글자를 붙여서 아무 일도 안 일어났다(2026-11-17 교사 신고).
+       지수 칸 안에서는 지수의 지수를 만들지 않는다. */
+    if(qEditPart){
+      const t=qTokens[qEditPart.idx];
+      const key=qEditPart.part;
+      if(t && (key==="num"||key==="den"||key==="inner") && typeof t[key]==="string"){
+        const cur=qEditPart.cursor??t[key].length;
+        if(t[key][cur-1]!=="^"){ t[key]=t[key].slice(0,cur)+"^"+t[key].slice(cur); qEditPart.cursor=cur+1; }
+      }
+      qRender(); return;
+    }
     let base="", removeFrom=-1, removeCount=0;
     const prev=qTokens[qCursorIdx-1];
     if(prev?.type==="char" && /[\d.]/.test(prev.val)){
@@ -4707,7 +4744,16 @@ function buildKeypad(answer, {onEnter='', showEq=false, comma=false}={}){
 
 /* evalAnswer → grading.js 로 이동 (채점 로직 단일 소스) */
 
+/* 키패드로 친 숫자 답의 값.
+   v15.1: 먼저 채점과 같은 계산기(grading.js _evalMulti — 곱셈 기호 생략·π·√·지수를 문항 채점과 같은 규칙으로 읽는다)에 키패드 글(kbdExprRaw)을 넣는다.
+   예전에는 아래 옛 방식만 썼는데, 지수를 Math.pow(…) 로 적고 그 앞에 곱셈을 넣지 않아 「1/9 → π → 지수 2」가 (1)/(9)Math.pow(π,2) 라는
+   문법 오류가 되어 NaN — 정답 1/9 π^2 인 숫자 단계가 언제나 오답이었다(2026-11-17 교사 신고, ws-u1-11-04 2번 1단계). √ 토큰도 아예 빠졌다.
+   옛 방식은 새 계산기가 못 읽는 글에 대비한 보험으로 남겨 둔다. */
 function qTokensToNum(){
+  if(typeof _evalMulti==='function'){
+    const v=_evalMulti(kbdExprRaw(), {});
+    if(typeof v==='number' && isFinite(v)) return v;
+  }
   let s=qTokens.map(t=>{
     if(t.type==="char") return t.val;
     if(t.type==="frac") return `(${t.num||0})/(${t.den||1})`;
@@ -6889,7 +6935,7 @@ async function submitQAns(){
      정답 「3, 23」이 3 으로 읽혀 「3」 하나만 쓴 답이 정답이 됐다. 재채점도 같은 글로 하도록 rawInput 을 남긴다. */
   const isListAns = isListAnswer(q.answer) || isListAnswer(rawInput);
   if(isListAns){
-    ok=judgeAnswer(q, rawInput)===true;
+    ok=judgeAnswer(q, kbdExprRaw())===true;   // v15.1: √ 까지 담는 키패드 글로
   } else if(!isNaN(val)){
     ok=numAnsEq(val, evalAnswer(q.answer));   // grading.js — 소수 다섯째 자리까지 (v13.9, 시험지·재채점과 같은 기준)
     // 분수/무리수 입력 비교: "3/2" → 1.5
@@ -6917,7 +6963,7 @@ async function submitQAns(){
         ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
     renderMath(fb);
-      recordAnswer(curQIdx, isListAns ? rawInput : ((typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val)), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
+      recordAnswer(curQIdx, isListAns ? kbdExprRaw() : ((typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val)), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     attempts[curQIdx]++;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v7.4">
+<meta name="app-version" content="edit-v8.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -306,6 +306,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
         style="background:#78350f;color:#fbbf24;border:1px solid #b45309">🔧 단원 ID 정리</button>
       <button class="hdr-btn" onclick="openImageCleanup()" title="문항 이미지 폴더에서 어느 학습지에도 안 쓰이는 그림을 찾아 휴지통으로 보냅니다"
         style="background:#134e4a;color:#99f6e4;border:1px solid #0f766e">🧹 이미지 정리</button>
+      <button class="hdr-btn" onclick="openListConvert()" title="정답에 쉼표가 든 예전 문항·단계를 찾아 「📋 리스트」 유형으로 바꿉니다 (미리 보고 고른 것만)"
+        style="background:#1e3a8a;color:#bfdbfe;border:1px solid #3b82f6">📋 쉼표 답 변환</button>
     </div>
     <div class="hdr-center">
       <span class="hdr-title">✏️ 학습지 편집기</span>
@@ -597,6 +599,27 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
           </div>
 
+          <!-- 📋 리스트형 설정 (v8.0) — 정답·대안 정답은 위 「텍스트 답」 칸을 같이 쓴다 -->
+          <div id="field-list-opts" class="field" style="display:none">
+            <label>리스트 설정</label>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <select id="q-list-item" style="padding:5px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:inherit">
+                <option value="text">항목: 📝 텍스트 (글자 칸)</option>
+                <option value="number">항목: 🔢 숫자 (키패드)</option>
+                <option value="expr">항목: 🔣 문자 포함 식 (키패드)</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;font-weight:400;margin:0;cursor:pointer">
+                <input type="checkbox" id="q-list-ordered" style="width:auto;margin:0"> 순서대로 채점
+              </label>
+            </div>
+            <div style="font-size:11px;color:var(--ink3);margin-top:6px;line-height:1.6">
+              정답은 <b>쉼표(,)</b>로 이어 적으세요 — 예: <code>3, 23</code> · <code>x축, y축</code> · <code>2x, -y, 1/4</code>.
+              기본은 <b>순서 상관없이</b> 채점합니다(23, 3 도 정답). 「차례로 적으시오」처럼 순서가 중요하면 <b>순서대로 채점</b>을 켜세요.
+              항목 개수가 정답과 같아야 하고, 항목 하나하나는 고른 항목 유형의 규칙(띄어쓰기 무시·수식 동치·소수 다섯째 자리)으로 봅니다.
+              숫자·식 항목이면 학생 키패드에 <b>쉼표 버튼</b>이 나옵니다. 대안 정답도 쉼표로 이은 목록 하나씩 넣습니다.
+            </div>
+          </div>
+
           <!-- 수식 답 -->
           <div id="field-ans-expr" class="field" style="display:none">
             <div style="margin-bottom:8px">
@@ -682,7 +705,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 
 <div class="toast" id="toast"></div>
 
-<script src="grading.js?v=14.8"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다(v6.6·v6.7 — 이 화면은 grading.js 의 새 함수를 쓰지 않는다) -->
+<script src="grading.js?v=15.0"></script>   <!-- 원주율 π 표기 통일(normPi)을 학생 채점과 같은 한 곳에서 가져온다 (v6.2). 쿼리는 index·teacher 와 같게 맞춘다(v6.6·v6.7 — 이 화면은 grading.js 의 새 함수를 쓰지 않는다) -->
 <script type="module">
 import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1389,9 +1412,9 @@ function renderQList(){
     const _rawType = isExtraItem ? 'auto' : (item.type||'word');
     // word 타입은 answerType으로 세분화 (word_text/word_expr 구분)
     const badge = _rawType==='word'
-      ? (item.answerType==='expr' ? 'word_expr' : 'word_text')
+      ? (item.answerType==='list' ? 'list' : item.answerType==='expr' ? 'word_expr' : 'word_text')   // 📋 리스트형(v8.0) 도 type 은 word
       : _rawType;
-    const badgeClass = {word:'badge-word',word_text:'badge-word',word_expr:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
+    const badgeClass = {word:'badge-word',word_text:'badge-word',word_expr:'badge-word',list:'badge-word',equation:'badge-equation',multi:'badge-multi',auto:'badge-auto',pool_random:'badge-auto',step3:'badge-step3',link:'badge-link'}[badge]||'badge-word';
     const _tdef = Q_TYPE_DEFS.find(t=>t.val===badge);   // 유형 이름·아이콘은 Q_TYPE_DEFS 한 곳에서
     const badgeLabel = _tdef ? `${_tdef.icon}${_tdef.badge}` : ({auto:'자동생성',word:'용어'}[badge]||'계산');
     const preview = (item.text||'').replace(/\\+[()[\]]/g,'').slice(0,60);
@@ -1695,7 +1718,7 @@ function showPanel(item){
     // 저장된 type → UI 유형 매핑
     let qtype;
     if(item.type==='word'){
-      qtype = item.answerType==='expr' ? 'word_expr' : 'word_text';
+      qtype = item.answerType==='list' ? 'list' : item.answerType==='expr' ? 'word_expr' : 'word_text';
     } else if(['equation','multi','link','step3','pool_random'].includes(item.type)){
       qtype = item.type;
     } else if(item.type==='graph'){
@@ -1746,10 +1769,14 @@ function showPanel(item){
       document.getElementById('q-img-preview').style.display = 'none';
     }
 
-    if(qtype==='word_text'||qtype==='word'){
+    if(qtype==='word_text'||qtype==='word'||qtype==='list'){
       document.getElementById('q-ans-text').value = item.answer??'';
       altAnswers = [...(item.answerAlt||[])];
       renderAltList();
+      if(qtype==='list'){   // 📋 리스트형 — 항목 유형·순서대로
+        document.getElementById('q-list-item').value = ['text','number','expr'].includes(item.listItemType) ? item.listItemType : 'text';
+        document.getElementById('q-list-ordered').checked = !!item.listOrdered;
+      }
     } else if(qtype==='word_expr'){
       document.getElementById('q-ans-expr').value = item.answer??'';
     } else if(qtype==='equation'){
@@ -1786,7 +1813,8 @@ function showPanel(item){
           // 객관식 단계의 정답은 선지 번호 배열(0부터), 나머지는 글·숫자
           answer:Array.isArray(s.answer) ? [...s.answer] : (s.answer??''),
           answerAlt:[...(s.answerAlt||[])], hint:s.hint||'',
-          ...(Array.isArray(s.options) ? {options:[...s.options]} : {})
+          ...(Array.isArray(s.options) ? {options:[...s.options]} : {}),
+          ...(s.answerType==='list' ? {listItemType:s.listItemType||'text', listOrdered:!!s.listOrdered} : {})
         }));
       } else {
         editSteps=[];
@@ -1819,7 +1847,7 @@ function setQType(type){
   const hide = id => document.getElementById(id).style.display='none';
   // 기본 모두 숨기기
   // field-link 가 빠져 있어서, 링크 문항을 보다가 다른 유형으로 바꾸면 URL 칸이 남아 있었다
-  ['field-text','field-ans-text','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint','field-noreview']
+  ['field-text','field-ans-text','field-list-opts','field-ans-expr','field-ans-num','field-options','field-pool','field-image','field-step3','field-graph','field-link','field-hint','field-noreview']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   _syncNoReviewField(type);
   if(type==='pool_random'){
@@ -1833,6 +1861,7 @@ function setQType(type){
   } else {
     show('field-text'); show('field-image'); show('field-hint');
     if(type==='word_text') show('field-ans-text');
+    else if(type==='list'){ show('field-ans-text'); show('field-list-opts'); }   // 📋 리스트형: 정답·대안 정답 칸은 한글 용어와 같은 것을 쓴다
     else if(type==='word_expr') show('field-ans-expr');
     else if(type==='equation') show('field-ans-num');
     else if(type==='multi'){ show('field-options'); if(!document.getElementById('options-list').children.length) renderOptions([],[]);}
@@ -2120,6 +2149,25 @@ window.saveQuestion = async function(){
   const _addScore=q=>{ if(!isNaN(_qScore)&&_qScore>=0){ q.score=_qScore; console.log('[_addScore]', q.id||'(no id)', '→ score:', _qScore); } return _withNoReview(q); };
   if(selectedQIdx===null||!currentWs) return;
   const type = document.getElementById('q-type-sel').value;
+  /* 📋 v8.0: 여러 답은 리스트형으로 — 한글 용어·숫자 값·문자 포함 식의 정답에는 쉼표를 쓰지 않는다(괄호 안의 쉼표 「(2, 3)」은 괜찮다).
+     예전에는 쉼표 답이 「맨 앞 값만」 읽히거나 순서가 섞여 채점됐다(2026-11-17 신고). */
+  {
+    const vals = type==='word_text' ? [document.getElementById('q-ans-text').value, ...altAnswers]
+               : type==='word_expr' ? [document.getElementById('q-ans-expr').value]
+               : type==='equation'  ? [document.getElementById('q-ans-num').value] : [];
+    const bad = vals.find(v=>_hasListComma(v));
+    if(bad!==undefined){
+      alert(`정답 「${bad}」에 쉼표가 있어요.
+
+여러 답을 쉼표로 적는 문항은 「📋 리스트」 유형으로 바꿔 주세요.
+(순서 상관없이 채점 · 필요하면 「순서대로 채점」을 켤 수 있어요)`);
+      return;
+    }
+    if(type==='list'){
+      const a=document.getElementById('q-ans-text').value.trim();
+      if(!_hasListComma(a)){ alert('리스트형 정답은 쉼표(,)로 둘 이상 이어 적어 주세요 (예: 3, 23).\n답이 하나면 다른 유형을 쓰세요.'); return; }
+    }
+  }
   if(type==='graph'){
     const qIdxS=selectedQIdx;
     const gt=curGraphType();
@@ -2229,6 +2277,18 @@ window.saveQuestion = async function(){
       if(imgUrl1) q.imageUrl=imgUrl1; else delete q.imageUrl;
       q.answer=document.getElementById('q-ans-text').value.trim();
       q.answerAlt=[...altAnswers];
+    } else if(type==='list'){
+      /* 📋 리스트형(v8.0) — type 은 word 로 두어 학생 화면·재채점·AI 분석이 「용어/식」 문항처럼 다룬다. 채점은 grading.js gradeList. */
+      const it=document.getElementById('q-list-item').value;
+      q.type='word'; q.answerType='list';
+      q.listItemType=['text','number','expr'].includes(it)?it:'text';
+      q.listOrdered=!!document.getElementById('q-list-ordered').checked;
+      q.text=text;
+      const imgUrlL=document.getElementById('q-img-url').value.trim();
+      if(imgUrlL) q.imageUrl=imgUrlL; else delete q.imageUrl;
+      const _m = q.listItemType!=='text';   // 숫자·식 항목은 원주율을 π 한 글자로 통일 (다른 유형과 같다)
+      q.answer=(_m?_normPi:String)(document.getElementById('q-ans-text').value.trim());
+      q.answerAlt=altAnswers.map(a=>_m?_normPi(a):a);
     } else if(type==='word_expr'){
       q.type='word'; q.answerType='expr';
       q.text=text;
@@ -2867,6 +2927,162 @@ window.importDriveLink = function(raw){
    ③ 고른 것은 trashQuestionImages 로 휴지통에 보낸다(영구 삭제 아님 — 30일 복구 가능).
    판정은 "학습지에 없음" 쪽으로만 틀릴 수 없게 보수적으로 한다 — ID 패턴이 문서 어디에라도
    있으면 '사용 중'으로 친다. */
+/* ══════════ 📋 쉼표 답 → 리스트형 변환 (v8.0) ══════════
+   v8.0 부터 여러 답은 「📋 리스트」 유형으로만 받는다(한글 용어·숫자·식 유형의 정답엔 쉼표 금지).
+   예전에 만든 쉼표 답(「3, 23」·「x축, y축」·「모서리 BC, 모서리 BE」…)을 찾아 리스트형으로 바꾸는 한 번짜리 도구.
+   ① 모든 학습지(curriculum)를 읽어 정답·대안 정답에 괄호 밖 쉼표가 있는 문항·단계를 모은다.
+   ② 항목 유형(텍스트/숫자/식)과 「순서대로」를 짐작해 보여 준다 — 선생님이 줄마다 고칠 수 있다.
+   ③ 체크한 줄만, 학습지마다 Firestore 최신 문서를 다시 읽어 그 문항(id)·단계만 바꿔 updateDoc 한다
+      (다른 필드는 건드리지 않는다. 읽은 뒤 정답이 바뀐 문항은 건너뛴다).
+   대안 정답 중 새 규칙으로 이미 같은 답이 되는 것(「차수, 문자」 ↔ 「문자, 차수」 — 순서 무관일 때)은 빼고,
+   쉼표 없는 대안 정답(「234」 같은)은 그대로 둔다(항목 1개짜리 목록으로 비교된다). */
+const CV_ORDER_WORDS = /차례|순서|부터|순으로/;
+const CV_BLANK_MARKS = /_{2,}|O{2,}|○|□|◯|\(\s*\)/;
+function cvGuessItemType(vals){
+  const items = vals.flatMap(v=>splitAnsList(String(v??''))).map(x=>x.trim()).filter(Boolean);
+  if(items.some(x=>/[가-힣]/.test(x))) return 'text';
+  if(items.every(x=>!/[a-zA-Z]/.test(normPi(x).replace(/π/g,'')) && isFinite(evalAnswer(x)))) return 'number';
+  return 'expr';
+}
+/* 「차례로·순서·부터」가 있으면 순서대로. 대안 정답에 순서만 바꾼 목록이 있으면 순서 무관.
+   빈칸 채우기(___·OO·□)는 칸 순서가 있으니 순서대로. 나머지는 순서 무관(기본). */
+function cvGuessOrdered(text, vals){
+  if(CV_ORDER_WORDS.test(String(text||''))) return true;
+  const lists = vals.filter(v=>isListAnswer(String(v??''))).map(v=>splitAnsList(String(v)).map(x=>x.replace(/\s+/g,'').toLowerCase()));
+  for(let i=0;i<lists.length;i++) for(let j=i+1;j<lists.length;j++){
+    const a=lists[i], b=lists[j];
+    if(a.length===b.length && a.join('\u0001')!==b.join('\u0001') && [...a].sort().join('\u0001')===[...b].sort().join('\u0001')) return false;
+  }
+  if(CV_BLANK_MARKS.test(String(text||''))) return true;
+  return false;
+}
+/* 정답·대안 정답을 리스트형 정답 한 개 + 대안 정답들로 정리한다 */
+function cvBuildAnswers(vals, itemType, ordered){
+  const norm = v => isListAnswer(v) ? splitAnsList(v).join(', ') : String(v).trim();
+  const kept=[];
+  vals.map(v=>String(v??'').trim()).filter(Boolean).forEach(v=>{
+    const nv=norm(v);
+    const dup = kept.some(k=>gradeList({answer:k, answerAlt:[], listItemType:itemType, listOrdered:ordered}, nv));
+    if(!dup) kept.push(nv);
+  });
+  // 정답 자리에는 쉼표가 있는 것(목록)을 먼저
+  const first = kept.findIndex(k=>isListAnswer(k));
+  if(first>0) kept.unshift(kept.splice(first,1)[0]);
+  return { answer: kept[0]||'', answerAlt: kept.slice(1) };
+}
+/** 학습지 목록에서 바꿀 줄을 모은다. 반환: [{wsId, wsTitle, qIdx, qId, stepIdx, curType, text, vals, itemType, ordered}] */
+function cvScan(wsList){
+  const rows=[];
+  const SKIP=new Set(['multi','graph','link','pool_random','step3']);
+  (wsList||[]).forEach(ws=>{
+    (ws.questions||[]).forEach((q,qi)=>{
+      if(q.type==='step3'){
+        (q.steps||[]).forEach((s,si)=>{
+          if(s.answerType==='multi' || s.answerType==='list') return;
+          const vals=[s.answer, ...(s.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='');
+          if(!vals.some(v=>isListAnswer(String(v)))) return;
+          const text=(q.text||'')+'\n'+(s.label||'');
+          rows.push({wsId:ws.id, wsTitle:ws.title||ws.id, qIdx:qi, qId:q.id, stepIdx:si, curType:s.answerType||'number',
+            label:String(s.label||'').replace(/\s+/g,' ').slice(0,60), text, vals:vals.map(String),
+            itemType:cvGuessItemType(vals), ordered:cvGuessOrdered(text, vals)});
+        });
+        return;
+      }
+      if(SKIP.has(q.type) || q.answerType==='list') return;
+      const vals=[q.answer, ...(q.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='');
+      if(!vals.some(v=>isListAnswer(String(v)))) return;
+      const text=q.text||'';
+      rows.push({wsId:ws.id, wsTitle:ws.title||ws.id, qIdx:qi, qId:q.id, stepIdx:null,
+        curType:q.type==='word'?(q.answerType||'text'):q.type,
+        label:String(text).replace(/<[^>]+>/g,'').replace(/\s+/g,' ').slice(0,60), text, vals:vals.map(String),
+        itemType:cvGuessItemType(vals), ordered:cvGuessOrdered(text, vals)});
+    });
+  });
+  return rows;
+}
+/** 한 줄의 변환을 문항 배열(questions)에 적용한다. 바꿨으면 true, 읽은 뒤 정답이 달라졌으면 false */
+function cvApplyRow(questions, row){
+  let qi = questions.findIndex(q=>q.id===row.qId);
+  if(qi<0) return false;
+  const q = questions[qi];
+  const {answer, answerAlt} = cvBuildAnswers(row.vals, row.itemType, row.ordered);
+  const same = (o)=>JSON.stringify([o.answer, ...(o.answerAlt||[])].filter(v=>v!=null && String(v).trim()!=='').map(String))===JSON.stringify(row.vals);
+  if(row.stepIdx!=null){
+    const s = (q.steps||[])[row.stepIdx];
+    if(!s || !same(s)) return false;
+    const ns = {...s, answerType:'list', listItemType:row.itemType, listOrdered:!!row.ordered, answer, answerAlt};
+    if(!answerAlt.length) delete ns.answerAlt;
+    q.steps = q.steps.map((x,k)=>k===row.stepIdx?ns:x);
+    return true;
+  }
+  if(!same(q)) return false;
+  const nq = {...q, type:'word', answerType:'list', listItemType:row.itemType, listOrdered:!!row.ordered, answer, answerAlt};
+  delete nq.factorMode; delete nq.answerFrac;
+  questions[qi] = nq;
+  return true;
+}
+let _cvRows = [];
+const _cvEsc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CV_TYPE_LABEL = {text:'📝 한글 용어', number:'🔢 숫자', expr:'🔣 식', equation:'🔢 숫자'};
+window.openListConvert = async function(){
+  const modal=document.getElementById('cv-modal'), body=document.getElementById('cv-body'), status=document.getElementById('cv-status');
+  modal.style.display='flex'; body.innerHTML=''; status.textContent='학습지 전체를 읽는 중…';
+  document.getElementById('cv-tools').style.display='none';
+  try{
+    const snap = await getDocs(collection(db,'curriculum'));
+    const all = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    _cvRows = cvScan(all).map(r=>({...r, on:true}));
+    if(!_cvRows.length){ status.textContent='쉼표가 든 정답이 없습니다. 바꿀 것이 없어요. 🎉'; return; }
+    status.textContent = `학습지 ${new Set(_cvRows.map(r=>r.wsId)).size}개에서 쉼표 답 ${_cvRows.length}개를 찾았습니다. 항목 유형·순서대로를 확인하고 [변환]을 누르세요.`;
+    document.getElementById('cv-tools').style.display='flex';
+    cvRender();
+  }catch(e){ status.textContent='읽기 실패: '+e.message; console.error(e); }
+};
+function cvRender(){
+  const body=document.getElementById('cv-body');
+  body.innerHTML = _cvRows.map((r,i)=>{
+    const out = cvBuildAnswers(r.vals, r.itemType, r.ordered);
+    return `<tr style="border-top:1px solid var(--rule);vertical-align:top${r.on?'':';opacity:.45'}">
+      <td style="padding:6px 4px"><input type="checkbox" ${r.on?'checked':''} onchange="cvSet(${i},'on',this.checked)" style="width:auto;margin:0"></td>
+      <td style="padding:6px 4px;font-size:12px"><b>${_cvEsc(r.wsTitle)}</b><br>${r.qIdx+1}번${r.stepIdx!=null?` · ${r.stepIdx+1}단계`:''} <span style="color:var(--ink3)">(${CV_TYPE_LABEL[r.curType]||r.curType})</span><div style="color:var(--ink3);font-size:11px">${_cvEsc(r.label)}</div></td>
+      <td style="padding:6px 4px;font-size:12px">${r.vals.map(_cvEsc).join('<br>')}</td>
+      <td style="padding:6px 4px"><select onchange="cvSet(${i},'itemType',this.value)" style="font-size:12px;padding:3px">
+        ${[['text','📝 텍스트'],['number','🔢 숫자'],['expr','🔣 식']].map(([v,l])=>`<option value="${v}" ${r.itemType===v?'selected':''}>${l}</option>`).join('')}
+      </select><label style="display:flex;gap:4px;align-items:center;font-size:12px;font-weight:400;margin:6px 0 0;cursor:pointer"><input type="checkbox" ${r.ordered?'checked':''} onchange="cvSet(${i},'ordered',this.checked)" style="width:auto;margin:0">순서대로</label></td>
+      <td style="padding:6px 4px;font-size:12px"><b>${_cvEsc(out.answer)}</b>${out.answerAlt.length?`<div style="color:var(--ink3)">대안: ${out.answerAlt.map(_cvEsc).join(' / ')}</div>`:''}</td>
+    </tr>`;
+  }).join('');
+  const n=_cvRows.filter(r=>r.on).length;
+  document.getElementById('cv-count').textContent = `${n}개 선택`;
+}
+window.cvSet = function(i, k, v){ if(_cvRows[i]){ _cvRows[i][k]=v; cvRender(); } };
+window.cvCheckAll = function(on){ _cvRows.forEach(r=>r.on=on); cvRender(); };
+window.runListConvert = async function(){
+  const pick=_cvRows.filter(r=>r.on);
+  if(!pick.length){ toast('변환할 줄을 선택하세요'); return; }
+  const wsIds=[...new Set(pick.map(r=>r.wsId))];
+  if(!confirm(`학습지 ${wsIds.length}개의 쉼표 답 ${pick.length}개를 「📋 리스트」 유형으로 바꿉니다.\n학생 화면에 바로 반영됩니다. 계속할까요?`)) return;
+  const status=document.getElementById('cv-status');
+  let done=0, skipped=0, failed=0;
+  for(const wsId of wsIds){
+    try{
+      status.textContent=`저장 중… (${wsIds.indexOf(wsId)+1}/${wsIds.length})`;
+      const ref=doc(db,'curriculum',wsId);
+      const data=(await getDoc(ref)).data();
+      if(!data){ skipped+=pick.filter(r=>r.wsId===wsId).length; continue; }
+      const questions=JSON.parse(JSON.stringify(data.questions||[]));
+      let changed=0;
+      pick.filter(r=>r.wsId===wsId).forEach(r=>{ if(cvApplyRow(questions, r)){ changed++; done++; } else skipped++; });
+      if(changed) await updateDoc(ref, {questions, lastModified:new Date().toISOString()});
+    }catch(e){ failed+=pick.filter(r=>r.wsId===wsId).length; console.error('[리스트형 변환]', wsId, e); }
+  }
+  status.textContent=`✅ ${done}개 변환${skipped?` · ${skipped}개 건너뜀(그사이 정답이 바뀜)`:''}${failed?` · ❌ ${failed}개 실패(콘솔 확인)`:''}`;
+  toast(`리스트형으로 ${done}개 변환`);
+  await loadAll();
+  if(currentWs){ const w=worksheets.find(x=>x.id===currentWs.id); if(w) selectWsLocal(w); }
+  _cvRows=_cvRows.filter(r=>!r.on); cvRender();
+};
+
 let _imgCleanupFiles = [];   // 마지막 조회에서 '안 쓰임'으로 나온 파일들
 
 function _collectDriveIds(v, set){
@@ -2994,6 +3210,7 @@ const Q_TYPE_DEFS = [
   {val:'word_text',   icon:'📝', name:'한글 용어',      badge:'용어',   step:'text',   group:'답을 받는 방식', desc:'한글/텍스트 정답'},
   {val:'equation',    icon:'🔢', name:'숫자 값',        badge:'숫자',   step:'number', group:'답을 받는 방식', desc:'숫자/분수 정답'},
   {val:'word_expr',   icon:'🔣', name:'문자 포함 식',   badge:'식',     step:'expr',   group:'답을 받는 방식', desc:'식 · 등식(y=30/x) · 부등식(x&gt;3)'},
+  {val:'list',        icon:'📋', name:'리스트',         badge:'리스트', step:'list',   group:'답을 받는 방식', desc:'여러 답을 쉼표로 · 순서 무관(선택: 순서대로)'},
   {val:'multi',       icon:'☑️', name:'객관식',         badge:'객관식', step:'multi',  group:'답을 받는 방식', desc:'선지에서 모두 고르기'},
   {val:'step3',       icon:'🪜', name:'단계형',         badge:'단계형',                 group:'특수 문항',     desc:'단계별 풀이 과정'},
   {val:'link',        icon:'🔗', name:'링크(다음 문항)', badge:'링크',                  group:'특수 문항',     desc:'바깥 활동으로 가는 링크'},
@@ -3020,7 +3237,7 @@ function fillQTypeLists(){
 }
 fillQTypeLists();
 
-/* 답 유형은 문항 유형(Q_TYPE_DEFS 의 앞 네 가지)과 같은 목록·같은 순서·같은 이름이다.
+/* 답 유형은 문항 유형(Q_TYPE_DEFS 의 앞 다섯 가지 — v8.0 부터 📋 리스트 포함)과 같은 목록·같은 순서·같은 이름이다.
    예전에는 여기에만 '③ 문자 포함 식 (= 포함)'이 따로 있어서 문항 쪽과 어긋났고,
    고른 유형과 정답 모양이 다르면(등식 유형인데 = 가 없는 등) 전원 오답이 되는 함정이었다.
    지금은 식·등식·부등식 중 무엇으로 채점할지 정답의 생김새를 보고 알아서 고른다.
@@ -3045,6 +3262,11 @@ window.updateStep = function(i, field, val){
    input 이벤트를 일으켜, 입력칸에 달린 oninput(단계 정답을 editSteps 에 담는 updateStep 등)이 그대로 돈다. */
 /* grading.js 의 normPi — 그 파일을 못 읽었더라도 문항 저장이 막히지는 않게 감싼다(그땐 표기 통일만 건너뛴다) */
 function _normPi(s){ return typeof normPi==='function' ? normPi(s) : String(s??''); }
+/* 괄호 밖에 쉼표가 있는가 (= 값을 여러 개 적은 답) — grading.js isListAnswer 와 같은 규칙. 그 파일을 못 읽었으면 직접 센다 */
+function _hasListComma(s){
+  if(typeof isListAnswer==='function') return isListAnswer(String(s??'').trim());
+  let d=0; for(const ch of String(s??'')){ if(ch==='('||ch==='[') d++; else if(ch===')'||ch===']') d--; else if(ch===','&&d===0) return true; } return false;
+}
 window.insertPi = function(id){
   const el=document.getElementById(id); if(!el) return;
   const s=el.selectionStart ?? el.value.length, e=el.selectionEnd ?? s;
@@ -3064,6 +3286,7 @@ window.setStepType = function(i, val){
   } else if(val!=='multi' && was==='multi'){
     s.answer='';
   }
+  if(val==='list' && !s.listItemType){ s.listItemType='number'; s.listOrdered=false; }   // 📋 리스트형(v8.0) 기본: 숫자 항목 · 순서 무관
   renderSteps();
 };
 /* 객관식 단계의 선지 — 문항 「객관식」의 선지 편집과 같은 모양(체크 = 정답, 수식 미리보기).
@@ -3109,6 +3332,20 @@ function stepsFromEditor(list){
       return o;
     }
     /* 원주율은 π 한 글자로 통일해 저장한다(pi · \pi · Math.PI → π). 숫자·식 단계만 — 한글 용어 단계의 글은 건드리지 않는다. */
+    //    (원주율 통일은 아래 mathStep 에서 — 그 전에 리스트형과 쉼표 검사를 먼저 한다)
+    if(at==='list'){
+      /* 📋 리스트형 단계(v8.0) — 정답·대안 정답은 쉼표로 이은 글, 항목 유형·순서대로를 함께 저장 (grading.js gradeList) */
+      o.listItemType=['text','number','expr'].includes(s.listItemType)?s.listItemType:'text';
+      o.listOrdered=!!s.listOrdered;
+      const m=o.listItemType!=='text';
+      o.answer=(m?_normPi:String)((s.answer??'').toString().trim());
+      if(s.answerAlt?.length) o.answerAlt=s.answerAlt.map(a=>m?_normPi(a):String(a));
+      if(!_hasListComma(o.answer)) problems.push(`${si+1}단계: 리스트형 정답은 쉼표(,)로 둘 이상 이어 적어 주세요 (예: 3, 23)`);
+      return o;
+    }
+    /* v8.0: 여러 답은 리스트형으로 — 한글 용어·숫자·식 단계의 정답에는 쉼표를 쓰지 않는다 */
+    { const bad=[s.answer, ...(s.answerAlt||[])].find(v=>_hasListComma(v));
+      if(bad!==undefined) problems.push(`${si+1}단계: 정답 「${bad}」에 쉼표가 있어요 — 여러 답은 답 유형을 「📋 리스트」로 바꿔 주세요`); }
     const mathStep = at==='number' || at==='expr';
     const av=(mathStep ? _normPi((s.answer??'').toString().trim()) : (s.answer??'').toString().trim());
     o.answer = (at==='number' && /^-?\d*\.?\d+$/.test(av)) ? parseFloat(av) : av;
@@ -3147,7 +3384,18 @@ function renderSteps(){
     const color=STEP_COLORS[i%STEP_COLORS.length];
     const stType=normStepType(s.answerType);
     const typeOpts=STEP_ANSWER_TYPES.map(t=>`<option value="${t.val}" ${stType===t.val?'selected':''}>${t.label}</option>`).join('');
-    const showAlt = stType==='text' || stType==='expr';
+    const showAlt = stType==='text' || stType==='expr' || stType==='list';
+    const isListStep = stType==='list';
+    const listMath = isListStep && s.listItemType!=='text';
+    const listOpts = isListStep ? `
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <select onchange="updateStep(${i},'listItemType',this.value);renderSteps()" style="padding:5px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--paper);font-size:12px">
+            ${[['text','항목: 📝 텍스트 (글자 칸)'],['number','항목: 🔢 숫자 (키패드)'],['expr','항목: 🔣 문자 포함 식 (키패드)']].map(([v,l])=>`<option value="${v}" ${(s.listItemType||'text')===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;margin:0;cursor:pointer">
+            <input type="checkbox" ${s.listOrdered?'checked':''} onchange="updateStep(${i},'listOrdered',this.checked)" style="width:auto;margin:0"> 순서대로 채점
+          </label>
+        </div>` : '';
     const isMultiStep = stType==='multi';
     const altTags=(s.answerAlt||[]).map((a,j)=>`<div class="ans-alt-tag">${a}<button onclick="removeStepAlt(${i},${j})">✕</button></div>`).join('');
     // 객관식 단계: 정답 칸 대신 선지 목록 (✓ = 정답)
@@ -3177,10 +3425,11 @@ function renderSteps(){
         <label style="font-size:11px">선지 <span style="font-weight:400;color:var(--ink3)">(✓ = 정답 · 여러 개 가능 · Enter 로 줄바꿈 · 학생 화면에 「모두 고르시오」 안내는 자동으로 붙지 않으니, 정답이 여러 개면 문제 글에 직접 적어 주세요)</span></label>
         ${optRows}
         <button class="btn-add-opt" onclick="addStepOption(${i})" style="margin-bottom:4px">＋ 선지 추가</button>` : `
-        <label style="font-size:11px">정답${(stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>
+        ${listOpts}
+        <label style="font-size:11px">정답${isListStep ? ' <span style="font-weight:400;color:var(--ink3)">(쉼표로 이어 적기 · 기본은 순서 상관없음)</span>' : (stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>
         <div class="pi-row" style="margin-bottom:6px">
-          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
-          ${(stType==='number'||stType==='expr') ? `<button type="button" class="pi-btn" onclick="insertPi('step-ans-${i}')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>` : ''}
+          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isListStep?'예: 3, 23 · x축, y축':stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
+          ${(stType==='number'||stType==='expr'||listMath) ? `<button type="button" class="pi-btn" onclick="insertPi('step-ans-${i}')" title="입력칸의 커서 위치에 원주율 π 를 넣습니다">π</button>` : ''}
         </div>`}
         ${showAlt?`
         <label style="font-size:11px">대안 정답 (Enter로 추가)</label>
@@ -3268,6 +3517,7 @@ function _doAddQuestion(type){
   const newQ = {id:`q${Date.now()}`,diff:1,text:'',answer:''};
   if(type==='word_text'){ newQ.type='word'; newQ.answerType='text'; newQ.answerAlt=[]; }
   else if(type==='word_expr'){ newQ.type='word'; newQ.answerType='expr'; }
+  else if(type==='list'){ newQ.type='word'; newQ.answerType='list'; newQ.listItemType='number'; newQ.listOrdered=false; newQ.answerAlt=[]; }
   else if(type==='equation'){ newQ.type='equation'; newQ.answer=0; }
   else if(type==='multi'){ newQ.type='multi'; newQ.options=['']; newQ.answer=[0]; }
   else if(type==='step3'){ newQ.type='step3';
@@ -3406,8 +3656,10 @@ function _aiAnswerSummary(q){
       const opts=(s.options||[]).map((o,k)=>`${k+1}.${o}`).join(' / ');
       return `${i+1}단계 (객관식) 보기: ${opts} / 정답 번호: ${(s.answer||[]).map(k=>k+1).join(',')}`;
     }
+    if(s.answerType==='list') return `${i+1}단계 (리스트 · ${s.listOrdered?'순서대로':'순서 무관'}) 정답:${s.answer}`;   // 📋 v8.0
     return `${i+1}단계 정답:${s.answer}`;
   }).join(' / ');
+  if(q.type==='word' && q.answerType==='list') return q.answer ? `${q.answer} (리스트 · ${q.listOrdered?'순서대로':'순서 무관'} — 쉼표로 여러 답)` : null;   // 📋 v8.0
   if(q.type==='word') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   if(q.type==='equation') return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
   return null;   // graph/link/pool_random 등 — 검토 대상 아님
@@ -3640,6 +3892,35 @@ window._jumpToQuestion = function(qIdx){
       <button type="button" id="img-cleanup-run" onclick="runImageCleanup()" style="margin-left:auto;background:var(--red);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer">🗑 선택한 그림 휴지통으로</button>
     </div>
     <div id="img-cleanup-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;overflow-y:auto;max-height:52vh;padding:4px"></div>
+  </div>
+</div>
+<!-- 📋 쉼표 답 → 리스트형 변환 (v8.0) — openListConvert -->
+<div id="cv-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--paper);border-radius:14px;padding:20px;width:min(1000px,94vw);max-height:88vh;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span style="font-weight:700;font-size:16px">📋 쉼표 답 → 리스트형 변환</span>
+      <button onclick="document.getElementById('cv-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:var(--ink3)">✕</button>
+    </div>
+    <div style="font-size:12px;line-height:1.6;color:var(--ink3);background:var(--cream);border-radius:8px;padding:8px 10px">
+      정답·대안 정답에 쉼표가 든 문항·단계를 모두 찾았습니다. 「📋 리스트」 유형은 기본이 <b>순서 상관없이</b> 채점이고,
+      <b>순서대로</b>를 켜면 적힌 순서와 같아야 정답입니다. 지문에 「차례로·순서·부터」나 빈칸(OO·___)이 있으면 순서대로로 짐작해 두었으니 줄마다 확인하세요.
+      항목 유형이 숫자·식이면 학생에게 <b>쉼표 버튼이 있는 키패드</b>, 텍스트면 글자 칸이 나옵니다.
+      예전에 맞던 답은 변환 뒤에도 모두 정답입니다(순서만 바꾼 대안 정답은 순서 무관이면 하나로 합쳐집니다).
+      ⚠️ 지금 편집 중인 문항에 저장 안 한 내용이 있으면 먼저 저장하세요.
+    </div>
+    <div id="cv-status" style="font-size:13px;font-weight:600">준비 중…</div>
+    <div id="cv-tools" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+      <button type="button" class="img-btn" onclick="cvCheckAll(true)">모두 선택</button>
+      <button type="button" class="img-btn" onclick="cvCheckAll(false)">모두 해제</button>
+      <span id="cv-count" style="color:var(--ink3)"></span>
+      <button type="button" onclick="runListConvert()" style="margin-left:auto;background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer">📋 선택한 것 리스트형으로 변환</button>
+    </div>
+    <div style="overflow-y:auto;max-height:58vh">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:11px;color:var(--ink3);text-align:left"><th></th><th>학습지 · 문항</th><th>지금 정답 · 대안 정답</th><th>항목 · 순서</th><th>변환 후</th></tr></thead>
+        <tbody id="cv-body"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 </body>

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.12">
+  <meta name="app-version" content="15.0">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -948,8 +948,8 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=14.8"></script>
-<script src="ai-lab.js?v=1.8"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
+<script src="grading.js?v=15.0"></script>
+<script src="ai-lab.js?v=1.9"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -3773,7 +3773,8 @@ function examQuestion(q){
       text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 고르세요)</span>'};
   }
   return {...q, type:'word', _origType:'step3',
-    answerType: last.answerType==='expr' ? 'expr' : 'text',
+    answerType: last.answerType==='expr' ? 'expr' : last.answerType==='list' ? 'list' : 'text',
+    ...(last.answerType==='list' ? {listItemType:last.listItemType, listOrdered:!!last.listOrdered} : {}),   // 📋 리스트 단계 → 리스트 문항 (v15.0)
     answer: last.answer,
     answerAlt: last.answerAlt||[],
     text: (q.text||'') + ' <span style="font-size:12px;color:#0891b2;font-weight:600">(최종 답만 입력하세요)</span>'};
@@ -4226,7 +4227,7 @@ function renderQuestion() {
       <div class="q-num">
         ${_qNum}
         <span class="q-diff">${DIFFS[q.diff||1]}</span>${qSrcHtml(q)}${window._examMode&&q.score!=null?` <span style="font-size:11px;font-weight:700;color:#0891b2;background:#cffafe;padding:2px 8px;border-radius:10px;margin-left:6px">${q.score}점</span>`:""}
-        ${isWord?'<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">용어</span>':q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':q.type==="link"?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">링크</span>':((q.text||"").includes("=")&&!(q.text||"").includes("일 때")&&!(q.text||"").includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
+        ${isWord?`<span style="font-size:10px;font-weight:600;color:var(--amber);margin-left:6px">${q.answerType==='list'?'리스트':'용어'}</span>`:q.type==="graph"?'<span style="font-size:10px;font-weight:600;color:#059669;margin-left:6px">그래프</span>':q.type==="link"?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">링크</span>':((q.text||"").includes("=")&&!(q.text||"").includes("일 때")&&!(q.text||"").includes("구하시오")?'<span style="font-size:10px;font-weight:600;color:var(--accent);margin-left:6px">방정식</span>':'<span style="font-size:10px;font-weight:600;color:#6366f1;margin-left:6px">계산</span>')}
       </div>
       ${(()=>{
         // 링크 문항: 안내문이 있으면 문장으로 보여 주고, 없으면 비워 둔다
@@ -4293,10 +4294,10 @@ function renderQuestion() {
       qTokens=[]; qEditPart=null; qCursorIdx=0;
       panel.innerHTML=`${qHeadHtml}
         <div class="math-input-card">
-          <div class="ans-hint"><strong>답:</strong><span>키보드 입력 가능 · Enter = 확인</span></div>
+          <div class="ans-hint"><strong>답:</strong><span>${q.answerType==='list' ? listHintText(q).replace('💡 ','')+' · Enter = 확인' : '키보드 입력 가능 · Enter = 확인'}</span></div>
           <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
           <div class="kbd-wrap" onmousedown="event.preventDefault()">
-            ${buildKeypad(q.answer,{onEnter:'submitQAns()'})}
+            ${buildKeypad(q.answer,{onEnter:'submitQAns()', comma:q.answerType==='list'})}
           </div>
           <div class="feedback-strip" id="feedback-strip"></div>
           <div class="attempt-badge" id="attempt-badge" style="display:${attempts[curQIdx]>0?'flex':'none'}">
@@ -4307,7 +4308,7 @@ function renderQuestion() {
       // ── 텍스트 입력 UI ──
       panel.innerHTML=`${qHeadHtml}
         <div class="math-input-card">
-          <div class="ans-hint"><strong>답:</strong><span>키보드로 입력 후 Enter</span></div>
+          <div class="ans-hint"><strong>답:</strong><span>${q.answerType==='list' ? listHintText(q).replace('💡 ','')+' · Enter' : '키보드로 입력 후 Enter'}</span></div>
           <input type="text" id="word-input" autocomplete="off" autocorrect="off"
             spellcheck="false"
             style="width:100%;height:44px;font-size:17px;font-weight:700;
@@ -4638,7 +4639,7 @@ function _qDisplayMouseDown(e){
 document.addEventListener('mousedown',_qDisplayMouseDown);
 
 // ── 공통 수식 키패드 HTML 생성 ──
-function buildKeypad(answer, {onEnter='', showEq=false}={}){
+function buildKeypad(answer, {onEnter='', showEq=false, comma=false}={}){
   /* 정답에 쓰인 글자를 대소문자 그대로 버튼으로 만든다.
      예전에는 소문자로 바꿔 버려서, 정답이 A=a² 처럼 둘을 갈라 쓴 문항이면
      학생이 대문자 A 를 넣을 방법이 아예 없었다. */
@@ -4650,7 +4651,9 @@ function buildKeypad(answer, {onEnter='', showEq=false}={}){
   const letters=[...new Set(ansNorm.match(/[a-zA-Z]/g)||[])];
   const vars=letters.length ? letters : (wantsPi ? [] : ['x']);
   const piBtn=wantsPi?`<button tabindex="-1" class="kb v" onclick="qInput('π')"><i style="font-family:serif">π</i></button>`:'';
-  const varRow=`<div class="kbd-var-row">${piBtn}${
+  /* 📋 리스트형(v15.0): 여러 답을 쉼표로 이어 쓰는 문항·단계에만 쉼표 버튼 (키보드 , 는 원래 받는다) */
+  const commaBtn=comma?`<button tabindex="-1" class="kb op" onclick="qInput(',')" title="답을 여러 개 쓸 때 사이에 넣으세요" style="font-weight:800">,</button>`:'';
+  const varRow=`<div class="kbd-var-row">${commaBtn}${piBtn}${
     vars.map(v=>`<button tabindex="-1" class="kb v" onclick="qInput('${v}')"><i style="font-family:serif">${v}</i></button>`).join('')
   }</div>`;
   /* 정답에 = 나 부등호가 들어 있으면 그 버튼을 띄운다.
@@ -4826,7 +4829,7 @@ function quizKeyHandler(e){
       }
       return;
     }
-    const isKeypad = step && ['number','expr','equation'].includes(stepAT(step));
+    const isKeypad = step && stepUsesKeypad(step);   // 📋 숫자·식 항목의 리스트 단계도 키패드 (v15.0)
     if(isKeypad){
       // 수 단계: 메인 키패드와 동일하게 물리 키보드 처리
       if(e.key==="ArrowRight"){e.preventDefault();qArrowRight();return;}
@@ -6209,7 +6212,7 @@ function renderStep3Body(q){
     // 객관식 단계는 고른 선지 번호("0,2")가 저장돼 있다 → 번호와 선지 글을 그대로 다시 보여 준다
     const escAns = at==='multi'
       ? s3MultiNums(savedAns).map(n=>`<span style="display:inline-block;margin-right:12px">${s3NumMark(n)} ${renderOption((step.options||[])[n]??'')}</span>`).join('')
-      : (at==='text'
+      : ((at==='text' || (at==='list' && !isListKeypad(step)))   // 📋 글자 칸 리스트도 글 그대로 (v15.0)
           ? String(savedAns).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
           : answerHtml(savedAns));   // 숫자·식 단계는 MathJax 로 (아래 typesetPromise 가 그린다) — 한글 용어는 글 그대로
     const hintHtmlD = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>` : '';
@@ -6228,7 +6231,7 @@ function renderStep3Body(q){
   }
 
   // 수/다항식/방정식 → 수학 키패드, 텍스트 → 일반 입력
-  const useKeypad = (at==='number' || at==='expr' || at==='equation');
+  const useKeypad = stepUsesKeypad(step);   // 📋 숫자·식 항목의 리스트 단계도 키패드 (v15.0)
 
   if(at==='multi'){
     /* 객관식 단계 — 문항 「객관식」(모두 고르기)과 같은 모양·같은 선택 상태(multiSel)를 쓴다.
@@ -6252,7 +6255,8 @@ function renderStep3Body(q){
     /* 안내 문구는 유형명이 아니라 정답의 생김새를 따른다 —
        「문자 포함 식」 하나로 식·등식·부등식을 모두 받기 때문이다. */
     const ansStr=String(step.answer||'');
-    const defHint = at==='number'        ? '💡 숫자/분수로 입력하세요'
+    const defHint = at==='list'          ? listHintText(step)
+                  : at==='number'        ? '💡 숫자/분수로 입력하세요'
                   : /[<>≤≥]/.test(ansStr) ? '💡 부등식을 입력하세요 (부등호 버튼 사용)'
                   : ansStr.includes('=') ? '💡 등식을 입력하세요 (= 버튼 사용)'
                   : '💡 문자가 든 식을 입력하세요 (x 버튼 사용)';
@@ -6261,13 +6265,13 @@ function renderStep3Body(q){
     body.innerHTML=labelHtml+hintHtml+`
       <div class="ans-display focused" id="ans-display"><span class="ans-cur">|</span></div>
       <div class="kbd-wrap" onmousedown="event.preventDefault()">
-        ${buildKeypad(step.answer||'',{onEnter:`submitStep3(${st.curStep})`})}
+        ${buildKeypad(step.answer||'',{onEnter:`submitStep3(${st.curStep})`, comma:at==='list'})}
       </div>
       <div class="feedback-strip" id="s3-fb"></div>`;
   } else {
     // text 유형: 일반 텍스트 입력
     const hintHtml = step.hint ? `<div class="step3-hint">💡 ${step.hint}</div>`
-                               : `<div class="step3-hint">💡 답을 정확한 형식으로 쓰세요 (필요하면 단위도 포함)</div>`;
+                               : `<div class="step3-hint">${at==='list' ? listHintText(step) : '💡 답을 정확한 형식으로 쓰세요 (필요하면 단위도 포함)'}</div>`;
     body.innerHTML=labelHtml+hintHtml+`
       <input type="text" id="s3-inp" class="word-inp-full" placeholder="예: 21, 2년 후, 24cm"
         autocomplete="off" autocapitalize="off" spellcheck="false"
@@ -6326,7 +6330,7 @@ function submitStep3(stepNum, byEnter){
   const lp=()=>document.getElementById("quiz-left-panel");
 
   // 빈 답 제출은 오답으로 세지 않고 무시한다 (엔터 연타·실수 입력).
-  const usesKeypad = ['number','expr','equation'].includes(at);
+  const usesKeypad = stepUsesKeypad(step);   // 📋 리스트 단계 포함 (v15.0)
   const isMulti = at==='multi';
   const isEmptyAns = isMulti
     ? multiSel.size===0
@@ -6349,7 +6353,12 @@ function submitStep3(stepNum, byEnter){
     return "";
   }).join("");
 
-  if(at==='number' && (isListAnswer(step.answer) || isListAnswer(tokensToDisp()))){
+  if(at==='list'){
+    /* 📋 리스트형 단계(v15.0) — 키패드면 키패드 글(kbdExprRaw), 글자 칸이면 그 글을 grading.js gradeList 로.
+       「내가 쓴 답」은 아래 st.ans 에서 키패드면 누른 모양(tokensToDisp)으로 남는다. */
+    userAns = usesKeypad ? kbdExprRaw() : ((document.getElementById("s3-inp")?.value)||"").trim();
+    ok=judgeStep(step, userAns)===true;
+  } else if(at==='number' && (isListAnswer(step.answer) || isListAnswer(tokensToDisp()))){
     /* v14.12: 값을 쉼표로 여러 개 적는 답(최빈값 「3, 23」)은 목록끼리 비교한다(grading.js judgeStep → 여러 값 답).
        아래 키패드 계산(qTokensToNum)으로는 안 된다 — 「3,23」이 JS 쉼표 연산자로 23 이 되고, 정답 「3, 23」은 3 으로 읽혀
        「3」 하나만 쓴 답이 정답, 둘 다 쓴 답이 오답이 됐다(2026-11-17 신고, 줄기와 잎 그림 8번). */
@@ -6403,7 +6412,7 @@ function submitStep3(stepNum, byEnter){
       const dispAns = isMulti ? (Array.isArray(step.answer)?step.answer:[]).map(s3NumMark).join(', ') : step.answer;
       // 부등호(<)가 든 답을 그대로 넣으면 태그로 읽혀 뒤쪽 버튼까지 사라진다 → 반드시 escape
       // 숫자·식 단계의 답은 MathJax 로 그린다(answerHtml) — 한글 용어·객관식 선지 번호는 글 그대로
-      const dispAnsHtml = (isMulti || at==='text') ? _escHtml(dispAns) : answerHtml(dispAns);
+      const dispAnsHtml = (isMulti || at==='text' || (at==='list' && !isListKeypad(step))) ? _escHtml(dispAns) : answerHtml(dispAns);
       const doneHtml=`✅ 완료! 답: ${dispAnsHtml}&nbsp;
         <button onclick="${allAnswered()?'finishQuiz()':'goNextUnanswered()'}"
           style="margin-left:10px;padding:5px 14px;border-radius:7px;border:none;
@@ -7110,6 +7119,7 @@ function hasHangul(s){
 function _altList(a){ return Array.isArray(a) ? a : (a==null||a==='' ? [] : [a]); }   // 대체 정답이 배열이 아니어도 죽지 않게
 function isExprInput(q){
   if(!q||q.type!=="word") return false;
+  if(q.answerType==="list") return isListKeypad(q);   // 📋 리스트형 — 항목 유형으로 (v15.0)
   /* 정답이 한글이면 유형이 "expr"로 저장돼 있어도 글자 입력칸이다 — 화면 키패드와 물리 키 처리(KMAP)는 한글을 받지 못해,
      키패드만 뜨면 학생이 답을 쓸 방법이 아예 없다(유형을 잘못 골랐거나 옛 데이터인 문항). 채점은 같은 문항을 글자로 쓴 답으로도 맞게 읽는다. */
   if(q.answerType==="expr") return !hasHangul(q.answer);
@@ -7121,6 +7131,20 @@ function isExprInput(q){
 }
 /* 단계형 한 단계의 답 유형 (v13.6) — 유형이 없거나 키패드 유형인데 정답이 한글이면 글자 입력칸(text)으로 본다.
    (단계 유형이 비어 있으면 number 로 읽는데, 정답이 한글인 단계는 키패드로 답할 수 없다) */
+/* 📋 리스트형(v15.0) — 문항은 type:'word' + answerType:'list', 단계는 answerType:'list'. 채점은 grading.js gradeList.
+   항목 유형(listItemType)이 숫자·식이면 쉼표 버튼이 있는 키패드, 텍스트면 글자 칸. 정답에 한글이 있으면 키패드로는 쓸 수 없어 글자 칸이다. */
+function isListKeypad(o){
+  return !!o && (o.listItemType==='number' || o.listItemType==='expr') && !hasHangul(o.answer) && !_altList(o.answerAlt).some(hasHangul);
+}
+/* 리스트형 안내 문구 — 순서대로 채점이면 그렇게 알려 준다 */
+function listHintText(o){
+  return '💡 답을 여러 개 쓸 때는 쉼표(,)로 구분하세요' + (o && o.listOrdered ? ' — 순서대로 적어야 해요' : ' — 순서는 상관없어요');
+}
+/* 이 단계가 키패드로 답하는가 (숫자·식 단계, 숫자·식 항목의 리스트 단계) */
+function stepUsesKeypad(step){
+  const at=stepAT(step);
+  return ['number','expr','equation'].includes(at) || (at==='list' && isListKeypad(step));
+}
 function stepAT(step){
   const at=(step && step.answerType) || 'number';
   return ((at==='number'||at==='expr'||at==='equation') && hasHangul(step && step.answer)) ? 'text' : at;

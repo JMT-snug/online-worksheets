@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -435,6 +435,34 @@ function listAnsMatch(uItems, cItems, eq){
   });
 }
 
+/* ══════════ 📋 리스트형 (v15.0) ══════════
+   여러 답을 쉼표로 적는 문항·단계 — type:'word' + answerType:'list' (단계는 answerType:'list').
+     listItemType : 'text' | 'number' | 'expr' — 항목 하나하나를 어느 규칙으로 볼지(학생 입력칸도 이걸 따른다:
+                    숫자·식은 쉼표 버튼이 있는 키패드, 텍스트는 글자 칸). 비어 있으면 항목마다 한글이 있으면 텍스트, 없으면 식.
+     listOrdered  : true 면 적힌 순서와 같아야 정답(「차례로 적으시오」), 아니면 순서 무관(기본).
+   정답·대안 정답은 「3, 23」처럼 쉼표로 이은 글이다. 대안 정답마다 따로 목록으로 비교하고, 개수가 같아야 한다.
+   텍스트·숫자·문자 포함 식 유형의 정답에는 쉼표를 쓰지 않는다(여러 답은 이 유형으로) — edit 가 저장할 때 막는다. */
+function listItemQ(q, c){
+  const it=q.listItemType || (/[가-힣]/.test(String(c))?'text':'expr');
+  if(it==='number') return {type:'equation', answer:c};
+  return {type:'word', answerType:(it==='text'?'text':'expr'), answer:c};
+}
+function gradeList(q, ans){
+  if(ans===null||ans===undefined) return false;
+  const raw=String(ans).trim();
+  if(!raw || raw==='(빈칸)') return false;
+  const u=splitAnsList(raw);
+  if(u.some(v=>!v)) return false;                                   // 「3,」·「,3」 처럼 빈 칸이 있으면 오답
+  const cands=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a).trim()!=='');
+  const eq=(x,c)=>gradeExamWord(listItemQ(q,c), x);
+  return cands.some(a=>{
+    const c=splitAnsList(a).filter(v=>v!=='');
+    if(c.length!==u.length) return false;
+    if(q.listOrdered) return c.every((ci,i)=>eq(u[i],ci));
+    return listAnsMatch(u, c, eq);
+  });
+}
+
 function gradeExamWord(q, ans){
   if(ans===null||ans===undefined) return false;
   const raw=String(ans).trim();
@@ -524,6 +552,7 @@ function isPrimeFactorExpr(tokens){
 function judgeAnswer(q, ans, tokens){
   if(!q) return false;
   const t = q.type;
+  if(t==='word' && q.answerType==='list') return gradeList(q, ans);   // 📋 리스트형 (v15.0)
   if(t==='word' || t==='equation' || t==='word_text' || t==='word_expr'){
     let ok = gradeExamWord(q, ans);
     if(ok && q.factorMode){
@@ -559,11 +588,14 @@ function judgeAnswer(q, ans, tokens){
      number→ 숫자 값     equation
      expr  → 문자 포함 식 word / answerType expr  (옛 이름 equation 도 같은 것)
      multi → 객관식      multi (options · answer 는 문항과 같은 모양)
+     list  → 리스트      word / answerType list (listItemType · listOrdered 함께, v15.0)
    ※ 학생 화면(index)의 숫자 단계는 키패드 값을 직접 비교한다 — 문항 ② 숫자 값을 연습할 때와 같은 방식이다. */
 function stepAsQuestion(step){
   const s=step||{};
   const at=(s.answerType==='equation') ? 'expr' : (s.answerType||'number');
   if(at==='multi')  return {type:'multi', options:s.options||[], answer:s.answer};
+  if(at==='list')   return {type:'word', answerType:'list', answer:s.answer, answerAlt:s.answerAlt||[],
+                            listItemType:s.listItemType, listOrdered:!!s.listOrdered};   // 📋 리스트형 (v15.0)
   if(at==='number') return {type:'equation', answer:s.answer, answerAlt:s.answerAlt||[]};
   return {type:'word', answerType:(at==='expr'?'expr':'text'), answer:s.answer, answerAlt:s.answerAlt||[]};
 }

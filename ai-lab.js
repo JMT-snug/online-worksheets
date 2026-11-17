@@ -123,8 +123,10 @@ function aiAnswerSummary(q){
       const opts=(s.options||[]).map((o,k)=>`${k+1}.${o}`).join(' / ');
       return `${i+1}단계 (객관식) 보기: ${opts} / 정답 번호: ${(s.answer||[]).map(k=>k+1).join(',')}`;
     }
+    if(s.answerType==='list') return `${i+1}단계 (리스트 · ${s.listOrdered?'순서대로':'순서 무관'}) 정답:${s.answer}`;   // 📋 리스트형 (v1.9)
     return `${i+1}단계 정답:${s.answer}`;
   }).join(' / ');
+  if(q.type==='word' && q.answerType==='list' && q.answer) return `${q.answer} (리스트 · ${q.listOrdered?'순서대로':'순서 무관'} — 쉼표로 여러 답)`;   // 📋 리스트형 (v1.9)
   return q.answer!=null && q.answer!=='' ? String(q.answer) : null;
 }
 

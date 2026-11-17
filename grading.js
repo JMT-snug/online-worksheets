@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord(15.1 부터 식 답은 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -492,14 +492,14 @@ function gradeExamWord(q, ans){
     if(allAns.some(a=>mathEquivCheck(raw, String(a), true))) return true;
   }catch(e){}
   // 2) 텍스트 정규화 비교 — 일반 모드와 동일한 normW (≤ 와 <= 는 같은 글자로 본다)
-  //    대소문자: 식 답은 언제나 구분(v15.1), 한글 용어 답은 정답이 A 와 a 를 갈라 쓴 경우에만 구분한다 (isCaseSignificant)
+  //    대소문자: 식 답·한글 용어 답 모두 언제나 구분한다(v15.1, 교사 지시 2026-11-17 — 예전에는 정답이 A 와 a 를 갈라 쓴 경우에만 구분, isCaseSignificant)
   const normW=(s,keepCase)=>{
     const t=normPi(s||"").replace(/−/g,"-").replace(/≤/g,"<=").replace(/≥/g,">=")
       .replace(/\s*,\s*/g,",")
       .replace(/\(\s+/g,"(").replace(/\s+\)/g,")").replace(/\s+/g,"").trim();
     return keepCase?t:t.toLowerCase();
   };
-  if(allAns.some(a=>{ const ks=!textMode || isCaseSignificant(a); return normW(a,ks)===normW(raw,ks); })) return true;
+  if(allAns.some(a=>normW(a,true)===normW(raw,true))) return true;
   // 3) 숫자 동치 — 문자가 섞인 식에는 쓰지 않는다
   //    (parseFloat("2x+5")===2 여서 정답 "2x+3"과 숫자만 같으면 오답이 정답 처리되던 오검출 방지)
   //    π 도 같다 — parseFloat("6π")===6 이라 정답 6 에 「6π」가 통과하고, 정답 「6π」에는 소수 근사(18.85)가 통과한다.

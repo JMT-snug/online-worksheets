@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), tableBlanks·tableAnsJoin·tableAnsSplit·gradeTable(▦ 표 빈칸, 16.0),gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), tableBlanks·tableAnsJoin·tableAnsSplit·gradeTable(▦ 표 빈칸, 16.0), tableLayout(셀 병합, 16.1), gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -526,6 +526,7 @@ function gradeExamWord(q, ans){
      q.table = { rows, cols, cells:[rows*cols 개, 행 순서], headRow, headCol }
        고정 칸 : {t:'삼각기둥'}            (글 · $수식$ 가능)
        빈칸    : {b:1, a:'5', alt:['…']}   (정답 · 대안 정답)
+       합친 칸 : 앵커(왼쪽 위)에 rs·cs 를 더 적고 덮인 칸은 {m:1}   (v16.1 셀 병합 — tableLayout)
      (Firestore 는 배열 안에 배열을 못 담아서 칸을 한 줄로 펴서 저장한다.)
    빈칸에는 행 순서대로 ㉠㉡㉢… 이름이 붙는다. 학생 답·정답 글(q.answer)은 「㉠ 5  ㉡ 9  ㉢ 사각뿔」처럼 이름을 붙여 한 글로 잇는다 —
    기록(lastAnswer·오답 목록·시험 답안)과 교사 화면이 다른 유형처럼 글 하나로 다루게 하려는 것.
@@ -533,13 +534,35 @@ function gradeExamWord(q, ans){
    칸 하나는 정답 모양으로 규칙을 고른다: 정답·대안 정답에 한글이 있으면 한글 용어(띄어쓰기 무시), 없으면 식(숫자·분수·식 동치 · 쉼표면 여러 값). */
 const TABLE_LABELS='㉠㉡㉢㉣㉤㉥㉦㉧㉨㉩㉪㉫㉬㉭㉮㉯㉰㉱㉲㉳㉴㉵㉶㉷㉸㉹㉺㉻';
 const TABLE_MAX_BLANKS=TABLE_LABELS.length;   // 28 — edit 가 이보다 많은 빈칸은 막는다
-/* 빈칸 목록 [{cell, label, a, alt}] — 행 순서 */
+/* 셀 병합 (v16.1) — 합친 덩어리의 왼쪽 위 칸(앵커)에 rs(세로 칸 수)·cs(가로 칸 수)를 적고, 덮인 칸은 {m:1} 로 둔다.
+   덮인 칸은 언제나 앵커에서 다시 계산한다(저장된 m 표시를 믿지 않는다) — 표 밖으로 나가는 크기는 잘라 내고,
+   먼저 나온(행 순서) 덩어리와 겹치는 덩어리는 합치지 않은 칸으로 본다. 덮인 칸은 빈칸이 될 수 없다(tableBlanks 가 건너뜀).
+   돌려주는 값: span[칸 번호]=[rs,cs] (합친 앵커만) · covered=덮인 칸 번호 Set */
+function tableLayout(t){
+  const R=Math.max(0,Number(t&&t.rows)|0), C=Math.max(0,Number(t&&t.cols)|0), cells=(t&&Array.isArray(t.cells))?t.cells:[];
+  const span={}, covered=new Set();
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const i=r*C+c;
+    if(covered.has(i)) continue;
+    const cell=cells[i]||{};
+    const rs=Math.max(1,Math.min(R-r, Number(cell.rs)|0||1)), cs=Math.max(1,Math.min(C-c, Number(cell.cs)|0||1));
+    if(rs===1 && cs===1) continue;
+    const inside=[];
+    for(let rr=r;rr<r+rs;rr++) for(let cc=c;cc<c+cs;cc++){ const j=rr*C+cc; if(j!==i) inside.push(j); }
+    if(inside.some(j=>covered.has(j) || span[j])) continue;   // 앞 덩어리와 겹침 → 합치지 않은 칸
+    inside.forEach(j=>covered.add(j));
+    span[i]=[rs,cs];
+  }
+  return {span, covered};
+}
+/* 빈칸 목록 [{cell, label, a, alt}] — 행 순서 (덮인 칸은 건너뜀) */
 function tableBlanks(q){
   const t=q && q.table;
   if(!t || !Array.isArray(t.cells)) return [];
+  const cov=tableLayout(t).covered;
   const out=[];
   t.cells.forEach((c,i)=>{
-    if(!c || !c.b || out.length>=TABLE_MAX_BLANKS) return;
+    if(!c || !c.b || cov.has(i) || out.length>=TABLE_MAX_BLANKS) return;
     out.push({cell:i, label:TABLE_LABELS[out.length], a:String(c.a??'').trim(),
       alt:(Array.isArray(c.alt)?c.alt:[]).map(v=>String(v??'').trim()).filter(v=>v!=='')});
   });
@@ -575,12 +598,15 @@ function tableText(q, withAns){
   const t=q && q.table;
   if(!t || !Array.isArray(t.cells)) return '';
   const lab=tableBlanks(q).reduce((m,b)=>(m[b.cell]=b,m),{});
+  const L=tableLayout(t);
   const rows=[];
   for(let r=0;r<(t.rows||0);r++){
     const cs=[];
     for(let c=0;c<(t.cols||0);c++){
       const i=r*t.cols+c, cell=t.cells[i]||{}, b=lab[i];
-      cs.push(cell.b ? '['+(b?b.label:'?')+(withAns&&b?'='+b.a:'')+']' : String(cell.t??'').trim());
+      if(L.covered.has(i)) continue;   // 합친 칸에 덮인 칸은 앵커 칸에 「(가로 2칸)」 처럼 적는다 (v16.1)
+      const sp=L.span[i], spTxt=sp ? (sp[0]>1&&sp[1]>1 ? `(${sp[0]}×${sp[1]}칸)` : sp[1]>1 ? `(가로 ${sp[1]}칸)` : `(세로 ${sp[0]}칸)`) : '';
+      cs.push((cell.b ? '['+(b?b.label:'?')+(withAns&&b?'='+b.a:'')+']' : String(cell.t??'').trim()) + spTxt);
     }
     rows.push(cs.join(' | '));
   }

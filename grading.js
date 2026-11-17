@@ -7,7 +7,7 @@
 
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
-         normalizeMultiAnswer, gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
+         normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), gradeExamWord, judgeAnswer, stepAsQuestion, judgeStep,
          그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
@@ -46,7 +46,9 @@ function evalAnswer(s){
   const hasPi=normPi(s).indexOf('π')>=0;
   /* 계산이 안 되면 맨 앞 숫자만 읽는 오랜 보험(parseFloat)이 있다. π 가 든 식에는 쓰면 안 된다 —
      「6π」가 6 으로 읽혀 정답 6 과 같아진다. */
-  const fallback=()=>{ if(hasPi) return NaN; const n=parseFloat(s); return isNaN(n)?NaN:n; };
+  /* 쉼표가 든 답(「3, 23」처럼 값을 여러 개 적은 답)에도 쓰면 안 된다 — 앞의 3 만 읽혀서 정답 「3, 23」에
+     「3」 하나만 써도 정답이 됐다(2026-11-17 신고, 줄기와 잎 그림 8번 최빈값). 여러 값 답은 splitAnsList 로 나눠 비교한다. */
+  const fallback=()=>{ if(hasPi || String(s).indexOf(',')>=0) return NaN; const n=parseFloat(s); return isNaN(n)?NaN:n; };
   let t=piToJs(negToMul(normPi(s).replace(/−/g,'-').replace(/\s/g,'').replace(/\*\*/g,'^')).replace(/\^/g,'**'));
   // 안전: 허용 문자(숫자, 연산자, 괄호, Math 함수)만
   if(!/^[-+*/().\d]+$/.test(t.replace(/Math\.(sqrt|cbrt|pow|abs|PI|E)/g,'').replace(/\*\*/g,''))){
@@ -401,12 +403,58 @@ function isCaseSignificant(s){
   return (t.match(/[A-Z]/g)||[]).some(ch=>lower.has(ch.toLowerCase()));
 }
 
+/* ══════════ 여러 값을 쉼표로 적은 답 (v14.8) ══════════
+   최빈값 「3, 23」, 해 「-2, 3」처럼 값을 여러 개 적는 답. 괄호 밖의 쉼표로만 나눈다 — 순서쌍 「(2, 3)」은 한 값이다.
+   예전에는 이런 정답을 맨 앞 숫자(parseFloat)만 읽어 「3」 하나만 써도 정답이었고,
+   학생이 키보드로 「3,23」을 치면 JS 쉼표 연산자 때문에 23 으로 계산돼 오히려 오답이었다. */
+function splitAnsList(s){
+  const t=String(s??''), out=[];
+  let depth=0, cur='';
+  for(const ch of t){
+    if(ch==='('||ch==='[') depth++;
+    else if(ch===')'||ch===']') depth--;
+    if(ch===','&&depth===0){ out.push(cur.trim()); cur=''; }
+    else cur+=ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+/* 괄호 밖에 쉼표가 있어 값이 둘 이상인가 */
+function isListAnswer(s){ return splitAnsList(s).length>1; }
+/* 두 목록의 값이 짝지어지는가 — 개수가 같고, 값마다 같은 값이 하나씩 있어야 한다(순서는 상관없다: 「23, 3」도 정답).
+   숫자·식 답에만 쓴다 — 한글 용어 문항은 적힌 그대로 비교한다(gradeExamWord 0) 참고).
+   eq(학생값, 정답값) 으로 한 값씩 비교한다. 빈 칸(「3,」)이 있으면 다른 답이다. */
+function listAnsMatch(uItems, cItems, eq){
+  if(uItems.length!==cItems.length) return false;
+  if(uItems.some(v=>!v) || cItems.some(v=>!v)) return false;
+  const used=new Array(cItems.length).fill(false);
+  return uItems.every(u=>{
+    const j=cItems.findIndex((c,k)=>!used[k]&&eq(u,c));
+    if(j<0) return false;
+    used[j]=true; return true;
+  });
+}
+
 function gradeExamWord(q, ans){
   if(ans===null||ans===undefined) return false;
   const raw=String(ans).trim();
   if(!raw || raw==='(빈칸)') return false;
   const allAns=[q.answer,...(q.answerAlt||[])].filter(a=>a!=null&&String(a)!=='');
   if(!allAns.length) return false;
+  /* 0) 여러 값 답 — 학생 답에 괄호 밖 쉼표가 있으면 목록인 정답과만 비교한다.
+        값 하나하나는 이 함수의 규칙(수식 동치·띄어쓰기·숫자 다섯째 자리)으로 본다.
+        학생 답이 값 하나면 아래로 그대로 내려간다 — 목록인 정답은 1)~3) 어디서도 값 하나와 같아지지 않는다
+        (evalAnswer 가 쉼표 답을 NaN 으로 돌려주므로). 그래서 정답 「3, 23」에 「3」은 오답, 단일 값 answerAlt 는 그대로 쓰인다. */
+  /*    한글 용어(텍스트) 문항은 여기 오지 않는다 — 적힌 그대로(띄어쓰기만 무시, 순서도 같아야) 아래 2) 에서 비교한다(교사 지시 2026-11-17).
+        순서를 바꿔도 되는 것은 숫자·식 답뿐이다. */
+  const uItems=splitAnsList(raw);
+  if(uItems.length>1 && !isTextAnswerQ(q)){
+    return allAns.some(a=>{
+      const cItems=splitAnsList(a);
+      return cItems.length>1 && listAnsMatch(uItems, cItems,
+        (u,c)=>gradeExamWord(Object.assign({}, q, {answer:c, answerAlt:[]}), u));
+    });
+  }
   const textMode=isTextAnswerQ(q);   // 텍스트 문항이면 수식 판정을 건너뛴다
   // 1) 수학적 동치 — 등식(=)·부등식(<, ≤, >, ≥)·그냥 식을 답 모양대로 갈라 판정
   if(!textMode) try{

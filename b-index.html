@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="14.11">
+  <meta name="app-version" content="14.12">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -948,7 +948,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
   </main>
 </div>
 
-<script src="grading.js?v=14.7"></script>
+<script src="grading.js?v=14.8"></script>
 <script src="ai-lab.js?v=1.8"></script>   <!-- 🔁 복습 문항 가중 추출(pickReviewQs, v14.0) — grading.js 다음에. 못 읽어도 복습은 균등 무작위로 돈다 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -6349,7 +6349,13 @@ function submitStep3(stepNum, byEnter){
     return "";
   }).join("");
 
-  if(at==='number'){
+  if(at==='number' && (isListAnswer(step.answer) || isListAnswer(tokensToDisp()))){
+    /* v14.12: 값을 쉼표로 여러 개 적는 답(최빈값 「3, 23」)은 목록끼리 비교한다(grading.js judgeStep → 여러 값 답).
+       아래 키패드 계산(qTokensToNum)으로는 안 된다 — 「3,23」이 JS 쉼표 연산자로 23 이 되고, 정답 「3, 23」은 3 으로 읽혀
+       「3」 하나만 쓴 답이 정답, 둘 다 쓴 답이 오답이 됐다(2026-11-17 신고, 줄기와 잎 그림 8번). */
+    userAns=tokensToDisp();
+    ok=judgeStep(step, userAns)===true;
+  } else if(at==='number'){
     const val=qTokensToNum();
     userAns=String(val);
     const correctNum = typeof step.answer==='number' ? step.answer : evalAnswer(String(step.answer));
@@ -6870,7 +6876,12 @@ async function submitQAns(){
 
   // 분수 정답 처리 (answerFrac 있으면 분수로도 비교)
   let ok=false;
-  if(!isNaN(val)){
+  /* v14.12: 값을 쉼표로 여러 개 적는 답(「3, 23」)은 목록끼리 비교한다 — 아래 키패드 계산으로는 「3,23」이 23(JS 쉼표 연산자),
+     정답 「3, 23」이 3 으로 읽혀 「3」 하나만 쓴 답이 정답이 됐다. 재채점도 같은 글로 하도록 rawInput 을 남긴다. */
+  const isListAns = isListAnswer(q.answer) || isListAnswer(rawInput);
+  if(isListAns){
+    ok=judgeAnswer(q, rawInput)===true;
+  } else if(!isNaN(val)){
     ok=numAnsEq(val, evalAnswer(q.answer));   // grading.js — 소수 다섯째 자리까지 (v13.9, 시험지·재채점과 같은 기준)
     // 분수/무리수 입력 비교: "3/2" → 1.5
     if(!ok && rawInput.includes("/") && !rawInput.includes("π")){   // π 가 든 분수는 parseFloat 로 읽으면 π 가 사라진다 (8π/3 → 8/3)
@@ -6897,7 +6908,7 @@ async function submitQAns(){
         ${allAnswered()?'결과 보기 →':'다음 문제 →'}
       </button>`;
     renderMath(fb);
-      recordAnswer(curQIdx, (typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
+      recordAnswer(curQIdx, isListAns ? rawInput : ((typeof userAns!=='undefined'&&userAns!=='') ? userAns : String(val)), (typeof qTokens!=='undefined'?qTokens:null));  // 재채점용
     answered[curQIdx]=true; updateStrip(); saveWorksheet();
   } else {
     attempts[curQIdx]++;

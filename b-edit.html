@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v9.1">
+<meta name="app-version" content="edit-v9.2">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -3294,7 +3294,35 @@ window.tblCellInput=function(i, el){
 };
 window.tblAltInput=function(i, el){
   editTable.cells[i].alt=String(el.value).split('|').map(s=>s.trim()).filter(Boolean);
+  // 대안 정답을 치는 동안 그 칸의 「대안 …」 글만 다시 그린다 (입력칸을 새로 만들지 않으니 커서가 안 튄다) — v9.2
+  const box=document.getElementById('tbl-altp-'+i);
+  if(box){
+    const b=tableBlanks({table:editTable}).find(x=>x.cell===i);
+    box.innerHTML=b?tblAltHtml(b):'';
+    tblTypeset([box]);
+  }
 };
+/* 정답값 하나를 문제처럼 MathJax 로 (v9.2, 2026-11-18 교사 요청 「정답값도 문제처럼 mathjax 렌더링한 값을 바로 보여줘 — edit 에서」).
+   표의 고정 칸(문제)은 미리보기에서 MathJax 로 그려지는데, 빈칸의 정답은 「정답 2/3」 처럼 글자 그대로 찍혀 학생이 보는 모양을 알 수 없었다.
+   숫자·식은 입력칸 미리보기(_ansPrevHtml)·학생 정답 화면과 같은 answerToTex 로 그리고, 못 읽는 글(한글·단위·세 글자 이상 영문)은 글 그대로. */
+function ansMathHtml(raw){
+  const v=String(raw??'').trim();
+  if(!v) return '';
+  let tex=null; try{ tex=answerToTex(v); }catch(e){ tex=null; }
+  return tex!=null ? `\\(${_esc(tex)}\\)` : _esc(v);
+}
+/* 키패드 칸(한글이 없는 빈칸)의 대안 정답들 — 글자 칸의 대안은 글 그대로라 입력칸에 쓴 것으로 충분하다 */
+function tblAltHtml(b){
+  const alts=(b&&b.alt)||[];
+  if(!alts.length || tableCellIsText(b)) return '';
+  return '대안 '+alts.map(ansMathHtml).join(' · ');
+}
+/* 칸들을 MathJax 로 다시 그린다 (MathJax 가 아직 없으면 조용히 건너뜀) */
+function tblTypeset(els){
+  if(!window.MathJax?.typesetPromise) return;
+  try{ MathJax.typesetClear?.(els); }catch(e){}
+  MathJax.typesetPromise(els).catch(()=>{});
+}
 window.tblHead=function(key, el){ editTable[key]=!!el.checked; renderTableEditor(); };
 const _tblIsHead=(t,r,c)=>(t.headRow&&r===0)||(t.headCol&&c===0);
 
@@ -3342,16 +3370,16 @@ function renderTableSide(){
         + bl.map(b=>{
             const kind=!b.a ? '<span style="color:#dc2626">정답을 적어 주세요</span>'
               : tableCellIsText(b) ? '가 글자 칸' : '⌨️ 키패드';
+            const ansHtml = tableCellIsText(b) ? _esc(b.a) : ansMathHtml(b.a);   // v9.2: 키패드 칸의 정답은 문제처럼 MathJax 로
             return `<div class="tbl-bl-row"><b style="color:#b45309">${b.label}</b>`
-              +`<span style="min-width:60px">정답 <b>${_esc(b.a)||'—'}</b></span><span style="color:var(--ink3)">${kind}</span>`
+              +`<span style="min-width:60px">정답 <b>${ansHtml||'—'}</b></span><span style="color:var(--ink3)">${kind}</span>`
+              +`<span id="tbl-altp-${b.cell}" style="color:var(--ink3)">${tblAltHtml(b)}</span>`
               +`<input value="${_esc((t.cells[b.cell].alt||[]).join(' | '))}" placeholder="대안 정답 (여러 개는 | 로)" oninput="tblAltInput(${b.cell},this)" spellcheck="false"></div>`;
           }).join('');
   }
   const pv=document.getElementById('tbl-preview');
-  if(pv){
-    pv.innerHTML=tablePreviewHtml(t, false);
-    if(window.MathJax?.typesetPromise){ MathJax.typesetClear?.([pv]); MathJax.typesetPromise([pv]).catch(()=>{}); }
-  }
+  if(pv) pv.innerHTML=tablePreviewHtml(t, false);
+  tblTypeset([list,pv].filter(Boolean));   // 빈칸 목록의 정답값도 같이 (v9.2)
 }
 /* 표를 그린다 — showAns 면 빈칸에 「㉠ 정답」, 아니면 학생이 보는 것처럼 「㉠」 만 */
 function tablePreviewHtml(t, showAns){

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v9.2">
+<meta name="app-version" content="edit-v9.3">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -3441,6 +3441,14 @@ window.removeStep = function(i){
 window.updateStep = function(i, field, val){
   if(editSteps[i]) editSteps[i][field]=val;
 };
+/* 단계 정답 칸을 칠 때마다 — 상태에 담고, 칸 아래 「학생 화면·채점은 이렇게 읽어요」 미리보기를 바로 다시 그린다 (v9.3, 2026-11-23 교사 신고).
+   예전에는 이 둘을 oninput 속성에 직접 적었다. 속성의 코드는 전역에서 도는데 이 파일은 <script type="module"> 이라 let editSteps 가 안 보여
+   updateStep 만 돌고 미리보기 갱신은 ReferenceError 로 멈췄다 — 「적용」을 눌러 renderSteps 가 (모듈 안에서) 다시 그릴 때만 나왔다.
+   인라인 핸들러가 부르는 이름은 반드시 window.이름 으로 내놓을 것 (점검/검증_인라인핸들러.js 가 감시한다). */
+window.updateStepAns = function(i, val){
+  updateStep(i, 'answer', val);
+  updateAnsPreview('step-ans-'+i, 'step-ans-prev-'+i, _stepPrevKind(editSteps[i]));
+};
 /* 원주율 π 를 입력칸의 커서 자리에 넣는다 (v6.2). 한글 키보드로는 π 를 치기 어려워서 버튼으로 넣는다.
    input 이벤트를 일으켜, 입력칸에 달린 oninput(단계 정답을 editSteps 에 담는 updateStep 등)이 그대로 돈다. */
 /* grading.js 의 normPi — 그 파일을 못 읽었더라도 문항 저장이 막히지는 않게 감싼다(그땐 표기 통일만 건너뛴다) */
@@ -3763,7 +3771,7 @@ function renderSteps(){
         ${listOpts}
         <label style="font-size:11px">정답${isListStep ? ' <span style="font-weight:400;color:var(--ink3)">(쉼표로 이어 적기 · 기본은 순서 상관없음)</span>' : (stType==='number'||stType==='expr') ? ' <span style="font-weight:400;color:var(--ink3)">(원주율은 π 버튼)</span>' : ''}</label>
         <div class="pi-row" style="margin-bottom:6px">
-          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStep(${i},'answer',this.value);updateAnsPreview('step-ans-${i}','step-ans-prev-${i}',_stepPrevKind(editSteps[${i}]))" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isListStep?'예: 3, 23 · x축, y축':stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
+          <input id="step-ans-${i}" value="${(s.answer??'').toString().replace(/"/g,'&quot;')}" oninput="updateStepAns(${i},this.value)" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${isListStep?'예: 3, 23 · x축, y축':stType==='number'?'예: 4, 8/3, 6π':stType==='expr'?'예: 2x+3, 2x+3=11, x>3, 2πr':'예: 21, 2년 후'}">
           ${(stType==='number'||stType==='expr'||listMath) ? mathBtns('step-ans-'+i) : ''}
         </div>
         <div class="latex-preview" id="step-ans-prev-${i}" style="display:none;text-align:left;padding:6px 10px;font-size:13px;margin:-2px 0 6px"></div>`}

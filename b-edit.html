@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v9.3">
+<meta name="app-version" content="edit-v9.4">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -732,7 +732,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             <div class="tbl-wrap"><div id="tbl-editor"></div></div>
             <div style="font-size:11px;color:var(--ink3);margin-top:6px;line-height:1.6">
               칸 아래 <b>[글]</b> 을 누르면 <b>빈칸</b>(노란 칸)이 되고, 그 칸에 적은 글이 <b>정답</b>입니다. 빈칸에는 행 순서대로 ㉠㉡㉢… 이름이 붙습니다(최대 28칸).
-              칸 아래 <b>[→]</b>·<b>[↓]</b> 는 오른쪽·아래 칸과 <b>합치기</b>(누를 때마다 한 줄씩 넓어짐), 합친 칸의 <b>[나누기]</b> 로 되돌립니다(합친 칸도 빈칸으로 만들 수 있어요).
+              칸 아래 <b>[→]</b>·<b>[↓]</b> 는 오른쪽·아래 칸과 <b>합치기</b>(누를 때마다 한 줄씩 넓어짐), 합친 칸의 <b>[나누기]</b> 로 되돌립니다(합친 칸도 빈칸으로 만들 수 있어요). <b>Tab</b> 을 누르면 다음 칸 입력으로 넘어갑니다(버튼은 건너뜀).
               고정 칸에는 <code>\(x^2\)</code> 같은 수식도 쓸 수 있어요. 채점은 <b>문항 전체</b>로 합니다 — 빈칸이 모두 맞아야 정답이고, 어느 칸이 틀렸는지는 학생에게 보여 주지 않습니다.
               정답에 한글이 있으면 학생은 <b>글자 칸</b>, 없으면 <b>키패드</b>(숫자·분수·식)로 답합니다.
             </div>
@@ -3334,11 +3334,13 @@ function renderTableEditor(){
   if(hr) hr.checked=!!t.headRow; if(hc) hc.checked=!!t.headCol;
   const labels=tableBlanks({table:t}).reduce((m,b)=>(m[b.cell]=b.label,m),{});
   const L=tableLayout(t);
+  /* Tab 은 칸 글 입력칸만 차례로 지난다(v9.4, 교사 요청) — 줄 삭제 ✕·[글/빈칸]·[→][↓]·[나누기] 버튼은 tabindex=-1 로 건너뛴다.
+     입력칸은 행 순서로 그려지고 합친 칸에 덮인 칸은 그리지 않으므로, 브라우저 기본 Tab 이 곧 「다음 칸」이다. */
   let h='<table class="tbl-ed"><tr><td class="tbl-x"></td>';
-  for(let c=0;c<t.cols;c++) h+=`<td class="tbl-x"><button type="button" onclick="tblDelCol(${c})" title="이 열 삭제">✕</button></td>`;
+  for(let c=0;c<t.cols;c++) h+=`<td class="tbl-x"><button type="button" tabindex="-1" onclick="tblDelCol(${c})" title="이 열 삭제">✕</button></td>`;
   h+='</tr>';
   for(let r=0;r<t.rows;r++){
-    h+=`<tr><td class="tbl-x"><button type="button" onclick="tblDelRow(${r})" title="이 행 삭제">✕</button></td>`;
+    h+=`<tr><td class="tbl-x"><button type="button" tabindex="-1" onclick="tblDelRow(${r})" title="이 행 삭제">✕</button></td>`;
     for(let c=0;c<t.cols;c++){
       const i=r*t.cols+c, cell=t.cells[i];
       if(L.covered.has(i)) continue;   // 합친 칸에 덮인 칸 (v9.1)
@@ -3346,10 +3348,10 @@ function renderTableEditor(){
       const cls=(cell.b?'tbl-blank':'')+(_tblIsHead(t,r,c)?' tbl-head':'')+(sp?' tbl-merged':'');
       h+=`<td class="${cls}"${sp?` rowspan="${sp[0]}" colspan="${sp[1]}"`:''}><div class="tbl-lab">${cell.b?(labels[i]||'⚠'):''}</div>`
         +`<input id="tbl-in-${i}" value="${_esc(cell.b?cell.a:cell.t)}" placeholder="${cell.b?'정답':''}" oninput="tblCellInput(${i},this)" autocomplete="off" spellcheck="false">`
-        +`<div class="tbl-btns"><button type="button" class="tbl-tg" onclick="tblToggleBlank(${i})" title="${cell.b?'고정 글로 되돌리기':'빈칸으로 만들기 — 적어 둔 글이 정답이 됩니다'}">${cell.b?'빈칸':'글'}</button>`
-        +`<button type="button" class="tbl-mg" onclick="tblMerge(${i},'r')" title="오른쪽 칸과 합치기">→</button>`
-        +`<button type="button" class="tbl-mg" onclick="tblMerge(${i},'d')" title="아래 칸과 합치기">↓</button>`
-        +(sp?`<button type="button" class="tbl-mg tbl-sp" onclick="tblSplit(${i})" title="합친 칸 나누기">나누기</button>`:'')
+        +`<div class="tbl-btns"><button type="button" tabindex="-1" class="tbl-tg" onclick="tblToggleBlank(${i})" title="${cell.b?'고정 글로 되돌리기':'빈칸으로 만들기 — 적어 둔 글이 정답이 됩니다'}">${cell.b?'빈칸':'글'}</button>`
+        +`<button type="button" tabindex="-1" class="tbl-mg" onclick="tblMerge(${i},'r')" title="오른쪽 칸과 합치기">→</button>`
+        +`<button type="button" tabindex="-1" class="tbl-mg" onclick="tblMerge(${i},'d')" title="아래 칸과 합치기">↓</button>`
+        +(sp?`<button type="button" tabindex="-1" class="tbl-mg tbl-sp" onclick="tblSplit(${i})" title="합친 칸 나누기">나누기</button>`:'')
         +`</div></td>`;
     }
     h+='</tr>';

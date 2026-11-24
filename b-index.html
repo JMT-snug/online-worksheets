@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="16.3">
+  <meta name="app-version" content="16.4">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -747,6 +747,7 @@ header{position:sticky;top:0;z-index:200;background:var(--ink);height:52px;displ
 .tblq .tblq-lab{display:block;font-size:11px;font-weight:800;color:var(--amber);line-height:1.2;text-align:left}
 .tblq .tblq-k{min-width:64px;min-height:34px;border:1.5px dashed #f59e0b;border-radius:6px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px 6px;font-size:16px}
 .tblq .tblq-k.active{border-style:solid;border-color:var(--accent);box-shadow:0 0 0 2px var(--acc-lt)}
+.tblq:has(input.tblq-t:focus) .tblq-k.active{border-style:dashed;border-color:#f59e0b;box-shadow:none}   /* 글자 칸에 쓰는 중엔 키패드 칸의 파란 테두리를 거둔다 (v16.4 — Tab 으로 옮겨 다닐 때 두 칸이 같이 파랗지 않게) */
 .tblq input.tblq-t{width:auto;min-width:72px;height:34px;box-sizing:border-box;border:1.5px dashed #f59e0b;border-radius:6px;padding:0 8px;font-size:15px;font-weight:700;font-family:inherit;color:var(--ink);background:#fff;outline:none;text-align:center}
 .tblq input.tblq-t:focus{border-style:solid;border-color:var(--accent)}
 .tblq .tblq-done{font-weight:700;color:var(--green)}
@@ -4985,6 +4986,15 @@ function quizKeyHandler(e){
       if(_ent){ e.preventDefault(); if(allAnswered()) finishQuiz(); else goNextUnanswered(true); }
       return;
     }
+    // Tab = 다음 빈칸 (v16.4) — 분수·지수·근호 안에서 쓰는 중이면 그 안의 다음 칸(예전 동작), Shift+Tab 은 이전 빈칸
+    if(e.key==="Tab"){
+      e.preventDefault();
+      const _ad=document.getElementById("ans-display");
+      if(_ad && qEditPart && !e.shiftKey){ qNextPart(); return; }
+      if(_ad && qEditPart){ qEditPart=null; qRender(); }
+      window.tblTab(e.shiftKey?-1:1);
+      return;
+    }
     if(!document.getElementById("ans-display")){
       if(_ent){ e.preventDefault(); submitQAns(); }
       return;
@@ -7363,7 +7373,7 @@ function renderTableQ(q, panel, qHeadHtml){
       if(!bk){ th+=`<td class="${head?'tblq-head':''}"${spa}>${cell.b?'':fracText(String(cell.t??''))}</td>`; continue; }
       const {b,k}=bk, lab=`<span class="tblq-lab">${b.label}</span>`;
       if(done) th+=`<td class="tblq-b"${spa}>${lab}<span class="tblq-done">${isText[k]?_escHtml(b.a):answerHtml(b.a)}</span></td>`;
-      else if(isText[k]) th+=`<td class="tblq-b"${spa}>${lab}<input class="tblq-t" data-k="${k}" size="${tblTxtSize(st.txt[k])}" value="${_escHtml(st.txt[k]||'')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="tblTxt(${k},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}"></td>`;
+      else if(isText[k]) th+=`<td class="tblq-b"${spa}>${lab}<input class="tblq-t" data-k="${k}" size="${tblTxtSize(st.txt[k])}" value="${_escHtml(st.txt[k]||'')}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="tblTxt(${k},this)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();submitQAns();}else if(event.key==='Tab'){event.preventDefault();event.stopPropagation();tblTab(event.shiftKey?-1:1,${k});}"></td>`;
       else th+=`<td class="tblq-b"${spa}>${lab}<div class="tblq-k${k===st.active?' active':''}" data-k="${k}"${k===st.active?' id="ans-display"':''} onclick="tblFocus(${k})"></div></td>`;
     }
     th+='</tr>';
@@ -7374,7 +7384,7 @@ function renderTableQ(q, panel, qHeadHtml){
   panel.innerHTML=`${qHeadHtml}
     <div class="math-input-card">
       ${th}
-      ${done?'':`<div class="ans-hint"><span>빈칸 ${bl.map(b=>b.label).join('')} 을 모두 채우고 확인을 누르세요${kIdx.length?' · 키패드 칸은 눌러서 고른 뒤 입력':''} · 모두 맞아야 정답이에요</span></div>`}
+      ${done?'':`<div class="ans-hint"><span>빈칸 ${bl.map(b=>b.label).join('')} 을 모두 채우고 확인을 누르세요${kIdx.length?' · 키패드 칸은 눌러서 고른 뒤 입력':''}${bl.length>1?' · Tab = 다음 칸':''} · 모두 맞아야 정답이에요</span></div>`}
       ${(!done && kIdx.length)?`<div class="kbd-wrap" onmousedown="event.preventDefault()">${buildKeypad(kAns,{comma:needComma})}</div>`:''}
       ${done?'':`<div class="ans-btns" style="margin-top:8px" onmousedown="event.preventDefault()">
         <button class="btn-submit" onclick="submitQAns()">확인 (Enter)</button>
@@ -7418,6 +7428,26 @@ window.tblFocus=function(k){
   qTokens=st.tok[k]=st.tok[k]||[]; qEditPart=null; qCursorIdx=qTokens.length;
   tblPaintStatic(true);
   qRender();
+};
+/* Tab 으로 다음 빈칸 (v16.4, 교사 요청) — ㉠→㉡→… 차례(글자 칸·키패드 칸 섞여도), Shift+Tab 은 거꾸로, 끝에서는 처음으로 돌아간다.
+   fromK: 지금 칸 번호(글자 칸의 onkeydown 이 넘김). 없으면 포커스가 있는 글자 칸, 그것도 없으면 고른 키패드 칸에서 출발.
+   키패드 칸 안에서 분수·지수·근호를 쓰는 중이면 Tab 은 예전처럼 그 안의 다음 칸으로 간다(quizKeyHandler — 다 쓰고 나오면 다음 Tab 이 다음 빈칸). */
+window.tblTab=function(dir, fromK){
+  const st=_tblLive; if(!st) return;
+  const q=curWS?.questions?.[curQIdx]; if(!q) return;
+  const bl=tableBlanks(q), n=bl.length; if(!n) return;
+  let cur=(typeof fromK==='number' && fromK>=0) ? fromK : -1;
+  if(cur<0){
+    const ae=document.activeElement;
+    cur=(ae && ae.classList && ae.classList.contains('tblq-t')) ? Number(ae.dataset.k) : st.active;
+  }
+  const nx = (cur==null || cur<0) ? (dir>0 ? 0 : n-1) : (((cur+dir)%n)+n)%n;
+  if(tableCellIsText(bl[nx])){
+    const el=document.querySelector(`.tblq-t[data-k="${nx}"]`);
+    if(el){ el.focus(); const L=el.value.length; try{ el.setSelectionRange(L,L); }catch(e){} }
+  } else {
+    window.tblFocus(nx);
+  }
 };
 window.tblClearAll=function(){
   const st=_tblLive; if(!st) return;

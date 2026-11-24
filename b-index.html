@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="16.8">
+  <meta name="app-version" content="16.9">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -4195,9 +4195,15 @@ function questionImgStyle(q){
   if(typeof v==='number') return `width:${v}%;max-width:100%;height:auto;`+base;
   return 'max-width:100%;max-height:260px;'+base;
 }
+/* 그림 새로 받기 (v16.9, 교사 요청) — Drive 에서 같은 파일을 「새 버전 업로드」로 바꾸면 주소(파일 ID)가 그대로라
+   학생 브라우저가 저장해 둔 옛 그림을 보여 줄 수 있었다. scoring·teacher 처럼 주소 뒤에 「이 화면을 연 시각」(v=)을 붙여
+   화면을 새로 열 때마다 한 번 새로 받는다(같은 화면 안에서 문항을 오갈 때는 다시 받지 않는다). data: 주소는 그대로.
+   시각은 globalThis 에 한 번만 정하고, 함수 안에 바로 적는다 — 이 함수만 떼어 쓰는 검증 하네스(단계형 4종·복습학습지 등)가 새 이름 없이 돌게. */
 function questionImgHtml(q){
-  const src=questionImgSrc(q && q.imageUrl);
-  if(!src) return '';
+  const src0=questionImgSrc(q && q.imageUrl);
+  if(!src0) return '';
+  const src = src0.startsWith('data:') ? src0
+    : src0+(src0.indexOf('?')>=0?'&':'?')+'v='+(globalThis.__qImgTs || (globalThis.__qImgTs=Date.now()));   // v16.9: 새로 받기 표식
   return `<img src="${_escHtml(src)}" data-src="${_escHtml(src)}" data-try="0" alt="문제 그림" onerror="qImgError(this)" style="${questionImgStyle(q)}">`;
 }
 window.qImgError=function(img){
@@ -5522,7 +5528,8 @@ function drawConstructionBg(ctx,W,H,imageUrl,imgSize){
       ctx.drawImage(img,r.x,r.y,r.w,r.h);
       ctx.strokeRect(0.5,0.5,W-1,H-1);
     };
-    img.src=imageUrl;
+    img.src = String(imageUrl).startsWith('data:') ? imageUrl
+      : imageUrl+(String(imageUrl).indexOf('?')>=0?'&':'?')+'v='+(globalThis.__qImgTs || (globalThis.__qImgTs=Date.now()));   // 새로 받기 표식 (v16.9 — 문항 그림과 같은 시각)
   }
 }
 

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-  <meta name="app-version" content="16.4">
+  <meta name="app-version" content="16.5">
   <script src="site-nav.js?v=1.1" defer></script>
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -4176,10 +4176,25 @@ function questionImgSrc(url){
        || u.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
   return m ? 'https://lh3.googleusercontent.com/d/'+m[1] : u;
 }
+/* 문항 그림 크기 (v16.5, edit v9.5 의 [자동][원본][10%~100%] 버튼 — 교사 요청 「그림 삽입 시 크기를 원본 / 문제 화면의 가로 % 로」).
+   q.imgSize: 'orig'(그림 원래 픽셀 크기 — 화면보다 크면 화면 너비까지만) · 10~100(문제 카드 가로의 몇 % — 10 단위) · 없음(예전과 같은 자동: 가로 100%·세로 260px 안).
+   가로세로 비율은 언제나 유지한다(height:auto · 크기를 정하면 세로 260px 제한을 두지 않는다 — 두면 가로만 줄고 찌그러짐 대신 비율 유지로 작아짐). 값이 이상하면 자동. edit 의 _imgSizeNorm 과 같은 규칙. */
+function _imgSizeNorm(v){
+  if(v==='orig') return 'orig';
+  const n=Number(v);
+  return (Number.isFinite(n) && n>=10 && n<=100 && n%10===0) ? n : null;
+}
+function questionImgStyle(q){
+  const v=_imgSizeNorm(q && q.imgSize);
+  const base='box-sizing:border-box;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)';
+  if(v==='orig') return 'max-width:100%;height:auto;'+base;
+  if(typeof v==='number') return `width:${v}%;max-width:100%;height:auto;`+base;
+  return 'max-width:100%;max-height:260px;'+base;
+}
 function questionImgHtml(q){
   const src=questionImgSrc(q && q.imageUrl);
   if(!src) return '';
-  return `<img src="${_escHtml(src)}" data-src="${_escHtml(src)}" data-try="0" alt="문제 그림" onerror="qImgError(this)" style="max-width:100%;max-height:260px;border-radius:8px;margin:10px 0;display:block;border:1px solid var(--rule)">`;
+  return `<img src="${_escHtml(src)}" data-src="${_escHtml(src)}" data-try="0" alt="문제 그림" onerror="qImgError(this)" style="${questionImgStyle(q)}">`;
 }
 window.qImgError=function(img){
   if(!img || !img.isConnected) return;

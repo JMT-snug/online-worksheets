@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="edit-v9.4">
+<meta name="app-version" content="edit-v9.5">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>학습지 편집기</title>
@@ -271,6 +271,14 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
 #add-q-area{flex-shrink:0}
 .meta-card{flex-shrink:0}
 #editor-empty{padding:24px}
+/* 그림 크기 버튼·문제 칸 틀 (v9.5) */
+.img-size-row{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-bottom:6px}
+.img-size-lab{font-size:12px;font-weight:600;color:var(--ink2);margin-right:4px}
+.img-size-btn{border:1px solid var(--rule);background:#fff;border-radius:5px;padding:2px 6px;font-size:11px;cursor:pointer;font-family:inherit;color:var(--ink2)}
+.img-size-btn:hover{border-color:#93c5fd;color:#1d4ed8}
+.img-size-btn.on{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:700}
+.img-frame{border:1px dashed #cbd5e1;border-radius:6px;padding:6px;background:#f8fafc}
+.img-frame::before{content:'학생 화면의 문제 칸 너비';display:block;font-size:10px;color:var(--ink3);margin-bottom:3px}
 /* ▦ 표 빈칸 편집 (v9.0) */
 .tbl-wrap{overflow-x:auto;margin-top:6px}
 .tbl-ed{border-collapse:collapse;font-size:12px}
@@ -605,7 +613,12 @@ body{font-family:'Pretendard','Apple SD Gothic Neo',sans-serif;background:var(--
             </div>
             <input id="q-img-url" placeholder="Drive URL (업로드 후 자동 입력)" style="margin-top:6px;width:100%;border:1px solid var(--rule);border-radius:6px;padding:6px 8px;font-size:11px;font-family:monospace;background:var(--cream)">
             <div id="q-img-preview" style="margin-top:8px;display:none">
-              <img id="q-img-tag" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--rule)">
+              <!-- 그림 크기 (v9.5) — 버튼은 renderImgSize 가 만든다. 틀(q-img-frame)은 학생 화면의 문제 칸 너비를 나타낸다 -->
+              <div class="img-size-row"><span class="img-size-lab">크기</span><span id="q-img-size-btns"></span></div>
+              <div id="q-img-frame" class="img-frame">
+                <img id="q-img-tag" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--rule)">
+              </div>
+              <div id="q-img-size-note" style="font-size:11px;color:var(--ink3);margin-top:4px;line-height:1.5"></div>
               <div id="q-img-status" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
             </div>
           </div>
@@ -1812,6 +1825,7 @@ function showPanel(item){
     const imgUrl = item.imageUrl||'';
     document.getElementById('q-img-url').value = imgUrl;
     _geomStore = (item.geomSpec && imgUrl) ? { u:imgUrl, s:String(item.geomSpec) } : null; updateGeomBtn();
+    editImgSize=_imgSizeNorm(item.imgSize); renderImgSize();   // 그림 크기 (v9.5)
     if(imgUrl){
       document.getElementById('q-img-tag').src = bustCache(imgUrl);
       document.getElementById('q-img-preview').style.display = '';
@@ -1888,6 +1902,7 @@ window.onQTypeChange = function(){
 };
 function setQType(type){
   setTimeout(()=>{ if(typeof refreshQAnsPreviews==='function') refreshQAnsPreviews(); }, 0);   // v8.1: 정답 칸 미리보기 — showPanel 이 값을 다 넣은 뒤에
+  setTimeout(renderImgSizeNote, 0);   // 그림 크기 안내(작도 문항이면 적용 안 됨) — 유형을 바꿀 때 (v9.5)
   document.getElementById('q-type-sel').value = type;
   // 링크 문항의 텍스트는 문제가 아니라 '안내문'이므로 라벨·예시를 바꿔 준다
   const _tl=document.getElementById('field-text')?.querySelector('label');
@@ -2053,6 +2068,7 @@ window.previewText = function(inputId, previewId){
 
 window.onGraphGridChange=function(){
   const gt=curGraphType();
+  setTimeout(renderImgSizeNote,0);   // 작도로 바꾸면 「그림 크기 적용 안 됨」 안내 (v9.5)
   document.getElementById('g-coord-settings').style.display=gt==='coordinate'?'':'none';
   document.getElementById('g-nl-settings').style.display=gt==='numberline'?'':'none';
   document.getElementById('g-ax-settings').style.display=gt==='axisonly'?'':'none';
@@ -2250,7 +2266,7 @@ window.saveQuestion = async function(){
     }
     if(currentWs.questions[qIdxS]?.partStart) qData.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     _keepAiTraps(qData, currentWs.questions[qIdxS]);
-    _keepGeom(qData);
+    _keepGeom(qData); _withImgSize(qData);   // 그림 크기 (v9.5)
     currentWs.questions[qIdxS]=_addScore(_withHint(qData));
     await saveToFirestore(); renderSidebar(); toast('저장됨'); return;
   }
@@ -2291,7 +2307,7 @@ window.saveQuestion = async function(){
     };
     if(currentWs.questions[qIdxS]?.partStart) _step3Q.partStart=currentWs.questions[qIdxS].partStart; // 파트 마커 보존
     _keepAiTraps(_step3Q, currentWs.questions[qIdxS]);
-    _keepGeom(_step3Q);
+    _keepGeom(_step3Q); _withImgSize(_step3Q);   // 그림 크기 (v9.5)
     currentWs.questions[qIdxS]=_addScore(_step3Q);
     renderQList(); saveToFirestore(null, true); return;
   }
@@ -2401,7 +2417,7 @@ window.saveQuestion = async function(){
       q.answer=tableAnswerText(q);
     }
     if(qIdx >= 0 && qIdx < currentWs.questions.length){
-      _keepGeom(q);
+      _keepGeom(q); _withImgSize(q);   // 그림 크기 (v9.5)
       _addScore(_withHint(q));
       currentWs.questions[qIdx] = q;
     }
@@ -2811,6 +2827,7 @@ window.previewLocalImage = function(input){
 window.clearImage = function(){
   document.getElementById('q-img-url').value = '';
   _geomStore = null; updateGeomBtn();
+  editImgSize=null; renderImgSize();   // 그림 크기도 자동으로 (v9.5)
   document.getElementById('q-img-preview').style.display = 'none';
   document.getElementById('q-img-file').value = '';
   const link = document.getElementById('q-img-link-input'); if(link) link.value = '';
@@ -2871,6 +2888,56 @@ function updateGeomBtn(){
 }
 /** 저장 직전에 호출 — 이미지가 도형 제작이 만든 그대로일 때만 사양을 문항에 붙인다 */
 function _keepGeom(q){ const g=_geomSaved(); if(g) q.geomSpec=g; else delete q.geomSpec; return q; }
+
+/* ══════════ 그림 크기 (v9.5, 2026-11-24 교사 요청 「그림 삽입 시 크기를 원본 크기 / 문제 화면의 %(가로 기준, 10% 단위)로 정하는 버튼」) ══════════
+   문항의 imgSize: 'orig'(그림 원래 픽셀 크기 — 문제 칸보다 크면 칸 너비까지만) · 10~100(문제 칸 가로의 %) · 없음(자동 — 예전과 같다: 가로 100%·세로 260px 안).
+   가로세로 비율은 언제나 유지한다. 학생 화면은 index questionImgStyle(같은 _imgSizeNorm 규칙). 작도 문항은 그림이 작도판 배경(캔버스)이라 적용되지 않는다.
+   버튼은 인라인 onclick 이라 window.setImgSize 를 거친다(모듈 변수는 인라인 핸들러에서 안 보임 — edit 9.3 교훈). */
+let editImgSize=null;
+const IMG_SIZE_OPTS=[null,'orig',10,20,30,40,50,60,70,80,90,100];
+function _imgSizeNorm(v){
+  if(v==='orig') return 'orig';
+  const n=Number(v);
+  return (v!==null && v!=='' && Number.isFinite(n) && n>=10 && n<=100 && n%10===0) ? n : null;
+}
+const _imgSizeLabel = v => v==null ? '자동' : v==='orig' ? '원본' : v+'%';
+function _imgPreviewStyle(v){
+  const base='border-radius:6px;border:1px solid var(--rule);box-sizing:border-box;display:block';
+  if(v==='orig') return 'max-width:100%;height:auto;'+base;
+  if(typeof v==='number') return `width:${v}%;max-width:100%;height:auto;`+base;
+  return 'max-width:100%;max-height:200px;'+base;
+}
+function renderImgSize(){
+  const box=document.getElementById('q-img-size-btns');
+  if(box) box.innerHTML=IMG_SIZE_OPTS.map(v=>{
+    const arg = v==null ? 'null' : v==='orig' ? "'orig'" : v;
+    const tip = v==null ? '자동 — 문제 칸 가로에 맞추고 세로는 260px 까지(예전과 같음)' : v==='orig' ? '그림의 원래 크기 — 문제 칸보다 크면 칸 너비까지만' : `문제 칸 가로의 ${v}% — 세로는 비율대로`;
+    return `<button type="button" class="img-size-btn${v===editImgSize?' on':''}" onclick="setImgSize(${arg})" title="${tip}">${_imgSizeLabel(v)}</button>`;
+  }).join('');
+  const img=document.getElementById('q-img-tag');
+  if(img){ img.style.cssText=_imgPreviewStyle(editImgSize); img.onload=renderImgSizeNote; }
+  renderImgSizeNote();
+}
+function renderImgSizeNote(){
+  const el=document.getElementById('q-img-size-note'); if(!el) return;
+  const img=document.getElementById('q-img-tag');
+  const nat=(img && img.naturalWidth) ? `${img.naturalWidth}×${img.naturalHeight}px` : '';
+  const v=editImgSize;
+  let t = v==null ? '자동: 문제 칸 가로에 맞추고 세로는 260px 까지 (예전과 같음)'
+        : v==='orig' ? `원본 크기${nat?' ('+nat+')':''} — 문제 칸보다 크면 칸 너비까지만`
+        : `문제 칸 가로의 ${v}% — 세로는 비율대로 (학생 화면에서)`;
+  if(v!=null && nat && v!=='orig') t+=` · 원본 ${nat}`;
+  const isCon = document.getElementById('q-type-sel')?.value==='graph' && typeof curGraphType==='function' && curGraphType()==='construction';
+  if(isCon) t='⚠ 작도 문항은 그림이 작도판 배경으로 깔려서 크기 설정이 적용되지 않아요.';
+  el.textContent=t;
+}
+window.setImgSize=function(v){ editImgSize=_imgSizeNorm(v); renderImgSize(); };
+/* 저장할 문항에 그림 크기를 넣거나(그림이 있고 자동이 아닐 때) 지운다 */
+function _withImgSize(q){
+  const v=_imgSizeNorm(editImgSize);
+  if(q.imageUrl && v!=null) q.imgSize=v; else delete q.imgSize;
+  return q;
+}
 window.openGeometryMaker = function(){
   if(selectedQIdx===null || !currentWs){ alert('먼저 문항을 선택해 주세요.'); return; }
   _geomTarget = { qIdx:selectedQIdx, wsId:currentWs.id||'' };

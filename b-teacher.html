@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.17">
+<meta name="app-version" content="6.18">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2771,7 +2771,7 @@ function drawGraphGridForTeacher(canvas, q, W, H){
   } else if(q.graphType==='axisonly'){
     drawAxisOnlyPlane(ctx,W,H,q.originPos||'mc');
   } else if(q.graphType==='construction'){
-    _drawConstructionBgT(ctx,W,H,q.imageUrl);   // v6.9: 작도 문항에 좌표평면이 깔리던 것을 학생·채점 화면과 같은 빈 판(+배경 그림)으로
+    _drawConstructionBgT(ctx,W,H,q.imageUrl,q.imgSize);   // 그림 크기 (v6.18)   // v6.9: 작도 문항에 좌표평면이 깔리던 것을 학생·채점 화면과 같은 빈 판(+배경 그림)으로
   } else {
     _drawCoordPlaneT(ctx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5);
   }
@@ -2780,15 +2780,26 @@ function drawGraphGridForTeacher(canvas, q, W, H){
    그림은 늘리지 않고 원래 가로세로 비율 그대로 가운데에 맞춰 넣는다. 이 창의 판(W×H)은 학생 답안 PNG 의 크기라
    새 답안은 학생이 그린 판(20:17)과 같다. */
 const _T_IMG_TS=Date.now();   // 같은 주소로 그림을 바꿔 올려도 옛 그림이 보이지 않게, 이 화면을 연 시각을 붙인다(scoring 과 같은 방식)
-function _drawConstructionBgT(ctx,W,H,imageUrl){
+/* 작도판 배경 그림의 자리 (index v16.6 · scoring v2.15 · teacher v6.18 — 세 화면이 **같은 규칙**이어야 한다:
+   학생 획은 판에 대한 상대 좌표라, 그림 자리가 화면마다 다르면 채점 화면에서 획과 그림이 어긋난다).
+   size(edit 9.6 의 그림 크기 imgSize): 10~100 = 판 가로의 % — 판보다 길어지면 판 높이에 맞춰 줄인다 · 그 밖(없음·'orig')= 예전처럼 판 안에 꼭 맞게.
+   언제나 가로세로 비율 유지·가운데. 값은 판 크기에 대한 비율로만 정해지므로 판 크기가 화면마다 달라도 같은 자리가 된다. */
+function _conBgRectT(iw,ih,W,H,size){
+  const n=Number(size), pct=(size!=null && size!=='' && Number.isFinite(n) && n>=10 && n<=100 && n%10===0) ? n : 0;
+  let w, h;
+  if(pct){ w=W*pct/100; h=w*ih/iw; if(h>H){ w=w*H/h; h=H; } }
+  else { const k=Math.min(W/iw,H/ih); w=iw*k; h=ih*k; }
+  return {x:(W-w)/2, y:(H-h)/2, w, h};
+}
+function _drawConstructionBgT(ctx,W,H,imageUrl,imgSize){
   ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=1;
   ctx.strokeRect(0.5,0.5,W-1,H-1);
   if(imageUrl){
     const img=new Image();
     img.onload=()=>{
       const iw=img.naturalWidth||W, ih=img.naturalHeight||H;
-      const k=Math.min(W/iw,H/ih), w=iw*k, h=ih*k;
-      ctx.drawImage(img,(W-w)/2,(H-h)/2,w,h);
+      const r=_conBgRectT(iw,ih,W,H,imgSize);
+      ctx.drawImage(img,r.x,r.y,r.w,r.h);
       ctx.strokeRect(0.5,0.5,W-1,H-1);
     };
     img.src=imageUrl.startsWith('data:') ? imageUrl : imageUrl+(imageUrl.includes('?')?'&':'?')+'v='+_T_IMG_TS;

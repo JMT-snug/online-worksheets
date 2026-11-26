@@ -8,7 +8,8 @@
    포함: normPi, evalAnswer, eqEquivCheck, ineqEquivCheck, mathEquivCheck, exprEquivCheck,
          _examEvExpr, isTextAnswerQ, varsOf, isCaseSignificant,
          normalizeMultiAnswer, splitAnsList, isListAnswer, listAnsMatch(여러 값 답, 14.8), listItemQ, gradeList(📋 리스트형, 15.0), tableBlanks·tableAnsJoin·tableAnsSplit·gradeTable(▦ 표 빈칸, 16.0), tableLayout(셀 병합, 16.1), gradeExamWord(15.1 부터 식·한글 용어 답 모두 대소문자 구분), judgeAnswer, stepAsQuestion, judgeStep,
-         그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 맨 아래 절)
+         그래프 피드백 누적(drawingSig, feedbackLogAfterSave, feedbackView, feedbackEarlierHtml, formatFbAt — 아래 절),
+         🖼 그래프 그림 따로 저장(17.0 — newDrawRef, splitDrawEntry, mergeDrawHeavy, needsDrawHeavy, drawSigOf, sameDrawingEntry, drawRefsOf, lightPQ — 맨 아래 절)
    캐시: <script src="grading.js?v=버전"> 형태로 로드해 갱신 시 쿼리를 올릴 것.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -880,4 +881,86 @@ function feedbackEarlierHtml(earlier, opts){
     + '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--ink2,#4b5563)">🕘 이전 피드백 ' + list.length + '개'
     + (o.note ? ' <span style="font-weight:400">— ' + _fbEsc(o.note) + '</span>' : '') + '</summary>'
     + items + '</details>';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🖼 그래프 그림 따로 저장 (grading.js 17.0 · index v17.0 · scoring v3.0 · teacher v7.0 · edit v10.0, 2026-11-26)
+
+   예전에는 그래프 문항의 그림(학생 답안 drawing · 선생님 첨삭 teacherDrawing — PNG 문자열)과 작도 획 기록(conVec)을
+   학생 기록 문서 records/{이메일}/worksheets/{학습지} 의 perQuestion.{문항} 안에 통째로 넣었다. 그래서 기록을 한꺼번에 읽는 곳
+   (진도 동기화·teacher 로그인·edit 도구·ai 분석실 — collectionGroup('worksheets'))이 그림이 필요 없는데도 전교생 그림을 다 받아
+   멈춘 듯 느렸다(교사 신고 2026-11-26 「진도 동기화를 누르면 결과 없이 멈춘다」).
+
+   지금은 무거운 세 칸을 records/{이메일}/drawings/{drawRef} 문서에 두고, 기록에는 가벼운 표시만 남긴다:
+     drawing:true        — 그림이 있다 (「제출했나」만 보는 기존 코드·Apps Script 알림은 그대로 동작)
+     dsig                — 그 그림의 지문(drawingSig) — 「같은 답안인가」를 그림 없이 비교한다(피드백 누적과 같은 지문)
+     teacherDrawing:true — 첨삭이 있다 (null 이면 없음)   · tdsig — 첨삭 지문(바뀌었는지 보고 다시 받을지 정한다)
+     drawRef             — 그림 문서 id. 학습지 id 와 무관한 값이라 edit 의 학습지 ID 정리처럼 기록을 옮겨도 그대로 따라간다.
+   그림 문서: { drawing, teacherDrawing, conVec, dsig, wsId, qId, updatedAt } — 있는 칸만 쓴다(merge).
+
+   옛 기록(그림이 문자열로 들어 있는 것)도 그대로 읽는다 — 칸마다 「문자열이면 그것, true 면 그림 문서에서」.
+   화면은 기록을 읽은 뒤 mergeDrawHeavy 로 진짜 그림을 채워(학생: 학습지를 열 때 · scoring: 학생 답안을 열 때 · teacher: 상세 창을 열 때) 예전과 같은 모양으로 쓴다.
+   ═══════════════════════════════════════════════════════════════ */
+/* 새 그림 문서 id — 학습지·문항 id 에 시각과 난수를 붙인다(같은 학습지 id 를 나중에 다른 학습지가 물려받아도 겹치지 않게) */
+function newDrawRef(wsId, qid){
+  return String(wsId || 'ws').replace(/[\/]/g, '_') + '__' + String(qid || 'q').replace(/[\/]/g, '_') + '__'
+    + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+/* 이 항목의 학생 답안 지문 — 그림 문자열이 있으면 그것으로, 없으면 기록의 dsig */
+function drawSigOf(v){
+  if(!v) return '';
+  return typeof v.drawing === 'string' ? drawingSig(v.drawing) : String(v.dsig || '');
+}
+/* 두 항목의 학생 답안이 같은 그림인가 (둘 중 하나라도 지문이 없으면 다르다고 본다) */
+function sameDrawingEntry(a, b){
+  const x = drawSigOf(a), y = drawSigOf(b);
+  return !!x && x === y;
+}
+/* 그림 문서를 읽어야 진짜 그림이 나오는 항목인가 */
+function needsDrawHeavy(v){
+  return !!(v && typeof v === 'object' && v.drawRef && (v.drawing === true || v.teacherDrawing === true));
+}
+/* 저장할 항목 → { light: 기록에 쓸 것, heavy: 그림 문서에 쓸 것 }
+   · drawing 이 문자열이면 heavy 로 옮기고 light 에는 true + dsig. 이미 true(그림을 못 받은 채)면 light 에 그대로 두고 heavy 엔 넣지 않는다.
+   · teacherDrawing 이 문자열이면 heavy 로 + light 에 true·tdsig, null/없음이면 둘 다 null(지운다), true 면 그대로.
+   · conVec 은 heavy 로만(light 에서 뺀다). 키가 없으면 어느 쪽에도 안 넣는다 — merge 저장이라 남아 있는 값은 그대로. */
+function splitDrawEntry(v, ref){
+  const light = Object.assign({}, v), heavy = {};
+  if(typeof v.drawing === 'string'){ heavy.drawing = v.drawing; light.drawing = true; light.dsig = drawingSig(v.drawing); }
+  if('teacherDrawing' in v){
+    if(typeof v.teacherDrawing === 'string'){ heavy.teacherDrawing = v.teacherDrawing; light.teacherDrawing = true; light.tdsig = drawingSig(v.teacherDrawing); }
+    else if(v.teacherDrawing !== true){ heavy.teacherDrawing = null; light.teacherDrawing = null; light.tdsig = null; }
+  }
+  if('conVec' in v){ heavy.conVec = (v.conVec === undefined ? null : v.conVec); delete light.conVec; }
+  if(heavy.drawing !== undefined) heavy.dsig = light.dsig;
+  light.drawRef = ref;
+  return { light, heavy };
+}
+/* 기록 항목 + 그림 문서 → 진짜 그림이 든 항목 (화면이 예전처럼 쓰는 모양). 그림 문서를 못 찾았으면 그 그림은 null */
+function mergeDrawHeavy(v, h){
+  if(!v || typeof v !== 'object') return v;
+  const o = Object.assign({}, v), H = h || {};
+  if(o.drawing === true) o.drawing = typeof H.drawing === 'string' ? H.drawing : null;
+  if(o.teacherDrawing === true) o.teacherDrawing = typeof H.teacherDrawing === 'string' ? H.teacherDrawing : null;
+  if(Object.prototype.hasOwnProperty.call(H, 'conVec')) o.conVec = H.conVec;   // 그림 문서의 획 기록이 기록 안에 남은 옛 것보다 새것
+  return o;
+}
+/* 기록 하나(perQuestion)가 가리키는 그림 문서 id 들 — 기록을 지울 때 함께 지우는 데 쓴다 */
+function drawRefsOf(rec){
+  const pq = (rec && rec.perQuestion) || {};
+  return [...new Set(Object.values(pq).map(v => v && typeof v === 'object' ? v.drawRef : null).filter(Boolean))];
+}
+/* 화면이 그림 문서에서 받아 채운 항목(그림 문자열)을 기록에 통째로 다시 쓸 때 — drawRef 가 있는 항목은 표시로 되돌린다.
+   (teacher 재채점처럼 perQuestion 을 통째로 쓰는 곳에서, 상세 창에서 받아 둔 그림이 기록 안으로 되돌아가지 않게) */
+function lightPQ(pq){
+  const out = {};
+  for(const [k, v] of Object.entries(pq || {})){
+    if(!v || typeof v !== 'object' || !v.drawRef){ out[k] = v; continue; }
+    const o = Object.assign({}, v);
+    if(typeof o.drawing === 'string'){ o.dsig = drawingSig(o.drawing); o.drawing = true; }
+    if(typeof o.teacherDrawing === 'string'){ o.tdsig = drawingSig(o.teacherDrawing); o.teacherDrawing = true; }
+    delete o.conVec;
+    out[k] = o;
+  }
+  return out;
 }

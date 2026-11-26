@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="app-version" content="scoring-v2.15">
+<meta name="app-version" content="scoring-v3.0">
 <script src="site-nav.js?v=1.0"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 수동 채점 · 수학 학습지+</title>
@@ -363,7 +363,7 @@ body.mode-feedback .f-q{display:none}
 
 <div class="toast" id="toast"></div>
 
-<script src="grading.js?v=16.1"></script>   <!-- 그래프 피드백 누적(feedbackLogAfterSave·feedbackView·feedbackEarlierHtml)을 index·teacher 와 같은 한 곳에서 가져온다 (v2.7 · v2.9 는 쿼리만 14.7 로 맞춤 · v2.13·v2.14 는 쿼리만 16.0·16.1 로 — 화면 변경 없음) -->
+<script src="grading.js?v=17.0"></script>   <!-- 그래프 피드백 누적(feedbackLogAfterSave·feedbackView·feedbackEarlierHtml)을 index·teacher 와 같은 한 곳에서 가져온다 (v2.7 · v2.9 는 쿼리만 14.7 로 맞춤 · v2.13·v2.14 는 쿼리만 16.0·16.1 로 — 화면 변경 없음) -->
 <script src="ai-lab.js?v=1.6"></script>   <!-- 오답 유형 분류표(buildTaxonomy·typeName) — grading.js 다음에 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -597,7 +597,7 @@ function syncErrType(stu, wsId, qid, code){
    여기서는 화면에 이전 피드백 목록을 그리고, 저장한 로그를 읽어 둔 기록에 맞춘다. */
 function renderFbHistory(stu){
   const box = document.getElementById('fb-history'); if(!box) return;
-  const v = feedbackView(stu?.fbLog, stu?.data?.drawing, stu?.data?.feedback);
+  const v = feedbackView(stu?.fbLog, (typeof stu?.data?.drawing==='string' ? stu.data.drawing : null), stu?.data?.feedback);   // 그림을 아직 못 받았으면(true) 지문 없이
   // 최신 피드백이 아직 없으면(학생이 고쳐 내서 비었을 때) 지난 피드백을 펼쳐 두어, 무엇을 지적했는지 보고 이어 쓸 수 있게 한다
   box.innerHTML = feedbackEarlierHtml(v.earlier, { open: !v.latest, note: '학생이 고쳐 내기 전 답안에 남긴 글 (학생도 볼 수 있어요)' });
 }
@@ -1971,6 +1971,16 @@ function drawNumberLine(ctx,W,H,nMin,nMax){
 }
 
 
+/* 🖼 그래프 그림 따로 저장 (v3.0 · grading.js 17.0) — 기록에는 drawing:true·teacherDrawing:true 표시와 drawRef 만 있고,
+   그림은 records/{이메일}/drawings/{drawRef} 에 있다. 학생 답안을 열 때 그 문서 하나를 읽어 stu.data(=읽어 둔 기록의 항목)에 채운다. */
+async function hydrateStuDrawing(stu){
+  if(!needsDrawHeavy(stu?.data)) return;
+  try{
+    const s = await getDoc(doc(db, 'records', stu.email, 'drawings', stu.data.drawRef));
+    Object.assign(stu.data, mergeDrawHeavy(stu.data, s.exists() ? s.data() : null));
+  }catch(e){ console.warn('[그림 읽기 실패]', stu.email, e.code||e.message); }
+}
+
 function showStudent(idx){
   if(idx < 0 || idx >= students.length) return;
   curStuIdx = idx;
@@ -2007,14 +2017,15 @@ function showStudent(idx){
   else if(q.graphType==='construction'){ drawConstructionBg(gCtx,W,H,q.imageUrl,q.imgSize); }   // 그림 크기 (v2.15)
   else { drawCoordPlane(gCtx,W,H,q.xMin??-5,q.xMax??5,q.yMin??-5,q.yMax??5); }
 
-  // 학생 답안 이미지
+  // 학생 답안 이미지 — 🖼 v3.0: 기록에 표시(true)만 있으면 그림 문서에서 받아 온 뒤 채운다(_stuStr 은 문자열일 때만)
+  const _stuStr = v => typeof v === 'string' ? v : '';
   const drawImg = document.getElementById('stu-drawing');
-  drawImg.src = stu.data.drawing || '';
+  drawImg.src = _stuStr(stu.data.drawing);
   drawImg.style.height = H+'px';
 
   // 교사 주석
   const tdImg = document.getElementById('teacher-drawing');
-  tdImg.src = stu.data.teacherDrawing || '';
+  tdImg.src = _stuStr(stu.data.teacherDrawing);
   tdImg.style.height = H+'px';
 
   // 교사 캔버스
@@ -2023,10 +2034,21 @@ function showStudent(idx){
   tCv.style.width = W+'px'; tCv.style.height = H+'px';
   const tCtx = tCv.getContext('2d');
   tCtx.clearRect(0,0,W,H);
-  if(stu.data.teacherDrawing){
+  const _paintTd = td => {
+    if(!td) return;
     const img = new Image();
     img.onload = ()=>tCtx.drawImage(img,0,0,W,H);
-    img.src = stu.data.teacherDrawing;
+    img.src = td;
+  };
+  _paintTd(_stuStr(stu.data.teacherDrawing));
+  if(needsDrawHeavy(stu.data)){
+    hydrateStuDrawing(stu).then(()=>{
+      if(students[curStuIdx] !== stu || needsDrawHeavy(stu.data)) return;   // 다른 학생으로 넘어갔거나 못 받았다
+      drawImg.src = _stuStr(stu.data.drawing);
+      tdImg.src = _stuStr(stu.data.teacherDrawing);
+      _paintTd(_stuStr(stu.data.teacherDrawing));   // 그새 그은 첨삭은 지우지 않는다
+      renderFbHistory(stu);
+    });
   }
   initTeacherCanvas(tCv);
   document.getElementById('td-controls').style.display='flex';
@@ -2156,6 +2178,8 @@ window.saveCurrent = async function(){
     if(hasContent) teacherDrawing = tCv.toDataURL('image/png');
   }catch(e){}
   try{
+    // 🖼 피드백 누적은 학생 답안 지문으로 줄을 가른다 — 그림을 아직 못 받았으면 먼저 받는다 (v3.0)
+    if(needsDrawHeavy(stu.data)) await hydrateStuDrawing(stu);
     // teacher와 동일한 방식(updateDoc + 점 표기법)으로 저장 — setDoc merge는 규칙상 거부되던 문제 해결
     const ref = doc(db, 'records', stu.email, 'worksheets', curWsId);
     const upd = {
@@ -2186,7 +2210,24 @@ window.saveCurrent = async function(){
       if(!_rec.completedAt) upd["completedAt"] = new Date().toISOString();
       _rec.isComplete = true;
     }
-    if(teacherDrawing) upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
+    /* 🖼 첨삭 그림은 그림 문서로, 기록에는 teacherDrawing:true · tdsig · drawRef 만 (v3.0 · grading.js 17.0).
+       그림 문서 쓰기가 거부되면(규칙 문제 등) 예전처럼 기록 안에 문자열로 쓴다 */
+    let _tdRef = null, _tdSig = null, _tdInline = false;
+    if(teacherDrawing){
+      _tdRef = stu.data.drawRef || newDrawRef(curWsId, curQid);
+      _tdSig = drawingSig(teacherDrawing);
+      try{
+        await setDoc(doc(db, 'records', stu.email, 'drawings', _tdRef),
+          { teacherDrawing, wsId: curWsId, qId: curQid, updatedAt: new Date().toISOString() }, { merge: true });
+        upd[`perQuestion.${curQid}.teacherDrawing`] = true;
+        upd[`perQuestion.${curQid}.tdsig`] = _tdSig;
+        upd[`perQuestion.${curQid}.drawRef`] = _tdRef;
+      }catch(eTd){
+        console.warn('[첨삭 그림 문서 저장 실패 — 기록 안에 저장]', eTd.code||eTd.message);
+        upd[`perQuestion.${curQid}.teacherDrawing`] = teacherDrawing;
+        _tdInline = true;
+      }
+    }
     try{
       await updateDoc(ref, upd);
     }catch(errUpd){
@@ -2195,10 +2236,11 @@ window.saveCurrent = async function(){
         correct: (_curJudgment===undefined ? null : _curJudgment),
         feedback: feedback || null,
         gradedAt: new Date().toISOString(),
-        ...(teacherDrawing ? {teacherDrawing} : {}),
+        ...(teacherDrawing ? (_tdInline ? {teacherDrawing} : {teacherDrawing:true, tdsig:_tdSig, drawRef:_tdRef}) : {}),
       } }, graphErrorTypes: { [curQid]: _errType },
          ...(_fbNext.changed ? { graphFeedbackLog: { [curQid]: _fbNext.log } } : {}) }, {merge:true});
     }
+    if(teacherDrawing && !_tdInline){ stu.data.drawRef = _tdRef; stu.data.tdsig = _tdSig; }
     stu.data.correct = _curJudgment;
     stu.data.feedback = feedback;
     stu.data.gradedAt = new Date().toISOString();   // 화면 상태에도 반영 (모달 재계산용)

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="app-version" content="6.18">
+<meta name="app-version" content="7.0">
 <script src="site-nav.js?v=1.0"></script>
 <title>교사 관리 · 수학 학습지+</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,7 +216,7 @@ select:focus,input:focus{outline:none;border-color:var(--accent)}
 </div>
 
 <script src="worksheets.js"></script>
-<script src="grading.js?v=16.1"></script>
+<script src="grading.js?v=17.0"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
@@ -1594,7 +1594,7 @@ window.repairPerQuestion=async function(){
         // 그래도 불일치면 건너뜀
         skipped++; continue;
       }
-      _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:newPQ});
+      _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',wsId),{perQuestion:lightPQ(newPQ)});   // 🖼 받아 둔 그림은 표시로 되돌려 쓴다 (v7.0)
       rec.perQuestion=newPQ; ok++;
     }catch(e){ errors.push(`${uid}/${wsId}: ${e.message}`); }
   }
@@ -1627,7 +1627,7 @@ window.migrateQuestionIds=async function(){
         const newPQ={};
         for(const [oid,val] of Object.entries(rec.perQuestion))
           newPQ[idMap[oid]||oid]=val;
-        _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:newPQ});
+        _gradingIndexDirty(); await updateDoc(doc(db,'records',uid,'worksheets',ws.id),{perQuestion:lightPQ(newPQ)});   // 🖼 받아 둔 그림은 표시로 되돌려 쓴다 (v7.0)
         rec.perQuestion=newPQ; recOk++;
       }
     }catch(e){ errors.push(e.message); }
@@ -1957,7 +1957,7 @@ async function _purgeStudents(uids, label){
   for(const uid of uids){
     for(const wsId of Object.keys(allData[uid]||{})){
       try{
-        _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
+        _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId)); await _delDrawingsOf(uid, allData[uid]?.[wsId]);
         try{ await deleteDoc(doc(db,'results',uid,'worksheets',wsId)); }catch(e2){}
         ok++;
       }catch(e){ fail++; console.warn('[삭제 실패]',uid,wsId,e.message); }
@@ -1994,7 +1994,7 @@ window.deleteSelectedWSRecs=async function(wsId){
   let ok=0, fail=0;
   for(const uid of uids){
     try{
-      _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId));
+      _gradingIndexDirty(); await deleteDoc(doc(db,'records',uid,'worksheets',wsId)); await _delDrawingsOf(uid, allData[uid]?.[wsId]);
       try{ await deleteDoc(doc(db,'results',uid,'worksheets',wsId)); }catch(e2){}
       if(allData[uid]) delete allData[uid][wsId];
       ok++;
@@ -2011,7 +2011,7 @@ window.deleteStudentRec=async function(wsId, uid){
   if(!confirm(`⚠️ "${name}"의 "${ws?.title||wsId}" 학습 기록을 삭제하시겠습니까?`
     + (_isExam ? `\n\n📝 시험지입니다. 삭제하면 이 학생이 다시 응시할 수 있습니다.\n(제출한 답안·점수는 복구할 수 없습니다)` : ''))) return;
   try{
-    _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+    _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId)); await _delDrawingsOf(uid, allData[uid]?.[wsId]);
     if(allData[uid]) delete allData[uid][wsId];
     renderWS(wsId); // 현재 뷰 새로고침
     toast?.('삭제 완료');
@@ -2028,7 +2028,7 @@ window.clearWSRecords=async function(wsId){
   let ok=0, fail=0;
   for(const uid of targets){
     try{
-      _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId));
+      _gradingIndexDirty(); await deleteDoc(doc(db,"records",uid,"worksheets",wsId)); await _delDrawingsOf(uid, allData[uid]?.[wsId]);
       try{ await deleteDoc(doc(db,"results",uid,"worksheets",wsId)); }catch(e2){}
       delete allData[uid][wsId]; ok++;
     }catch(e){ console.warn("삭제 실패:",uid,e.message); fail++; }
@@ -2752,9 +2752,21 @@ window.saveTeacherDrawing=async function(key){
   if(!canvas){ alert('캔버스를 찾을 수 없습니다'); return; }
   const drawing=canvas.toDataURL('image/png');  // 투명 배경 유지
   try{
-    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId),{
-      [`perQuestion.${d.qid}.teacherDrawing`]: drawing,
-    });
+    /* 🖼 첨삭 그림은 그림 문서로, 기록에는 teacherDrawing:true · tdsig · drawRef 만 (v7.0 · grading.js 17.0).
+       그림 문서 쓰기가 거부되면 예전처럼 기록 안에 문자열로 쓴다 */
+    const upd={};
+    const r=d.v?.drawRef || newDrawRef(d.wsId, d.qid);
+    try{
+      await setDoc(doc(db,'records',d.uid,'drawings',r), { teacherDrawing:drawing, wsId:d.wsId, qId:d.qid, updatedAt:new Date().toISOString() }, { merge:true });
+      upd[`perQuestion.${d.qid}.teacherDrawing`]=true;
+      upd[`perQuestion.${d.qid}.tdsig`]=drawingSig(drawing);
+      upd[`perQuestion.${d.qid}.drawRef`]=r;
+      d.v.drawRef=r; d.v.tdsig=drawingSig(drawing);
+    }catch(eTd){
+      console.warn('[첨삭 그림 문서 저장 실패 — 기록 안에 저장]', eTd.code||eTd.message);
+      upd[`perQuestion.${d.qid}.teacherDrawing`]=drawing;
+    }
+    await updateDoc(doc(db,'records',d.uid,'worksheets',d.wsId), upd);
     d.v.teacherDrawing=drawing;
     toast('교사 주석 저장됨');
   }catch(e){ alert('저장 실패: '+e.message); }
@@ -2963,6 +2975,7 @@ window.saveGraphFeedback=async function(key){
   const d=(window._qd||{})[key]; if(!d?.v?.drawing) return;
   const fb=document.getElementById('graph-feedback-input').value.trim();
   try{
+    await hydrateQdDrawing(d);   // 🖼 피드백 누적은 학생 답안 지문으로 줄을 가른다 — 그림을 아직 못 받았으면 먼저 (v7.0)
     const upd={ [`perQuestion.${d.qid}.feedback`]: fb };
     // 지난 피드백 누적 — 같은 답안에 대한 수정은 마지막 줄을 덮어쓰고, 학생이 고쳐 낸 뒤의 피드백은 새 줄로 쌓는다 (scoring 저장과 같은 규칙)
     const nx=feedbackLogAfterSave(d.rec?.graphFeedbackLog?.[d.qid], fb, d.v.drawing, new Date().toISOString());
@@ -2975,8 +2988,24 @@ window.saveGraphFeedback=async function(key){
   }catch(e){ alert('저장 실패: '+e.message); }
 };
 
-window.showQDetail=function(key){
+/* 🖼 그래프 그림 따로 저장 (v7.0 · grading.js 17.0) — 기록에는 drawing:true·teacherDrawing:true 표시와 drawRef 만 있고
+   그림은 records/{이메일}/drawings/{drawRef} 에 있다. 상세 창을 열 때 그 문서 하나를 읽어 d.v(=읽어 둔 기록의 항목)에 채운다. */
+async function hydrateQdDrawing(d){
+  if(!d || !needsDrawHeavy(d.v) || !d.uid) return;
+  try{
+    const s=await getDoc(doc(db,'records',d.uid,'drawings',d.v.drawRef));
+    Object.assign(d.v, mergeDrawHeavy(d.v, s.exists()?s.data():null));
+  }catch(e){ console.warn('[그림 읽기 실패]', d.uid, e.code||e.message); }
+}
+/* 기록을 지울 때 그 기록이 가리키는 그림 문서도 지운다 (실패해도 기록 삭제는 그대로 — 남은 그림 문서는 어디서도 읽지 않는다) */
+async function _delDrawingsOf(uid, rec){
+  for(const r of drawRefsOf(rec)){
+    try{ await deleteDoc(doc(db,'records',uid,'drawings',r)); }catch(e){ console.warn('[그림 문서 삭제 실패]', uid, r, e.code||e.message); }
+  }
+}
+window.showQDetail=async function(key){
   const d=(window._qd||{})[key]; if(!d) return;
+  if(needsDrawHeavy(d.v)) await hydrateQdDrawing(d);
   const _isExam = d.isExamQ || d.v?.examAnswer!==undefined || d.v?.maxScore!==undefined;
   document.getElementById('qd-title').textContent=
     `${d.studentName} · ${d.qid.replace('q','Q')}` + (d.v?.drawing?' (그래프)'
@@ -3012,8 +3041,8 @@ window.showQDetail=function(key){
       <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:8px">📝 그래프 답안</div>
       <div style="position:relative;display:inline-block;width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--rule)">
         <canvas id="graph-grid-canvas" style="display:block;width:100%;background:#fff"></canvas>
-        <img src="${d.v.drawing}" id="graph-student-img" style="position:absolute;inset:0;width:100%;height:100%">
-        ${d.v.teacherDrawing?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">`:''}
+        <img src="${typeof d.v.drawing==='string'?d.v.drawing:''}" id="graph-student-img" style="position:absolute;inset:0;width:100%;height:100%">
+        ${typeof d.v.teacherDrawing==='string'?`<img src="${d.v.teacherDrawing}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">`:''}
         <!-- oncontextmenu·touch-callout: 한 자리를 오래 누르면 브라우저가 "길게 누르기 = 오른쪽 클릭"으로
              보고 상황 메뉴를 띄우면서 pointercancel 로 그리던 획까지 끊었다(점을 찍을 때 자주 났다).
              touch-action:none 은 스크롤·확대만 막을 뿐 이건 못 막는다. index 와 같은 처리다. -->
@@ -3094,7 +3123,7 @@ window.showQDetail=function(key){
       }
       // 기존 교사 주석 복원
       const td=window._qd[key]?.v?.teacherDrawing;
-      if(td){ const i2=new Image(); i2.onload=()=>canvas.getContext('2d').drawImage(i2,0,0,canvas.width,canvas.height); i2.src=td; }
+      if(typeof td==='string'){ const i2=new Image(); i2.onload=()=>canvas.getContext('2d').drawImage(i2,0,0,canvas.width,canvas.height); i2.src=td; }
     };
     if(img.complete) setSize(); else img.onload=setSize;
     initTeacherCanvas(canvas);
